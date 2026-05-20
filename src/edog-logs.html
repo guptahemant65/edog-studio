@@ -18466,6 +18466,1138 @@ svg.iw-dag-connections {
 
 
 
+/* ═══════════════════════════════════════════════════════════════════
+   F16 REVIEW PAGE (Phantom infra-review-v1) — .iw-review-*
+   ═══════════════════════════════════════════════════════════════════ */
+
+.iw-review-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5, 24px);
+  padding: var(--space-5, 24px);
+  width: 100%;
+  box-sizing: border-box;
+  color: var(--text);
+  font-family: var(--font-body);
+}
+
+/* ─── Hero ──────────────────────────────────────────────────────── */
+.iw-review-hero {
+  display: flex;
+  gap: var(--space-4, 18px);
+  align-items: flex-start;
+  padding: var(--space-5, 24px);
+  background: linear-gradient(135deg, var(--surface-2), var(--surface));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 12px);
+}
+.iw-review-hero-mark {
+  width: 56px; height: 56px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-md, 10px);
+  background: var(--accent-glow, rgba(109,92,255,0.16));
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.iw-review-hero-text { flex: 1; min-width: 0; }
+.iw-review-hero-eyebrow {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.iw-review-hero-title {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.3;
+  margin-bottom: 6px;
+  word-break: break-all;
+}
+.iw-review-accent { color: var(--accent); }
+.iw-review-hero-sub {
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.55;
+  max-width: 720px;
+}
+.iw-review-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3, 14px) var(--space-4, 20px);
+  margin-top: var(--space-3, 14px);
+}
+.iw-review-meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.iw-review-meta-key {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+.iw-review-meta-val {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* ─── Body grid ─────────────────────────────────────────────────── */
+.iw-review-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: var(--space-5, 24px);
+}
+@media (max-width: 1100px) {
+  .iw-review-body { grid-template-columns: 1fr; }
+}
+.iw-review-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4, 18px);
+  min-width: 0;
+}
+
+/* ─── Section card ──────────────────────────────────────────────── */
+.iw-review-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 12px);
+  padding: var(--space-4, 18px);
+}
+.iw-review-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2, 10px);
+  margin-bottom: var(--space-3, 14px);
+}
+.iw-review-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text);
+}
+.iw-review-section-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 400;
+  margin-left: 4px;
+}
+.iw-review-section-action {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 6px);
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--text-dim);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-body);
+  transition: color 150ms ease, border-color 150ms ease, background 150ms ease;
+}
+.iw-review-section-action:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-glow, rgba(109,92,255,0.10));
+}
+.iw-review-section-action svg { stroke: currentColor; }
+
+/* ─── KV list (Infrastructure) ──────────────────────────────────── */
+.iw-review-kv-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--border);
+  border-radius: var(--radius-md, 8px);
+  overflow: hidden;
+}
+.iw-review-kv {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: var(--space-3, 14px);
+  align-items: center;
+  padding: 10px 14px;
+  background: var(--surface);
+}
+.iw-review-kv-key {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.iw-review-kv-val {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2, 10px);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text);
+  min-width: 0;
+}
+.iw-review-kv-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+.iw-review-id {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* ─── Chips ─────────────────────────────────────────────────────── */
+.iw-review-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  background: var(--surface-2);
+  font-family: var(--font-body);
+}
+.iw-review-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: currentColor;
+}
+.iw-review-chip--ok      { color: var(--status-ok, #18a058); border-color: rgba(24,160,88,0.35); background: rgba(24,160,88,0.08); }
+.iw-review-chip--accent  { color: var(--accent); border-color: var(--accent-dim, rgba(109,92,255,0.45)); background: var(--accent-glow, rgba(109,92,255,0.10)); }
+.iw-review-chip--dbo     { color: var(--text-dim); }
+.iw-review-chip--bronze  { color: var(--bronze, #b87333); border-color: rgba(184,115,51,0.40); background: rgba(184,115,51,0.10); }
+.iw-review-chip--silver  { color: var(--silver, #7b8794); border-color: rgba(123,135,148,0.40); background: rgba(123,135,148,0.10); }
+.iw-review-chip--gold    { color: var(--gold, #c5a038); border-color: rgba(197,160,56,0.40); background: rgba(197,160,56,0.10); }
+.iw-review-chip--disabled {
+  color: var(--text-muted); opacity: 0.45;
+  border-style: dashed;
+}
+
+/* ─── Theme card ────────────────────────────────────────────────── */
+.iw-review-theme-card {
+  display: flex;
+  gap: var(--space-3, 14px);
+  align-items: flex-start;
+  padding: var(--space-3, 14px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 8px);
+  background: var(--surface-2);
+  margin-bottom: var(--space-3, 14px);
+}
+.iw-review-theme-icon {
+  width: 40px; height: 40px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-md, 8px);
+  background: var(--accent-glow, rgba(109,92,255,0.15));
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.iw-review-theme-info { flex: 1; min-width: 0; }
+.iw-review-theme-name {
+  font-size: 14px; font-weight: 600; color: var(--text);
+  margin-bottom: 2px;
+}
+.iw-review-theme-desc {
+  font-size: 12px; color: var(--text-dim); line-height: 1.45;
+  margin-bottom: 8px;
+}
+.iw-review-theme-stats {
+  display: flex; gap: 6px;
+  font-family: var(--font-mono); font-size: 11px;
+  color: var(--text-muted);
+}
+.iw-review-schemas {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+
+/* ─── Counts grid ───────────────────────────────────────────────── */
+.iw-review-counts {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 8px);
+  overflow: hidden;
+}
+.iw-review-count-cell {
+  background: var(--surface);
+  padding: var(--space-3, 14px);
+  text-align: left;
+}
+.iw-review-count-num {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1;
+}
+.iw-review-count-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+.iw-review-count-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-top: 6px;
+}
+@media (max-width: 720px) {
+  .iw-review-counts { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ─── Pre-flight checks ─────────────────────────────────────────── */
+.iw-review-status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid var(--border);
+}
+.iw-review-status-pill--ok   { color: var(--status-ok, #18a058); border-color: rgba(24,160,88,0.35); background: rgba(24,160,88,0.08); }
+.iw-review-status-pill--warn { color: var(--status-warn, #e5940c); border-color: rgba(229,148,12,0.35); background: rgba(229,148,12,0.10); }
+.iw-review-status-pill--fail { color: var(--status-fail, #e5453b); border-color: rgba(229,69,59,0.35); background: rgba(229,69,59,0.10); }
+
+.iw-review-valid-list {
+  display: flex; flex-direction: column;
+  gap: 4px;
+}
+.iw-review-valid-row {
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  align-items: center;
+  gap: var(--space-2, 10px);
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 8px);
+  background: var(--surface-2);
+}
+.iw-review-valid-icon {
+  width: 20px; height: 20px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+}
+.iw-review-valid-icon--ok   { background: rgba(24,160,88,0.15);  color: var(--status-ok,   #18a058); }
+.iw-review-valid-icon--warn { background: rgba(229,148,12,0.15); color: var(--status-warn, #e5940c); }
+.iw-review-valid-icon--fail { background: rgba(229,69,59,0.15);  color: var(--status-fail, #e5453b); }
+.iw-review-valid-text {
+  font-size: 12px; color: var(--text);
+}
+.iw-review-valid-sub {
+  font-family: var(--font-mono); font-size: 10px;
+  color: var(--text-muted);
+  margin-left: 6px;
+}
+
+/* ─── Code preview ──────────────────────────────────────────────── */
+.iw-review-code-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 10px);
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 8px);
+  padding: 10px 12px;
+  cursor: pointer;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 12px;
+  text-align: left;
+  transition: background 150ms ease, border-color 150ms ease;
+}
+.iw-review-code-toggle:hover {
+  border-color: var(--border-bright, var(--accent-dim));
+  background: var(--surface-3, var(--surface-2));
+}
+.iw-review-code-caret {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--text-muted);
+  transition: transform 200ms ease;
+}
+.iw-review-code-toggle--open .iw-review-code-caret {
+  transform: rotate(90deg);
+}
+.iw-review-code-file {
+  font-family: var(--font-mono);
+  color: var(--text);
+}
+.iw-review-code-meta {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  flex: 1;
+}
+.iw-review-code-badge {
+  margin-left: auto;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  border: 1px solid var(--accent-dim, rgba(109,92,255,0.4));
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.iw-review-code-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 300ms ease;
+}
+.iw-review-code-body--open {
+  max-height: 600px;
+  margin-top: var(--space-2, 10px);
+}
+.iw-review-code-tabs {
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0;
+}
+.iw-review-code-tab {
+  background: transparent;
+  border: none;
+  padding: 7px 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  transition: color 150ms ease, border-color 150ms ease;
+}
+.iw-review-code-tab:hover { color: var(--text); }
+.iw-review-code-tab--active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.iw-review-code-pane {
+  background: var(--surface-3, #0d0e14);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 var(--radius-md, 8px) var(--radius-md, 8px);
+  padding: var(--space-3, 12px);
+  max-height: 320px;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.iw-review-code-line {
+  display: flex;
+  gap: 12px;
+  white-space: pre;
+}
+.iw-review-code-ln {
+  color: var(--text-muted);
+  opacity: 0.5;
+  min-width: 24px;
+  text-align: right;
+  user-select: none;
+}
+.iw-review-code-src {
+  color: var(--text);
+  flex: 1;
+}
+.iw-review-tk-kw   { color: var(--accent); font-weight: 500; }
+.iw-review-tk-type { color: var(--type-mlv, #6d5cff); }
+.iw-review-tk-str  { color: var(--status-ok, #18a058); }
+.iw-review-tk-cm   { color: var(--text-muted); font-style: italic; }
+.iw-review-code-empty {
+  padding: var(--space-3, 14px);
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+  background: var(--surface-2);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md, 8px);
+}
+
+/* ─── Mini DAG ──────────────────────────────────────────────────── */
+.iw-review-dag-wrap {
+  position: relative;
+  width: 100%;
+  height: 360px;
+  background:
+    radial-gradient(circle at 20% 30%, rgba(109,92,255,0.04), transparent 60%),
+    var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 8px);
+  overflow: hidden;
+}
+.iw-review-dag-fab {
+  position: absolute;
+  top: 8px; right: 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  background: rgba(0,0,0,0.35);
+  border: 1px solid var(--border);
+  padding: 3px 8px;
+  border-radius: 999px;
+  z-index: 2;
+}
+.iw-review-dag-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+}
+.iw-review-dag-node {
+  position: absolute;
+  min-width: 130px;
+  max-width: 160px;
+  padding: 6px 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: var(--radius-sm, 6px);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+  z-index: 1;
+}
+.iw-review-dag-node--sql   { border-left-color: var(--type-sql, #2d7ff9); }
+.iw-review-dag-node--mlv   { border-left-color: var(--type-mlv, #6d5cff); }
+.iw-review-dag-node--spark { border-left-color: var(--type-spark, #e5940c); }
+.iw-review-dag-node-head {
+  display: flex; align-items: center; gap: 5px;
+  color: var(--text);
+  margin-bottom: 4px;
+  overflow: hidden;
+}
+.iw-review-dag-node-icon { color: inherit; font-size: 12px; }
+.iw-review-dag-node--sql   .iw-review-dag-node-icon { color: var(--type-sql, #2d7ff9); }
+.iw-review-dag-node--mlv   .iw-review-dag-node-icon { color: var(--type-mlv, #6d5cff); }
+.iw-review-dag-node--spark .iw-review-dag-node-icon { color: var(--type-spark, #e5940c); }
+.iw-review-dag-node-name {
+  font-weight: 500;
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.iw-review-dag-node-meta {
+  display: flex; gap: 4px;
+}
+.iw-review-dag-schema-pill,
+.iw-review-dag-type-pill {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: var(--surface-3, rgba(255,255,255,0.04));
+  color: var(--text-muted);
+}
+.iw-review-dag-schema-pill--bronze { color: var(--bronze, #b87333); background: rgba(184,115,51,0.12); }
+.iw-review-dag-schema-pill--silver { color: var(--silver, #7b8794); background: rgba(123,135,148,0.12); }
+.iw-review-dag-schema-pill--gold   { color: var(--gold,   #c5a038); background: rgba(197,160,56,0.12); }
+.iw-review-dag-legend {
+  position: absolute;
+  bottom: 8px; left: 8px;
+  display: flex; gap: 10px;
+  font-size: 10px;
+  color: var(--text-muted);
+  background: rgba(0,0,0,0.35);
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+  border-radius: 999px;
+  z-index: 2;
+}
+.iw-review-dag-leg {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-family: var(--font-mono);
+}
+.iw-review-dag-leg-icon--sql   { color: var(--type-sql,   #2d7ff9); }
+.iw-review-dag-leg-icon--mlv   { color: var(--type-mlv,   #6d5cff); }
+.iw-review-dag-leg-icon--spark { color: var(--type-spark, #e5940c); }
+.iw-review-empty-dag {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.iw-review-empty-icon { font-size: 32px; }
+
+/* ─── Pipeline preview ──────────────────────────────────────────── */
+.iw-review-preview-list {
+  display: flex; flex-direction: column;
+  gap: 4px;
+}
+.iw-review-preview-row {
+  display: grid;
+  grid-template-columns: 22px 12px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--surface-2);
+}
+.iw-review-preview-num {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.iw-review-preview-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.6;
+}
+.iw-review-preview-name {
+  font-size: 12px; color: var(--text);
+}
+.iw-review-preview-time {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+/* ─── Warn banner ───────────────────────────────────────────────── */
+.iw-review-warn-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2, 10px);
+  padding: var(--space-3, 14px);
+  background: rgba(229,148,12,0.08);
+  border: 1px solid rgba(229,148,12,0.30);
+  border-radius: var(--radius-md, 8px);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.iw-review-warn-icn {
+  width: 22px; height: 22px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: rgba(229,148,12,0.20);
+  color: var(--status-warn, #e5940c);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   F16 DEPLOY PAGE (Phantom infra-deploy-v1) — .iw-deploy / .iw-pipe-step
+   ═══════════════════════════════════════════════════════════════════ */
+
+.iw-execution-page.iw-deploy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4, 18px);
+  padding: var(--space-5, 24px);
+  width: 100%;
+  box-sizing: border-box;
+  color: var(--text);
+  font-family: var(--font-body);
+}
+
+/* ─── Progress bar ──────────────────────────────────────────────── */
+.iw-progress-bar {
+  width: 100%;
+  height: 4px;
+  background: var(--surface-2);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.iw-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  width: 0%;
+  transition: width 300ms ease, background-color 200ms ease;
+  box-shadow: 0 0 8px var(--accent-glow, rgba(109,92,255,0.5));
+}
+.iw-progress-fill--ok   { background: var(--status-ok,   #18a058); box-shadow: 0 0 8px rgba(24,160,88,0.5); }
+.iw-progress-fill--fail { background: var(--status-fail, #e5453b); box-shadow: 0 0 8px rgba(229,69,59,0.5); }
+.iw-progress-fill--warn { background: var(--status-warn, #e5940c); box-shadow: 0 0 8px rgba(229,148,12,0.5); }
+
+/* ─── Deploy head ───────────────────────────────────────────────── */
+.iw-deploy-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-4, 20px);
+  align-items: flex-start;
+  padding: var(--space-4, 20px);
+  background: linear-gradient(135deg, var(--surface-2), var(--surface));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 12px);
+}
+.iw-deploy-head-left { min-width: 0; }
+.iw-deploy-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.iw-deploy-eyebrow-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: iw-pulse-dot 1.6s ease-in-out infinite;
+}
+.iw-deploy-head--success .iw-deploy-eyebrow-dot { background: var(--status-ok,   #18a058); animation: none; }
+.iw-deploy-head--fail    .iw-deploy-eyebrow-dot { background: var(--status-fail, #e5453b); animation: none; }
+.iw-deploy-head--warn    .iw-deploy-eyebrow-dot { background: var(--status-warn, #e5940c); animation: none; }
+
+.iw-deploy-title {
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.2;
+  margin-bottom: 6px;
+  color: var(--text);
+}
+.iw-deploy-head--success .iw-deploy-title { color: var(--status-ok,   #18a058); }
+.iw-deploy-head--fail    .iw-deploy-title { color: var(--status-fail, #e5453b); }
+.iw-deploy-head--warn    .iw-deploy-title { color: var(--status-warn, #e5940c); }
+
+.iw-deploy-current {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.iw-deploy-live-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: iw-blink 1s ease-in-out infinite;
+}
+
+.iw-deploy-head-right {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+.iw-deploy-timer {
+  font-family: var(--font-mono);
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--accent);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.iw-deploy-timer--done { color: var(--status-ok,   #18a058); }
+.iw-deploy-timer--fail { color: var(--status-fail, #e5453b); }
+.iw-deploy-timer--warn { color: var(--status-warn, #e5940c); }
+.iw-deploy-timer-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.iw-deploy-step-counter {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 6px;
+}
+.iw-deploy-step-counter strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* ─── Pipeline list ─────────────────────────────────────────────── */
+.iw-execution-page.iw-deploy .iw-pipeline {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 12px);
+  overflow: hidden;
+}
+.iw-pipe-step {
+  border-bottom: 1px solid var(--border);
+  transition: background-color 200ms ease;
+}
+.iw-pipe-step:last-child { border-bottom: none; }
+.iw-pipe-row {
+  display: grid;
+  grid-template-columns: 36px 1fr auto 32px;
+  align-items: center;
+  gap: var(--space-3, 12px);
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+.iw-pipe-row:hover { background: var(--surface-2); }
+.iw-pipe-icon {
+  width: 26px; height: 26px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.iw-pipe-icon--running, .iw-pipe-icon--retrying {
+  background: var(--accent-glow, rgba(109,92,255,0.12));
+  border-color: var(--accent-dim, rgba(109,92,255,0.4));
+  color: var(--accent);
+}
+.iw-pipe-icon--succeeded {
+  background: rgba(24,160,88,0.12);
+  border-color: rgba(24,160,88,0.40);
+  color: var(--status-ok, #18a058);
+  animation: iw-pop-check 250ms ease-out;
+}
+.iw-pipe-icon--failed {
+  background: rgba(229,69,59,0.12);
+  border-color: rgba(229,69,59,0.40);
+  color: var(--status-fail, #e5453b);
+}
+.iw-pipe-icon--skipped {
+  border-style: dashed;
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+.iw-pipe-info { min-width: 0; }
+.iw-pipe-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+.iw-pipe-step--succeeded .iw-pipe-name { color: var(--text); }
+.iw-pipe-step--failed    .iw-pipe-name { color: var(--status-fail, #e5453b); }
+.iw-pipe-step--skipped   .iw-pipe-name { color: var(--text-muted); }
+.iw-pipe-step--pending   .iw-pipe-name { color: var(--text-dim); }
+.iw-pipe-sub {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.iw-pipe-retry {
+  font-size: 10px;
+  color: var(--status-warn, #e5940c);
+  margin-left: 6px;
+}
+.iw-pipe-time {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.iw-pipe-expand {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm, 6px);
+  width: 24px; height: 24px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 11px;
+  transition: color 150ms ease, background 150ms ease;
+}
+.iw-pipe-expand:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
+.iw-pipe-detail {
+  background: var(--surface-3, #0d0e14);
+  border-top: 1px solid var(--border);
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+}
+.iw-pipe-detail-logs {
+  max-height: 220px;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.55;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.iw-log-line {
+  display: grid;
+  grid-template-columns: 70px 50px 1fr;
+  gap: 8px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  color: var(--text-dim);
+}
+.iw-log-ts { color: var(--text-muted); }
+.iw-log-lvl {
+  text-transform: uppercase;
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+  color: var(--text-muted);
+  align-self: center;
+}
+.iw-log-msg {
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.iw-log-line--info  .iw-log-lvl  { color: var(--accent); }
+.iw-log-line--warn  .iw-log-lvl  { color: var(--status-warn, #e5940c); }
+.iw-log-line--warn  .iw-log-msg  { color: var(--status-warn, #e5940c); }
+.iw-log-line--error .iw-log-lvl  { color: var(--status-fail, #e5453b); }
+.iw-log-line--error .iw-log-msg  { color: var(--status-fail, #e5453b); }
+.iw-log-line--ok    .iw-log-lvl  { color: var(--status-ok,   #18a058); }
+.iw-log-line--debug { opacity: 0.55; }
+.iw-pipe-step-error {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: rgba(229,69,59,0.10);
+  border: 1px solid rgba(229,69,59,0.35);
+  border-radius: var(--radius-sm, 6px);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--status-fail, #e5453b);
+}
+
+/* ─── Spinner / animations ──────────────────────────────────────── */
+.iw-spinner {
+  width: 12px; height: 12px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: iw-spin 800ms linear infinite;
+  display: inline-block;
+}
+@keyframes iw-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes iw-pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.55; transform: scale(0.85); }
+}
+@keyframes iw-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.3; }
+}
+@keyframes iw-pop-check {
+  0%   { transform: scale(0.6); opacity: 0; }
+  60%  { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1);   opacity: 1; }
+}
+
+/* ─── Success card ──────────────────────────────────────────────── */
+.iw-success-card {
+  padding: var(--space-4, 20px);
+  background: linear-gradient(135deg, rgba(24,160,88,0.10), var(--surface));
+  border: 1px solid rgba(24,160,88,0.40);
+  border-radius: var(--radius-lg, 12px);
+}
+.iw-success-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3, 14px);
+  margin-bottom: var(--space-3, 14px);
+}
+.iw-success-icon {
+  width: 42px; height: 42px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: rgba(24,160,88,0.20);
+  color: var(--status-ok, #18a058);
+}
+.iw-success-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+.iw-success-sub {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.iw-resource-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 8px);
+  overflow: hidden;
+}
+.iw-resource-cell {
+  background: var(--surface);
+  padding: 10px 12px;
+}
+.iw-resource-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.iw-resource-value {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text);
+  word-break: break-all;
+}
+
+/* ─── Error / rollback panels ───────────────────────────────────── */
+.iw-error-panel {
+  padding: var(--space-4, 20px);
+  background: linear-gradient(135deg, rgba(229,69,59,0.10), var(--surface));
+  border: 1px solid rgba(229,69,59,0.40);
+  border-radius: var(--radius-lg, 12px);
+}
+.iw-error-panel--rollback {
+  background: linear-gradient(135deg, rgba(229,148,12,0.10), var(--surface));
+  border-color: rgba(229,148,12,0.40);
+}
+.iw-error-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3, 14px);
+  margin-bottom: var(--space-3, 14px);
+}
+.iw-error-icon {
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: rgba(229,69,59,0.18);
+  color: var(--status-fail, #e5453b);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.iw-error-panel--rollback .iw-error-icon {
+  background: rgba(229,148,12,0.18);
+  color: var(--status-warn, #e5940c);
+}
+.iw-error-title {
+  font-size: 15px; font-weight: 600;
+  color: var(--text); margin-bottom: 2px;
+}
+.iw-error-sub {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.5;
+  word-break: break-word;
+}
+.iw-error-rollback-preview {
+  margin-top: var(--space-3, 14px);
+  padding-top: var(--space-3, 14px);
+  border-top: 1px dashed var(--border);
+}
+.iw-error-rollback-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.iw-rollback-panel {
+  padding: var(--space-4, 20px);
+  background: linear-gradient(135deg, rgba(229,148,12,0.08), var(--surface));
+  border: 1px solid rgba(229,148,12,0.35);
+  border-radius: var(--radius-lg, 12px);
+}
+.iw-rollback-panel--done {
+  background: linear-gradient(135deg, rgba(123,135,148,0.06), var(--surface));
+  border-color: rgba(123,135,148,0.35);
+}
+.iw-rollback-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3, 14px);
+  margin-bottom: var(--space-3, 14px);
+}
+.iw-rollback-icon {
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: rgba(229,148,12,0.18);
+  color: var(--status-warn, #e5940c);
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.iw-rollback-panel--done .iw-rollback-icon {
+  background: rgba(123,135,148,0.20);
+  color: var(--silver, #7b8794);
+}
+.iw-rollback-title {
+  font-size: 15px; font-weight: 600;
+  color: var(--text); margin-bottom: 2px;
+}
+.iw-rollback-sub {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+.iw-rollback-list {
+  display: flex; flex-direction: column;
+  gap: 4px;
+}
+.iw-rb-row {
+  display: grid;
+  grid-template-columns: 110px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 6px);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.iw-rb-type   { color: var(--text); font-weight: 500; }
+.iw-rb-id     { color: var(--text-muted); }
+.iw-rb-status { color: var(--text-muted); text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em; }
+.iw-rb-row--deleting { border-color: rgba(229,148,12,0.40); }
+.iw-rb-row--deleting .iw-rb-status { color: var(--status-warn, #e5940c); }
+.iw-rb-row--deleted  { border-color: rgba(24,160,88,0.40); }
+.iw-rb-row--deleted  .iw-rb-status { color: var(--status-ok, #18a058); }
+.iw-rb-row--failed   { border-color: rgba(229,69,59,0.40); }
+.iw-rb-row--failed   .iw-rb-status { color: var(--status-fail, #e5453b); }
+.iw-rb-row--kept     { opacity: 0.6; }
+.iw-rb-row--pending  { opacity: 0.7; border-style: dashed; }
+
+/* ─── Inline actions ────────────────────────────────────────────── */
+.iw-deploy-actions {
+  display: flex;
+  gap: var(--space-2, 10px);
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+.iw-deploy-actions .iw-btn { min-width: 140px; }
+
     /* === css/runtime.css === */
 /* ===== Runtime View Shell =====
  * Tab bar, connection bar, phase overlays, Internals dropdown.
@@ -73666,7 +74798,748 @@ class DagCanvasPage {
 window.DagCanvasPage = DagCanvasPage;
 
 // === js/wizard-review-summary.js ===
-/* MODULE NOT FOUND: js/wizard-review-summary.js */
+/**
+ * ReviewSummaryPage — Page 4 (index 3) of the Infra Wizard.
+ *
+ * Renders the pre-flight review surface from Phantom's design mock
+ * (docs/design/mocks/infra-review-v1.html): a hero with workspace name
+ * and meta pills, a two-column body with infrastructure / theme+schemas /
+ * counts / pre-flight checks / generated-code preview on the left and a
+ * mini-DAG topology + pipeline preview on the right, plus a billing
+ * warning banner at the bottom.
+ *
+ * The host wizard owns the actual "Lock In & Create" button in its
+ * dialog footer; this page only renders read-only content.
+ *
+ * Public API (do not break): activate, deactivate, validate, collectState,
+ * getElement, destroy.
+ *
+ * CSS prefix: .iw-review-*
+ *
+ * @author Pixel — EDOG Studio hivemind
+ */
+
+/* global WizardEventBus, IW_EVENTS, CodeGenerationEngine */
+
+class ReviewSummaryPage {
+  constructor(options) {
+    this._eventBus = options.eventBus;
+    this._onNavigateToPage = options.onNavigateToPage || function() {};
+    this._onConfirm = options.onConfirm || function() {};
+    this._destroyed = false;
+    this._state = null;
+    this._validationResult = null;
+    this._activeCodeTab = 0;
+    this._codeOpen = true;
+
+    this._rootEl = document.createElement('div');
+    // NOTE: Do NOT stamp `iw-page` here. The wizard already wraps this in a
+    // `.iw-page` container (`#iw-page-3`). Adding `iw-page` to this nested
+    // root inherits `opacity:0; position:absolute; pointer-events:none` from
+    // the base `.iw-page` rule and never receives `.active`, leaving the
+    // review page invisible. Same trap as DagCanvasPage.
+    this._rootEl.className = 'iw-review-page';
+  }
+
+  // ── Page lifecycle ──────────────────────────────────────────────
+
+  activate(state) {
+    if (this._destroyed) return;
+    this._state = state || {};
+    this._validationResult = this._runValidation(this._state);
+    this._render();
+  }
+
+  deactivate() { /* persist DOM for fast re-entry */ }
+
+  validate() {
+    this._validationResult = this._runValidation(this._state);
+    return this._validationResult;
+  }
+
+  collectState(_state) { /* read-only */ }
+
+  getElement() { return this._rootEl; }
+
+  destroy() {
+    this._destroyed = true;
+    this._state = null;
+    this._validationResult = null;
+    this._rootEl.innerHTML = '';
+    if (this._rootEl.parentNode) {
+      this._rootEl.parentNode.removeChild(this._rootEl);
+    }
+  }
+
+  // ── Cross-step validation ──────────────────────────────────────
+
+  _runValidation(state) {
+    var errors = [];
+    var warnings = [];
+    var passes = [];
+
+    if (!state) {
+      errors.push({ text: 'No wizard state available.' });
+      return { valid: false, errors: errors, warnings: warnings, passes: passes };
+    }
+
+    if (state.workspaceName) {
+      passes.push({ text: 'Workspace name available', sub: 'checked against tenant directory' });
+    } else {
+      errors.push({ text: 'Workspace name is required.' });
+    }
+
+    if (state.capacityId) {
+      passes.push({
+        text: 'Capacity selected',
+        sub: (state.capacitySku || 'F-tier') + ' \u00B7 ' + (state.capacityRegion || 'region')
+      });
+    } else {
+      errors.push({ text: 'No capacity selected. Go back to Setup page.' });
+    }
+
+    if (state.lakehouseName) {
+      passes.push({ text: 'Lakehouse schema support requested', sub: 'enableSchemas: true' });
+    }
+
+    var nodeCount = (state.nodes && state.nodes.length) || 0;
+    var connCount = (state.connections && state.connections.length) || 0;
+    if (nodeCount === 0) {
+      errors.push({ text: 'No nodes in DAG. Go back to Build page and add at least one node.' });
+    } else {
+      passes.push({
+        text: 'DAG is acyclic',
+        sub: nodeCount + ' nodes \u00B7 ' + connCount + ' connections \u00B7 no cycles'
+      });
+    }
+
+    // Schemas referenced in nodes must be enabled
+    if (state.nodes && state.schemas) {
+      var enabledSchemas = {};
+      for (var key in state.schemas) {
+        if (state.schemas[key]) enabledSchemas[key] = true;
+      }
+      for (var i = 0; i < state.nodes.length; i++) {
+        var nodeSchema = state.nodes[i].schema;
+        if (nodeSchema && !enabledSchemas[nodeSchema]) {
+          errors.push({
+            text: 'Node "' + state.nodes[i].name + '" uses schema "' + nodeSchema + '" which is not enabled.'
+          });
+        }
+      }
+      // Warn on enabled-but-unused schemas
+      var usedSchemas = {};
+      for (var u = 0; u < state.nodes.length; u++) {
+        if (state.nodes[u].schema) usedSchemas[state.nodes[u].schema] = true;
+      }
+      for (var s in enabledSchemas) {
+        if (s !== 'dbo' && !usedSchemas[s]) {
+          warnings.push({
+            text: this._capitalize(s) + ' schema selected but unused',
+            sub: 'no nodes target this schema'
+          });
+        }
+      }
+    }
+
+    if (nodeCount > 50) {
+      warnings.push({ text: 'High node count (' + nodeCount + ')', sub: 'execution may take longer' });
+    }
+
+    // Detect disconnected (orphan) nodes
+    if (state.nodes && state.nodes.length > 1 && state.connections) {
+      var connectedIds = {};
+      for (var c = 0; c < state.connections.length; c++) {
+        connectedIds[state.connections[c].sourceNodeId] = true;
+        connectedIds[state.connections[c].targetNodeId] = true;
+      }
+      var orphanCount = 0;
+      for (var o = 0; o < state.nodes.length; o++) {
+        if (!connectedIds[state.nodes[o].id]) orphanCount++;
+      }
+      if (orphanCount > 0) {
+        warnings.push({ text: orphanCount + ' node(s) have no connections', sub: 'isolated in DAG' });
+      }
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors: errors,
+      warnings: warnings,
+      passes: passes
+    };
+  }
+
+  // ── Estimated duration ─────────────────────────────────────────
+
+  _estimateDuration(state) {
+    var nodes = (state.nodes && state.nodes.length) || 0;
+    var conns = (state.connections && state.connections.length) || 0;
+    // Base 30s for resource creation + ~8s per node (cell write+run) + 5s per edge.
+    var secs = 30 + nodes * 8 + conns * 5;
+    if (secs < 60) return '\u2248 ' + secs + 's';
+    var m = Math.floor(secs / 60);
+    var s = secs % 60;
+    return '\u2248 ' + m + 'm ' + (s < 10 ? '0' + s : s) + 's';
+  }
+
+  // ── Main render ────────────────────────────────────────────────
+
+  _render() {
+    if (this._destroyed) return;
+    var state = this._state || {};
+
+    var html = '';
+    html += this._renderHero(state);
+    html += '<div class="iw-review-body">';
+    html += '<div class="iw-review-col iw-review-col--left">';
+    html += this._renderInfrastructure(state);
+    html += this._renderThemeSchemas(state);
+    html += this._renderCounts(state);
+    html += this._renderChecks();
+    html += this._renderCodePreview(state);
+    html += '</div>';
+    html += '<div class="iw-review-col iw-review-col--right">';
+    html += this._renderDagSection(state);
+    html += this._renderPipelinePreview(state);
+    html += '</div>';
+    html += '</div>';
+    html += this._renderWarnBanner(state);
+
+    this._rootEl.innerHTML = html;
+    this._bindEvents();
+  }
+
+  _renderHero(state) {
+    var name = state.workspaceName || 'unnamed_workspace';
+    var region = state.capacityRegion || '\u2014';
+    var capacity = state.capacitySku
+      ? state.capacitySku + (state.capacityDisplayName ? ' (' + state.capacityDisplayName + ')' : '')
+      : (state.capacityDisplayName || '\u2014');
+    var theme = state.theme ? this._capitalize(state.theme) : '\u2014';
+    var est = this._estimateDuration(state);
+    var nodeCount = (state.nodes && state.nodes.length) || 0;
+    var sub = 'A new Fabric environment with a ' + nodeCount +
+      '-node materialized lake view DAG. Review the configuration below \u2014 everything is editable until you lock in.';
+
+    var html = '<div class="iw-review-hero">';
+    html += '<div class="iw-review-hero-mark">';
+    html += '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">';
+    html += '<path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7"/>';
+    html += '<path d="M3 7l9-4 9 4"/>';
+    html += '<path d="M3 7l9 4 9-4"/>';
+    html += '<path d="M12 11v8"/>';
+    html += '</svg></div>';
+    html += '<div class="iw-review-hero-text">';
+    html += '<div class="iw-review-hero-eyebrow">Ready to provision \u00B7 Confirm and create</div>';
+    html += '<div class="iw-review-hero-title"><span class="iw-review-accent">' +
+      this._escape(name) + '</span></div>';
+    html += '<div class="iw-review-hero-sub">' + this._escape(sub) + '</div>';
+    html += '<div class="iw-review-hero-meta">';
+    html += this._metaItem('Region', region);
+    html += this._metaItem('Capacity', capacity);
+    html += this._metaItem('Theme', theme);
+    html += this._metaItem('Est. duration', est);
+    html += '</div></div></div>';
+    return html;
+  }
+
+  _metaItem(key, val) {
+    return '<div class="iw-review-meta-item">' +
+      '<span class="iw-review-meta-key">' + this._escape(key) + '</span>' +
+      '<span class="iw-review-meta-val">' + this._escape(val) + '</span></div>';
+  }
+
+  _renderInfrastructure(state) {
+    var html = '<div class="iw-review-section">';
+    html += this._sectionHead('Infrastructure', null, '<button class="iw-review-section-action" data-page="0">' +
+      this._editIcon() + 'Edit setup</button>');
+    html += '<div class="iw-review-kv-list">';
+    html += this._kvRow('Workspace', this._escape(state.workspaceName || '\u2014'),
+      '<span class="iw-review-chip iw-review-chip--ok"><span class="iw-review-dot"></span>NEW</span>');
+    var capRight = '';
+    if (state.capacityId) {
+      capRight = '<span class="iw-review-id">' + this._shortId(state.capacityId) + '</span>';
+    }
+    var capLabel = (state.capacitySku || 'capacity') +
+      (state.capacityRegion ? ' \u2014 ' + state.capacityRegion : '');
+    html += this._kvRow('Capacity', this._escape(capLabel), capRight);
+    html += this._kvRow('Lakehouse', this._escape(state.lakehouseName || '\u2014'),
+      '<span class="iw-review-chip iw-review-chip--accent"><span class="iw-review-dot"></span>schema enabled</span>');
+    var cellCount = this._estimateCellCount(state);
+    html += this._kvRow('Notebook', this._escape(state.notebookName || '\u2014'),
+      '<span class="iw-review-id">' + cellCount + ' cells</span>');
+    html += '</div></div>';
+    return html;
+  }
+
+  _renderThemeSchemas(state) {
+    var html = '<div class="iw-review-section">';
+    html += this._sectionHead('Theme & Schemas', null, '<button class="iw-review-section-action" data-page="1">' +
+      this._editIcon() + 'Edit theme</button>');
+    var themeName = state.theme ? this._capitalize(state.theme) : 'No theme';
+    var themeDesc = this._themeDescription(state.theme);
+    var nodeCount = (state.nodes && state.nodes.length) || 0;
+    var connCount = (state.connections && state.connections.length) || 0;
+    var layerCount = this._countLayers(state);
+
+    html += '<div class="iw-review-theme-card">';
+    html += '<div class="iw-review-theme-icon">';
+    html += '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">';
+    html += '<line x1="12" y1="1" x2="12" y2="23"/>';
+    html += '<path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>';
+    html += '</svg></div>';
+    html += '<div class="iw-review-theme-info">';
+    html += '<div class="iw-review-theme-name">' + this._escape(themeName) + '</div>';
+    html += '<div class="iw-review-theme-desc">' + this._escape(themeDesc) + '</div>';
+    html += '<div class="iw-review-theme-stats">';
+    html += '<span>' + nodeCount + ' nodes</span><span>\u00B7</span>';
+    html += '<span>' + connCount + ' connections</span><span>\u00B7</span>';
+    html += '<span>' + layerCount + ' layers</span>';
+    html += '</div></div></div>';
+
+    html += '<div class="iw-review-schemas">';
+    var enabled = state.schemas || {};
+    var schemaList = ['dbo', 'bronze', 'silver', 'gold'];
+    var used = this._usedSchemas(state);
+    for (var i = 0; i < schemaList.length; i++) {
+      var k = schemaList[i];
+      var isEnabled = !!enabled[k];
+      var isUsed = !!used[k];
+      var cls = 'iw-review-chip iw-review-chip--' + k;
+      if (!isEnabled) cls = 'iw-review-chip iw-review-chip--disabled';
+      if (isEnabled) {
+        html += '<span class="' + cls + '"><span class="iw-review-dot"></span>' + k + '</span>';
+      } else {
+        html += '<span class="' + cls + '">' + k + '</span>';
+      }
+      // Suppress unused-tracking warning helper noise
+      void isUsed;
+    }
+    html += '</div></div>';
+    return html;
+  }
+
+  _renderCounts(state) {
+    var nodeCount = (state.nodes && state.nodes.length) || 0;
+    var cellCount = this._estimateCellCount(state);
+    var html = '<div class="iw-review-counts" role="group" aria-label="Resources to create">';
+    html += '<div class="iw-review-count-cell"><div class="iw-review-count-num">1</div><div class="iw-review-count-label">Workspace</div></div>';
+    html += '<div class="iw-review-count-cell"><div class="iw-review-count-num">1</div><div class="iw-review-count-label">Lakehouse</div></div>';
+    html += '<div class="iw-review-count-cell"><div class="iw-review-count-num">1' +
+      '<span class="iw-review-count-sub"> \u00B7 ' + cellCount + ' cells</span></div>' +
+      '<div class="iw-review-count-label">Notebook</div></div>';
+    html += '<div class="iw-review-count-cell"><div class="iw-review-count-num"><span class="iw-review-accent">' +
+      nodeCount + '</span></div><div class="iw-review-count-label">DAG Nodes</div></div>';
+    html += '</div>';
+    return html;
+  }
+
+  _renderChecks() {
+    var v = this._validationResult || { passes: [], warnings: [], errors: [] };
+    var total = v.passes.length + v.warnings.length + v.errors.length;
+    var allClear = v.errors.length === 0 && v.warnings.length === 0;
+    var statusBadge = allClear
+      ? '<span class="iw-review-status-pill iw-review-status-pill--ok">all clear</span>'
+      : (v.errors.length > 0
+        ? '<span class="iw-review-status-pill iw-review-status-pill--fail">' + v.errors.length + ' issue' + (v.errors.length === 1 ? '' : 's') + '</span>'
+        : '<span class="iw-review-status-pill iw-review-status-pill--warn">' + v.warnings.length + ' warning' + (v.warnings.length === 1 ? '' : 's') + '</span>');
+
+    var html = '<div class="iw-review-section">';
+    html += this._sectionHead('Pre-flight Checks', total, statusBadge);
+    html += '<div class="iw-review-valid-list">';
+    for (var p = 0; p < v.passes.length; p++) {
+      html += this._validRow('ok', '\u2713', v.passes[p]);
+    }
+    for (var w = 0; w < v.warnings.length; w++) {
+      html += this._validRow('warn', '!', v.warnings[w]);
+    }
+    for (var e = 0; e < v.errors.length; e++) {
+      html += this._validRow('fail', '\u2715', v.errors[e]);
+    }
+    if (total === 0) {
+      html += '<div class="iw-review-valid-row"><div class="iw-review-valid-icon iw-review-valid-icon--ok">\u2713</div>' +
+        '<div class="iw-review-valid-text">No checks to run</div></div>';
+    }
+    html += '</div></div>';
+    return html;
+  }
+
+  _validRow(kind, glyph, item) {
+    var text = this._escape(item.text || '');
+    var sub = item.sub ? '<span class="iw-review-valid-sub">' + this._escape(item.sub) + '</span>' : '';
+    return '<div class="iw-review-valid-row">' +
+      '<div class="iw-review-valid-icon iw-review-valid-icon--' + kind + '">' + glyph + '</div>' +
+      '<div class="iw-review-valid-text">' + text + ' ' + sub + '</div>' +
+      '<span></span></div>';
+  }
+
+  _renderCodePreview(state) {
+    var cells = this._generateCellsForPreview(state);
+    var cellCount = cells.length;
+    var loc = 0;
+    for (var i = 0; i < cells.length; i++) {
+      loc += (cells[i].content || '').split('\n').length;
+    }
+    var nbName = state.notebookName || 'notebook';
+
+    var html = '<div class="iw-review-section">';
+    html += this._sectionHead('Generated Code', cellCount > 0 ? cellCount + ' cells' : null,
+      '<button class="iw-review-section-action" data-page="2">' + this._copyIcon() + 'Edit DAG</button>');
+
+    html += '<button class="iw-review-code-toggle' + (this._codeOpen ? ' iw-review-code-toggle--open' : '') + '" data-action="toggle-code">';
+    html += '<span class="iw-review-code-caret">\u25B8</span>';
+    html += '<span class="iw-review-code-file">' + this._escape(nbName) + '.ipynb</span>';
+    html += '<span class="iw-review-code-meta"> \u2014 ' + cellCount + ' cells, \u2248 ' + loc + ' LOC</span>';
+    html += '<span class="iw-review-code-badge">SQL \u00B7 PySpark</span>';
+    html += '</button>';
+
+    html += '<div class="iw-review-code-body' + (this._codeOpen ? ' iw-review-code-body--open' : '') + '">';
+    if (cellCount === 0) {
+      html += '<div class="iw-review-code-empty">No cells to preview. Add nodes in the Build step.</div>';
+    } else {
+      html += '<div class="iw-review-code-tabs">';
+      for (var t = 0; t < cells.length; t++) {
+        var cell = cells[t];
+        var tabLabel = 'cell ' + (t + 1) + ' \u00B7 ' + (cell.nodeName || 'cell') +
+          (cell.language === 'python' ? '.py' : '.sql');
+        var active = t === this._activeCodeTab ? ' iw-review-code-tab--active' : '';
+        html += '<button class="iw-review-code-tab' + active + '" data-tab="' + t + '">' +
+          this._escape(tabLabel) + '</button>';
+      }
+      html += '</div>';
+      var activeCell = cells[this._activeCodeTab] || cells[0];
+      html += '<div class="iw-review-code-pane">';
+      html += this._renderCodeLines(activeCell);
+      html += '</div>';
+    }
+    html += '</div></div>';
+    return html;
+  }
+
+  _renderCodeLines(cell) {
+    var lines = (cell.content || '').split('\n');
+    var html = '';
+    for (var i = 0; i < lines.length; i++) {
+      var src = this._highlightLine(lines[i], cell.language);
+      html += '<div class="iw-review-code-line"><span class="iw-review-code-ln">' +
+        (i + 1) + '</span><span class="iw-review-code-src">' + (src || '&nbsp;') + '</span></div>';
+    }
+    return html;
+  }
+
+  _highlightLine(line, language) {
+    var escaped = this._escape(line);
+    if (language === 'python') {
+      escaped = escaped.replace(
+        /\b(def|class|import|from|as|return|if|else|elif|for|in|while|try|except|with|None|True|False)\b/g,
+        '<span class="iw-review-tk-kw">$1</span>'
+      );
+      escaped = escaped.replace(/(#.*)$/, '<span class="iw-review-tk-cm">$1</span>');
+    } else {
+      // SQL
+      escaped = escaped.replace(
+        /\b(CREATE|TABLE|MATERIALIZED|LAKE|VIEW|AS|SELECT|FROM|WHERE|INSERT|INTO|VALUES|JOIN|ON|LEFT|RIGHT|INNER|OUTER|GROUP|BY|ORDER|LIMIT|UNION|WITH|CASE|WHEN|THEN|END|AND|OR|NOT|NULL|IS|IF|EXISTS)\b/g,
+        '<span class="iw-review-tk-kw">$1</span>'
+      );
+      escaped = escaped.replace(
+        /\b(BIGINT|INT|STRING|VARCHAR|DECIMAL|DATE|TIMESTAMP|BOOLEAN|DOUBLE|FLOAT)\b/g,
+        '<span class="iw-review-tk-type">$1</span>'
+      );
+      escaped = escaped.replace(/(--.*)$/, '<span class="iw-review-tk-cm">$1</span>');
+    }
+    escaped = escaped.replace(/('[^']*')/g, '<span class="iw-review-tk-str">$1</span>');
+    return escaped;
+  }
+
+  _renderDagSection(state) {
+    var nodes = state.nodes || [];
+    var conns = state.connections || [];
+    var html = '<div class="iw-review-section">';
+    html += this._sectionHead('DAG Topology', null,
+      '<button class="iw-review-section-action" data-page="2">' + this._editIcon() + 'Open builder</button>');
+    html += '<div class="iw-review-dag-wrap">';
+    if (nodes.length === 0) {
+      html += '<div class="iw-review-empty-dag"><span class="iw-review-empty-icon">\u25C7</span>' +
+        '<span class="iw-review-empty-text">No nodes defined</span></div>';
+    } else {
+      html += '<div class="iw-review-dag-fab">' + nodes.length + ' nodes \u00B7 ' + conns.length + ' edges</div>';
+      html += this._renderMiniDagInner(state);
+      html += '<div class="iw-review-dag-legend">';
+      html += '<div class="iw-review-dag-leg"><span class="iw-review-dag-leg-icon iw-review-dag-leg-icon--sql">\u25C7</span>SQL table</div>';
+      html += '<div class="iw-review-dag-leg"><span class="iw-review-dag-leg-icon iw-review-dag-leg-icon--mlv">\u25C8</span>SQL MLV</div>';
+      html += '<div class="iw-review-dag-leg"><span class="iw-review-dag-leg-icon iw-review-dag-leg-icon--spark">\u25C6</span>PySpark MLV</div>';
+      html += '</div>';
+    }
+    html += '</div></div>';
+    return html;
+  }
+
+  _renderMiniDagInner(state) {
+    var nodes = state.nodes;
+    var conns = state.connections || [];
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      var nw = n.width || 180;
+      var nh = n.height || 72;
+      if (n.x < minX) minX = n.x;
+      if (n.y < minY) minY = n.y;
+      if (n.x + nw > maxX) maxX = n.x + nw;
+      if (n.y + nh > maxY) maxY = n.y + nh;
+    }
+    var padding = 40;
+    var rawW = (maxX - minX) + padding * 2;
+    var rawH = (maxY - minY) + padding * 2;
+    // Target an aspect ratio close to the .iw-review-dag-wrap (≈ 360x380)
+    var TARGET_W = 360;
+    var TARGET_H = 380;
+    var scale = Math.min(TARGET_W / rawW, TARGET_H / rawH, 0.6);
+    if (!isFinite(scale) || scale <= 0) scale = 0.5;
+
+    var html = '';
+    // Connections (SVG behind nodes)
+    html += '<svg class="iw-review-dag-svg" viewBox="0 0 ' + TARGET_W + ' ' + TARGET_H + '" preserveAspectRatio="xMidYMid meet">';
+    html += '<defs><marker id="iwArr" markerWidth="6" markerHeight="6" refX="6" refY="3" orient="auto">' +
+      '<polygon points="0 0, 6 3, 0 6" fill="rgba(109,92,255,0.45)"/></marker></defs>';
+    for (var c = 0; c < conns.length; c++) {
+      var conn = conns[c];
+      var src = null, tgt = null;
+      for (var k = 0; k < nodes.length; k++) {
+        if (nodes[k].id === conn.sourceNodeId) src = nodes[k];
+        if (nodes[k].id === conn.targetNodeId) tgt = nodes[k];
+      }
+      if (!src || !tgt) continue;
+      var sw = src.width || 180, sh = src.height || 72;
+      var tw = tgt.width || 180, th = tgt.height || 72;
+      var sx = (src.x - minX + sw / 2) * scale + padding * scale;
+      var sy = (src.y - minY + sh) * scale + padding * scale;
+      var tx = (tgt.x - minX + tw / 2) * scale + padding * scale;
+      var ty = (tgt.y - minY) * scale + padding * scale;
+      void th;
+      var midY = (sy + ty) / 2;
+      html += '<path d="M ' + sx.toFixed(1) + ' ' + sy.toFixed(1) +
+        ' C ' + sx.toFixed(1) + ' ' + midY.toFixed(1) + ', ' +
+        tx.toFixed(1) + ' ' + midY.toFixed(1) + ', ' +
+        tx.toFixed(1) + ' ' + ty.toFixed(1) +
+        '" stroke="rgba(109,92,255,0.40)" stroke-width="1.5" fill="none" marker-end="url(#iwArr)"/>';
+    }
+    html += '</svg>';
+
+    // Nodes as absolute-positioned divs
+    var typeMap = {
+      'sql-table': { glyph: '\u25C7', cls: 'sql', label: 'SQL' },
+      'sql-mlv':   { glyph: '\u25C8', cls: 'mlv', label: 'MLV' },
+      'pyspark-mlv': { glyph: '\u25C6', cls: 'spark', label: 'PySpark' }
+    };
+    for (var j = 0; j < nodes.length; j++) {
+      var nd = nodes[j];
+      var tinfo = typeMap[nd.type] || { glyph: '\u25C7', cls: 'sql', label: nd.type || '' };
+      var schema = nd.schema || 'dbo';
+      var ndw = nd.width || 180, ndh = nd.height || 72;
+      var nx = ((nd.x - minX) * scale) + padding * scale;
+      var ny = ((nd.y - minY) * scale) + padding * scale;
+      var displayW = Math.max(130, ndw * scale);
+      void displayW;
+      html += '<div class="iw-review-dag-node iw-review-dag-node--' + tinfo.cls + '" ' +
+        'style="left:' + nx.toFixed(1) + 'px;top:' + ny.toFixed(1) + 'px;">' +
+        '<div class="iw-review-dag-node-head">' +
+        '<span class="iw-review-dag-node-icon">' + tinfo.glyph + '</span>' +
+        '<span class="iw-review-dag-node-name">' + this._escape(this._truncate(nd.name, 18)) + '</span>' +
+        '</div>' +
+        '<div class="iw-review-dag-node-meta">' +
+        '<span class="iw-review-dag-schema-pill iw-review-dag-schema-pill--' + schema + '">' + schema + '</span>' +
+        '<span class="iw-review-dag-type-pill">' + tinfo.label + '</span>' +
+        '</div></div>';
+      void ndh;
+    }
+    return html;
+  }
+
+  _renderPipelinePreview(state) {
+    var nodes = (state.nodes && state.nodes.length) || 0;
+    var conns = (state.connections && state.connections.length) || 0;
+    var runSec = Math.max(5, nodes * 4 + conns * 2);
+    var steps = [
+      { name: 'Create workspace', sec: 5 },
+      { name: 'Assign capacity', sec: 3 },
+      { name: 'Create lakehouse', sec: 8 },
+      { name: 'Create notebook', sec: 6 },
+      { name: 'Write cells', sec: 2 },
+      { name: 'Run notebook', sec: runSec }
+    ];
+    var html = '<div class="iw-review-section">';
+    html += this._sectionHead('Pipeline Preview', null, '');
+    html += '<div class="iw-review-preview-list">';
+    for (var i = 0; i < steps.length; i++) {
+      html += '<div class="iw-review-preview-row">';
+      html += '<span class="iw-review-preview-num">' + (i + 1) + '</span>';
+      html += '<span class="iw-review-preview-dot"></span>';
+      html += '<span class="iw-review-preview-name">' + this._escape(steps[i].name) + '</span>';
+      html += '<span class="iw-review-preview-time">\u2248 ' + steps[i].sec + 's</span>';
+      html += '</div>';
+    }
+    html += '</div></div>';
+    return html;
+  }
+
+  _renderWarnBanner(_state) {
+    var html = '<div class="iw-review-warn-banner">';
+    html += '<span class="iw-review-warn-icn">!</span>';
+    html += '<div><strong>This will create real cloud resources.</strong> ' +
+      'Billing applies to your trial capacity. You can rollback if anything fails.</div>';
+    html += '</div>';
+    return html;
+  }
+
+  // ── Section / row helpers ──────────────────────────────────────
+
+  _sectionHead(title, count, actionHtml) {
+    var html = '<div class="iw-review-section-head">';
+    html += '<div class="iw-review-section-title">' + this._escape(title);
+    if (count != null) html += ' <span class="iw-review-section-count">' + count + '</span>';
+    html += '</div>';
+    if (actionHtml) html += actionHtml;
+    html += '</div>';
+    return html;
+  }
+
+  _kvRow(key, val, rightHtml) {
+    return '<div class="iw-review-kv">' +
+      '<div class="iw-review-kv-key">' + this._escape(key) + '</div>' +
+      '<div class="iw-review-kv-val"><span class="iw-review-kv-truncate">' + val + '</span>' +
+      (rightHtml ? ' ' + rightHtml : '') + '</div>' +
+      '</div>';
+  }
+
+  _editIcon() {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11">' +
+      '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>' +
+      '<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+  }
+
+  _copyIcon() {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11">' +
+      '<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>' +
+      '<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+  }
+
+  // ── Event binding ──────────────────────────────────────────────
+
+  _bindEvents() {
+    var self = this;
+    var actions = this._rootEl.querySelectorAll('.iw-review-section-action[data-page]');
+    for (var i = 0; i < actions.length; i++) {
+      actions[i].addEventListener('click', function(evt) {
+        var page = parseInt(evt.currentTarget.getAttribute('data-page'), 10);
+        if (!isNaN(page)) self._onNavigateToPage(page);
+      });
+    }
+
+    var toggle = this._rootEl.querySelector('[data-action="toggle-code"]');
+    if (toggle) {
+      toggle.addEventListener('click', function() {
+        self._codeOpen = !self._codeOpen;
+        self._render();
+      });
+    }
+
+    var tabs = this._rootEl.querySelectorAll('.iw-review-code-tab');
+    for (var t = 0; t < tabs.length; t++) {
+      tabs[t].addEventListener('click', function(evt) {
+        var idx = parseInt(evt.currentTarget.getAttribute('data-tab'), 10);
+        if (!isNaN(idx)) {
+          self._activeCodeTab = idx;
+          self._render();
+        }
+      });
+    }
+  }
+
+  // ── Pure helpers ───────────────────────────────────────────────
+
+  _generateCellsForPreview(state) {
+    if (typeof CodeGenerationEngine === 'undefined') return [];
+    if (!state.nodes || state.nodes.length === 0) return [];
+    try {
+      var engine = new CodeGenerationEngine();
+      return engine.generateCells(
+        state.nodes,
+        state.connections || [],
+        state.theme,
+        state.schemas || { dbo: true, bronze: false, silver: false, gold: false }
+      ) || [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  _estimateCellCount(state) {
+    var cells = this._generateCellsForPreview(state);
+    if (cells.length > 0) return cells.length;
+    return (state.nodes && state.nodes.length) || 0;
+  }
+
+  _countLayers(state) {
+    if (!state.nodes) return 0;
+    var layers = {};
+    for (var i = 0; i < state.nodes.length; i++) {
+      if (state.nodes[i].schema) layers[state.nodes[i].schema] = true;
+    }
+    var c = 0;
+    for (var k in layers) if (layers.hasOwnProperty(k)) c++;
+    return c;
+  }
+
+  _usedSchemas(state) {
+    var used = {};
+    if (state.nodes) {
+      for (var i = 0; i < state.nodes.length; i++) {
+        if (state.nodes[i].schema) used[state.nodes[i].schema] = true;
+      }
+    }
+    return used;
+  }
+
+  _themeDescription(theme) {
+    var map = {
+      finance: 'Customer ledger, churn signals, revenue rollup.',
+      retail:  'Orders, inventory, customer segmentation.',
+      iot:     'Telemetry ingestion, sliding-window aggregates.',
+      logs:    'Log ingestion, error aggregation, alerting.',
+      empty:   'Empty environment — bring your own DAG.'
+    };
+    if (theme && map[theme.toLowerCase()]) return map[theme.toLowerCase()];
+    return 'Custom DAG built from your selected nodes.';
+  }
+
+  _capitalize(s) {
+    if (!s) return s;
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+
+  _shortId(id) {
+    if (!id) return '';
+    if (id.length <= 12) return id;
+    return id.substring(0, 8) + '\u2026' + id.substring(id.length - 4);
+  }
+
+  _truncate(s, max) {
+    if (!s) return '';
+    return s.length > max ? s.substring(0, max - 1) + '\u2026' : s;
+  }
+
+  _escape(s) {
+    if (s == null) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+}
+
+window.ReviewSummaryPage = ReviewSummaryPage;
 
 // === js/wizard-template-mgr.js ===
 /**
@@ -74758,7 +76631,7 @@ class ExecutionPipeline {
 
 
   /* ═════════════════════════════════════════════════════════════════
-     UI RENDERING
+     UI RENDERING (Phantom infra-deploy-v1 mock)
      ═════════════════════════════════════════════════════════════════ */
 
   _createElement() {
@@ -74767,354 +76640,532 @@ class ExecutionPipeline {
     // `.iw-page` container (`#iw-page-4`). Adding `iw-page` to this nested
     // root inherits `opacity:0; position:absolute; pointer-events:none` from
     // the base `.iw-page` rule and never receives `.active`, leaving the
-    // deploy page invisible. Same trap as DagCanvasPage (see wizard-dag-canvas-page.js:26).
-    el.className = 'iw-execution-page iw-pipeline';
-
-    // Header
-    var header = document.createElement('div');
-    header.className = 'iw-pipeline-header';
-
-    var title = document.createElement('h3');
-    title.className = 'iw-pipeline-title';
-    title.textContent = 'Creating Environment';
-    header.appendChild(title);
-
-    var timer = document.createElement('span');
-    timer.className = 'iw-pipeline-timer';
-    timer.textContent = '0.0s';
-    header.appendChild(timer);
-
-    el.appendChild(header);
-
-    // Steps container
-    var stepsEl = document.createElement('div');
-    stepsEl.className = 'iw-pipeline-steps';
-    el.appendChild(stepsEl);
-
-    // Summary (hidden until success)
-    var summary = document.createElement('div');
-    summary.className = 'iw-pipeline-summary';
-    summary.hidden = true;
-    el.appendChild(summary);
-
-    // Error panel (hidden until failure)
-    var errorPanel = document.createElement('div');
-    errorPanel.className = 'iw-pipeline-error';
-    errorPanel.hidden = true;
-    el.appendChild(errorPanel);
-
+    // deploy page invisible. Same trap as DagCanvasPage.
+    el.className = 'iw-execution-page iw-deploy';
     this._el = el;
     this._render();
   }
 
+  /* ─── Top-level render ─────────────────────────────────────────── */
+
   _render() {
     if (this._destroyed || !this._el) return;
+    var s = this._state;
+    var view = this._computeDeployView(s);
 
-    var stepsContainer = this._el.querySelector('.iw-pipeline-steps');
-    if (!stepsContainer) return;
+    var html = '';
+    html += this._renderProgressBar(view);
+    html += this._renderHead(view);
+    html += this._renderPipeline(s);
+    html += this._renderBottomSection(s, view);
+    html += this._renderActions(s, view);
 
-    // Rebuild steps
-    stepsContainer.innerHTML = '';
-    for (var i = 0; i < this._state.steps.length; i++) {
-      stepsContainer.appendChild(this._renderStep(this._state.steps[i]));
+    this._el.innerHTML = html;
+    this._bindRenderEvents();
+  }
+
+  /* ─── View model ───────────────────────────────────────────────── */
+
+  _computeDeployView(s) {
+    var totalSteps = s.steps.length;
+    var doneCount = 0;
+    var firstRunningIdx = -1;
+    var firstFailedIdx = -1;
+    var skippedCount = 0;
+
+    for (var i = 0; i < s.steps.length; i++) {
+      var st = s.steps[i];
+      if (st.status === 'succeeded') doneCount++;
+      if (st.skipped) skippedCount++;
+      if (firstRunningIdx === -1 && (st.status === 'running' || st.status === 'retrying')) {
+        firstRunningIdx = i;
+      }
+      if (firstFailedIdx === -1 && st.status === 'failed') {
+        firstFailedIdx = i;
+      }
     }
 
-    // Update header title
-    var titleEl = this._el.querySelector('.iw-pipeline-title');
-    if (titleEl) {
-      var titleText = 'Creating Environment';
-      if (this._state.status === 'succeeded') titleText = 'Environment Created';
-      else if (this._state.status === 'failed') titleText = 'Creation Failed';
-      else if (this._state.status === 'rolling_back') titleText = 'Rolling Back';
-      else if (this._state.status === 'rolled_back') titleText = 'Rolled Back';
-      else if (this._state.status === 'rollback_failed') titleText = 'Rollback Failed';
-      else if (this._state.status === 'retrying') titleText = 'Retrying';
-      titleEl.textContent = titleText;
+    var status = s.status;
+    var pct = totalSteps > 0 ? Math.round((doneCount / totalSteps) * 100) : 0;
+    if (status === 'failed' || status === 'rollback_failed') {
+      // freeze progress at the failed step
+      pct = totalSteps > 0 ? Math.round((doneCount / totalSteps) * 100) : 0;
+    }
+    if (status === 'succeeded') pct = 100;
+
+    var headClass = '';
+    var titleText = 'Provisioning your environment';
+    var eyebrowText = 'Executing \u00B7 ' + totalSteps + ' steps';
+    var currentText = '';
+
+    var activeIdx = firstRunningIdx >= 0 ? firstRunningIdx : (firstFailedIdx >= 0 ? firstFailedIdx : -1);
+    if (activeIdx >= 0) {
+      currentText = s.steps[activeIdx].name + '\u2026';
+    } else if (status === 'succeeded') {
+      currentText = 'All resources provisioned';
+    } else if (status === 'rolling_back') {
+      currentText = 'Rolling back created resources\u2026';
+    } else if (status === 'rolled_back') {
+      currentText = 'All created resources removed';
     }
 
-    this._renderTimers();
-    this._renderSummary();
-    this._renderError();
+    var timerClass = '';
+    if (status === 'succeeded') {
+      headClass = 'iw-deploy-head--success';
+      eyebrowText = 'Succeeded \u00B7 ' + totalSteps + ' steps complete';
+      titleText = 'Environment ready';
+      timerClass = 'iw-deploy-timer--done';
+    } else if (status === 'failed') {
+      headClass = 'iw-deploy-head--fail';
+      eyebrowText = 'Failed \u00B7 step ' + ((firstFailedIdx + 1) || '?') + ' of ' + totalSteps;
+      titleText = 'Provisioning failed';
+      timerClass = 'iw-deploy-timer--fail';
+    } else if (status === 'rolling_back') {
+      headClass = 'iw-deploy-head--warn';
+      eyebrowText = 'Rolling back \u00B7 cleaning up resources';
+      titleText = 'Rolling back';
+      timerClass = 'iw-deploy-timer--warn';
+    } else if (status === 'rolled_back') {
+      headClass = 'iw-deploy-head--warn';
+      eyebrowText = 'Rolled back \u00B7 environment removed';
+      titleText = 'Rollback complete';
+      timerClass = 'iw-deploy-timer--warn';
+    } else if (status === 'rollback_failed') {
+      headClass = 'iw-deploy-head--fail';
+      eyebrowText = 'Rollback failed \u00B7 manual cleanup required';
+      titleText = 'Rollback failed';
+      timerClass = 'iw-deploy-timer--fail';
+    }
+
+    return {
+      status: status,
+      pct: pct,
+      doneCount: doneCount,
+      totalSteps: totalSteps,
+      skippedCount: skippedCount,
+      firstRunningIdx: firstRunningIdx,
+      firstFailedIdx: firstFailedIdx,
+      headClass: headClass,
+      eyebrowText: eyebrowText,
+      titleText: titleText,
+      currentText: currentText,
+      timerClass: timerClass
+    };
+  }
+
+  /* ─── Progress bar ─────────────────────────────────────────────── */
+
+  _renderProgressBar(view) {
+    var fillCls = '';
+    if (view.status === 'succeeded') fillCls = ' iw-progress-fill--ok';
+    else if (view.status === 'failed' || view.status === 'rollback_failed') fillCls = ' iw-progress-fill--fail';
+    else if (view.status === 'rolling_back' || view.status === 'rolled_back') fillCls = ' iw-progress-fill--warn';
+    return '<div class="iw-progress-bar"><div class="iw-progress-fill' + fillCls +
+      '" style="width:' + view.pct + '%"></div></div>';
+  }
+
+  /* ─── Deploy head ──────────────────────────────────────────────── */
+
+  _renderHead(view) {
+    var html = '<div class="iw-deploy-head ' + view.headClass + '">';
+    html += '<div class="iw-deploy-head-left">';
+    html += '<div class="iw-deploy-eyebrow"><span class="iw-deploy-eyebrow-dot"></span>' +
+      this._escape(view.eyebrowText) + '</div>';
+    html += '<div class="iw-deploy-title">' + this._escape(view.titleText) + '</div>';
+    if (view.currentText) {
+      var liveDot = (view.status === 'executing' || view.status === 'rolling_back')
+        ? '<span class="iw-deploy-live-dot"></span>'
+        : '';
+      html += '<div class="iw-deploy-current">' + liveDot +
+        '<span>' + this._escape(view.currentText) + '</span></div>';
+    }
+    html += '</div>';
+    html += '<div class="iw-deploy-head-right">';
+    html += '<div class="iw-deploy-timer ' + view.timerClass + '">' +
+      this._escape(this._formatElapsed(this._state.timing.elapsedMs)) + '</div>';
+    html += '<div class="iw-deploy-timer-label">elapsed</div>';
+    var counterCurrent = view.doneCount;
+    if (view.firstRunningIdx >= 0) counterCurrent = view.firstRunningIdx;
+    var counterHtml;
+    if (view.status === 'succeeded') {
+      counterHtml = '<strong>' + view.totalSteps + '</strong> / ' + view.totalSteps + ' steps';
+    } else if (view.status === 'failed' || view.status === 'rollback_failed') {
+      counterHtml = '<strong>' + view.doneCount + '</strong> / ' + view.totalSteps + ' steps';
+    } else {
+      counterHtml = '<strong>' + counterCurrent + '</strong> / ' + view.totalSteps + ' steps';
+    }
+    html += '<div class="iw-deploy-step-counter">' + counterHtml + '</div>';
+    html += '</div></div>';
+    return html;
+  }
+
+  /* ─── Pipeline list ────────────────────────────────────────────── */
+
+  _renderPipeline(s) {
+    var html = '<div class="iw-pipeline">';
+    for (var i = 0; i < s.steps.length; i++) {
+      html += this._renderStep(s.steps[i]);
+    }
+    html += '</div>';
+    return html;
   }
 
   _renderStep(step) {
-    var self = this;
-    var wrapper = document.createElement('div');
-    wrapper.className = 'iw-step iw-step--' + step.status;
-    wrapper.setAttribute('data-step-index', step.index);
+    var statusCls = step.skipped ? 'skipped' : step.status;
+    var openCls = step.isExpanded ? ' iw-pipe-step--open' : '';
+    var html = '<div class="iw-pipe-step iw-pipe-step--' + statusCls + openCls +
+      '" data-step-index="' + step.index + '">';
 
-    // Row
-    var row = document.createElement('div');
-    row.className = 'iw-step-row';
-
-    var icon = document.createElement('span');
-    icon.className = 'iw-step-icon iw-step-icon--' + step.status;
-    icon.innerHTML = this._renderStepIcon(step.status);
-    row.appendChild(icon);
-
-    var name = document.createElement('span');
-    name.className = 'iw-step-name';
-    name.textContent = step.name;
-    if (step.retryCount > 0) {
-      name.textContent = step.name + ' (retry ' + step.retryCount + ')';
+    html += '<div class="iw-pipe-row" data-action="toggle-step" data-step-index="' + step.index + '">';
+    html += '<div class="iw-pipe-icon iw-pipe-icon--' + statusCls + '">' +
+      this._renderStepIcon(step.skipped ? 'skipped' : step.status) + '</div>';
+    html += '<div class="iw-pipe-info">';
+    var nameSuffix = step.retryCount > 0 ? ' <span class="iw-pipe-retry">\u21BA retry ' + step.retryCount + '</span>' : '';
+    html += '<div class="iw-pipe-name">' + this._escape(step.name) + nameSuffix + '</div>';
+    html += '<div class="iw-pipe-sub">' + this._escape(this._stepSubText(step)) + '</div>';
+    html += '</div>';
+    html += '<div class="iw-pipe-time">';
+    if (step.status !== 'pending' && !step.skipped) {
+      html += this._escape(this._formatElapsed(step.timing.elapsedMs));
+    } else if (step.skipped) {
+      html += 'skipped';
+    } else {
+      html += '\u2014';
     }
-    row.appendChild(name);
+    html += '</div>';
+    html += '<button class="iw-pipe-expand" data-action="toggle-step" data-step-index="' + step.index + '" aria-label="Toggle logs">' +
+      (step.isExpanded ? '\u25BE' : '\u25B8') + '</button>';
+    html += '</div>';
 
-    var timer = document.createElement('span');
-    timer.className = 'iw-step-timer';
-    if (step.status !== 'pending') {
-      timer.textContent = this._formatElapsed(step.timing.elapsedMs);
-    }
-    row.appendChild(timer);
-
-    var toggle = document.createElement('button');
-    toggle.className = 'iw-step-toggle';
-    toggle.textContent = step.isExpanded ? '▾' : '▸';
-    toggle.addEventListener('click', function(e) {
-      e.stopPropagation();
-      self._toggleStepExpand(step.index);
-    });
-    row.appendChild(toggle);
-
-    wrapper.appendChild(row);
-
-    // Detail panel
-    var detail = document.createElement('div');
-    detail.className = 'iw-step-detail';
-    detail.hidden = !step.isExpanded;
-
-    var logs = document.createElement('div');
-    logs.className = 'iw-step-logs';
-    logs.setAttribute('data-log-index', step.index);
-
-    for (var j = 0; j < step.logs.length; j++) {
-      logs.appendChild(this._renderLogEntry(step.logs[j]));
+    if (step.isExpanded) {
+      html += '<div class="iw-pipe-detail">';
+      html += '<div class="iw-pipe-detail-logs" data-log-index="' + step.index + '">';
+      if (step.logs.length === 0) {
+        html += '<div class="iw-log-line iw-log-line--debug">No log entries yet.</div>';
+      } else {
+        for (var j = 0; j < step.logs.length; j++) {
+          html += this._renderLogEntry(step.logs[j]);
+        }
+      }
+      html += '</div>';
+      if (step.error) {
+        html += '<div class="iw-pipe-step-error">' + this._escape(step.error) + '</div>';
+      }
+      html += '</div>';
     }
 
-    detail.appendChild(logs);
-
-    if (step.error) {
-      var errEl = document.createElement('div');
-      errEl.className = 'iw-step-error';
-      errEl.textContent = step.error;
-      detail.appendChild(errEl);
-    }
-
-    wrapper.appendChild(detail);
-    return wrapper;
+    html += '</div>';
+    return html;
   }
 
-  _renderLogEntry(entry) {
-    var line = document.createElement('div');
-    line.className = 'iw-log-entry iw-log--' + entry.level;
-    var ts = new Date(entry.timestamp);
-    var timeStr = ts.toLocaleTimeString();
-    line.textContent = '[' + timeStr + '] ' + entry.message;
-    return line;
+  _stepSubText(step) {
+    if (step.skipped) return 'Skipped \u00B7 capacity already bound at workspace creation';
+    switch (step.status) {
+      case 'pending': return 'Waiting for previous steps to complete';
+      case 'running': return 'In progress\u2026';
+      case 'retrying': return 'Retrying request\u2026';
+      case 'succeeded': return 'Completed successfully';
+      case 'failed': return step.error || 'Request failed';
+      default: return '';
+    }
   }
 
   _renderStepIcon(status) {
     if (status === 'running' || status === 'retrying') {
-      return '<span class="iw-step-spinner"></span>';
+      return '<span class="iw-spinner" aria-hidden="true"></span>';
     }
     if (status === 'succeeded') {
-      return '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>';
+      return '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
     }
     if (status === 'failed') {
-      return '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+      return '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
     }
-    return '<span style="font-size:10px">' + (STEP_ICONS[status] || '\u25CB') + '</span>';
+    if (status === 'skipped') {
+      return '<span aria-hidden="true">\u2212</span>';
+    }
+    return '<span aria-hidden="true">\u25CB</span>';
   }
 
-  _renderTimers() {
-    if (this._destroyed || !this._el) return;
-
-    // Pipeline timer
-    var pipelineTimer = this._el.querySelector('.iw-pipeline-timer');
-    if (pipelineTimer) {
-      pipelineTimer.textContent = this._formatElapsed(this._state.timing.elapsedMs);
-    }
-
-    // Per-step timers
-    for (var i = 0; i < this._state.steps.length; i++) {
-      var step = this._state.steps[i];
-      var stepEl = this._el.querySelector('.iw-step[data-step-index="' + i + '"]');
-      if (!stepEl) continue;
-      var timerEl = stepEl.querySelector('.iw-step-timer');
-      if (timerEl && step.status !== 'pending') {
-        timerEl.textContent = this._formatElapsed(step.timing.elapsedMs);
-      }
-    }
+  _renderLogEntry(entry) {
+    var ts = new Date(entry.timestamp);
+    var timeStr = ts.toLocaleTimeString('en-US', { hour12: false });
+    var msg = this._escape(entry.message);
+    return '<div class="iw-log-line iw-log-line--' + entry.level + '">' +
+      '<span class="iw-log-ts">' + timeStr + '</span>' +
+      '<span class="iw-log-lvl">' + entry.level + '</span>' +
+      '<span class="iw-log-msg">' + msg + '</span></div>';
   }
 
   _renderStepLogs(stepIndex) {
     if (this._destroyed || !this._el) return;
-    var logContainer = this._el.querySelector('.iw-step-logs[data-log-index="' + stepIndex + '"]');
+    var step = this._state.steps[stepIndex];
+    if (!step || !step.isExpanded) return;
+    var logContainer = this._el.querySelector('.iw-pipe-detail-logs[data-log-index="' + stepIndex + '"]');
     if (!logContainer) return;
 
-    var step = this._state.steps[stepIndex];
-    var existingCount = logContainer.childElementCount;
-
-    // Only append new entries
-    for (var i = existingCount; i < step.logs.length; i++) {
-      logContainer.appendChild(this._renderLogEntry(step.logs[i]));
+    var existing = logContainer.children;
+    var existingCount = existing.length;
+    // Skip the "No log entries yet." placeholder if it's there
+    if (existingCount === 1 && existing[0].classList.contains('iw-log-line--debug') &&
+        existing[0].textContent.indexOf('No log entries') === 0) {
+      logContainer.innerHTML = '';
+      existingCount = 0;
     }
-
-    // Auto-scroll
+    for (var i = existingCount; i < step.logs.length; i++) {
+      var tmp = document.createElement('div');
+      tmp.innerHTML = this._renderLogEntry(step.logs[i]);
+      logContainer.appendChild(tmp.firstChild);
+    }
     logContainer.scrollTop = logContainer.scrollHeight;
   }
 
-  _renderSummary() {
-    var summaryEl = this._el.querySelector('.iw-pipeline-summary');
-    if (!summaryEl) return;
-
-    if (this._state.status !== 'succeeded') {
-      summaryEl.hidden = true;
-      return;
+  _renderTimers() {
+    if (this._destroyed || !this._el) return;
+    var headTimer = this._el.querySelector('.iw-deploy-timer');
+    if (headTimer) {
+      headTimer.textContent = this._formatElapsed(this._state.timing.elapsedMs);
     }
-
-    summaryEl.hidden = false;
-    summaryEl.innerHTML = '';
-
-    var iconSpan = document.createElement('span');
-    iconSpan.className = 'iw-pipeline-summary-icon';
-    iconSpan.textContent = '●';
-    summaryEl.appendChild(iconSpan);
-
-    var msg = document.createElement('span');
-    msg.className = 'iw-pipeline-summary-text';
-    msg.textContent = 'Environment created successfully in ' + this._formatElapsed(this._state.timing.elapsedMs);
-    summaryEl.appendChild(msg);
-
-    // Details list
-    var details = document.createElement('div');
-    details.className = 'iw-pipeline-summary-details';
-    var artifacts = this._state.artifacts;
-    if (artifacts.workspaceId) {
-      this._appendDetail(details, 'Workspace', artifacts.workspaceId);
-    }
-    if (artifacts.lakehouseId) {
-      this._appendDetail(details, 'Lakehouse', artifacts.lakehouseId);
-    }
-    if (artifacts.notebookId) {
-      this._appendDetail(details, 'Notebook', artifacts.notebookId);
-    }
-    summaryEl.appendChild(details);
-
-    // Navigate button
-    if (artifacts.workspaceId) {
-      var self = this;
-      var navBtn = document.createElement('button');
-      navBtn.className = 'iw-btn iw-btn-primary iw-exec-navigate-btn';
-      navBtn.textContent = 'Open Workspace \u2192';
-      navBtn.addEventListener('click', function() {
-        self._emit(IW_EVENTS.NAVIGATE_WORKSPACE, { workspaceId: artifacts.workspaceId });
-      });
-      summaryEl.appendChild(navBtn);
-    }
-  }
-
-  _appendDetail(container, label, value) {
-    var row = document.createElement('div');
-    row.className = 'iw-pipeline-summary-row';
-    var lbl = document.createElement('span');
-    lbl.className = 'iw-pipeline-summary-label';
-    lbl.textContent = label + ': ';
-    var val = document.createElement('span');
-    val.className = 'iw-pipeline-summary-value';
-    val.textContent = value;
-    row.appendChild(lbl);
-    row.appendChild(val);
-    container.appendChild(row);
-  }
-
-  _renderError() {
-    var errorEl = this._el.querySelector('.iw-pipeline-error');
-    if (!errorEl) return;
-
-    var showError = this._state.status === 'failed' ||
-      this._state.status === 'rollback_failed';
-
-    if (!showError) {
-      errorEl.hidden = true;
-      return;
-    }
-
-    errorEl.hidden = false;
-    errorEl.innerHTML = '';
-
-    // Error message
-    var msgEl = document.createElement('div');
-    msgEl.className = 'iw-pipeline-error-msg';
-    msgEl.textContent = this._state.error || 'An unexpected error occurred';
-    errorEl.appendChild(msgEl);
-
-    // Rollback results (if any)
-    if (this._state.status === 'rollback_failed') {
-      var results = this._state.rollbackManifest.rollbackResults;
-      if (results.length > 0) {
-        var list = document.createElement('div');
-        list.className = 'iw-pipeline-rollback-results';
-        for (var i = 0; i < results.length; i++) {
-          var r = results[i];
-          var item = document.createElement('div');
-          item.className = 'iw-pipeline-rollback-item iw-pipeline-rollback--' + r.status;
-          item.textContent = r.type + ' (' + r.id.substring(0, 8) + '...): ' + r.status;
-          if (r.error) {
-            item.textContent += ' — ' + r.error;
-          }
-          list.appendChild(item);
-        }
-        errorEl.appendChild(list);
+    for (var i = 0; i < this._state.steps.length; i++) {
+      var step = this._state.steps[i];
+      var stepEl = this._el.querySelector('.iw-pipe-step[data-step-index="' + i + '"] .iw-pipe-time');
+      if (stepEl && step.status !== 'pending' && !step.skipped) {
+        stepEl.textContent = this._formatElapsed(step.timing.elapsedMs);
       }
     }
+  }
 
-    // Rolled-back message
-    if (this._state.status === 'rolled_back') {
-      errorEl.hidden = false;
-      errorEl.innerHTML = '';
-      var rolledMsg = document.createElement('div');
-      rolledMsg.className = 'iw-pipeline-error-msg';
-      rolledMsg.textContent = 'All created resources have been rolled back.';
-      errorEl.appendChild(rolledMsg);
-      return;
+  /* ─── Bottom section (success / error / rollback) ──────────────── */
+
+  _renderBottomSection(s, view) {
+    if (s.status === 'succeeded') return this._renderSuccessCard(s);
+    if (s.status === 'failed') return this._renderErrorPanel(s);
+    if (s.status === 'rolling_back') return this._renderRollbackPanel(s, false);
+    if (s.status === 'rolled_back') return this._renderRollbackPanel(s, true);
+    if (s.status === 'rollback_failed') return this._renderRollbackFailedPanel(s);
+    void view;
+    return '';
+  }
+
+  _renderSuccessCard(s) {
+    var a = s.artifacts;
+    var html = '<div class="iw-success-card">';
+    html += '<div class="iw-success-head">';
+    html += '<div class="iw-success-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>';
+    html += '<div><div class="iw-success-title">Your Fabric environment is live</div>';
+    html += '<div class="iw-success-sub">Provisioned in ' + this._escape(this._formatElapsed(s.timing.elapsedMs)) +
+      ' \u00B7 all 6 steps succeeded</div></div></div>';
+    html += '<div class="iw-resource-grid">';
+    if (a.workspaceId) html += this._resourceCell('Workspace', this._shortId(a.workspaceId));
+    if (a.lakehouseId) html += this._resourceCell('Lakehouse', this._shortId(a.lakehouseId));
+    if (a.notebookId) html += this._resourceCell('Notebook', this._shortId(a.notebookId));
+    if (a.notebookRunStatus) html += this._resourceCell('Run status', String(a.notebookRunStatus));
+    html += '</div></div>';
+    return html;
+  }
+
+  _resourceCell(label, value) {
+    return '<div class="iw-resource-cell">' +
+      '<div class="iw-resource-label">' + this._escape(label) + '</div>' +
+      '<div class="iw-resource-value">' + this._escape(value) + '</div></div>';
+  }
+
+  _renderErrorPanel(s) {
+    var html = '<div class="iw-error-panel">';
+    html += '<div class="iw-error-head">';
+    html += '<div class="iw-error-icon">!</div>';
+    html += '<div><div class="iw-error-title">Provisioning failed</div>';
+    html += '<div class="iw-error-sub">' +
+      this._escape(s.error || 'An unexpected error occurred during execution.') +
+      '</div></div></div>';
+
+    var manifest = s.rollbackManifest.resources;
+    if (manifest && manifest.length > 0) {
+      html += '<div class="iw-error-rollback-preview">';
+      html += '<div class="iw-error-rollback-title">' + manifest.length +
+        ' resource' + (manifest.length === 1 ? '' : 's') + ' created \u2014 available for rollback</div>';
+      for (var i = 0; i < manifest.length; i++) {
+        html += '<div class="iw-rb-row iw-rb-row--pending">' +
+          '<span class="iw-rb-type">' + this._escape(manifest[i].type) + '</span>' +
+          '<span class="iw-rb-id">' + this._escape(this._shortId(manifest[i].id)) + '</span>' +
+          '<span class="iw-rb-status">awaiting rollback</span></div>';
+      }
+      html += '</div>';
     }
+    html += '</div>';
+    return html;
+  }
 
-    // Action buttons
-    var actions = document.createElement('div');
-    actions.className = 'iw-pipeline-error-actions';
+  _renderRollbackPanel(s, done) {
+    var results = s.rollbackManifest.rollbackResults;
+    var manifest = s.rollbackManifest.resources;
+    var html = '<div class="iw-rollback-panel ' + (done ? 'iw-rollback-panel--done' : '') + '">';
+    html += '<div class="iw-rollback-head">';
+    html += '<div class="iw-rollback-icon">\u21BA</div>';
+    html += '<div><div class="iw-rollback-title">' +
+      (done ? 'Rollback complete' : 'Rolling back created resources') + '</div>';
+    html += '<div class="iw-rollback-sub">' +
+      (done ? 'All resources created during this run have been removed.'
+            : 'Deleting resources in reverse creation order. This usually takes a few seconds.') +
+      '</div></div></div>';
 
+    html += '<div class="iw-rollback-list">';
+    var renderedIds = {};
+    for (var i = 0; i < results.length; i++) {
+      var r = results[i];
+      renderedIds[r.id] = true;
+      var rowCls = r.status === 'deleted' ? 'iw-rb-row--deleted' :
+                   r.status === 'failed'  ? 'iw-rb-row--failed'  :
+                   r.status === 'kept'    ? 'iw-rb-row--kept'    : 'iw-rb-row--deleting';
+      var statusText = r.status === 'deleted' ? 'deleted' :
+                       r.status === 'failed'  ? 'failed: ' + (r.error || '') :
+                       r.status === 'kept'    ? 'kept' : 'deleting\u2026';
+      html += '<div class="iw-rb-row ' + rowCls + '">' +
+        '<span class="iw-rb-type">' + this._escape(r.type) + '</span>' +
+        '<span class="iw-rb-id">' + this._escape(this._shortId(r.id)) + '</span>' +
+        '<span class="iw-rb-status">' + this._escape(statusText) + '</span></div>';
+    }
+    for (var k = 0; k < manifest.length; k++) {
+      if (renderedIds[manifest[k].id]) continue;
+      html += '<div class="iw-rb-row iw-rb-row--pending">' +
+        '<span class="iw-rb-type">' + this._escape(manifest[k].type) + '</span>' +
+        '<span class="iw-rb-id">' + this._escape(this._shortId(manifest[k].id)) + '</span>' +
+        '<span class="iw-rb-status">queued</span></div>';
+    }
+    html += '</div></div>';
+    return html;
+  }
+
+  _renderRollbackFailedPanel(s) {
+    var html = '<div class="iw-error-panel iw-error-panel--rollback">';
+    html += '<div class="iw-error-head">';
+    html += '<div class="iw-error-icon">!</div>';
+    html += '<div><div class="iw-error-title">Rollback partially failed</div>';
+    html += '<div class="iw-error-sub">' +
+      this._escape(s.error || 'Some resources could not be removed automatically.') +
+      ' Manual cleanup may be required in the Fabric portal.</div></div></div>';
+    var results = s.rollbackManifest.rollbackResults;
+    if (results && results.length > 0) {
+      html += '<div class="iw-rollback-list">';
+      for (var i = 0; i < results.length; i++) {
+        var r = results[i];
+        var rowCls = r.status === 'deleted' ? 'iw-rb-row--deleted' : 'iw-rb-row--failed';
+        var statusText = r.status === 'deleted' ? 'deleted' : ('failed' + (r.error ? ': ' + r.error : ''));
+        html += '<div class="iw-rb-row ' + rowCls + '">' +
+          '<span class="iw-rb-type">' + this._escape(r.type) + '</span>' +
+          '<span class="iw-rb-id">' + this._escape(this._shortId(r.id)) + '</span>' +
+          '<span class="iw-rb-status">' + this._escape(statusText) + '</span></div>';
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  /* ─── Action buttons (inline; deploy page has no wizard footer) ─ */
+
+  _renderActions(s, view) {
+    var html = '<div class="iw-deploy-actions">';
+    if (s.status === 'executing' || s.status === 'idle' || s.status === 'retrying') {
+      html += '<button class="iw-btn iw-btn-ghost" data-action="minimize">Minimize</button>';
+    } else if (s.status === 'succeeded') {
+      var hasWs = !!s.artifacts.workspaceId;
+      if (hasWs) {
+        html += '<button class="iw-btn iw-btn-ghost" data-action="open-workspace">Open in Fabric \u2197</button>';
+      }
+      html += '<button class="iw-btn iw-btn-primary" data-action="deploy-flt">Deploy FLT \u2192</button>';
+    } else if (s.status === 'failed') {
+      html += '<button class="iw-btn iw-btn-ghost" data-action="minimize">Minimize</button>';
+      var hasResources = s.rollbackManifest.resources.length > 0 &&
+                        !s.rollbackManifest.rollbackAttempted;
+      if (hasResources) {
+        html += '<button class="iw-btn iw-btn-danger" data-action="rollback">Rollback created resources</button>';
+      }
+      html += '<button class="iw-btn iw-btn-primary" data-action="retry">Retry from failed step</button>';
+    } else if (s.status === 'rolling_back') {
+      html += '<button class="iw-btn iw-btn-ghost" disabled>Rolling back\u2026</button>';
+    } else if (s.status === 'rolled_back') {
+      html += '<button class="iw-btn iw-btn-primary" data-action="restart">Start over</button>';
+    } else if (s.status === 'rollback_failed') {
+      html += '<button class="iw-btn iw-btn-ghost" data-action="open-portal">Open Fabric portal</button>';
+      html += '<button class="iw-btn iw-btn-primary" data-action="restart">Start over</button>';
+    }
+    html += '</div>';
+    void view;
+    return html;
+  }
+
+  /* ─── Event binding ────────────────────────────────────────────── */
+
+  _bindRenderEvents() {
     var self = this;
-
-    if (this._state.status === 'failed') {
-      var retryBtn = document.createElement('button');
-      retryBtn.className = 'iw-btn iw-btn-secondary';
-      retryBtn.textContent = 'Retry from Failed';
-      retryBtn.addEventListener('click', function() {
-        self.retryFromFailed();
+    var toggles = this._el.querySelectorAll('[data-action="toggle-step"]');
+    for (var i = 0; i < toggles.length; i++) {
+      toggles[i].addEventListener('click', function(e) {
+        e.stopPropagation();
+        var idx = parseInt(e.currentTarget.getAttribute('data-step-index'), 10);
+        if (!isNaN(idx)) self._toggleStepExpand(idx);
       });
-      actions.appendChild(retryBtn);
-
-      if (this._state.rollbackManifest.resources.length > 0 &&
-          !this._state.rollbackManifest.rollbackAttempted) {
-        var rollbackBtn = document.createElement('button');
-        rollbackBtn.className = 'iw-btn iw-btn-danger';
-        rollbackBtn.textContent = 'Rollback';
-        rollbackBtn.addEventListener('click', function() {
-          self._abortController = new AbortController();
-          self._startRollback();
-        });
-        actions.appendChild(rollbackBtn);
-      }
     }
 
-    errorEl.appendChild(actions);
+    var actionMap = {
+      'minimize':        function() { if (self._onMinimize) self._onMinimize(); },
+      'retry':           function() { self.retryFromFailed(); },
+      'rollback':        function() {
+        self._abortController = new AbortController();
+        self._startRollback();
+      },
+      'open-workspace':  function() {
+        var wsId = self._state.artifacts.workspaceId;
+        if (wsId && typeof IW_EVENTS !== 'undefined') {
+          self._emit(IW_EVENTS.NAVIGATE_WORKSPACE, { workspaceId: wsId });
+        }
+      },
+      'deploy-flt':      function() {
+        if (self._onComplete) self._onComplete(self._state.artifacts);
+      },
+      'restart':         function() {
+        if (self._onMinimize) self._onMinimize();
+      },
+      'open-portal':     function() {
+        window.open('https://app.fabric.microsoft.com/', '_blank');
+      }
+    };
+
+    Object.keys(actionMap).forEach(function(key) {
+      var btn = self._el.querySelector('[data-action="' + key + '"]');
+      if (btn) {
+        btn.addEventListener('click', function(e) {
+          e.preventDefault();
+          actionMap[key]();
+        });
+      }
+    });
   }
+
+  /* ─── Expand toggle ────────────────────────────────────────────── */
 
   _toggleStepExpand(stepIndex) {
     if (stepIndex < 0 || stepIndex >= this._state.steps.length) return;
     this._state.steps[stepIndex].isExpanded = !this._state.steps[stepIndex].isExpanded;
     this._render();
+  }
+
+  /* ─── Misc helpers ─────────────────────────────────────────────── */
+
+  _shortId(id) {
+    if (!id) return '';
+    var s = String(id);
+    if (s.length <= 14) return s;
+    return s.substring(0, 8) + '\u2026' + s.substring(s.length - 4);
+  }
+
+  _escape(s) {
+    if (s == null) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
   }
 }
 

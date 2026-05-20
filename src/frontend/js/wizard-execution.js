@@ -945,7 +945,7 @@ class ExecutionPipeline {
 
 
   /* ═════════════════════════════════════════════════════════════════
-     UI RENDERING
+     UI RENDERING (Phantom infra-deploy-v1 mock)
      ═════════════════════════════════════════════════════════════════ */
 
   _createElement() {
@@ -954,354 +954,532 @@ class ExecutionPipeline {
     // `.iw-page` container (`#iw-page-4`). Adding `iw-page` to this nested
     // root inherits `opacity:0; position:absolute; pointer-events:none` from
     // the base `.iw-page` rule and never receives `.active`, leaving the
-    // deploy page invisible. Same trap as DagCanvasPage (see wizard-dag-canvas-page.js:26).
-    el.className = 'iw-execution-page iw-pipeline';
-
-    // Header
-    var header = document.createElement('div');
-    header.className = 'iw-pipeline-header';
-
-    var title = document.createElement('h3');
-    title.className = 'iw-pipeline-title';
-    title.textContent = 'Creating Environment';
-    header.appendChild(title);
-
-    var timer = document.createElement('span');
-    timer.className = 'iw-pipeline-timer';
-    timer.textContent = '0.0s';
-    header.appendChild(timer);
-
-    el.appendChild(header);
-
-    // Steps container
-    var stepsEl = document.createElement('div');
-    stepsEl.className = 'iw-pipeline-steps';
-    el.appendChild(stepsEl);
-
-    // Summary (hidden until success)
-    var summary = document.createElement('div');
-    summary.className = 'iw-pipeline-summary';
-    summary.hidden = true;
-    el.appendChild(summary);
-
-    // Error panel (hidden until failure)
-    var errorPanel = document.createElement('div');
-    errorPanel.className = 'iw-pipeline-error';
-    errorPanel.hidden = true;
-    el.appendChild(errorPanel);
-
+    // deploy page invisible. Same trap as DagCanvasPage.
+    el.className = 'iw-execution-page iw-deploy';
     this._el = el;
     this._render();
   }
 
+  /* ─── Top-level render ─────────────────────────────────────────── */
+
   _render() {
     if (this._destroyed || !this._el) return;
+    var s = this._state;
+    var view = this._computeDeployView(s);
 
-    var stepsContainer = this._el.querySelector('.iw-pipeline-steps');
-    if (!stepsContainer) return;
+    var html = '';
+    html += this._renderProgressBar(view);
+    html += this._renderHead(view);
+    html += this._renderPipeline(s);
+    html += this._renderBottomSection(s, view);
+    html += this._renderActions(s, view);
 
-    // Rebuild steps
-    stepsContainer.innerHTML = '';
-    for (var i = 0; i < this._state.steps.length; i++) {
-      stepsContainer.appendChild(this._renderStep(this._state.steps[i]));
+    this._el.innerHTML = html;
+    this._bindRenderEvents();
+  }
+
+  /* ─── View model ───────────────────────────────────────────────── */
+
+  _computeDeployView(s) {
+    var totalSteps = s.steps.length;
+    var doneCount = 0;
+    var firstRunningIdx = -1;
+    var firstFailedIdx = -1;
+    var skippedCount = 0;
+
+    for (var i = 0; i < s.steps.length; i++) {
+      var st = s.steps[i];
+      if (st.status === 'succeeded') doneCount++;
+      if (st.skipped) skippedCount++;
+      if (firstRunningIdx === -1 && (st.status === 'running' || st.status === 'retrying')) {
+        firstRunningIdx = i;
+      }
+      if (firstFailedIdx === -1 && st.status === 'failed') {
+        firstFailedIdx = i;
+      }
     }
 
-    // Update header title
-    var titleEl = this._el.querySelector('.iw-pipeline-title');
-    if (titleEl) {
-      var titleText = 'Creating Environment';
-      if (this._state.status === 'succeeded') titleText = 'Environment Created';
-      else if (this._state.status === 'failed') titleText = 'Creation Failed';
-      else if (this._state.status === 'rolling_back') titleText = 'Rolling Back';
-      else if (this._state.status === 'rolled_back') titleText = 'Rolled Back';
-      else if (this._state.status === 'rollback_failed') titleText = 'Rollback Failed';
-      else if (this._state.status === 'retrying') titleText = 'Retrying';
-      titleEl.textContent = titleText;
+    var status = s.status;
+    var pct = totalSteps > 0 ? Math.round((doneCount / totalSteps) * 100) : 0;
+    if (status === 'failed' || status === 'rollback_failed') {
+      // freeze progress at the failed step
+      pct = totalSteps > 0 ? Math.round((doneCount / totalSteps) * 100) : 0;
+    }
+    if (status === 'succeeded') pct = 100;
+
+    var headClass = '';
+    var titleText = 'Provisioning your environment';
+    var eyebrowText = 'Executing \u00B7 ' + totalSteps + ' steps';
+    var currentText = '';
+
+    var activeIdx = firstRunningIdx >= 0 ? firstRunningIdx : (firstFailedIdx >= 0 ? firstFailedIdx : -1);
+    if (activeIdx >= 0) {
+      currentText = s.steps[activeIdx].name + '\u2026';
+    } else if (status === 'succeeded') {
+      currentText = 'All resources provisioned';
+    } else if (status === 'rolling_back') {
+      currentText = 'Rolling back created resources\u2026';
+    } else if (status === 'rolled_back') {
+      currentText = 'All created resources removed';
     }
 
-    this._renderTimers();
-    this._renderSummary();
-    this._renderError();
+    var timerClass = '';
+    if (status === 'succeeded') {
+      headClass = 'iw-deploy-head--success';
+      eyebrowText = 'Succeeded \u00B7 ' + totalSteps + ' steps complete';
+      titleText = 'Environment ready';
+      timerClass = 'iw-deploy-timer--done';
+    } else if (status === 'failed') {
+      headClass = 'iw-deploy-head--fail';
+      eyebrowText = 'Failed \u00B7 step ' + ((firstFailedIdx + 1) || '?') + ' of ' + totalSteps;
+      titleText = 'Provisioning failed';
+      timerClass = 'iw-deploy-timer--fail';
+    } else if (status === 'rolling_back') {
+      headClass = 'iw-deploy-head--warn';
+      eyebrowText = 'Rolling back \u00B7 cleaning up resources';
+      titleText = 'Rolling back';
+      timerClass = 'iw-deploy-timer--warn';
+    } else if (status === 'rolled_back') {
+      headClass = 'iw-deploy-head--warn';
+      eyebrowText = 'Rolled back \u00B7 environment removed';
+      titleText = 'Rollback complete';
+      timerClass = 'iw-deploy-timer--warn';
+    } else if (status === 'rollback_failed') {
+      headClass = 'iw-deploy-head--fail';
+      eyebrowText = 'Rollback failed \u00B7 manual cleanup required';
+      titleText = 'Rollback failed';
+      timerClass = 'iw-deploy-timer--fail';
+    }
+
+    return {
+      status: status,
+      pct: pct,
+      doneCount: doneCount,
+      totalSteps: totalSteps,
+      skippedCount: skippedCount,
+      firstRunningIdx: firstRunningIdx,
+      firstFailedIdx: firstFailedIdx,
+      headClass: headClass,
+      eyebrowText: eyebrowText,
+      titleText: titleText,
+      currentText: currentText,
+      timerClass: timerClass
+    };
+  }
+
+  /* ─── Progress bar ─────────────────────────────────────────────── */
+
+  _renderProgressBar(view) {
+    var fillCls = '';
+    if (view.status === 'succeeded') fillCls = ' iw-progress-fill--ok';
+    else if (view.status === 'failed' || view.status === 'rollback_failed') fillCls = ' iw-progress-fill--fail';
+    else if (view.status === 'rolling_back' || view.status === 'rolled_back') fillCls = ' iw-progress-fill--warn';
+    return '<div class="iw-progress-bar"><div class="iw-progress-fill' + fillCls +
+      '" style="width:' + view.pct + '%"></div></div>';
+  }
+
+  /* ─── Deploy head ──────────────────────────────────────────────── */
+
+  _renderHead(view) {
+    var html = '<div class="iw-deploy-head ' + view.headClass + '">';
+    html += '<div class="iw-deploy-head-left">';
+    html += '<div class="iw-deploy-eyebrow"><span class="iw-deploy-eyebrow-dot"></span>' +
+      this._escape(view.eyebrowText) + '</div>';
+    html += '<div class="iw-deploy-title">' + this._escape(view.titleText) + '</div>';
+    if (view.currentText) {
+      var liveDot = (view.status === 'executing' || view.status === 'rolling_back')
+        ? '<span class="iw-deploy-live-dot"></span>'
+        : '';
+      html += '<div class="iw-deploy-current">' + liveDot +
+        '<span>' + this._escape(view.currentText) + '</span></div>';
+    }
+    html += '</div>';
+    html += '<div class="iw-deploy-head-right">';
+    html += '<div class="iw-deploy-timer ' + view.timerClass + '">' +
+      this._escape(this._formatElapsed(this._state.timing.elapsedMs)) + '</div>';
+    html += '<div class="iw-deploy-timer-label">elapsed</div>';
+    var counterCurrent = view.doneCount;
+    if (view.firstRunningIdx >= 0) counterCurrent = view.firstRunningIdx;
+    var counterHtml;
+    if (view.status === 'succeeded') {
+      counterHtml = '<strong>' + view.totalSteps + '</strong> / ' + view.totalSteps + ' steps';
+    } else if (view.status === 'failed' || view.status === 'rollback_failed') {
+      counterHtml = '<strong>' + view.doneCount + '</strong> / ' + view.totalSteps + ' steps';
+    } else {
+      counterHtml = '<strong>' + counterCurrent + '</strong> / ' + view.totalSteps + ' steps';
+    }
+    html += '<div class="iw-deploy-step-counter">' + counterHtml + '</div>';
+    html += '</div></div>';
+    return html;
+  }
+
+  /* ─── Pipeline list ────────────────────────────────────────────── */
+
+  _renderPipeline(s) {
+    var html = '<div class="iw-pipeline">';
+    for (var i = 0; i < s.steps.length; i++) {
+      html += this._renderStep(s.steps[i]);
+    }
+    html += '</div>';
+    return html;
   }
 
   _renderStep(step) {
-    var self = this;
-    var wrapper = document.createElement('div');
-    wrapper.className = 'iw-step iw-step--' + step.status;
-    wrapper.setAttribute('data-step-index', step.index);
+    var statusCls = step.skipped ? 'skipped' : step.status;
+    var openCls = step.isExpanded ? ' iw-pipe-step--open' : '';
+    var html = '<div class="iw-pipe-step iw-pipe-step--' + statusCls + openCls +
+      '" data-step-index="' + step.index + '">';
 
-    // Row
-    var row = document.createElement('div');
-    row.className = 'iw-step-row';
-
-    var icon = document.createElement('span');
-    icon.className = 'iw-step-icon iw-step-icon--' + step.status;
-    icon.innerHTML = this._renderStepIcon(step.status);
-    row.appendChild(icon);
-
-    var name = document.createElement('span');
-    name.className = 'iw-step-name';
-    name.textContent = step.name;
-    if (step.retryCount > 0) {
-      name.textContent = step.name + ' (retry ' + step.retryCount + ')';
+    html += '<div class="iw-pipe-row" data-action="toggle-step" data-step-index="' + step.index + '">';
+    html += '<div class="iw-pipe-icon iw-pipe-icon--' + statusCls + '">' +
+      this._renderStepIcon(step.skipped ? 'skipped' : step.status) + '</div>';
+    html += '<div class="iw-pipe-info">';
+    var nameSuffix = step.retryCount > 0 ? ' <span class="iw-pipe-retry">\u21BA retry ' + step.retryCount + '</span>' : '';
+    html += '<div class="iw-pipe-name">' + this._escape(step.name) + nameSuffix + '</div>';
+    html += '<div class="iw-pipe-sub">' + this._escape(this._stepSubText(step)) + '</div>';
+    html += '</div>';
+    html += '<div class="iw-pipe-time">';
+    if (step.status !== 'pending' && !step.skipped) {
+      html += this._escape(this._formatElapsed(step.timing.elapsedMs));
+    } else if (step.skipped) {
+      html += 'skipped';
+    } else {
+      html += '\u2014';
     }
-    row.appendChild(name);
+    html += '</div>';
+    html += '<button class="iw-pipe-expand" data-action="toggle-step" data-step-index="' + step.index + '" aria-label="Toggle logs">' +
+      (step.isExpanded ? '\u25BE' : '\u25B8') + '</button>';
+    html += '</div>';
 
-    var timer = document.createElement('span');
-    timer.className = 'iw-step-timer';
-    if (step.status !== 'pending') {
-      timer.textContent = this._formatElapsed(step.timing.elapsedMs);
-    }
-    row.appendChild(timer);
-
-    var toggle = document.createElement('button');
-    toggle.className = 'iw-step-toggle';
-    toggle.textContent = step.isExpanded ? '▾' : '▸';
-    toggle.addEventListener('click', function(e) {
-      e.stopPropagation();
-      self._toggleStepExpand(step.index);
-    });
-    row.appendChild(toggle);
-
-    wrapper.appendChild(row);
-
-    // Detail panel
-    var detail = document.createElement('div');
-    detail.className = 'iw-step-detail';
-    detail.hidden = !step.isExpanded;
-
-    var logs = document.createElement('div');
-    logs.className = 'iw-step-logs';
-    logs.setAttribute('data-log-index', step.index);
-
-    for (var j = 0; j < step.logs.length; j++) {
-      logs.appendChild(this._renderLogEntry(step.logs[j]));
+    if (step.isExpanded) {
+      html += '<div class="iw-pipe-detail">';
+      html += '<div class="iw-pipe-detail-logs" data-log-index="' + step.index + '">';
+      if (step.logs.length === 0) {
+        html += '<div class="iw-log-line iw-log-line--debug">No log entries yet.</div>';
+      } else {
+        for (var j = 0; j < step.logs.length; j++) {
+          html += this._renderLogEntry(step.logs[j]);
+        }
+      }
+      html += '</div>';
+      if (step.error) {
+        html += '<div class="iw-pipe-step-error">' + this._escape(step.error) + '</div>';
+      }
+      html += '</div>';
     }
 
-    detail.appendChild(logs);
-
-    if (step.error) {
-      var errEl = document.createElement('div');
-      errEl.className = 'iw-step-error';
-      errEl.textContent = step.error;
-      detail.appendChild(errEl);
-    }
-
-    wrapper.appendChild(detail);
-    return wrapper;
+    html += '</div>';
+    return html;
   }
 
-  _renderLogEntry(entry) {
-    var line = document.createElement('div');
-    line.className = 'iw-log-entry iw-log--' + entry.level;
-    var ts = new Date(entry.timestamp);
-    var timeStr = ts.toLocaleTimeString();
-    line.textContent = '[' + timeStr + '] ' + entry.message;
-    return line;
+  _stepSubText(step) {
+    if (step.skipped) return 'Skipped \u00B7 capacity already bound at workspace creation';
+    switch (step.status) {
+      case 'pending': return 'Waiting for previous steps to complete';
+      case 'running': return 'In progress\u2026';
+      case 'retrying': return 'Retrying request\u2026';
+      case 'succeeded': return 'Completed successfully';
+      case 'failed': return step.error || 'Request failed';
+      default: return '';
+    }
   }
 
   _renderStepIcon(status) {
     if (status === 'running' || status === 'retrying') {
-      return '<span class="iw-step-spinner"></span>';
+      return '<span class="iw-spinner" aria-hidden="true"></span>';
     }
     if (status === 'succeeded') {
-      return '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>';
+      return '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
     }
     if (status === 'failed') {
-      return '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+      return '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
     }
-    return '<span style="font-size:10px">' + (STEP_ICONS[status] || '\u25CB') + '</span>';
+    if (status === 'skipped') {
+      return '<span aria-hidden="true">\u2212</span>';
+    }
+    return '<span aria-hidden="true">\u25CB</span>';
   }
 
-  _renderTimers() {
-    if (this._destroyed || !this._el) return;
-
-    // Pipeline timer
-    var pipelineTimer = this._el.querySelector('.iw-pipeline-timer');
-    if (pipelineTimer) {
-      pipelineTimer.textContent = this._formatElapsed(this._state.timing.elapsedMs);
-    }
-
-    // Per-step timers
-    for (var i = 0; i < this._state.steps.length; i++) {
-      var step = this._state.steps[i];
-      var stepEl = this._el.querySelector('.iw-step[data-step-index="' + i + '"]');
-      if (!stepEl) continue;
-      var timerEl = stepEl.querySelector('.iw-step-timer');
-      if (timerEl && step.status !== 'pending') {
-        timerEl.textContent = this._formatElapsed(step.timing.elapsedMs);
-      }
-    }
+  _renderLogEntry(entry) {
+    var ts = new Date(entry.timestamp);
+    var timeStr = ts.toLocaleTimeString('en-US', { hour12: false });
+    var msg = this._escape(entry.message);
+    return '<div class="iw-log-line iw-log-line--' + entry.level + '">' +
+      '<span class="iw-log-ts">' + timeStr + '</span>' +
+      '<span class="iw-log-lvl">' + entry.level + '</span>' +
+      '<span class="iw-log-msg">' + msg + '</span></div>';
   }
 
   _renderStepLogs(stepIndex) {
     if (this._destroyed || !this._el) return;
-    var logContainer = this._el.querySelector('.iw-step-logs[data-log-index="' + stepIndex + '"]');
+    var step = this._state.steps[stepIndex];
+    if (!step || !step.isExpanded) return;
+    var logContainer = this._el.querySelector('.iw-pipe-detail-logs[data-log-index="' + stepIndex + '"]');
     if (!logContainer) return;
 
-    var step = this._state.steps[stepIndex];
-    var existingCount = logContainer.childElementCount;
-
-    // Only append new entries
-    for (var i = existingCount; i < step.logs.length; i++) {
-      logContainer.appendChild(this._renderLogEntry(step.logs[i]));
+    var existing = logContainer.children;
+    var existingCount = existing.length;
+    // Skip the "No log entries yet." placeholder if it's there
+    if (existingCount === 1 && existing[0].classList.contains('iw-log-line--debug') &&
+        existing[0].textContent.indexOf('No log entries') === 0) {
+      logContainer.innerHTML = '';
+      existingCount = 0;
     }
-
-    // Auto-scroll
+    for (var i = existingCount; i < step.logs.length; i++) {
+      var tmp = document.createElement('div');
+      tmp.innerHTML = this._renderLogEntry(step.logs[i]);
+      logContainer.appendChild(tmp.firstChild);
+    }
     logContainer.scrollTop = logContainer.scrollHeight;
   }
 
-  _renderSummary() {
-    var summaryEl = this._el.querySelector('.iw-pipeline-summary');
-    if (!summaryEl) return;
-
-    if (this._state.status !== 'succeeded') {
-      summaryEl.hidden = true;
-      return;
+  _renderTimers() {
+    if (this._destroyed || !this._el) return;
+    var headTimer = this._el.querySelector('.iw-deploy-timer');
+    if (headTimer) {
+      headTimer.textContent = this._formatElapsed(this._state.timing.elapsedMs);
     }
-
-    summaryEl.hidden = false;
-    summaryEl.innerHTML = '';
-
-    var iconSpan = document.createElement('span');
-    iconSpan.className = 'iw-pipeline-summary-icon';
-    iconSpan.textContent = '●';
-    summaryEl.appendChild(iconSpan);
-
-    var msg = document.createElement('span');
-    msg.className = 'iw-pipeline-summary-text';
-    msg.textContent = 'Environment created successfully in ' + this._formatElapsed(this._state.timing.elapsedMs);
-    summaryEl.appendChild(msg);
-
-    // Details list
-    var details = document.createElement('div');
-    details.className = 'iw-pipeline-summary-details';
-    var artifacts = this._state.artifacts;
-    if (artifacts.workspaceId) {
-      this._appendDetail(details, 'Workspace', artifacts.workspaceId);
-    }
-    if (artifacts.lakehouseId) {
-      this._appendDetail(details, 'Lakehouse', artifacts.lakehouseId);
-    }
-    if (artifacts.notebookId) {
-      this._appendDetail(details, 'Notebook', artifacts.notebookId);
-    }
-    summaryEl.appendChild(details);
-
-    // Navigate button
-    if (artifacts.workspaceId) {
-      var self = this;
-      var navBtn = document.createElement('button');
-      navBtn.className = 'iw-btn iw-btn-primary iw-exec-navigate-btn';
-      navBtn.textContent = 'Open Workspace \u2192';
-      navBtn.addEventListener('click', function() {
-        self._emit(IW_EVENTS.NAVIGATE_WORKSPACE, { workspaceId: artifacts.workspaceId });
-      });
-      summaryEl.appendChild(navBtn);
-    }
-  }
-
-  _appendDetail(container, label, value) {
-    var row = document.createElement('div');
-    row.className = 'iw-pipeline-summary-row';
-    var lbl = document.createElement('span');
-    lbl.className = 'iw-pipeline-summary-label';
-    lbl.textContent = label + ': ';
-    var val = document.createElement('span');
-    val.className = 'iw-pipeline-summary-value';
-    val.textContent = value;
-    row.appendChild(lbl);
-    row.appendChild(val);
-    container.appendChild(row);
-  }
-
-  _renderError() {
-    var errorEl = this._el.querySelector('.iw-pipeline-error');
-    if (!errorEl) return;
-
-    var showError = this._state.status === 'failed' ||
-      this._state.status === 'rollback_failed';
-
-    if (!showError) {
-      errorEl.hidden = true;
-      return;
-    }
-
-    errorEl.hidden = false;
-    errorEl.innerHTML = '';
-
-    // Error message
-    var msgEl = document.createElement('div');
-    msgEl.className = 'iw-pipeline-error-msg';
-    msgEl.textContent = this._state.error || 'An unexpected error occurred';
-    errorEl.appendChild(msgEl);
-
-    // Rollback results (if any)
-    if (this._state.status === 'rollback_failed') {
-      var results = this._state.rollbackManifest.rollbackResults;
-      if (results.length > 0) {
-        var list = document.createElement('div');
-        list.className = 'iw-pipeline-rollback-results';
-        for (var i = 0; i < results.length; i++) {
-          var r = results[i];
-          var item = document.createElement('div');
-          item.className = 'iw-pipeline-rollback-item iw-pipeline-rollback--' + r.status;
-          item.textContent = r.type + ' (' + r.id.substring(0, 8) + '...): ' + r.status;
-          if (r.error) {
-            item.textContent += ' — ' + r.error;
-          }
-          list.appendChild(item);
-        }
-        errorEl.appendChild(list);
+    for (var i = 0; i < this._state.steps.length; i++) {
+      var step = this._state.steps[i];
+      var stepEl = this._el.querySelector('.iw-pipe-step[data-step-index="' + i + '"] .iw-pipe-time');
+      if (stepEl && step.status !== 'pending' && !step.skipped) {
+        stepEl.textContent = this._formatElapsed(step.timing.elapsedMs);
       }
     }
+  }
 
-    // Rolled-back message
-    if (this._state.status === 'rolled_back') {
-      errorEl.hidden = false;
-      errorEl.innerHTML = '';
-      var rolledMsg = document.createElement('div');
-      rolledMsg.className = 'iw-pipeline-error-msg';
-      rolledMsg.textContent = 'All created resources have been rolled back.';
-      errorEl.appendChild(rolledMsg);
-      return;
+  /* ─── Bottom section (success / error / rollback) ──────────────── */
+
+  _renderBottomSection(s, view) {
+    if (s.status === 'succeeded') return this._renderSuccessCard(s);
+    if (s.status === 'failed') return this._renderErrorPanel(s);
+    if (s.status === 'rolling_back') return this._renderRollbackPanel(s, false);
+    if (s.status === 'rolled_back') return this._renderRollbackPanel(s, true);
+    if (s.status === 'rollback_failed') return this._renderRollbackFailedPanel(s);
+    void view;
+    return '';
+  }
+
+  _renderSuccessCard(s) {
+    var a = s.artifacts;
+    var html = '<div class="iw-success-card">';
+    html += '<div class="iw-success-head">';
+    html += '<div class="iw-success-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>';
+    html += '<div><div class="iw-success-title">Your Fabric environment is live</div>';
+    html += '<div class="iw-success-sub">Provisioned in ' + this._escape(this._formatElapsed(s.timing.elapsedMs)) +
+      ' \u00B7 all 6 steps succeeded</div></div></div>';
+    html += '<div class="iw-resource-grid">';
+    if (a.workspaceId) html += this._resourceCell('Workspace', this._shortId(a.workspaceId));
+    if (a.lakehouseId) html += this._resourceCell('Lakehouse', this._shortId(a.lakehouseId));
+    if (a.notebookId) html += this._resourceCell('Notebook', this._shortId(a.notebookId));
+    if (a.notebookRunStatus) html += this._resourceCell('Run status', String(a.notebookRunStatus));
+    html += '</div></div>';
+    return html;
+  }
+
+  _resourceCell(label, value) {
+    return '<div class="iw-resource-cell">' +
+      '<div class="iw-resource-label">' + this._escape(label) + '</div>' +
+      '<div class="iw-resource-value">' + this._escape(value) + '</div></div>';
+  }
+
+  _renderErrorPanel(s) {
+    var html = '<div class="iw-error-panel">';
+    html += '<div class="iw-error-head">';
+    html += '<div class="iw-error-icon">!</div>';
+    html += '<div><div class="iw-error-title">Provisioning failed</div>';
+    html += '<div class="iw-error-sub">' +
+      this._escape(s.error || 'An unexpected error occurred during execution.') +
+      '</div></div></div>';
+
+    var manifest = s.rollbackManifest.resources;
+    if (manifest && manifest.length > 0) {
+      html += '<div class="iw-error-rollback-preview">';
+      html += '<div class="iw-error-rollback-title">' + manifest.length +
+        ' resource' + (manifest.length === 1 ? '' : 's') + ' created \u2014 available for rollback</div>';
+      for (var i = 0; i < manifest.length; i++) {
+        html += '<div class="iw-rb-row iw-rb-row--pending">' +
+          '<span class="iw-rb-type">' + this._escape(manifest[i].type) + '</span>' +
+          '<span class="iw-rb-id">' + this._escape(this._shortId(manifest[i].id)) + '</span>' +
+          '<span class="iw-rb-status">awaiting rollback</span></div>';
+      }
+      html += '</div>';
     }
+    html += '</div>';
+    return html;
+  }
 
-    // Action buttons
-    var actions = document.createElement('div');
-    actions.className = 'iw-pipeline-error-actions';
+  _renderRollbackPanel(s, done) {
+    var results = s.rollbackManifest.rollbackResults;
+    var manifest = s.rollbackManifest.resources;
+    var html = '<div class="iw-rollback-panel ' + (done ? 'iw-rollback-panel--done' : '') + '">';
+    html += '<div class="iw-rollback-head">';
+    html += '<div class="iw-rollback-icon">\u21BA</div>';
+    html += '<div><div class="iw-rollback-title">' +
+      (done ? 'Rollback complete' : 'Rolling back created resources') + '</div>';
+    html += '<div class="iw-rollback-sub">' +
+      (done ? 'All resources created during this run have been removed.'
+            : 'Deleting resources in reverse creation order. This usually takes a few seconds.') +
+      '</div></div></div>';
 
+    html += '<div class="iw-rollback-list">';
+    var renderedIds = {};
+    for (var i = 0; i < results.length; i++) {
+      var r = results[i];
+      renderedIds[r.id] = true;
+      var rowCls = r.status === 'deleted' ? 'iw-rb-row--deleted' :
+                   r.status === 'failed'  ? 'iw-rb-row--failed'  :
+                   r.status === 'kept'    ? 'iw-rb-row--kept'    : 'iw-rb-row--deleting';
+      var statusText = r.status === 'deleted' ? 'deleted' :
+                       r.status === 'failed'  ? 'failed: ' + (r.error || '') :
+                       r.status === 'kept'    ? 'kept' : 'deleting\u2026';
+      html += '<div class="iw-rb-row ' + rowCls + '">' +
+        '<span class="iw-rb-type">' + this._escape(r.type) + '</span>' +
+        '<span class="iw-rb-id">' + this._escape(this._shortId(r.id)) + '</span>' +
+        '<span class="iw-rb-status">' + this._escape(statusText) + '</span></div>';
+    }
+    for (var k = 0; k < manifest.length; k++) {
+      if (renderedIds[manifest[k].id]) continue;
+      html += '<div class="iw-rb-row iw-rb-row--pending">' +
+        '<span class="iw-rb-type">' + this._escape(manifest[k].type) + '</span>' +
+        '<span class="iw-rb-id">' + this._escape(this._shortId(manifest[k].id)) + '</span>' +
+        '<span class="iw-rb-status">queued</span></div>';
+    }
+    html += '</div></div>';
+    return html;
+  }
+
+  _renderRollbackFailedPanel(s) {
+    var html = '<div class="iw-error-panel iw-error-panel--rollback">';
+    html += '<div class="iw-error-head">';
+    html += '<div class="iw-error-icon">!</div>';
+    html += '<div><div class="iw-error-title">Rollback partially failed</div>';
+    html += '<div class="iw-error-sub">' +
+      this._escape(s.error || 'Some resources could not be removed automatically.') +
+      ' Manual cleanup may be required in the Fabric portal.</div></div></div>';
+    var results = s.rollbackManifest.rollbackResults;
+    if (results && results.length > 0) {
+      html += '<div class="iw-rollback-list">';
+      for (var i = 0; i < results.length; i++) {
+        var r = results[i];
+        var rowCls = r.status === 'deleted' ? 'iw-rb-row--deleted' : 'iw-rb-row--failed';
+        var statusText = r.status === 'deleted' ? 'deleted' : ('failed' + (r.error ? ': ' + r.error : ''));
+        html += '<div class="iw-rb-row ' + rowCls + '">' +
+          '<span class="iw-rb-type">' + this._escape(r.type) + '</span>' +
+          '<span class="iw-rb-id">' + this._escape(this._shortId(r.id)) + '</span>' +
+          '<span class="iw-rb-status">' + this._escape(statusText) + '</span></div>';
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  /* ─── Action buttons (inline; deploy page has no wizard footer) ─ */
+
+  _renderActions(s, view) {
+    var html = '<div class="iw-deploy-actions">';
+    if (s.status === 'executing' || s.status === 'idle' || s.status === 'retrying') {
+      html += '<button class="iw-btn iw-btn-ghost" data-action="minimize">Minimize</button>';
+    } else if (s.status === 'succeeded') {
+      var hasWs = !!s.artifacts.workspaceId;
+      if (hasWs) {
+        html += '<button class="iw-btn iw-btn-ghost" data-action="open-workspace">Open in Fabric \u2197</button>';
+      }
+      html += '<button class="iw-btn iw-btn-primary" data-action="deploy-flt">Deploy FLT \u2192</button>';
+    } else if (s.status === 'failed') {
+      html += '<button class="iw-btn iw-btn-ghost" data-action="minimize">Minimize</button>';
+      var hasResources = s.rollbackManifest.resources.length > 0 &&
+                        !s.rollbackManifest.rollbackAttempted;
+      if (hasResources) {
+        html += '<button class="iw-btn iw-btn-danger" data-action="rollback">Rollback created resources</button>';
+      }
+      html += '<button class="iw-btn iw-btn-primary" data-action="retry">Retry from failed step</button>';
+    } else if (s.status === 'rolling_back') {
+      html += '<button class="iw-btn iw-btn-ghost" disabled>Rolling back\u2026</button>';
+    } else if (s.status === 'rolled_back') {
+      html += '<button class="iw-btn iw-btn-primary" data-action="restart">Start over</button>';
+    } else if (s.status === 'rollback_failed') {
+      html += '<button class="iw-btn iw-btn-ghost" data-action="open-portal">Open Fabric portal</button>';
+      html += '<button class="iw-btn iw-btn-primary" data-action="restart">Start over</button>';
+    }
+    html += '</div>';
+    void view;
+    return html;
+  }
+
+  /* ─── Event binding ────────────────────────────────────────────── */
+
+  _bindRenderEvents() {
     var self = this;
-
-    if (this._state.status === 'failed') {
-      var retryBtn = document.createElement('button');
-      retryBtn.className = 'iw-btn iw-btn-secondary';
-      retryBtn.textContent = 'Retry from Failed';
-      retryBtn.addEventListener('click', function() {
-        self.retryFromFailed();
+    var toggles = this._el.querySelectorAll('[data-action="toggle-step"]');
+    for (var i = 0; i < toggles.length; i++) {
+      toggles[i].addEventListener('click', function(e) {
+        e.stopPropagation();
+        var idx = parseInt(e.currentTarget.getAttribute('data-step-index'), 10);
+        if (!isNaN(idx)) self._toggleStepExpand(idx);
       });
-      actions.appendChild(retryBtn);
-
-      if (this._state.rollbackManifest.resources.length > 0 &&
-          !this._state.rollbackManifest.rollbackAttempted) {
-        var rollbackBtn = document.createElement('button');
-        rollbackBtn.className = 'iw-btn iw-btn-danger';
-        rollbackBtn.textContent = 'Rollback';
-        rollbackBtn.addEventListener('click', function() {
-          self._abortController = new AbortController();
-          self._startRollback();
-        });
-        actions.appendChild(rollbackBtn);
-      }
     }
 
-    errorEl.appendChild(actions);
+    var actionMap = {
+      'minimize':        function() { if (self._onMinimize) self._onMinimize(); },
+      'retry':           function() { self.retryFromFailed(); },
+      'rollback':        function() {
+        self._abortController = new AbortController();
+        self._startRollback();
+      },
+      'open-workspace':  function() {
+        var wsId = self._state.artifacts.workspaceId;
+        if (wsId && typeof IW_EVENTS !== 'undefined') {
+          self._emit(IW_EVENTS.NAVIGATE_WORKSPACE, { workspaceId: wsId });
+        }
+      },
+      'deploy-flt':      function() {
+        if (self._onComplete) self._onComplete(self._state.artifacts);
+      },
+      'restart':         function() {
+        if (self._onMinimize) self._onMinimize();
+      },
+      'open-portal':     function() {
+        window.open('https://app.fabric.microsoft.com/', '_blank');
+      }
+    };
+
+    Object.keys(actionMap).forEach(function(key) {
+      var btn = self._el.querySelector('[data-action="' + key + '"]');
+      if (btn) {
+        btn.addEventListener('click', function(e) {
+          e.preventDefault();
+          actionMap[key]();
+        });
+      }
+    });
   }
+
+  /* ─── Expand toggle ────────────────────────────────────────────── */
 
   _toggleStepExpand(stepIndex) {
     if (stepIndex < 0 || stepIndex >= this._state.steps.length) return;
     this._state.steps[stepIndex].isExpanded = !this._state.steps[stepIndex].isExpanded;
     this._render();
+  }
+
+  /* ─── Misc helpers ─────────────────────────────────────────────── */
+
+  _shortId(id) {
+    if (!id) return '';
+    var s = String(id);
+    if (s.length <= 14) return s;
+    return s.substring(0, 8) + '\u2026' + s.substring(s.length - 4);
+  }
+
+  _escape(s) {
+    if (s == null) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
   }
 }
 
