@@ -336,9 +336,22 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             if (string.IsNullOrWhiteSpace(endpoint) || string.IsNullOrWhiteSpace(apiKey))
             {
+                // Diagnostic: dump which env vars FLT actually sees so the operator
+                // can tell whether the .env propagation worked (launcher issue) or
+                // whether the .env itself is missing the keys (config issue).
+                string Probe(string name) =>
+                    string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(name)) ? "no" : "YES";
+                var diag =
+                    "ARCHITECT_ENDPOINT=" + Probe("AZURE_OPENAI_ARCHITECT_ENDPOINT") +
+                    ", PRO_ENDPOINT=" + Probe("AZURE_OPENAI_PRO_ENDPOINT") +
+                    ", ENDPOINT=" + Probe("AZURE_OPENAI_ENDPOINT") +
+                    ", ARCHITECT_KEY=" + Probe("AZURE_OPENAI_ARCHITECT_API_KEY") +
+                    ", PRO_KEY=" + Probe("AZURE_OPENAI_PRO_API_KEY") +
+                    ", KEY=" + Probe("AZURE_OPENAI_API_KEY");
                 result.Errors.Add(ErrorCodeConfigMissing
                     + " — set AZURE_OPENAI_PRO_ENDPOINT + AZURE_OPENAI_PRO_API_KEY"
-                    + " (or AZURE_OPENAI_ENDPOINT + AZURE_OPENAI_API_KEY) and restart.");
+                    + " (or AZURE_OPENAI_ENDPOINT + AZURE_OPENAI_API_KEY) and restart."
+                    + " [FLT process env: " + diag + "]");
                 return result;
             }
 
