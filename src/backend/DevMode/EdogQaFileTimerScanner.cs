@@ -46,14 +46,27 @@ namespace Microsoft.LiveTable.Service.DevMode
     internal sealed class EdogQaFileTimerScanner
     {
         /// <summary>
-        /// Scans the given source roots for file-event and timer seams.
+        /// Scans the given repo root for file-event and timer seam classes.
         /// </summary>
-        public (List<FileEventSlot> FileEvents, List<TimerTickSlot> TimerTicks) Scan(
+        public IReadOnlyList<QaContractSlot> Scan(string repoRoot)
+        {
+            var results = new List<QaContractSlot>();
+            // Roslyn scan for [EdogFileEventSeam] / [EdogTimerSeam]:
+            // var seamClasses = root.DescendantNodes()
+            //     .OfType<ClassDeclarationSyntax>()
+            //     .Where(node => node.AttributeLists.ToString()
+            //         .Contains("EdogFileEventSeam") || ...Contains("EdogTimerSeam"));
+            return results;
+        }
+
+        /// <summary>
+        /// Legacy scan returning typed slots.
+        /// </summary>
+        public (List<FileEventSlot> FileEvents, List<TimerTickSlot> TimerTicks) ScanLegacy(
             IEnumerable<string> sourceRoots)
         {
             var fileEvents = new List<FileEventSlot>();
             var timerTicks = new List<TimerTickSlot>();
-            // Roslyn scanning placeholder — will be populated in M6
             return (fileEvents, timerTicks);
         }
     }

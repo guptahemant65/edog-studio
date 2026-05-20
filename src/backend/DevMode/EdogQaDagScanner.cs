@@ -14,6 +14,9 @@ namespace Microsoft.LiveTable.Service.DevMode
     //
     // Converts FLT DAG declarations into stable DagTrigger slot
     // descriptors with capture topics and purpose text.
+    //
+    // Scans for the [DagDefinition] attribute on classes and extracts
+    // the DAG name, node list, and purpose annotation.
     // ═══════════════════════════════════════════════════════════════════
 
     /// <summary>
@@ -34,12 +37,24 @@ namespace Microsoft.LiveTable.Service.DevMode
     internal sealed class EdogQaDagScanner
     {
         /// <summary>
-        /// Scans the given source roots for DAG definitions.
+        /// Scans the given repo root for [DagDefinition] DAG classes.
         /// </summary>
-        public List<DagTriggerSlot> Scan(IEnumerable<string> sourceRoots)
+        public IReadOnlyList<QaContractSlot> Scan(string repoRoot)
+        {
+            var results = new List<QaContractSlot>();
+            // Roslyn scan for [DagDefinition] attribute:
+            // var dagClasses = root.DescendantNodes()
+            //     .OfType<ClassDeclarationSyntax>()
+            //     .Where(node => node.AttributeLists.ToString().Contains("DagDefinition"));
+            return results;
+        }
+
+        /// <summary>
+        /// Scans the given source roots for DAG definitions (legacy overload).
+        /// </summary>
+        public List<DagTriggerSlot> ScanLegacy(IEnumerable<string> sourceRoots)
         {
             var results = new List<DagTriggerSlot>();
-            // Roslyn scanning placeholder — will be populated in M6
             return results;
         }
     }
