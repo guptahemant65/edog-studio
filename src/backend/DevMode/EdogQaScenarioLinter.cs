@@ -159,11 +159,18 @@ namespace Microsoft.LiveTable.Service.DevMode
             if (catalog == null || catalog.Count == 0) return;
 
             // Build a normalized template set: "/api/v1/foo/{id}/bar".
+            // The dev-server emits the camelCase key `urlTemplate` for each
+            // endpoint (see scripts/flt_catalog.py). Earlier versions of
+            // this rule looked up only the snake form `url_template`, which
+            // never matched — so this entire check was silently dead.
+            // Keep snake forms as last-ditch fallbacks for future shapes.
             var templates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var ep in catalog)
             {
                 if (ep == null) continue;
-                var template = TryGetString(ep, "url_template") ?? TryGetString(ep, "path");
+                var template = TryGetString(ep, "urlTemplate")
+                            ?? TryGetString(ep, "url_template")
+                            ?? TryGetString(ep, "path");
                 if (!string.IsNullOrEmpty(template))
                 {
                     templates.Add(template);

@@ -605,6 +605,17 @@ Return ONLY valid JSON, no markdown, no explanation text.";
         /// to the dev-server's own caps in <c>_collect_pr_context_extras</c>.
         /// </remarks>
         private static void AppendContractSections(StringBuilder sb, PrContext ctx)
+            => AppendContractSectionsInternal(sb, ctx);
+
+        /// <summary>
+        /// Test seam for <see cref="AppendContractSections"/>. The production
+        /// callsite uses the private wrapper so the public surface stays
+        /// unchanged; harnesses in
+        /// <c>tests/dotnet/EdogQaE2E.Tests</c> reach this overload directly
+        /// to pin the contract-section rendering (e.g. the API Surface
+        /// section's key-name lookups for <c>method</c>/<c>urlTemplate</c>).
+        /// </summary>
+        internal static void AppendContractSectionsInternal(StringBuilder sb, PrContext ctx)
         {
             if (ctx == null) return;
 
@@ -696,15 +707,23 @@ Return ONLY valid JSON, no markdown, no explanation text.";
                     sb.AppendLine($"**Controllers in diff:** {string.Join(", ", ctx.ApiCatalog.Controllers)}");
                     sb.AppendLine();
                 }
-                sb.AppendLine("**Endpoints (verb, path, summary):**");
+                sb.AppendLine("**Endpoints (method, urlTemplate, name):**");
                 var rendered = 0;
                 foreach (var ep in ctx.ApiCatalog.Endpoints)
                 {
                     if (ep == null) continue;
                     if (rendered >= MaxCatalogEndpointsRendered) break;
-                    var verb = TryGetString(ep, "verb") ?? "?";
-                    var path = TryGetString(ep, "url_template") ?? TryGetString(ep, "path") ?? "?";
-                    var summary = TryGetString(ep, "summary") ?? TryGetString(ep, "name") ?? "";
+                    // The dev-server (scripts/flt_catalog.py) emits camelCase keys
+                    // `method` / `urlTemplate` / `name` / `description`. Earlier
+                    // versions of this renderer looked up the snake/short forms
+                    // `verb` / `url_template` / `summary`, which never matched
+                    // anything in the catalog payload — so every endpoint
+                    // rendered as `? ?` and the Architect prompt lost all of
+                    // its grounding. Keep the snake forms as last-ditch
+                    // fallbacks in case a future catalog shape uses them.
+                    var verb = TryGetString(ep, "method") ?? TryGetString(ep, "verb") ?? "?";
+                    var path = TryGetString(ep, "urlTemplate") ?? TryGetString(ep, "url_template") ?? TryGetString(ep, "path") ?? "?";
+                    var summary = TryGetString(ep, "name") ?? TryGetString(ep, "summary") ?? TryGetString(ep, "description") ?? "";
                     if (!string.IsNullOrEmpty(summary))
                     {
                         sb.AppendLine($"- `{verb} {path}` — {summary}");

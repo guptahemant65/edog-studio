@@ -37,7 +37,7 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
         {
             if (args.Length == 0)
             {
-                Console.Error.WriteLine("usage: <harness-exe> {analyze|aggregate|compose|classify-llm|fallback-policy|pipeline-chaos|history-store|capability-probe|llm-client|validator|projector|orchestrator|gold-corpus-baseline|broadcast-projection}");
+                Console.Error.WriteLine("usage: <harness-exe> {analyze|aggregate|compose|classify-llm|fallback-policy|pipeline-chaos|history-store|capability-probe|llm-client|validator|projector|orchestrator|gold-corpus-baseline|broadcast-projection|api-surface-render}");
                 return 2;
             }
 
@@ -60,6 +60,7 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                     "orchestrator" => await OrchestratorHarness.RunAsync(cts.Token),
                     "gold-corpus-baseline" => await GoldCorpusBaselineHarness.RunAsync(args, cts.Token),
                     "broadcast-projection" => await BroadcastProjectionHarness.RunAsync(cts.Token),
+                    "api-surface-render" => await ApiSurfaceRenderHarness.RunAsync(cts.Token),
                     _ => Fail($"unknown subcommand: {args[0]}"),
                 };
             }
