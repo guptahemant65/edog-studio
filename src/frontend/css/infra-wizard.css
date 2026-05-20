@@ -2438,13 +2438,21 @@
 
 /* --- Step Row --- */
 
+/* --- Step Row --- */
+
+.iw-step-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3, 12px);
+  width: 100%;
+}
+
 .iw-step {
   position: relative;
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: var(--r-m, 8px);
+  flex-direction: column;
+  padding: var(--space-2, 8px) var(--space-3, 12px);
+  border-radius: var(--radius-md, 6px);
   transition: background 200ms ease, box-shadow 200ms ease;
   cursor: pointer;
   user-select: none;
@@ -2498,25 +2506,20 @@
   border: 2px solid var(--border-bright, rgba(0,0,0,0.12));
 }
 
-.iw-step-icon--pending {
-  color: var(--text-dim, #8a8a9a);
+.iw-step--succeeded .iw-step-icon {
+  color: var(--status-succeeded, #18a058);
+  border-color: var(--status-succeeded, #18a058);
+  background: rgba(24,160,88,0.08);
 }
-
-.iw-step-icon--running {
-  color: var(--accent, #7c5cfc);
+.iw-step--running .iw-step-icon {
+  color: var(--accent, #6d5cff);
+  border-color: var(--accent, #6d5cff);
+  background: var(--accent-dim, rgba(109,92,255,0.07));
 }
-
-.iw-step-icon--succeeded {
-  color: var(--success, #4ade80);
-}
-
-.iw-step-icon--failed {
-  color: var(--error, #f87171);
-}
-
-.iw-step-icon--skipped {
-  color: var(--text-dim, #8a8a9a);
-  opacity: 0.5;
+.iw-step--failed .iw-step-icon {
+  color: var(--status-failed, #e5453b);
+  border-color: var(--status-failed, #e5453b);
+  background: rgba(229,69,59,0.08);
 }
 
 /* Spinner for running icon */
@@ -2597,9 +2600,8 @@
 /* --- Step Status Row Highlights --- */
 
 .iw-step--running {
-  background: rgba(124, 92, 252, 0.06);
-  box-shadow: inset 0 0 0 1px rgba(124, 92, 252, 0.15);
-  transition: background 300ms ease, box-shadow 300ms ease, border-color 300ms ease;
+  background: var(--accent-dim, rgba(109,92,255,0.07));
+  box-shadow: inset 0 0 0 1px var(--accent-glow, rgba(109,92,255,0.15));
 }
 
 .iw-step--failed {

@@ -1013,8 +1013,8 @@ class ExecutionPipeline {
     row.className = 'iw-step-row';
 
     var icon = document.createElement('span');
-    icon.className = 'iw-step-icon';
-    icon.textContent = this._renderStepIcon(step.status);
+    icon.className = 'iw-step-icon iw-step-icon--' + step.status;
+    icon.innerHTML = this._renderStepIcon(step.status);
     row.appendChild(icon);
 
     var name = document.createElement('span');
@@ -1079,7 +1079,16 @@ class ExecutionPipeline {
   }
 
   _renderStepIcon(status) {
-    return STEP_ICONS[status] || '○';
+    if (status === 'running' || status === 'retrying') {
+      return '<span class="iw-step-spinner"></span>';
+    }
+    if (status === 'succeeded') {
+      return '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>';
+    }
+    if (status === 'failed') {
+      return '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+    }
+    return '<span style="font-size:10px">' + (STEP_ICONS[status] || '\u25CB') + '</span>';
   }
 
   _renderTimers() {
