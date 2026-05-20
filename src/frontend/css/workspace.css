@@ -118,9 +118,9 @@
 /* Item name label */
 .ws-tree-name {
   flex: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.3;
 }
 
 /* Item count badge — "4 items" on workspaces */
