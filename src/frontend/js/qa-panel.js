@@ -88,8 +88,19 @@ class QaPanel {
       this._llmPill.addEventListener('click', () => this._loadCapabilities(true));
     }
 
-    // Subscribe to QA server events via topic bus
+    // Subscribe to QA server events via topic bus.
+    //
+    // The topic stream lifetime is INTENTIONALLY tied to init/destroy
+    // and NOT to activate/deactivate. The server's `SubscribeToTopic`
+    // (EdogPlaygroundHub.cs:410) yields the topic-buffer snapshot as
+    // Phase 1 of every new subscription — so toggling subscribe on
+    // each tab activate would replay every QaScenarioGenerated event
+    // from the most-recent run, doubling (or more) the scenario list
+    // each time the user switches tabs. The handler is cheap to leave
+    // attached: it just routes events to sub-modules which already
+    // ignore-or-accumulate based on their own state.
     this._ws.on('qa', this._qaEventHandler);
+    this._ws.subscribeTopic('qa');
 
     // Restore crash-recovery state
     this._restoreState();
@@ -111,14 +122,19 @@ class QaPanel {
   activate() {
     this._isActive = true;
     document.addEventListener('keydown', this._keyHandler);
-    this._ws.subscribeTopic('qa');
+    // NOTE: do NOT re-subscribe the 'qa' topic here. Re-subscribing
+    // would cause the server's `SubscribeToTopic` to replay the
+    // entire qa ring buffer (2000 events) as its snapshot phase
+    // before going live, which would duplicate every scenario card
+    // on the curation page. The subscription is established once in
+    // `init()` and torn down in `destroy()`.
     this._updatePhaseGate();
   }
 
   deactivate() {
     this._isActive = false;
     document.removeEventListener('keydown', this._keyHandler);
-    this._ws.unsubscribeTopic('qa');
+    // NOTE: do NOT unsubscribe the 'qa' topic here. See `activate()`.
   }
 
   setPhase(phase) {

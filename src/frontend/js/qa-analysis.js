@@ -78,7 +78,13 @@ class QaAnalysis {
 
     // ── Cancel button ──
     var cancelRow = document.createElement('div');
-    cancelRow.className = 'qa-analysis-actions';
+    // Two distinct marker classes so `_showProceedButton`'s idempotency
+    // check can target ONLY the proceed row. Previously both rows used
+    // the same `qa-analysis-actions` class and the guard
+    // `if (this._container.querySelector('.qa-analysis-actions')) return;`
+    // would always match the cancel row → the proceed button was never
+    // shown when analysis completed.
+    cancelRow.className = 'qa-analysis-actions qa-analysis-cancel-row';
     this._cancelBtn = document.createElement('button');
     this._cancelBtn.className = 'qa-btn';
     this._cancelBtn.textContent = 'Cancel Analysis';
@@ -310,6 +316,18 @@ class QaAnalysis {
     // data: { scenarioIndex, totalExpected, scenario: { id, title, category, priority, technique, invariantsAddressed, groundingEvidence, ... } }
     var scn = data.scenario;
     if (!scn) return;
+    // Defence-in-depth dedup. The qa topic stream's Phase 1 snapshot
+    // (EdogPlaygroundHub.SubscribeToTopic) would otherwise replay every
+    // QaScenarioGenerated event into this method on each fresh
+    // subscription, doubling the scenario list. The primary fix lives
+    // in qa-panel.js (subscribe-once at init), but skipping by id
+    // here means a future regression on the subscription lifecycle
+    // can't reintroduce the duplicate cards.
+    if (scn.id) {
+      for (var j = 0; j < this._scenarios.length; j++) {
+        if (this._scenarios[j] && this._scenarios[j].id === scn.id) return;
+      }
+    }
     this._scenarios.push(scn);
 
     // Show header
@@ -383,11 +401,14 @@ class QaAnalysis {
   _showProceedButton() {
     if (!this._container) return;
     // Idempotent — silently bail if a proceed row is already in the DOM.
-    // The container also hosts other stage rows so we use a dedicated
-    // class as the marker.
-    if (this._container.querySelector('.qa-analysis-actions')) return;
+    // The container also hosts other action rows (e.g. the cancel row
+    // emitted during `_render`) which share the `qa-analysis-actions`
+    // class for styling, so we target a dedicated marker class instead
+    // to avoid colliding with them and silently hiding the proceed
+    // button forever.
+    if (this._container.querySelector('.qa-analysis-proceed-row')) return;
     var row = document.createElement('div');
-    row.className = 'qa-analysis-actions';
+    row.className = 'qa-analysis-actions qa-analysis-proceed-row';
     var btn = document.createElement('button');
     btn.className = 'qa-btn primary';
     btn.textContent = 'Review Scenarios \u25B8';
