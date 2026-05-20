@@ -1,0 +1,1363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDOG Studio — F16 Infra Wizard · Page 4 · Review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   EDOG Studio — F16 Infra Wizard · Page 4 · Review
+   Pre-flight checklist. Confident. Thorough. Professional.
+   @author Phantom
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  /* Surfaces */
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --surface-2: #f8f9fb;
+  --surface-3: #ebedf0;
+
+  /* Borders */
+  --border: rgba(0,0,0,0.06);
+  --border-bright: rgba(0,0,0,0.12);
+
+  /* Text */
+  --text: #1a1d23;
+  --text-dim: #5a6070;
+  --text-muted: #8e95a5;
+
+  /* Accent */
+  --accent: #6d5cff;
+  --accent-dim: rgba(109,92,255,0.07);
+  --accent-hover: rgba(109,92,255,0.04);
+  --accent-glow: rgba(109,92,255,0.15);
+  --accent-soft: rgba(109,92,255,0.10);
+  --text-on-accent: #ffffff;
+
+  /* Status */
+  --status-ok: #18a058;
+  --status-ok-dim: rgba(24,160,88,0.08);
+  --status-ok-glow: rgba(24,160,88,0.15);
+  --status-fail: #e5453b;
+  --status-fail-dim: rgba(229,69,59,0.08);
+  --status-warn: #e5940c;
+  --status-warn-dim: rgba(229,148,12,0.08);
+  --status-pending: #8e95a5;
+
+  /* Schema colors */
+  --bronze: #b87333;
+  --bronze-dim: rgba(184,115,51,0.10);
+  --silver: #7b8794;
+  --silver-dim: rgba(123,135,148,0.10);
+  --gold: #c5a038;
+  --gold-dim: rgba(197,160,56,0.10);
+  --dbo: #5a6070;
+  --dbo-dim: rgba(90,96,112,0.08);
+
+  /* Node type colors */
+  --type-sql: #2d7ff9;
+  --type-sql-dim: rgba(45,127,249,0.08);
+  --type-mlv: #6d5cff;
+  --type-mlv-dim: rgba(109,92,255,0.08);
+  --type-spark: #e5940c;
+  --type-spark-dim: rgba(229,148,12,0.08);
+
+  /* Typography */
+  --font: 'Inter', -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
+  --text-xs: 10px;
+  --text-sm: 12px;
+  --text-md: 13px;
+  --text-lg: 15px;
+  --text-xl: 18px;
+  --text-2xl: 22px;
+  --text-3xl: 28px;
+
+  /* Spacing */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px;
+
+  /* Radius */
+  --r-sm: 4px; --r-md: 6px; --r-lg: 10px; --r-full: 100px;
+
+  /* Elevation */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 2px 8px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-lg: 0 4px 16px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+  --shadow-dialog: 0 24px 80px rgba(0,0,0,0.12), 0 8px 24px rgba(0,0,0,0.08);
+
+  /* Transitions */
+  --t-fast: 80ms ease-out;
+  --t-normal: 150ms ease-out;
+  --t-state: 300ms ease-out;
+}
+
+[data-theme="dark"] {
+  --bg: #0c0e14;
+  --surface: #14171f;
+  --surface-2: #1c2029;
+  --surface-3: #282d3a;
+  --border: rgba(255,255,255,0.06);
+  --border-bright: rgba(255,255,255,0.10);
+  --text: #e4e7ed;
+  --text-dim: #8a91a3;
+  --text-muted: #555d70;
+  --accent: #8577ff;
+  --accent-dim: rgba(133,119,255,0.10);
+  --accent-glow: rgba(133,119,255,0.20);
+  --status-ok: #34d399;
+  --status-ok-dim: rgba(52,211,153,0.12);
+  --status-fail: #ff6b6b;
+  --status-fail-dim: rgba(255,107,107,0.12);
+  --status-warn: #f0b429;
+  --status-warn-dim: rgba(240,180,41,0.12);
+  --type-sql: #5b9bff;
+  --type-sql-dim: rgba(91,155,255,0.12);
+  --type-mlv: #a78bfa;
+  --type-mlv-dim: rgba(167,139,250,0.12);
+  --type-spark: #f0b429;
+  --type-spark-dim: rgba(240,180,41,0.12);
+  --bronze-dim: rgba(184,115,51,0.18);
+  --silver-dim: rgba(155,167,180,0.18);
+  --gold-dim: rgba(197,160,56,0.18);
+  --dbo-dim: rgba(138,145,163,0.14);
+  --silver: #9ba7b4;
+  --shadow-dialog: 0 24px 80px rgba(0,0,0,0.50), 0 8px 24px rgba(0,0,0,0.40);
+}
+
+/* ── Reset ── */
+html, body { height: 100%; }
+body {
+  font-family: var(--font);
+  font-size: var(--text-md);
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'cv11', 'ss01', 'ss03';
+  line-height: 1.5;
+}
+button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+a { color: inherit; text-decoration: none; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LAYOUT — Wizard shell
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.viewport {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--sp-8) var(--sp-6);
+  background:
+    radial-gradient(1200px 600px at 50% -200px, var(--accent-dim), transparent 60%),
+    var(--bg);
+}
+
+.theme-toggle {
+  position: fixed;
+  top: var(--sp-4);
+  right: var(--sp-4);
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  border: 1px solid var(--border-bright);
+  color: var(--text-dim);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100;
+  box-shadow: var(--shadow-sm);
+  transition: all var(--t-fast);
+}
+.theme-toggle:hover { background: var(--surface-2); color: var(--text); }
+
+.dialog {
+  width: 100%;
+  max-width: 1180px;
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border-bright);
+  box-shadow: var(--shadow-dialog);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Header ── */
+.dialog-header {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--sp-4) 0 var(--sp-5);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.dialog-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  display: flex; align-items: center; gap: var(--sp-2);
+}
+.dialog-title .dot {
+  width: 6px; height: 6px; border-radius: 100px;
+  background: var(--accent);
+}
+.dialog-title .crumb { color: var(--text-muted); font-weight: 500; }
+.dialog-controls { margin-left: auto; display: flex; gap: var(--sp-1); }
+.win-btn {
+  width: 28px; height: 28px;
+  border-radius: var(--r-sm);
+  color: var(--text-muted);
+  display: flex; align-items: center; justify-content: center;
+  transition: all var(--t-fast);
+  font-size: 14px;
+}
+.win-btn:hover { background: var(--surface-2); color: var(--text); }
+.win-btn.close:hover { background: var(--status-fail-dim); color: var(--status-fail); }
+
+/* ── Stepper ── */
+.stepper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-5) var(--sp-6);
+  gap: var(--sp-2);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.step-group { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 80px; }
+.step-circle {
+  width: 28px; height: 28px;
+  border-radius: 100px;
+  background: var(--surface);
+  border: 1.5px solid var(--border-bright);
+  color: var(--text-muted);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  transition: all var(--t-normal);
+}
+.step-group.done .step-circle {
+  background: var(--status-ok);
+  border-color: var(--status-ok);
+  color: white;
+}
+.step-group.active .step-circle {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+  box-shadow: var(--shadow-glow, 0 0 0 4px var(--accent-glow));
+}
+.step-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.step-group.done .step-label,
+.step-group.active .step-label { color: var(--text); }
+.step-conn {
+  flex: 0 0 56px;
+  height: 1.5px;
+  background: var(--border-bright);
+  position: relative;
+  margin-top: 22px;
+}
+.step-conn.done {
+  background: var(--status-ok);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BODY
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.body {
+  padding: var(--sp-6) var(--sp-8);
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: var(--sp-6);
+  min-height: 0;
+}
+
+/* ── Hero ── */
+.hero {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-5);
+  padding-bottom: var(--sp-5);
+  border-bottom: 1px solid var(--border);
+}
+.hero-mark {
+  width: 56px; height: 56px;
+  border-radius: var(--r-md);
+  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, white));
+  display: flex; align-items: center; justify-content: center;
+  color: white;
+  box-shadow: 0 8px 24px var(--accent-glow);
+  flex-shrink: 0;
+}
+.hero-text { flex: 1; min-width: 0; }
+.hero-eyebrow {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.hero-title {
+  font-size: var(--text-3xl);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  margin-bottom: 6px;
+  font-family: var(--mono);
+}
+.hero-title .accent { color: var(--accent); }
+.hero-sub {
+  font-size: var(--text-md);
+  color: var(--text-dim);
+  max-width: 60ch;
+}
+.hero-meta {
+  display: flex;
+  gap: var(--sp-5);
+  margin-top: var(--sp-3);
+}
+.hero-meta .item {
+  display: flex;
+  flex-direction: column;
+}
+.hero-meta .key {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.hero-meta .val {
+  font-family: var(--mono);
+  font-size: var(--text-md);
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* ── Left column: review sections ── */
+.col-left { display: flex; flex-direction: column; gap: var(--sp-5); min-width: 0; }
+.col-right { display: flex; flex-direction: column; gap: var(--sp-5); min-width: 0; }
+
+.section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+.section-head {
+  display: flex;
+  align-items: center;
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.section-title {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.section-title .count {
+  display: inline-flex;
+  align-items: center; justify-content: center;
+  min-width: 18px; height: 16px;
+  padding: 0 5px;
+  margin-left: 6px;
+  background: var(--surface-3);
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  border-radius: 100px;
+  letter-spacing: 0;
+}
+.section-action {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--accent);
+  padding: 4px 8px;
+  border-radius: var(--r-sm);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  transition: all var(--t-fast);
+}
+.section-action:hover { background: var(--accent-dim); }
+.section-action svg { width: 11px; height: 11px; }
+
+/* ── Key-value rows ── */
+.kv-list { padding: var(--sp-1) 0; }
+.kv {
+  display: grid;
+  grid-template-columns: 140px 1fr auto;
+  align-items: center;
+  padding: var(--sp-2) var(--sp-4);
+  gap: var(--sp-3);
+  min-height: 36px;
+  border-top: 1px solid transparent;
+  transition: background var(--t-fast);
+}
+.kv:not(:first-child) { border-top: 1px solid var(--border); }
+.kv:hover { background: var(--surface-2); }
+.kv-key {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.kv-val {
+  font-family: var(--mono);
+  font-size: var(--text-md);
+  color: var(--text);
+  font-weight: 500;
+  display: flex; align-items: center; gap: var(--sp-2);
+  min-width: 0;
+}
+.kv-val .truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kv-val .id {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  padding: 1px 6px;
+  background: var(--surface-2);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+}
+.kv-action {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity var(--t-fast), color var(--t-fast);
+  display: flex; align-items: center; gap: 3px;
+}
+.kv:hover .kv-action { opacity: 1; }
+.kv-action:hover { color: var(--accent); }
+
+/* ── Chips & pills ── */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: var(--r-full);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  border: 1px solid transparent;
+}
+.chip .dot {
+  width: 6px; height: 6px;
+  border-radius: 100px;
+  background: currentColor;
+}
+.chip.dbo { color: var(--dbo); background: var(--dbo-dim); }
+.chip.bronze { color: var(--bronze); background: var(--bronze-dim); }
+.chip.silver { color: var(--silver); background: var(--silver-dim); }
+.chip.gold { color: var(--gold); background: var(--gold-dim); }
+.chip.disabled {
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border-color: var(--border);
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+.chip.accent {
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+.chip.ok {
+  color: var(--status-ok);
+  background: var(--status-ok-dim);
+}
+
+/* ── Theme summary ── */
+.theme-card {
+  display: grid;
+  grid-template-columns: 56px 1fr auto;
+  gap: var(--sp-4);
+  align-items: center;
+  padding: var(--sp-4);
+}
+.theme-icon {
+  width: 56px; height: 56px;
+  border-radius: var(--r-md);
+  background: var(--accent-dim);
+  color: var(--accent);
+  display: flex; align-items: center; justify-content: center;
+}
+.theme-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.theme-name { font-size: var(--text-lg); font-weight: 600; }
+.theme-desc { font-size: var(--text-sm); color: var(--text-dim); }
+.theme-stats {
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  display: flex; gap: var(--sp-3);
+}
+
+.schemas {
+  display: flex; gap: var(--sp-2); flex-wrap: wrap;
+  padding: 0 var(--sp-4) var(--sp-4);
+}
+
+/* ── Counts banner ── */
+.counts {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+.count-cell {
+  padding: var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-right: 1px solid var(--border);
+}
+.count-cell:last-child { border-right: none; }
+.count-num {
+  font-family: var(--mono);
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+.count-num .accent { color: var(--accent); }
+.count-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* ── Validation list ── */
+.valid-list { padding: var(--sp-1) 0; }
+.valid-row {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  align-items: center;
+  padding: var(--sp-2) var(--sp-4);
+  gap: var(--sp-3);
+  min-height: 36px;
+  border-top: 1px solid transparent;
+}
+.valid-row:not(:first-child) { border-top: 1px solid var(--border); }
+.valid-icon {
+  width: 18px; height: 18px;
+  border-radius: 100px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+}
+.valid-icon.ok { background: var(--status-ok-dim); color: var(--status-ok); }
+.valid-icon.warn { background: var(--status-warn-dim); color: var(--status-warn); }
+.valid-icon.fail { background: var(--status-fail-dim); color: var(--status-fail); }
+.valid-text { font-size: var(--text-md); color: var(--text); }
+.valid-text .sub { color: var(--text-muted); font-size: var(--text-sm); margin-left: 6px; }
+.valid-link {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ── DAG topology ── */
+.dag-wrap {
+  position: relative;
+  background:
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 16px 16px;
+  background-position: -1px -1px;
+  height: 380px;
+  border-radius: 0 0 var(--r-lg) var(--r-lg);
+  overflow: hidden;
+}
+.dag-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.dag-node {
+  position: absolute;
+  background: var(--surface);
+  border: 1.5px solid var(--border-bright);
+  border-radius: var(--r-md);
+  padding: 8px 10px;
+  display: flex; flex-direction: column; gap: 4px;
+  min-width: 130px;
+  box-shadow: var(--shadow-sm);
+  font-size: var(--text-sm);
+  z-index: 2;
+  transition: all var(--t-fast);
+}
+.dag-node:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+  transform: translateY(-1px);
+}
+.dag-node-head {
+  display: flex; align-items: center; gap: 6px;
+}
+.dag-node-icon {
+  font-family: var(--mono);
+  font-size: 13px;
+  width: 14px;
+  text-align: center;
+}
+.dag-node.sql-table .dag-node-icon { color: var(--type-sql); }
+.dag-node.sql-mlv .dag-node-icon { color: var(--type-mlv); }
+.dag-node.spark .dag-node-icon { color: var(--type-spark); }
+.dag-node-name {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: -0.01em;
+}
+.dag-node-meta {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 9px;
+}
+.dag-node-meta .schema-pill {
+  font-family: var(--mono);
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: var(--r-full);
+}
+.dag-node-meta .type-pill {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 1px 5px;
+  background: var(--surface-2);
+  border-radius: var(--r-full);
+}
+.dag-legend {
+  position: absolute;
+  bottom: 12px; left: 12px;
+  display: flex;
+  gap: 14px;
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  background: var(--surface);
+  padding: 6px 10px;
+  border-radius: var(--r-full);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  z-index: 3;
+}
+.dag-legend .leg {
+  display: flex; align-items: center; gap: 4px;
+}
+.dag-legend .leg-icon { font-weight: 700; font-size: 12px; }
+.dag-fab {
+  position: absolute;
+  top: 12px; right: 12px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  background: var(--surface);
+  padding: 4px 8px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  z-index: 3;
+}
+
+/* ── Code preview ── */
+.code-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  padding: var(--sp-3) var(--sp-4);
+  gap: var(--sp-2);
+  font-size: var(--text-sm);
+  color: var(--text-dim);
+  transition: background var(--t-fast);
+  border-top: 1px solid var(--border);
+}
+.code-toggle:hover { background: var(--surface-2); }
+.code-toggle .caret {
+  font-family: var(--mono);
+  color: var(--text-muted);
+  transition: transform var(--t-normal);
+  width: 12px;
+}
+.code-toggle.open .caret { transform: rotate(90deg); }
+.code-toggle .file {
+  font-family: var(--mono);
+  color: var(--text);
+  font-weight: 500;
+}
+.code-toggle .badge {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  padding: 2px 7px;
+  background: var(--surface-2);
+  border-radius: var(--r-full);
+  border: 1px solid var(--border);
+}
+.code-body {
+  display: none;
+  background: var(--surface-2);
+  border-top: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.6;
+  max-height: 280px;
+  overflow: auto;
+}
+.code-body.open { display: block; }
+.code-tabs {
+  display: flex;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.code-tab {
+  padding: 7px 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  border-bottom: 1.5px solid transparent;
+  transition: all var(--t-fast);
+}
+.code-tab:hover { color: var(--text); }
+.code-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.code-pane { display: none; padding: var(--sp-3) var(--sp-4); }
+.code-pane.active { display: block; }
+.code-line { display: flex; gap: var(--sp-3); }
+.code-line .ln {
+  color: var(--text-muted);
+  user-select: none;
+  text-align: right;
+  width: 22px;
+  flex-shrink: 0;
+}
+.code-line .src { white-space: pre; }
+.kw { color: var(--accent); font-weight: 600; }
+.tk { color: var(--type-sql); }
+.fn { color: var(--bronze); }
+.st { color: var(--status-ok); }
+.cm { color: var(--text-muted); font-style: italic; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   FOOTER
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.dialog-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-6);
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.warn-banner {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--text-sm);
+  color: var(--text-dim);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--status-warn-dim);
+  border: 1px solid color-mix(in srgb, var(--status-warn) 30%, transparent);
+  border-radius: var(--r-md);
+}
+.warn-banner .icn {
+  width: 16px; height: 16px;
+  border-radius: 100px;
+  background: var(--status-warn);
+  color: white;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.warn-banner strong { color: var(--text); font-weight: 600; }
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 0 var(--sp-4);
+  height: 36px;
+  border-radius: var(--r-md);
+  font-size: var(--text-md);
+  font-weight: 600;
+  transition: all var(--t-fast);
+  white-space: nowrap;
+}
+.btn-ghost {
+  color: var(--text-dim);
+  background: var(--surface);
+  border: 1px solid var(--border-bright);
+}
+.btn-ghost:hover { background: var(--surface-2); color: var(--text); }
+.btn-primary {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border: 1px solid var(--accent);
+  padding: 0 var(--sp-5);
+}
+.btn-primary:hover {
+  background: color-mix(in srgb, var(--accent) 90%, black);
+  box-shadow: 0 4px 12px var(--accent-glow);
+}
+.btn-primary kbd {
+  font-family: var(--mono);
+  font-size: 10px;
+  background: rgba(255,255,255,0.15);
+  padding: 2px 5px;
+  border-radius: var(--r-sm);
+  font-weight: 500;
+  margin-left: var(--sp-1);
+}
+.btn .arrow { transition: transform var(--t-fast); }
+.btn-primary:hover .arrow { transform: translateX(2px); }
+
+/* ── Sub-footer (subtle) ── */
+.sub-footer {
+  text-align: center;
+  padding: var(--sp-4);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.sub-footer .kbd {
+  font-family: var(--mono);
+  background: var(--surface);
+  padding: 1px 5px;
+  border: 1px solid var(--border-bright);
+  border-radius: 3px;
+  margin: 0 2px;
+}
+
+/* ── Mobile fallback ── */
+@media (max-width: 940px) {
+  .body { grid-template-columns: 1fr; }
+  .counts { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+</head>
+<body data-theme="light">
+
+<button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
+  <svg id="iconSun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+    <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+  </svg>
+  <svg id="iconMoon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+  </svg>
+</button>
+
+<div class="viewport">
+  <div class="dialog">
+
+    <!-- Header -->
+    <div class="dialog-header">
+      <div class="dialog-title">
+        <span class="dot"></span>
+        New Environment
+        <span class="crumb">/ Review</span>
+      </div>
+      <div class="dialog-controls">
+        <button class="win-btn" title="Minimize">⎯</button>
+        <button class="win-btn" title="Maximize">▢</button>
+        <button class="win-btn close" title="Close">✕</button>
+      </div>
+    </div>
+
+    <!-- Stepper -->
+    <div class="stepper">
+      <div class="step-group done">
+        <div class="step-circle">✓</div>
+        <div class="step-label">Setup</div>
+      </div>
+      <div class="step-conn done"></div>
+      <div class="step-group done">
+        <div class="step-circle">✓</div>
+        <div class="step-label">Theme</div>
+      </div>
+      <div class="step-conn done"></div>
+      <div class="step-group done">
+        <div class="step-circle">✓</div>
+        <div class="step-label">Build</div>
+      </div>
+      <div class="step-conn done"></div>
+      <div class="step-group active">
+        <div class="step-circle">4</div>
+        <div class="step-label">Review</div>
+      </div>
+      <div class="step-conn"></div>
+      <div class="step-group">
+        <div class="step-circle">5</div>
+        <div class="step-label">Deploy</div>
+      </div>
+    </div>
+
+    <!-- Body -->
+    <div class="body">
+
+      <!-- Hero -->
+      <div class="hero">
+        <div class="hero-mark">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7"/>
+            <path d="M3 7l9-4 9 4"/>
+            <path d="M3 7l9 4 9-4"/>
+            <path d="M12 11v8"/>
+          </svg>
+        </div>
+        <div class="hero-text">
+          <div class="hero-eyebrow">Ready to provision · Confirm and create</div>
+          <div class="hero-title"><span class="accent">prime_thompson_49</span></div>
+          <div class="hero-sub">A new Fabric environment with a 4-node materialized lake view DAG. Review the configuration below — everything is editable until you lock in.</div>
+          <div class="hero-meta">
+            <div class="item"><span class="key">Region</span><span class="val">East US</span></div>
+            <div class="item"><span class="key">Capacity</span><span class="val">F4 Trial</span></div>
+            <div class="item"><span class="key">Theme</span><span class="val">Finance</span></div>
+            <div class="item"><span class="key">Est. duration</span><span class="val">≈ 45s</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Left column -->
+      <div class="col-left">
+
+        <!-- Infrastructure -->
+        <div class="section">
+          <div class="section-head">
+            <div class="section-title">Infrastructure</div>
+            <button class="section-action">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              Edit setup
+            </button>
+          </div>
+          <div class="kv-list">
+            <div class="kv">
+              <div class="kv-key">Workspace</div>
+              <div class="kv-val">
+                <span class="truncate">prime_thompson_49</span>
+                <span class="chip ok"><span class="dot"></span>NEW</span>
+              </div>
+              <button class="kv-action">copy ⎘</button>
+            </div>
+            <div class="kv">
+              <div class="kv-key">Capacity</div>
+              <div class="kv-val">
+                <span class="truncate">F4 Trial — East US</span>
+                <span class="id">3e65fd15-…ac2d</span>
+              </div>
+              <button class="kv-action">change ▸</button>
+            </div>
+            <div class="kv">
+              <div class="kv-key">Lakehouse</div>
+              <div class="kv-val">
+                <span class="truncate">prime_thompson_49_lh</span>
+                <span class="chip accent"><span class="dot"></span>schema enabled</span>
+              </div>
+              <button class="kv-action">copy ⎘</button>
+            </div>
+            <div class="kv">
+              <div class="kv-key">Notebook</div>
+              <div class="kv-val">
+                <span class="truncate">prime_thompson_49_nb</span>
+                <span class="id">4 cells</span>
+              </div>
+              <button class="kv-action">preview ▸</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Theme & schemas -->
+        <div class="section">
+          <div class="section-head">
+            <div class="section-title">Theme &amp; Schemas</div>
+            <button class="section-action">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              Edit theme
+            </button>
+          </div>
+          <div class="theme-card">
+            <div class="theme-icon">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="1" x2="12" y2="23"/>
+                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+              </svg>
+            </div>
+            <div class="theme-info">
+              <div class="theme-name">Finance</div>
+              <div class="theme-desc">Customer ledger, churn signals, revenue rollup.</div>
+              <div class="theme-stats">
+                <span>4 nodes</span>
+                <span>·</span>
+                <span>4 connections</span>
+                <span>·</span>
+                <span>3 layers</span>
+              </div>
+            </div>
+          </div>
+          <div class="schemas">
+            <span class="chip dbo"><span class="dot"></span>dbo</span>
+            <span class="chip bronze"><span class="dot"></span>bronze</span>
+            <span class="chip silver"><span class="dot"></span>silver</span>
+            <span class="chip disabled">gold</span>
+          </div>
+        </div>
+
+        <!-- Counts -->
+        <div class="counts" role="group" aria-label="Resources to create">
+          <div class="count-cell">
+            <div class="count-num">1</div>
+            <div class="count-label">Workspace</div>
+          </div>
+          <div class="count-cell">
+            <div class="count-num">1</div>
+            <div class="count-label">Lakehouse</div>
+          </div>
+          <div class="count-cell">
+            <div class="count-num">1<span style="font-size:14px;color:var(--text-muted);font-weight:400;"> · 4 cells</span></div>
+            <div class="count-label">Notebook</div>
+          </div>
+          <div class="count-cell">
+            <div class="count-num"><span class="accent">4</span></div>
+            <div class="count-label">DAG Nodes</div>
+          </div>
+        </div>
+
+        <!-- Validation -->
+        <div class="section">
+          <div class="section-head">
+            <div class="section-title">Pre-flight Checks <span class="count">5</span></div>
+            <span class="section-action" style="cursor:default;background:var(--status-ok-dim);color:var(--status-ok);">all clear</span>
+          </div>
+          <div class="valid-list">
+            <div class="valid-row">
+              <div class="valid-icon ok">✓</div>
+              <div class="valid-text">Workspace name available <span class="sub">checked against tenant directory</span></div>
+              <span></span>
+            </div>
+            <div class="valid-row">
+              <div class="valid-icon ok">✓</div>
+              <div class="valid-text">Capacity has sufficient CUs <span class="sub">2.0 CU available · 0.4 CU est. peak</span></div>
+              <span></span>
+            </div>
+            <div class="valid-row">
+              <div class="valid-icon ok">✓</div>
+              <div class="valid-text">Lakehouse schema support requested <span class="sub">enableSchemas: true</span></div>
+              <span></span>
+            </div>
+            <div class="valid-row">
+              <div class="valid-icon ok">✓</div>
+              <div class="valid-text">DAG is acyclic <span class="sub">4 nodes · 4 connections · no cycles</span></div>
+              <span></span>
+            </div>
+            <div class="valid-row">
+              <div class="valid-icon warn">!</div>
+              <div class="valid-text">Gold schema selected but unused <span class="sub">no nodes target this schema</span></div>
+              <button class="valid-link">dismiss</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Code preview -->
+        <div class="section">
+          <div class="section-head">
+            <div class="section-title">Generated Code <span class="count">4 cells</span></div>
+            <button class="section-action">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              Copy all
+            </button>
+          </div>
+          <button class="code-toggle open" id="codeToggle">
+            <span class="caret">▸</span>
+            <span class="file">prime_thompson_49_nb.ipynb</span>
+            <span style="color:var(--text-muted);">— 4 cells, ≈ 132 LOC</span>
+            <span class="badge">SQL · PySpark</span>
+          </button>
+          <div class="code-body open" id="codeBody">
+            <div class="code-tabs">
+              <button class="code-tab active" data-pane="p1">cell 1 · customers.sql</button>
+              <button class="code-tab" data-pane="p2">cell 2 · customers_active.sql</button>
+              <button class="code-tab" data-pane="p3">cell 3 · customers_churn.sql</button>
+              <button class="code-tab" data-pane="p4">cell 4 · customers_summary.py</button>
+            </div>
+            <div class="code-pane active" id="p1">
+              <div class="code-line"><span class="ln">1</span><span class="src"><span class="cm">-- Bronze base table seeded with sample data</span></span></div>
+              <div class="code-line"><span class="ln">2</span><span class="src"><span class="kw">CREATE TABLE</span> dbo.customers (</span></div>
+              <div class="code-line"><span class="ln">3</span><span class="src">  customer_id <span class="tk">BIGINT</span>,</span></div>
+              <div class="code-line"><span class="ln">4</span><span class="src">  full_name   <span class="tk">STRING</span>,</span></div>
+              <div class="code-line"><span class="ln">5</span><span class="src">  signup_date <span class="tk">DATE</span>,</span></div>
+              <div class="code-line"><span class="ln">6</span><span class="src">  segment     <span class="tk">STRING</span>,</span></div>
+              <div class="code-line"><span class="ln">7</span><span class="src">  lifetime_value <span class="tk">DECIMAL</span>(<span class="st">12</span>,<span class="st">2</span>)</span></div>
+              <div class="code-line"><span class="ln">8</span><span class="src">);</span></div>
+              <div class="code-line"><span class="ln">9</span><span class="src">&nbsp;</span></div>
+              <div class="code-line"><span class="ln">10</span><span class="src"><span class="kw">INSERT INTO</span> dbo.customers <span class="kw">VALUES</span></span></div>
+              <div class="code-line"><span class="ln">11</span><span class="src">  (<span class="st">1</span>, <span class="fn">'Ada Lovelace'</span>, <span class="fn">'2024-01-15'</span>, <span class="fn">'enterprise'</span>, <span class="st">48200.00</span>),</span></div>
+              <div class="code-line"><span class="ln">12</span><span class="src">  (<span class="st">2</span>, <span class="fn">'Alan Turing'</span>, <span class="fn">'2024-02-08'</span>, <span class="fn">'smb'</span>, <span class="st">12450.00</span>),</span></div>
+              <div class="code-line"><span class="ln">13</span><span class="src">  <span class="cm">-- + 48 more rows</span></span></div>
+            </div>
+            <div class="code-pane" id="p2">
+              <div class="code-line"><span class="ln">1</span><span class="src"><span class="cm">-- Silver MLV: active customers in the last 90 days</span></span></div>
+              <div class="code-line"><span class="ln">2</span><span class="src"><span class="kw">CREATE MATERIALIZED LAKE VIEW</span> silver.customers_active <span class="kw">AS</span></span></div>
+              <div class="code-line"><span class="ln">3</span><span class="src"><span class="kw">SELECT</span> *</span></div>
+              <div class="code-line"><span class="ln">4</span><span class="src"><span class="kw">FROM</span> dbo.customers</span></div>
+              <div class="code-line"><span class="ln">5</span><span class="src"><span class="kw">WHERE</span> signup_date >= <span class="fn">DATEADD</span>(<span class="kw">day</span>, -<span class="st">90</span>, <span class="fn">CURRENT_DATE</span>());</span></div>
+            </div>
+            <div class="code-pane" id="p3">
+              <div class="code-line"><span class="ln">1</span><span class="src"><span class="cm">-- Silver MLV: customers at risk of churn</span></span></div>
+              <div class="code-line"><span class="ln">2</span><span class="src"><span class="kw">CREATE MATERIALIZED LAKE VIEW</span> silver.customers_churn <span class="kw">AS</span></span></div>
+              <div class="code-line"><span class="ln">3</span><span class="src"><span class="kw">SELECT</span> customer_id, segment, lifetime_value</span></div>
+              <div class="code-line"><span class="ln">4</span><span class="src"><span class="kw">FROM</span> dbo.customers</span></div>
+              <div class="code-line"><span class="ln">5</span><span class="src"><span class="kw">WHERE</span> lifetime_value &lt; <span class="st">5000</span>;</span></div>
+            </div>
+            <div class="code-pane" id="p4">
+              <div class="code-line"><span class="ln">1</span><span class="src"><span class="cm"># Gold MLV: joined customer summary (PySpark)</span></span></div>
+              <div class="code-line"><span class="ln">2</span><span class="src">df_active = spark.table(<span class="fn">"silver.customers_active"</span>)</span></div>
+              <div class="code-line"><span class="ln">3</span><span class="src">df_churn  = spark.table(<span class="fn">"silver.customers_churn"</span>)</span></div>
+              <div class="code-line"><span class="ln">4</span><span class="src">df_summary = df_active.join(df_churn, <span class="fn">"customer_id"</span>, <span class="fn">"left"</span>)</span></div>
+              <div class="code-line"><span class="ln">5</span><span class="src">df_summary.write.mode(<span class="fn">"overwrite"</span>).saveAsTable(<span class="fn">"gold.customers_summary"</span>)</span></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Right column -->
+      <div class="col-right">
+
+        <!-- DAG topology -->
+        <div class="section">
+          <div class="section-head">
+            <div class="section-title">DAG Topology</div>
+            <button class="section-action">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              Open builder
+            </button>
+          </div>
+          <div class="dag-wrap" id="dag">
+            <div class="dag-fab">4 nodes · 4 edges</div>
+            <svg class="dag-svg" viewBox="0 0 360 380" preserveAspectRatio="none">
+              <defs>
+                <marker id="arr" markerWidth="6" markerHeight="6" refX="6" refY="3" orient="auto">
+                  <polygon points="0 0, 6 3, 0 6" fill="rgba(109,92,255,0.45)"/>
+                </marker>
+                <marker id="arrm" markerWidth="6" markerHeight="6" refX="6" refY="3" orient="auto">
+                  <polygon points="0 0, 6 3, 0 6" fill="rgba(0,0,0,0.18)"/>
+                </marker>
+              </defs>
+              <!-- customers → customers_active -->
+              <path d="M 110,90 C 110,140 80,140 80,180" stroke="rgba(109,92,255,0.40)" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+              <!-- customers → customers_churn -->
+              <path d="M 175,90 C 175,140 240,140 240,180" stroke="rgba(109,92,255,0.40)" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+              <!-- customers_active → customers_summary -->
+              <path d="M 100,235 C 100,275 145,275 145,305" stroke="rgba(229,148,12,0.40)" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+              <!-- customers_churn → customers_summary -->
+              <path d="M 240,235 C 240,275 200,275 200,305" stroke="rgba(229,148,12,0.40)" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+            </svg>
+
+            <div class="dag-node sql-table" style="left:90px;top:30px;">
+              <div class="dag-node-head">
+                <span class="dag-node-icon">◇</span>
+                <span class="dag-node-name">customers</span>
+              </div>
+              <div class="dag-node-meta">
+                <span class="schema-pill" style="background:var(--dbo-dim);color:var(--dbo);">dbo</span>
+                <span class="type-pill">SQL</span>
+              </div>
+            </div>
+            <div class="dag-node sql-mlv" style="left:20px;top:182px;">
+              <div class="dag-node-head">
+                <span class="dag-node-icon">◈</span>
+                <span class="dag-node-name">customers_active</span>
+              </div>
+              <div class="dag-node-meta">
+                <span class="schema-pill" style="background:var(--silver-dim);color:var(--silver);">silver</span>
+                <span class="type-pill">MLV</span>
+              </div>
+            </div>
+            <div class="dag-node sql-mlv" style="left:200px;top:182px;">
+              <div class="dag-node-head">
+                <span class="dag-node-icon">◈</span>
+                <span class="dag-node-name">customers_churn</span>
+              </div>
+              <div class="dag-node-meta">
+                <span class="schema-pill" style="background:var(--silver-dim);color:var(--silver);">silver</span>
+                <span class="type-pill">MLV</span>
+              </div>
+            </div>
+            <div class="dag-node spark" style="left:105px;top:308px;">
+              <div class="dag-node-head">
+                <span class="dag-node-icon">◆</span>
+                <span class="dag-node-name">customers_summary</span>
+              </div>
+              <div class="dag-node-meta">
+                <span class="schema-pill" style="background:var(--gold-dim);color:var(--gold);">gold</span>
+                <span class="type-pill">PySpark</span>
+              </div>
+            </div>
+
+            <div class="dag-legend">
+              <div class="leg"><span class="leg-icon" style="color:var(--type-sql);">◇</span>SQL table</div>
+              <div class="leg"><span class="leg-icon" style="color:var(--type-mlv);">◈</span>SQL MLV</div>
+              <div class="leg"><span class="leg-icon" style="color:var(--type-spark);">◆</span>PySpark MLV</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- What happens next -->
+        <div class="section">
+          <div class="section-head">
+            <div class="section-title">Pipeline Preview</div>
+          </div>
+          <div style="padding: var(--sp-2) 0;">
+            <div style="display:flex;flex-direction:column;">
+              <div style="display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-2) var(--sp-4);min-height:32px;">
+                <span style="font-family:var(--mono);font-size:10px;color:var(--text-muted);width:14px;">1</span>
+                <span style="width:8px;height:8px;border-radius:100px;background:var(--text-muted);"></span>
+                <span style="font-size:var(--text-sm);color:var(--text-dim);flex:1;">Create workspace</span>
+                <span style="font-family:var(--mono);font-size:10px;color:var(--text-muted);">≈ 5s</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-2) var(--sp-4);min-height:32px;">
+                <span style="font-family:var(--mono);font-size:10px;color:var(--text-muted);width:14px;">2</span>
+                <span style="width:8px;height:8px;border-radius:100px;background:var(--text-muted);"></span>
+                <span style="font-size:var(--text-sm);color:var(--text-dim);flex:1;">Assign capacity</span>
+                <span style="font-family:var(--mono);font-size:10px;color:var(--text-muted);">≈ 3s</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-2) var(--sp-4);min-height:32px;">
+                <span style="font-family:var(--mono);font-size:10px;color:var(--text-muted);width:14px;">3</span>
+                <span style="width:8px;height:8px;border-radius:100px;background:var(--text-muted);"></span>
+                <span style="font-size:var(--text-sm);color:var(--text-dim);flex:1;">Create lakehouse</span>
+                <span style="font-family:var(--mono);font-size:10px;color:var(--text-muted);">≈ 8s</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-2) var(--sp-4);min-height:32px;">
+                <span style="font-family:var(--mono);font-size:10px;color:var(--text-muted);width:14px;">4</span>
+                <span style="width:8px;height:8px;border-radius:100px;background:var(--text-muted);"></span>
+                <span style="font-size:var(--text-sm);color:var(--text-dim);flex:1;">Create notebook</span>
+                <span style="font-family:var(--mono);font-size:10px;color:var(--text-muted);">≈ 6s</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-2) var(--sp-4);min-height:32px;">
+                <span style="font-family:var(--mono);font-size:10px;color:var(--text-muted);width:14px;">5</span>
+                <span style="width:8px;height:8px;border-radius:100px;background:var(--text-muted);"></span>
+                <span style="font-size:var(--text-sm);color:var(--text-dim);flex:1;">Write cells</span>
+                <span style="font-family:var(--mono);font-size:10px;color:var(--text-muted);">≈ 2s</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-2) var(--sp-4);min-height:32px;">
+                <span style="font-family:var(--mono);font-size:10px;color:var(--text-muted);width:14px;">6</span>
+                <span style="width:8px;height:8px;border-radius:100px;background:var(--text-muted);"></span>
+                <span style="font-size:var(--text-sm);color:var(--text-dim);flex:1;">Run notebook</span>
+                <span style="font-family:var(--mono);font-size:10px;color:var(--text-muted);">≈ 21s</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="dialog-footer">
+      <button class="btn btn-ghost">
+        <span class="arrow">←</span>
+        Back to Build
+      </button>
+      <div class="warn-banner">
+        <span class="icn">!</span>
+        <div><strong>This will create real cloud resources.</strong> Billing applies to your F4 trial capacity. You can rollback if anything fails.</div>
+      </div>
+      <button class="btn btn-primary">
+        Lock In &amp; Create
+        <span class="arrow">→</span>
+        <kbd>⏎</kbd>
+      </button>
+    </div>
+
+  </div>
+
+  <div class="sub-footer">
+    Press <span class="kbd">Esc</span> to cancel · <span class="kbd">⏎</span> to confirm · <span class="kbd">⌘ E</span> to edit a section
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ── Theme toggle ──
+  const body = document.body;
+  const toggle = document.getElementById('themeToggle');
+  const sun = document.getElementById('iconSun');
+  const moon = document.getElementById('iconMoon');
+  function setTheme(t) {
+    body.setAttribute('data-theme', t);
+    sun.style.display = t === 'dark' ? 'block' : 'none';
+    moon.style.display = t === 'dark' ? 'none' : 'block';
+  }
+  toggle.addEventListener('click', () => {
+    setTheme(body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+  });
+
+  // ── Code toggle ──
+  const codeToggle = document.getElementById('codeToggle');
+  const codeBody = document.getElementById('codeBody');
+  codeToggle.addEventListener('click', () => {
+    const open = codeBody.classList.toggle('open');
+    codeToggle.classList.toggle('open', open);
+  });
+
+  // ── Code tabs ──
+  document.querySelectorAll('.code-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const pane = tab.dataset.pane;
+      document.querySelectorAll('.code-tab').forEach(t => t.classList.toggle('active', t === tab));
+      document.querySelectorAll('.code-pane').forEach(p => p.classList.toggle('active', p.id === pane));
+    });
+  });
+
+  // ── KV action: dismiss validation warning ──
+  document.querySelectorAll('.valid-link').forEach(b => {
+    b.addEventListener('click', e => {
+      const row = e.currentTarget.closest('.valid-row');
+      row.style.transition = 'opacity 150ms ease-out, height 150ms ease-out';
+      row.style.opacity = '0';
+      setTimeout(() => row.remove(), 160);
+    });
+  });
+})();
+</script>
+</body>
+</html>

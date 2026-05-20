@@ -1,0 +1,1766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDOG Studio — F16 Infra Wizard · Page 5 · Deploy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   EDOG Studio — F16 Infra Wizard · Page 5 · Deploy
+   GitHub Actions × Vercel deployments × Azure DevOps pipelines.
+   Full state matrix: executing · succeeded · failed · rolling_back · rolled_back · rollback_failed
+   @author Phantom
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --surface-2: #f8f9fb;
+  --surface-3: #ebedf0;
+  --border: rgba(0,0,0,0.06);
+  --border-bright: rgba(0,0,0,0.12);
+  --text: #1a1d23;
+  --text-dim: #5a6070;
+  --text-muted: #8e95a5;
+
+  --accent: #6d5cff;
+  --accent-dim: rgba(109,92,255,0.07);
+  --accent-hover: rgba(109,92,255,0.04);
+  --accent-glow: rgba(109,92,255,0.15);
+  --accent-soft: rgba(109,92,255,0.10);
+  --text-on-accent: #ffffff;
+
+  --status-ok: #18a058;
+  --status-ok-dim: rgba(24,160,88,0.08);
+  --status-ok-glow: rgba(24,160,88,0.15);
+  --status-fail: #e5453b;
+  --status-fail-dim: rgba(229,69,59,0.08);
+  --status-fail-glow: rgba(229,69,59,0.15);
+  --status-warn: #e5940c;
+  --status-warn-dim: rgba(229,148,12,0.08);
+  --status-pending: #8e95a5;
+  --status-pending-dim: rgba(142,149,165,0.10);
+
+  --level-verbose: #8e95a5;
+  --level-message: #2d7ff9;
+  --level-warning: #e5940c;
+  --level-error: #e5453b;
+
+  --font: 'Inter', -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
+  --text-xs: 10px;
+  --text-sm: 12px;
+  --text-md: 13px;
+  --text-lg: 15px;
+  --text-xl: 18px;
+  --text-2xl: 22px;
+  --text-3xl: 28px;
+  --text-4xl: 44px;
+
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px;
+
+  --r-sm: 4px; --r-md: 6px; --r-lg: 10px; --r-full: 100px;
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 2px 8px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-lg: 0 4px 16px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+  --shadow-dialog: 0 24px 80px rgba(0,0,0,0.12), 0 8px 24px rgba(0,0,0,0.08);
+
+  --t-fast: 80ms ease-out;
+  --t-normal: 150ms ease-out;
+  --t-state: 300ms ease-out;
+}
+
+[data-theme="dark"] {
+  --bg: #0c0e14;
+  --surface: #14171f;
+  --surface-2: #1c2029;
+  --surface-3: #282d3a;
+  --border: rgba(255,255,255,0.06);
+  --border-bright: rgba(255,255,255,0.10);
+  --text: #e4e7ed;
+  --text-dim: #8a91a3;
+  --text-muted: #555d70;
+  --accent: #8577ff;
+  --accent-dim: rgba(133,119,255,0.10);
+  --accent-glow: rgba(133,119,255,0.20);
+  --status-ok: #34d399;
+  --status-ok-dim: rgba(52,211,153,0.12);
+  --status-fail: #ff6b6b;
+  --status-fail-dim: rgba(255,107,107,0.12);
+  --status-warn: #f0b429;
+  --status-warn-dim: rgba(240,180,41,0.12);
+  --level-message: #5b9bff;
+  --level-warning: #f0b429;
+  --level-error: #ff6b6b;
+  --shadow-dialog: 0 24px 80px rgba(0,0,0,0.50), 0 8px 24px rgba(0,0,0,0.40);
+}
+
+html, body { height: 100%; }
+body {
+  font-family: var(--font);
+  font-size: var(--text-md);
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'cv11', 'ss01', 'ss03';
+  line-height: 1.5;
+}
+button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+a { color: inherit; text-decoration: none; }
+
+/* ── Keyframes ── */
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pulse-dot {
+  0%, 100% { box-shadow: 0 0 0 0 var(--accent-glow); }
+  50%      { box-shadow: 0 0 0 8px transparent; }
+}
+@keyframes fill-bar {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+@keyframes flow {
+  to { stroke-dashoffset: -24; }
+}
+@keyframes blink {
+  0%, 100% { opacity: 0.4; }
+  50%      { opacity: 1; }
+}
+@keyframes tick-up {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes pop-check {
+  0%   { transform: scale(0); opacity: 0; }
+  60%  { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes confetti {
+  0%   { transform: translateY(-10px) rotate(0); opacity: 0; }
+  20%  { opacity: 1; }
+  100% { transform: translateY(120px) rotate(360deg); opacity: 0; }
+}
+@keyframes connector-fill {
+  from { background-size: 100% 0%; }
+  to   { background-size: 100% 100%; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SHELL
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.viewport {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--sp-8) var(--sp-6);
+  background:
+    radial-gradient(1200px 600px at 50% -200px, var(--accent-dim), transparent 60%),
+    var(--bg);
+}
+
+.theme-toggle {
+  position: fixed;
+  top: var(--sp-4);
+  right: var(--sp-4);
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  border: 1px solid var(--border-bright);
+  color: var(--text-dim);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 200;
+  box-shadow: var(--shadow-sm);
+  transition: all var(--t-fast);
+}
+.theme-toggle:hover { background: var(--surface-2); color: var(--text); }
+
+/* ── State switcher (dev-only chrome to demo state matrix) ── */
+.state-switcher {
+  position: fixed;
+  top: var(--sp-4);
+  left: var(--sp-4);
+  background: var(--surface);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--r-md);
+  padding: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  box-shadow: var(--shadow-md);
+  z-index: 200;
+  max-width: 540px;
+}
+.state-switcher-label {
+  display: flex; align-items: center; gap: 6px;
+  padding: 0 8px;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-right: 1px solid var(--border);
+  margin-right: 4px;
+}
+.state-switcher-label .dev-dot {
+  width: 6px; height: 6px;
+  border-radius: 100px;
+  background: var(--accent);
+  animation: blink 2s ease-in-out infinite;
+}
+.state-pill {
+  padding: 4px 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  transition: all var(--t-fast);
+}
+.state-pill:hover { background: var(--surface-2); color: var(--text); }
+.state-pill.active {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+/* ── Dialog ── */
+.dialog {
+  width: 100%;
+  max-width: 1100px;
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border-bright);
+  box-shadow: var(--shadow-dialog);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* Live progress bar at the very top */
+.progress-bar {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--border);
+  z-index: 5;
+}
+.progress-bar .fill {
+  height: 100%;
+  background: var(--accent);
+  transform-origin: left;
+  transition: width var(--t-state);
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+.progress-bar.success .fill { background: var(--status-ok); box-shadow: 0 0 8px var(--status-ok-glow); }
+.progress-bar.fail    .fill { background: var(--status-fail); box-shadow: 0 0 8px var(--status-fail-glow); }
+.progress-bar.warn    .fill { background: var(--status-warn); }
+
+/* ── Header ── */
+.dialog-header {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--sp-4) 0 var(--sp-5);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.dialog-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+  display: flex; align-items: center; gap: var(--sp-2);
+}
+.dialog-title .dot {
+  width: 6px; height: 6px; border-radius: 100px;
+  background: var(--accent);
+}
+.dialog-title .crumb { color: var(--text-muted); font-weight: 500; }
+.dialog-controls { margin-left: auto; display: flex; gap: var(--sp-1); }
+.win-btn {
+  width: 28px; height: 28px;
+  border-radius: var(--r-sm);
+  color: var(--text-muted);
+  display: flex; align-items: center; justify-content: center;
+  transition: all var(--t-fast);
+  font-size: 14px;
+}
+.win-btn:hover { background: var(--surface-2); color: var(--text); }
+.win-btn.close:hover { background: var(--status-fail-dim); color: var(--status-fail); }
+
+/* ── Stepper ── */
+.stepper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-5) var(--sp-6);
+  gap: var(--sp-2);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.step-group { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 80px; }
+.step-circle {
+  width: 28px; height: 28px;
+  border-radius: 100px;
+  background: var(--surface);
+  border: 1.5px solid var(--border-bright);
+  color: var(--text-muted);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  transition: all var(--t-normal);
+}
+.step-group.done .step-circle {
+  background: var(--status-ok);
+  border-color: var(--status-ok);
+  color: white;
+}
+.step-group.active .step-circle {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+  box-shadow: 0 0 0 4px var(--accent-glow);
+}
+.step-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.step-group.done .step-label,
+.step-group.active .step-label { color: var(--text); }
+.step-conn {
+  flex: 0 0 56px;
+  height: 1.5px;
+  background: var(--border-bright);
+  margin-top: 22px;
+}
+.step-conn.done { background: var(--status-ok); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   STATE HEADER (the big timer / status zone)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.deploy-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--sp-6);
+  align-items: center;
+  padding: var(--sp-6) var(--sp-8);
+  border-bottom: 1px solid var(--border);
+}
+.deploy-head .left { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.deploy-head .eyebrow {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  display: flex; align-items: center; gap: 6px;
+}
+.deploy-head .title {
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.deploy-head .current-action {
+  font-size: var(--text-sm);
+  color: var(--text-dim);
+  font-family: var(--mono);
+  display: flex; align-items: center; gap: 6px;
+}
+.deploy-head .current-action .live-dot {
+  width: 8px; height: 8px; border-radius: 100px;
+  background: var(--accent);
+  animation: pulse-dot 1.6s ease-out infinite;
+}
+.deploy-head .right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.timer {
+  font-family: var(--mono);
+  font-size: var(--text-4xl);
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: -0.02em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.timer.done { color: var(--status-ok); }
+.timer.fail { color: var(--status-fail); }
+.timer.warn { color: var(--status-warn); }
+.timer-label {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.step-counter {
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.step-counter .now { color: var(--text); font-weight: 600; }
+
+/* State variants for header */
+.deploy-head.success-state .title { color: var(--status-ok); }
+.deploy-head.fail-state .title    { color: var(--status-fail); }
+.deploy-head.warn-state .title    { color: var(--status-warn); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BODY
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.body {
+  padding: var(--sp-6) var(--sp-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  min-height: 0;
+  max-height: calc(100vh - 280px);
+  overflow: auto;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PIPELINE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.pipeline {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.pipe-step {
+  display: grid;
+  grid-template-columns: 56px 1fr auto auto;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  position: relative;
+  min-height: 56px;
+  border-top: 1px solid var(--border);
+  transition: background var(--t-normal);
+}
+.pipe-step:first-child { border-top: none; }
+
+/* Vertical connector line that joins icon to next icon */
+.pipe-step::before {
+  content: '';
+  position: absolute;
+  left: 28px;
+  top: 56px;
+  bottom: -1px;
+  width: 1.5px;
+  background: var(--border-bright);
+  transform: translateX(-50%);
+}
+.pipe-step:last-child::before { display: none; }
+.pipe-step.done::before { background: var(--status-ok); }
+.pipe-step.failed::before { background: var(--status-fail); }
+.pipe-step.running::before {
+  background: linear-gradient(180deg, var(--accent) 0%, var(--border-bright) 100%);
+  background-size: 100% 200%;
+  animation: connector-fill 1.6s ease-out infinite;
+}
+
+/* Status icon column */
+.pipe-icon {
+  width: 30px; height: 30px;
+  border-radius: 100px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--surface);
+  border: 1.5px solid var(--border-bright);
+  color: var(--text-muted);
+  flex-shrink: 0;
+  margin-left: 14px;
+  position: relative;
+  z-index: 2;
+  transition: all var(--t-state);
+}
+.pipe-step.done .pipe-icon {
+  background: var(--status-ok);
+  border-color: var(--status-ok);
+  color: white;
+  animation: pop-check 240ms ease-out;
+}
+.pipe-step.failed .pipe-icon {
+  background: var(--status-fail);
+  border-color: var(--status-fail);
+  color: white;
+}
+.pipe-step.running .pipe-icon {
+  background: var(--surface);
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-glow);
+}
+.pipe-step.retrying .pipe-icon {
+  background: var(--surface);
+  border-color: var(--status-warn);
+  color: var(--status-warn);
+}
+.pipe-step.skipped .pipe-icon {
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--text-muted);
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+/* Spinner */
+.spinner {
+  width: 16px; height: 16px;
+  border: 1.5px solid var(--accent-dim);
+  border-top-color: var(--accent);
+  border-radius: 100px;
+  animation: spin 0.9s linear infinite;
+}
+
+/* Info */
+.pipe-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pipe-name {
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.005em;
+}
+.pipe-sub {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  font-family: var(--mono);
+}
+.pipe-step.skipped .pipe-name,
+.pipe-step.pending .pipe-name { color: var(--text-muted); font-weight: 500; }
+
+/* Right column: timing + expand */
+.pipe-time {
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  min-width: 60px;
+}
+.pipe-step.running .pipe-time {
+  color: var(--accent);
+  font-weight: 600;
+}
+.pipe-step.done .pipe-time { color: var(--status-ok); }
+.pipe-step.failed .pipe-time { color: var(--status-fail); }
+
+.pipe-expand {
+  width: 24px; height: 24px;
+  border-radius: var(--r-sm);
+  color: var(--text-muted);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono);
+  transition: all var(--t-fast);
+}
+.pipe-expand:hover { background: var(--surface-2); color: var(--text); }
+.pipe-step.pending .pipe-expand,
+.pipe-step.skipped .pipe-expand { opacity: 0.3; pointer-events: none; }
+.pipe-expand.open { transform: rotate(90deg); color: var(--accent); }
+
+/* Running step gets background tint */
+.pipe-step.running { background: var(--accent-dim); }
+.pipe-step.failed  { background: rgba(229,69,59,0.04); }
+
+/* Log detail */
+.pipe-detail {
+  grid-column: 1 / -1;
+  display: none;
+  margin: var(--sp-2) 0 var(--sp-1) 56px;
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.7;
+  max-height: 260px;
+  overflow: auto;
+}
+.pipe-step.open .pipe-detail { display: block; }
+.log-line { display: grid; grid-template-columns: 80px 56px 1fr; gap: var(--sp-3); align-items: baseline; }
+.log-line .ts { color: var(--text-muted); }
+.log-line .lvl {
+  font-weight: 700;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: var(--r-sm);
+  text-align: center;
+}
+.log-line .lvl.info   { color: var(--level-message); background: rgba(45,127,249,0.10); }
+.log-line .lvl.warn   { color: var(--level-warning); background: rgba(229,148,12,0.12); }
+.log-line .lvl.error  { color: var(--level-error); background: rgba(229,69,59,0.12); }
+.log-line .lvl.ok     { color: var(--status-ok); background: var(--status-ok-dim); }
+.log-line .lvl.debug  { color: var(--text-muted); background: var(--surface-3); }
+.log-line .msg { color: var(--text-dim); white-space: pre-wrap; word-break: break-word; }
+.log-line .msg .k { color: var(--accent); }
+.log-line .msg .s { color: var(--status-ok); }
+.log-line .msg .e { color: var(--status-fail); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   STATE: ERROR PANEL
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.error-panel {
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--status-fail) 30%, transparent);
+  border-left: 3px solid var(--status-fail);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+.error-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--status-fail-dim);
+  border-bottom: 1px solid color-mix(in srgb, var(--status-fail) 20%, transparent);
+}
+.error-head .icn {
+  width: 22px; height: 22px;
+  border-radius: 100px;
+  background: var(--status-fail);
+  color: white;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.error-head .title {
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--status-fail);
+}
+.error-head .title .step {
+  color: var(--text);
+  font-family: var(--mono);
+  font-weight: 500;
+  margin-left: 6px;
+}
+.error-head .status-code {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--status-fail);
+  background: var(--surface);
+  padding: 3px 8px;
+  border-radius: var(--r-full);
+  border: 1px solid color-mix(in srgb, var(--status-fail) 30%, transparent);
+}
+.error-body {
+  padding: var(--sp-3) var(--sp-4);
+}
+.error-msg {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  padding: var(--sp-3);
+  border-radius: var(--r-md);
+  white-space: pre-wrap;
+  max-height: 140px;
+  overflow: auto;
+}
+.error-msg .h { color: var(--status-fail); font-weight: 600; }
+.error-msg .k { color: var(--accent); }
+.error-msg .s { color: var(--text-muted); }
+.error-actions {
+  display: flex;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4) var(--sp-4);
+  border-top: 1px solid var(--border);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   STATE: SUCCESS PANEL
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.success-card {
+  background:
+    radial-gradient(600px 300px at 50% -100px, var(--status-ok-glow), transparent 70%),
+    var(--surface);
+  border: 1px solid color-mix(in srgb, var(--status-ok) 25%, transparent);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  position: relative;
+}
+.success-head {
+  padding: var(--sp-6) var(--sp-6) var(--sp-5);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  border-bottom: 1px solid var(--border);
+}
+.success-icon {
+  width: 48px; height: 48px;
+  border-radius: 100px;
+  background: var(--status-ok);
+  color: white;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  animation: pop-check 400ms ease-out;
+  box-shadow: 0 8px 24px var(--status-ok-glow);
+}
+.success-text { flex: 1; min-width: 0; }
+.success-title {
+  font-size: var(--text-xl);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.success-sub {
+  font-size: var(--text-sm);
+  color: var(--text-dim);
+  margin-top: 2px;
+  font-family: var(--mono);
+}
+.success-total {
+  text-align: right;
+  flex-shrink: 0;
+}
+.success-total .val {
+  font-family: var(--mono);
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  color: var(--status-ok);
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.success-total .lbl {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.resource-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  padding: 0;
+}
+.resource-cell {
+  padding: var(--sp-4) var(--sp-5);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: background var(--t-fast);
+}
+.resource-cell:last-child { border-right: none; }
+.resource-cell:hover { background: var(--surface-2); }
+.resource-cell .key {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.resource-cell .val {
+  font-family: var(--mono);
+  font-size: var(--text-md);
+  font-weight: 500;
+  color: var(--text);
+  display: flex; align-items: center; gap: 6px;
+}
+.resource-cell .val .link-arrow {
+  color: var(--accent);
+  opacity: 0.6;
+  transition: opacity var(--t-fast);
+}
+.resource-cell:hover .val .link-arrow { opacity: 1; }
+.resource-cell .id {
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+/* Confetti */
+.confetti-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.confetto {
+  position: absolute;
+  width: 6px; height: 10px;
+  top: -10px;
+  animation: confetti 1800ms ease-out forwards;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   STATE: ROLLBACK LIST
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.rollback-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--status-warn);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+.rollback-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--status-warn-dim);
+  border-bottom: 1px solid color-mix(in srgb, var(--status-warn) 20%, transparent);
+}
+.rollback-head .icn {
+  width: 22px; height: 22px;
+  border-radius: 100px;
+  background: var(--status-warn);
+  color: white;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.rollback-head .title {
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--text);
+}
+.rollback-head .count {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--status-warn);
+  background: var(--surface);
+  padding: 3px 8px;
+  border-radius: var(--r-full);
+  border: 1px solid color-mix(in srgb, var(--status-warn) 30%, transparent);
+}
+.rollback-list { padding: var(--sp-2) 0; }
+.rb-row {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-4);
+  min-height: 36px;
+}
+.rb-row + .rb-row { border-top: 1px solid var(--border); }
+.rb-status {
+  width: 16px; height: 16px;
+  border-radius: 100px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+}
+.rb-status.deleting { background: var(--surface); border: 1px solid var(--status-warn); color: var(--status-warn); }
+.rb-status.deleted { background: var(--text-muted); color: white; }
+.rb-status.kept { background: var(--status-fail); color: white; }
+.rb-status.pending { background: var(--surface-2); color: var(--text-muted); border: 1px solid var(--border); }
+.rb-status .spin {
+  width: 8px; height: 8px;
+  border: 1.2px solid var(--status-warn);
+  border-top-color: transparent;
+  border-radius: 100px;
+  animation: spin 0.8s linear infinite;
+}
+.rb-name { font-family: var(--mono); font-size: var(--text-sm); color: var(--text); }
+.rb-name.del { text-decoration: line-through; color: var(--text-muted); }
+.rb-msg {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.rb-msg.warn { color: var(--status-warn); }
+.rb-msg.fail { color: var(--status-fail); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ACTIONS / FOOTER
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.action-bar {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: center;
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 0 var(--sp-4);
+  height: 36px;
+  border-radius: var(--r-md);
+  font-size: var(--text-md);
+  font-weight: 600;
+  transition: all var(--t-fast);
+  white-space: nowrap;
+}
+.btn-ghost {
+  color: var(--text-dim);
+  background: var(--surface);
+  border: 1px solid var(--border-bright);
+}
+.btn-ghost:hover { background: var(--surface-2); color: var(--text); }
+.btn-primary {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border: 1px solid var(--accent);
+  padding: 0 var(--sp-5);
+}
+.btn-primary:hover {
+  background: color-mix(in srgb, var(--accent) 90%, black);
+  box-shadow: 0 4px 12px var(--accent-glow);
+}
+.btn-success {
+  background: var(--status-ok);
+  color: white;
+  border: 1px solid var(--status-ok);
+  padding: 0 var(--sp-5);
+}
+.btn-success:hover { background: color-mix(in srgb, var(--status-ok) 90%, black); box-shadow: 0 4px 12px var(--status-ok-glow); }
+.btn-danger {
+  color: var(--status-fail);
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--status-fail) 40%, transparent);
+}
+.btn-danger:hover { background: var(--status-fail-dim); }
+.btn-warn {
+  color: var(--status-warn);
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--status-warn) 40%, transparent);
+}
+.btn-warn:hover { background: var(--status-warn-dim); }
+
+.dialog-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-6);
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.dialog-footer .spacer { flex: 1; }
+.dialog-footer .meta {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-family: var(--mono);
+}
+.dialog-footer .meta .live {
+  width: 6px; height: 6px;
+  border-radius: 100px;
+  background: var(--status-ok);
+  animation: pulse-dot 1.6s ease-out infinite;
+}
+
+/* Hide all state containers by default */
+.state { display: none; flex-direction: column; gap: var(--sp-5); }
+.state.active { display: flex; }
+
+/* ── Sub-footer ── */
+.sub-footer {
+  text-align: center;
+  padding: var(--sp-4);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.sub-footer .kbd {
+  font-family: var(--mono);
+  background: var(--surface);
+  padding: 1px 5px;
+  border: 1px solid var(--border-bright);
+  border-radius: 3px;
+  margin: 0 2px;
+}
+
+@media (max-width: 940px) {
+  .state-switcher { position: static; margin-bottom: var(--sp-3); }
+  .resource-grid { grid-template-columns: 1fr; }
+  .resource-cell { border-right: none; border-bottom: 1px solid var(--border); }
+}
+</style>
+</head>
+<body data-theme="light">
+
+<button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
+  <svg id="iconSun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+    <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+  </svg>
+  <svg id="iconMoon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+  </svg>
+</button>
+
+<!-- ── Dev-only state switcher (showcases the full state matrix) ── -->
+<div class="state-switcher" role="tablist" aria-label="Deploy state matrix">
+  <div class="state-switcher-label"><span class="dev-dot"></span>State</div>
+  <button class="state-pill active" data-state="executing">executing</button>
+  <button class="state-pill" data-state="succeeded">succeeded</button>
+  <button class="state-pill" data-state="failed">failed</button>
+  <button class="state-pill" data-state="rolling_back">rolling_back</button>
+  <button class="state-pill" data-state="rolled_back">rolled_back</button>
+  <button class="state-pill" data-state="rollback_failed">rollback_failed</button>
+</div>
+
+<div class="viewport">
+  <div class="dialog" id="dialog">
+
+    <!-- Progress bar -->
+    <div class="progress-bar" id="progressBar"><div class="fill" id="progressFill" style="width:42%;"></div></div>
+
+    <!-- Header -->
+    <div class="dialog-header">
+      <div class="dialog-title">
+        <span class="dot"></span>
+        New Environment
+        <span class="crumb">/ Deploy</span>
+      </div>
+      <div class="dialog-controls">
+        <button class="win-btn" title="Minimize">⎯</button>
+        <button class="win-btn" title="Maximize">▢</button>
+        <button class="win-btn close" title="Close">✕</button>
+      </div>
+    </div>
+
+    <!-- Stepper -->
+    <div class="stepper">
+      <div class="step-group done"><div class="step-circle">✓</div><div class="step-label">Setup</div></div>
+      <div class="step-conn done"></div>
+      <div class="step-group done"><div class="step-circle">✓</div><div class="step-label">Theme</div></div>
+      <div class="step-conn done"></div>
+      <div class="step-group done"><div class="step-circle">✓</div><div class="step-label">Build</div></div>
+      <div class="step-conn done"></div>
+      <div class="step-group done"><div class="step-circle">✓</div><div class="step-label">Review</div></div>
+      <div class="step-conn done"></div>
+      <div class="step-group active"><div class="step-circle">5</div><div class="step-label">Deploy</div></div>
+    </div>
+
+    <!-- ───────────────────────────────────────────────────────────────────
+         DEPLOY HEAD (timer + status) — content is swapped per state
+         ─────────────────────────────────────────────────────────────────── -->
+    <div class="deploy-head" id="deployHead">
+      <div class="left">
+        <div class="eyebrow" id="headEyebrow"><span style="display:inline-block;width:6px;height:6px;border-radius:100px;background:var(--accent);"></span> Live · auto-refresh</div>
+        <div class="title" id="headTitle">Creating Environment</div>
+        <div class="current-action" id="currentAction"><span class="live-dot"></span><span id="currentActionText">Creating lakehouse with schema support…</span></div>
+      </div>
+      <div class="right">
+        <div class="timer" id="timer">00:18.4</div>
+        <div class="timer-label" id="timerLabel">Elapsed</div>
+        <div class="step-counter" id="stepCounter"><span class="now">3</span> / 6 steps</div>
+      </div>
+    </div>
+
+    <div class="body">
+
+      <!-- ═══════════════════════════════════════════════════════════════
+           STATE 1 — EXECUTING
+           ═══════════════════════════════════════════════════════════════ -->
+      <div class="state active" data-state="executing">
+
+        <div class="pipeline" id="pipeline">
+
+          <!-- Step 1: Create Workspace (done) -->
+          <div class="pipe-step done">
+            <div class="pipe-icon">✓</div>
+            <div class="pipe-info">
+              <div class="pipe-name">Create Workspace</div>
+              <div class="pipe-sub">prime_thompson_49 · 2 sub-tasks</div>
+            </div>
+            <div class="pipe-time">4.21s</div>
+            <button class="pipe-expand" data-toggle>▸</button>
+            <div class="pipe-detail">
+              <div class="log-line"><span class="ts">00:00.012</span><span class="lvl info">INFO</span><span class="msg"><span class="k">POST</span> /v1/workspaces displayName=<span class="s">"prime_thompson_49"</span></span></div>
+              <div class="log-line"><span class="ts">00:01.184</span><span class="lvl debug">DEBUG</span><span class="msg">workspaceId received: <span class="k">a7b2c3d4-1234-5678-9abc-def012345678</span></span></div>
+              <div class="log-line"><span class="ts">00:01.502</span><span class="lvl info">INFO</span><span class="msg"><span class="k">POST</span> /v1/workspaces/{wsId}/users role=Admin</span></div>
+              <div class="log-line"><span class="ts">00:04.205</span><span class="lvl ok">OK</span><span class="msg">workspace ready · 200 OK</span></div>
+            </div>
+          </div>
+
+          <!-- Step 2: Assign Capacity (done) -->
+          <div class="pipe-step done">
+            <div class="pipe-icon">✓</div>
+            <div class="pipe-info">
+              <div class="pipe-name">Assign Capacity</div>
+              <div class="pipe-sub">F4 Trial · East US</div>
+            </div>
+            <div class="pipe-time">2.83s</div>
+            <button class="pipe-expand" data-toggle>▸</button>
+            <div class="pipe-detail">
+              <div class="log-line"><span class="ts">00:04.221</span><span class="lvl info">INFO</span><span class="msg"><span class="k">POST</span> /v1/workspaces/{wsId}/assignToCapacity</span></div>
+              <div class="log-line"><span class="ts">00:04.789</span><span class="lvl debug">DEBUG</span><span class="msg">capacityId=<span class="k">3e65fd15-1c0b-4a73-b8a5-e62f04a3ac2d</span></span></div>
+              <div class="log-line"><span class="ts">00:07.040</span><span class="lvl ok">OK</span><span class="msg">capacity assigned · 200 OK</span></div>
+            </div>
+          </div>
+
+          <!-- Step 3: Create Lakehouse (RUNNING) -->
+          <div class="pipe-step running open">
+            <div class="pipe-icon"><div class="spinner"></div></div>
+            <div class="pipe-info">
+              <div class="pipe-name">Create Lakehouse</div>
+              <div class="pipe-sub" id="runningSub">enableSchemas: true · provisioning…</div>
+            </div>
+            <div class="pipe-time" id="runningTime">11.4s</div>
+            <button class="pipe-expand open" data-toggle>▸</button>
+            <div class="pipe-detail">
+              <div class="log-line"><span class="ts">00:07.052</span><span class="lvl info">INFO</span><span class="msg"><span class="k">POST</span> /v1/workspaces/{wsId}/items type=Lakehouse</span></div>
+              <div class="log-line"><span class="ts">00:07.058</span><span class="lvl debug">DEBUG</span><span class="msg">payload: { displayName: <span class="s">"prime_thompson_49_lh"</span>, enableSchemas: <span class="s">true</span> }</span></div>
+              <div class="log-line"><span class="ts">00:08.301</span><span class="lvl info">INFO</span><span class="msg">202 Accepted · long-running operation queued</span></div>
+              <div class="log-line"><span class="ts">00:08.302</span><span class="lvl debug">DEBUG</span><span class="msg">operationId=<span class="k">op_b9c1d2e3-…</span> · polling every 1s</span></div>
+              <div class="log-line"><span class="ts">00:09.350</span><span class="lvl debug">DEBUG</span><span class="msg">poll #1 — status=<span class="s">Running</span> (12%)</span></div>
+              <div class="log-line"><span class="ts">00:11.402</span><span class="lvl debug">DEBUG</span><span class="msg">poll #3 — status=<span class="s">Running</span> (48%)</span></div>
+              <div class="log-line"><span class="ts">00:15.512</span><span class="lvl debug">DEBUG</span><span class="msg">poll #7 — status=<span class="s">Running</span> (72%)</span></div>
+              <div class="log-line"><span class="ts">00:18.395</span><span class="lvl debug">DEBUG</span><span class="msg">poll #10 — provisioning sql endpoint…</span></div>
+            </div>
+          </div>
+
+          <!-- Step 4: Create Notebook (pending) -->
+          <div class="pipe-step pending">
+            <div class="pipe-icon">◯</div>
+            <div class="pipe-info">
+              <div class="pipe-name">Create Notebook</div>
+              <div class="pipe-sub">4 cells · SQL + PySpark</div>
+            </div>
+            <div class="pipe-time">—</div>
+            <button class="pipe-expand">▸</button>
+          </div>
+
+          <!-- Step 5: Write Cells (pending) -->
+          <div class="pipe-step pending">
+            <div class="pipe-icon">◯</div>
+            <div class="pipe-info">
+              <div class="pipe-name">Write Cells</div>
+              <div class="pipe-sub">SQL tables, MLVs, Spark joins</div>
+            </div>
+            <div class="pipe-time">—</div>
+            <button class="pipe-expand">▸</button>
+          </div>
+
+          <!-- Step 6: Run Notebook (pending) -->
+          <div class="pipe-step pending">
+            <div class="pipe-icon">◯</div>
+            <div class="pipe-info">
+              <div class="pipe-name">Run Notebook</div>
+              <div class="pipe-sub">execute & materialize all views</div>
+            </div>
+            <div class="pipe-time">—</div>
+            <button class="pipe-expand">▸</button>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+           STATE 2 — SUCCEEDED
+           ═══════════════════════════════════════════════════════════════ -->
+      <div class="state" data-state="succeeded">
+
+        <div class="success-card">
+          <div class="confetti-layer" id="confettiLayer"></div>
+          <div class="success-head">
+            <div class="success-icon">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+            </div>
+            <div class="success-text">
+              <div class="success-title">Environment ready</div>
+              <div class="success-sub">prime_thompson_49 · 1 workspace · 1 lakehouse · 1 notebook · 4 MLVs</div>
+            </div>
+            <div class="success-total">
+              <div class="val">00:43.7</div>
+              <div class="lbl">total time</div>
+            </div>
+          </div>
+          <div class="resource-grid">
+            <div class="resource-cell">
+              <span class="key">Workspace</span>
+              <span class="val">prime_thompson_49 <span class="link-arrow">↗</span></span>
+              <span class="id">a7b2c3d4-…5678</span>
+            </div>
+            <div class="resource-cell">
+              <span class="key">Lakehouse</span>
+              <span class="val">prime_thompson_49_lh <span class="link-arrow">↗</span></span>
+              <span class="id">b8c3d4e5-…6789</span>
+            </div>
+            <div class="resource-cell">
+              <span class="key">Notebook · 4 cells</span>
+              <span class="val">prime_thompson_49_nb <span class="link-arrow">↗</span></span>
+              <span class="id">c9d4e5f6-…789a · Completed</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="pipeline">
+          <div class="pipe-step done">
+            <div class="pipe-icon">✓</div>
+            <div class="pipe-info"><div class="pipe-name">Create Workspace</div><div class="pipe-sub">prime_thompson_49</div></div>
+            <div class="pipe-time">4.21s</div>
+            <button class="pipe-expand" data-toggle>▸</button>
+          </div>
+          <div class="pipe-step done">
+            <div class="pipe-icon">✓</div>
+            <div class="pipe-info"><div class="pipe-name">Assign Capacity</div><div class="pipe-sub">F4 Trial · East US</div></div>
+            <div class="pipe-time">2.83s</div>
+            <button class="pipe-expand" data-toggle>▸</button>
+          </div>
+          <div class="pipe-step done">
+            <div class="pipe-icon">✓</div>
+            <div class="pipe-info"><div class="pipe-name">Create Lakehouse</div><div class="pipe-sub">enableSchemas: true</div></div>
+            <div class="pipe-time">14.02s</div>
+            <button class="pipe-expand" data-toggle>▸</button>
+          </div>
+          <div class="pipe-step done">
+            <div class="pipe-icon">✓</div>
+            <div class="pipe-info"><div class="pipe-name">Create Notebook</div><div class="pipe-sub">4 cells</div></div>
+            <div class="pipe-time">3.41s</div>
+            <button class="pipe-expand" data-toggle>▸</button>
+          </div>
+          <div class="pipe-step done">
+            <div class="pipe-icon">✓</div>
+            <div class="pipe-info"><div class="pipe-name">Write Cells</div><div class="pipe-sub">SQL × 3 · PySpark × 1</div></div>
+            <div class="pipe-time">1.18s</div>
+            <button class="pipe-expand" data-toggle>▸</button>
+          </div>
+          <div class="pipe-step done">
+            <div class="pipe-icon">✓</div>
+            <div class="pipe-info"><div class="pipe-name">Run Notebook</div><div class="pipe-sub">jobInstanceId · Completed</div></div>
+            <div class="pipe-time">18.05s</div>
+            <button class="pipe-expand" data-toggle>▸</button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+           STATE 3 — FAILED
+           ═══════════════════════════════════════════════════════════════ -->
+      <div class="state" data-state="failed">
+
+        <div class="error-panel">
+          <div class="error-head">
+            <div class="icn">✕</div>
+            <div class="title">Failed at step 3 of 6<span class="step">· Create Lakehouse</span></div>
+            <div class="status-code">HTTP 409</div>
+          </div>
+          <div class="error-body">
+            <div class="error-msg"><span class="h">LakehouseAlreadyExists</span>
+<span class="s">at</span> Microsoft.Fabric.SDK.LakehouseClient.<span class="k">CreateAsync</span>(CreateLakehouseRequest request, CancellationToken ct)
+<span class="s">at</span> EnvironmentFactory.<span class="k">CreateLakehouseStep</span>.ExecuteAsync(StepContext ctx)
+<span class="s">at</span> EnvironmentFactory.<span class="k">Pipeline</span>.RunAsync()
+
+<span class="s">Response body:</span>
+{
+  "errorCode": "LakehouseAlreadyExists",
+  "message": "A lakehouse named 'prime_thompson_49_lh' already exists in workspace a7b2c3d4-1234-…",
+  "requestId": "req_8f2c1b9a-…",
+  "moreInfo": "https://aka.ms/fabric-errors/409-lakehouse-exists"
+}</div>
+          </div>
+          <div class="error-actions">
+            <button class="btn btn-primary">↻ Retry from Failed Step</button>
+            <button class="btn btn-danger">⤺ Rollback Created Resources</button>
+            <div style="flex:1;"></div>
+            <button class="btn btn-ghost">View Full Log</button>
+            <button class="btn btn-ghost">⎘ Copy Error</button>
+          </div>
+        </div>
+
+        <div class="pipeline">
+          <div class="pipe-step done">
+            <div class="pipe-icon">✓</div>
+            <div class="pipe-info"><div class="pipe-name">Create Workspace</div><div class="pipe-sub">prime_thompson_49</div></div>
+            <div class="pipe-time">4.21s</div>
+            <button class="pipe-expand" data-toggle>▸</button>
+          </div>
+          <div class="pipe-step done">
+            <div class="pipe-icon">✓</div>
+            <div class="pipe-info"><div class="pipe-name">Assign Capacity</div><div class="pipe-sub">F4 Trial</div></div>
+            <div class="pipe-time">2.83s</div>
+            <button class="pipe-expand" data-toggle>▸</button>
+          </div>
+          <div class="pipe-step failed open">
+            <div class="pipe-icon">✕</div>
+            <div class="pipe-info">
+              <div class="pipe-name">Create Lakehouse</div>
+              <div class="pipe-sub" style="color:var(--status-fail);">409 LakehouseAlreadyExists · retried 2×</div>
+            </div>
+            <div class="pipe-time">8.41s</div>
+            <button class="pipe-expand open" data-toggle>▸</button>
+            <div class="pipe-detail">
+              <div class="log-line"><span class="ts">00:07.052</span><span class="lvl info">INFO</span><span class="msg"><span class="k">POST</span> /v1/workspaces/{wsId}/items type=Lakehouse</span></div>
+              <div class="log-line"><span class="ts">00:08.103</span><span class="lvl warn">WARN</span><span class="msg">409 Conflict — <span class="e">LakehouseAlreadyExists</span></span></div>
+              <div class="log-line"><span class="ts">00:08.110</span><span class="lvl info">INFO</span><span class="msg">retry 1/2 with backoff=1s</span></div>
+              <div class="log-line"><span class="ts">00:11.234</span><span class="lvl warn">WARN</span><span class="msg">409 Conflict — <span class="e">LakehouseAlreadyExists</span></span></div>
+              <div class="log-line"><span class="ts">00:11.241</span><span class="lvl info">INFO</span><span class="msg">retry 2/2 with backoff=2s</span></div>
+              <div class="log-line"><span class="ts">00:15.482</span><span class="lvl error">ERROR</span><span class="msg">409 Conflict — <span class="e">LakehouseAlreadyExists · retries exhausted</span></span></div>
+              <div class="log-line"><span class="ts">00:15.490</span><span class="lvl error">ERROR</span><span class="msg">step aborted · halting pipeline</span></div>
+            </div>
+          </div>
+          <div class="pipe-step skipped">
+            <div class="pipe-icon">−</div>
+            <div class="pipe-info"><div class="pipe-name">Create Notebook</div><div class="pipe-sub">skipped — upstream failed</div></div>
+            <div class="pipe-time">—</div>
+            <button class="pipe-expand">▸</button>
+          </div>
+          <div class="pipe-step skipped">
+            <div class="pipe-icon">−</div>
+            <div class="pipe-info"><div class="pipe-name">Write Cells</div><div class="pipe-sub">skipped — upstream failed</div></div>
+            <div class="pipe-time">—</div>
+            <button class="pipe-expand">▸</button>
+          </div>
+          <div class="pipe-step skipped">
+            <div class="pipe-icon">−</div>
+            <div class="pipe-info"><div class="pipe-name">Run Notebook</div><div class="pipe-sub">skipped — upstream failed</div></div>
+            <div class="pipe-time">—</div>
+            <button class="pipe-expand">▸</button>
+          </div>
+        </div>
+
+        <div class="rollback-panel" style="border-left-color:var(--status-fail);">
+          <div class="rollback-head" style="background:var(--status-fail-dim);">
+            <div class="icn" style="background:var(--status-fail);">⤺</div>
+            <div class="title">Rollback preview</div>
+            <div class="count" style="color:var(--status-fail);border-color:color-mix(in srgb, var(--status-fail) 30%, transparent);">2 resources</div>
+          </div>
+          <div class="rollback-list">
+            <div class="rb-row">
+              <div class="rb-status pending">◯</div>
+              <div class="rb-name">prime_thompson_49 <span style="color:var(--text-muted);">· workspace</span></div>
+              <div class="rb-msg">will be deleted</div>
+            </div>
+            <div class="rb-row">
+              <div class="rb-status pending">◯</div>
+              <div class="rb-name">capacity binding <span style="color:var(--text-muted);">· F4 trial</span></div>
+              <div class="rb-msg">will be unassigned</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+           STATE 4 — ROLLING BACK
+           ═══════════════════════════════════════════════════════════════ -->
+      <div class="state" data-state="rolling_back">
+
+        <div class="rollback-panel">
+          <div class="rollback-head">
+            <div class="icn">⤺</div>
+            <div class="title">Rolling back created resources…</div>
+            <div class="count">2 of 2</div>
+          </div>
+          <div class="rollback-list">
+            <div class="rb-row">
+              <div class="rb-status deleted">✓</div>
+              <div class="rb-name del">capacity binding</div>
+              <div class="rb-msg">unassigned · 312ms</div>
+            </div>
+            <div class="rb-row">
+              <div class="rb-status deleting"><span class="spin"></span></div>
+              <div class="rb-name">prime_thompson_49 <span style="color:var(--text-muted);">· workspace</span></div>
+              <div class="rb-msg warn">deleting… (long-running, polling)</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="pipeline">
+          <div class="pipe-step done">
+            <div class="pipe-icon">✓</div>
+            <div class="pipe-info"><div class="pipe-name">Create Workspace</div><div class="pipe-sub" style="color:var(--status-warn);">marked for deletion</div></div>
+            <div class="pipe-time">4.21s</div>
+            <button class="pipe-expand">▸</button>
+          </div>
+          <div class="pipe-step done">
+            <div class="pipe-icon">✓</div>
+            <div class="pipe-info"><div class="pipe-name">Assign Capacity</div><div class="pipe-sub" style="color:var(--status-warn);">unassigned</div></div>
+            <div class="pipe-time">2.83s</div>
+            <button class="pipe-expand">▸</button>
+          </div>
+          <div class="pipe-step failed">
+            <div class="pipe-icon">✕</div>
+            <div class="pipe-info"><div class="pipe-name">Create Lakehouse</div><div class="pipe-sub" style="color:var(--status-fail);">409 LakehouseAlreadyExists</div></div>
+            <div class="pipe-time">8.41s</div>
+            <button class="pipe-expand">▸</button>
+          </div>
+          <div class="pipe-step skipped">
+            <div class="pipe-icon">−</div>
+            <div class="pipe-info"><div class="pipe-name">Create Notebook</div><div class="pipe-sub">skipped</div></div>
+            <div class="pipe-time">—</div>
+            <button class="pipe-expand">▸</button>
+          </div>
+          <div class="pipe-step skipped">
+            <div class="pipe-icon">−</div>
+            <div class="pipe-info"><div class="pipe-name">Write Cells</div><div class="pipe-sub">skipped</div></div>
+            <div class="pipe-time">—</div>
+            <button class="pipe-expand">▸</button>
+          </div>
+          <div class="pipe-step skipped">
+            <div class="pipe-icon">−</div>
+            <div class="pipe-info"><div class="pipe-name">Run Notebook</div><div class="pipe-sub">skipped</div></div>
+            <div class="pipe-time">—</div>
+            <button class="pipe-expand">▸</button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+           STATE 5 — ROLLED BACK
+           ═══════════════════════════════════════════════════════════════ -->
+      <div class="state" data-state="rolled_back">
+
+        <div class="rollback-panel" style="border-left-color:var(--status-pending);">
+          <div class="rollback-head" style="background:var(--surface-2);border-bottom-color:var(--border);">
+            <div class="icn" style="background:var(--status-pending);">⤺</div>
+            <div class="title">All created resources removed</div>
+            <div class="count" style="color:var(--status-ok);border-color:color-mix(in srgb, var(--status-ok) 30%, transparent);">clean</div>
+          </div>
+          <div class="rollback-list">
+            <div class="rb-row">
+              <div class="rb-status deleted">✓</div>
+              <div class="rb-name del">capacity binding</div>
+              <div class="rb-msg">unassigned · 312ms</div>
+            </div>
+            <div class="rb-row">
+              <div class="rb-status deleted">✓</div>
+              <div class="rb-name del">prime_thompson_49 <span style="color:var(--text-muted);">· workspace</span></div>
+              <div class="rb-msg">deleted · 6.4s</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="padding:var(--sp-5);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);display:flex;align-items:center;gap:var(--sp-4);">
+          <div style="width:40px;height:40px;border-radius:var(--r-md);background:var(--surface-2);color:var(--text-muted);display:flex;align-items:center;justify-content:center;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+            </svg>
+          </div>
+          <div style="flex:1;">
+            <div style="font-size:var(--text-md);font-weight:600;">Clean state · nothing was created</div>
+            <div style="font-size:var(--text-sm);color:var(--text-dim);">You can safely restart with a fresh configuration. The original error <span style="font-family:var(--mono);color:var(--status-fail);">409 LakehouseAlreadyExists</span> was caused by a name collision.</div>
+          </div>
+          <button class="btn btn-ghost">View error report</button>
+        </div>
+
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+           STATE 6 — ROLLBACK FAILED (partial cleanup)
+           ═══════════════════════════════════════════════════════════════ -->
+      <div class="state" data-state="rollback_failed">
+
+        <div class="rollback-panel">
+          <div class="rollback-head">
+            <div class="icn">!</div>
+            <div class="title">Partial rollback · manual cleanup needed</div>
+            <div class="count">1 of 2 removed</div>
+          </div>
+          <div class="rollback-list">
+            <div class="rb-row">
+              <div class="rb-status deleted">✓</div>
+              <div class="rb-name del">capacity binding</div>
+              <div class="rb-msg">unassigned · 312ms</div>
+            </div>
+            <div class="rb-row">
+              <div class="rb-status kept">!</div>
+              <div class="rb-name">prime_thompson_49 <span style="color:var(--text-muted);">· workspace</span></div>
+              <div class="rb-msg fail">delete returned 403 · resource still exists</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="padding:var(--sp-4) var(--sp-5);background:var(--status-warn-dim);border:1px solid color-mix(in srgb, var(--status-warn) 30%, transparent);border-radius:var(--r-lg);">
+          <div style="display:flex;align-items:flex-start;gap:var(--sp-3);">
+            <div style="width:22px;height:22px;border-radius:100px;background:var(--status-warn);color:white;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;">!</div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:var(--text-md);font-weight:600;color:var(--text);">Workspace requires manual deletion</div>
+              <div style="font-size:var(--text-sm);color:var(--text-dim);margin-top:4px;">Your token may lack delete permissions. Open the workspace in Fabric to remove it, or run the cleanup script with elevated credentials. Leaving the workspace in place will incur capacity charges.</div>
+              <div style="display:flex;gap:var(--sp-2);margin-top:var(--sp-3);flex-wrap:wrap;">
+                <button class="btn btn-warn" style="height:30px;font-size:var(--text-sm);padding:0 var(--sp-3);">↗ Open in Fabric portal</button>
+                <button class="btn btn-ghost" style="height:30px;font-size:var(--text-sm);padding:0 var(--sp-3);">⎘ Copy workspace ID</button>
+                <button class="btn btn-ghost" style="height:30px;font-size:var(--text-sm);padding:0 var(--sp-3);">↻ Retry rollback</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div><!-- /body -->
+
+    <!-- ───────────────────────────────────────────────────────────────────
+         FOOTER — buttons swap per state
+         ─────────────────────────────────────────────────────────────────── -->
+    <div class="dialog-footer" id="footer">
+      <div class="meta"><span class="live"></span> streaming · log_id <span style="color:var(--text-dim);">deploy_b9c1d2e3</span></div>
+      <div class="spacer"></div>
+      <div class="action-bar" id="actionBar">
+        <!-- Executing default buttons -->
+        <button class="btn btn-ghost">View Raw Log</button>
+        <button class="btn btn-danger">Cancel Deployment</button>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="sub-footer">
+    <span class="kbd">Esc</span> to minimize · <span class="kbd">⌘ L</span> to copy log · <span class="kbd">⌘ K</span> to open command palette
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ── Theme toggle ── */
+  const body = document.body;
+  const themeToggle = document.getElementById('themeToggle');
+  const sun = document.getElementById('iconSun');
+  const moon = document.getElementById('iconMoon');
+  function setTheme(t) {
+    body.setAttribute('data-theme', t);
+    sun.style.display = t === 'dark' ? 'block' : 'none';
+    moon.style.display = t === 'dark' ? 'none' : 'block';
+  }
+  themeToggle.addEventListener('click', () => {
+    setTheme(body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+  });
+
+  /* ── Pipe step toggles ── */
+  document.querySelectorAll('[data-toggle]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const step = btn.closest('.pipe-step');
+      const open = step.classList.toggle('open');
+      btn.classList.toggle('open', open);
+    });
+  });
+
+  /* ── State switcher ── */
+  const states = {
+    executing: {
+      eyebrow:  '<span style="display:inline-block;width:6px;height:6px;border-radius:100px;background:var(--accent);"></span> Live · auto-refresh',
+      title:    'Creating Environment',
+      titleClass: '',
+      action:   'Creating lakehouse with schema support…',
+      actionShow: true,
+      timer:    '00:18.4',
+      timerClass: '',
+      label:    'Elapsed',
+      counter:  '<span class="now">3</span> / 6 steps',
+      progress: 42,
+      progressClass: '',
+      footer: `
+        <button class="btn btn-ghost">View Raw Log</button>
+        <button class="btn btn-danger">Cancel Deployment</button>`
+    },
+    succeeded: {
+      eyebrow:  '<span style="display:inline-block;width:6px;height:6px;border-radius:100px;background:var(--status-ok);"></span> All systems green',
+      title:    'Environment Created',
+      titleClass: 'success-state',
+      action:   '',
+      actionShow: false,
+      timer:    '00:43.7',
+      timerClass: 'done',
+      label:    'Total',
+      counter:  '<span class="now" style="color:var(--status-ok);">6</span> / 6 steps · all succeeded',
+      progress: 100,
+      progressClass: 'success',
+      footer: `
+        <button class="btn btn-ghost">View Logs</button>
+        <button class="btn btn-ghost">↻ Deploy Another</button>
+        <button class="btn btn-success">Open Workspace ↗</button>
+        <button class="btn btn-primary">Deploy to FLT →</button>`
+    },
+    failed: {
+      eyebrow:  '<span style="display:inline-block;width:6px;height:6px;border-radius:100px;background:var(--status-fail);"></span> Pipeline halted',
+      title:    'Deployment Failed',
+      titleClass: 'fail-state',
+      action:   'Step 3 of 6 · Create Lakehouse · retries exhausted',
+      actionShow: true,
+      timer:    '00:15.5',
+      timerClass: 'fail',
+      label:    'Failed at',
+      counter:  '<span class="now" style="color:var(--status-ok);">2</span> / 6 succeeded · 1 failed · 3 skipped',
+      progress: 38,
+      progressClass: 'fail',
+      footer: `
+        <button class="btn btn-ghost">View Raw Log</button>
+        <div style="width:1px;height:20px;background:var(--border-bright);margin:0 var(--sp-2);"></div>
+        <button class="btn btn-danger">⤺ Rollback</button>
+        <button class="btn btn-primary">↻ Retry from Failed</button>`
+    },
+    rolling_back: {
+      eyebrow:  '<span style="display:inline-block;width:6px;height:6px;border-radius:100px;background:var(--status-warn);animation:blink 1.4s ease-in-out infinite;"></span> Cleanup in progress',
+      title:    'Rolling Back…',
+      titleClass: 'warn-state',
+      action:   'Deleting workspace prime_thompson_49…',
+      actionShow: true,
+      timer:    '00:06.4',
+      timerClass: 'warn',
+      label:    'Rollback elapsed',
+      counter:  '<span class="now">1</span> / 2 resources removed',
+      progress: 65,
+      progressClass: 'warn',
+      footer: `
+        <button class="btn btn-ghost" disabled style="opacity:.5;cursor:not-allowed;">Cancel disabled · rollback in progress</button>`
+    },
+    rolled_back: {
+      eyebrow:  '<span style="display:inline-block;width:6px;height:6px;border-radius:100px;background:var(--status-pending);"></span> Cleanup complete',
+      title:    'Rollback Complete',
+      titleClass: '',
+      action:   'All created resources removed · no charges incurred',
+      actionShow: true,
+      timer:    '00:06.7',
+      timerClass: '',
+      label:    'Rollback time',
+      counter:  '<span class="now">0</span> resources remain',
+      progress: 100,
+      progressClass: '',
+      footer: `
+        <button class="btn btn-ghost">Save Error Report</button>
+        <button class="btn btn-ghost">← Back to Review</button>
+        <button class="btn btn-primary">↻ Try Again</button>`
+    },
+    rollback_failed: {
+      eyebrow:  '<span style="display:inline-block;width:6px;height:6px;border-radius:100px;background:var(--status-warn);"></span> Manual cleanup required',
+      title:    'Partial Rollback',
+      titleClass: 'warn-state',
+      action:   '1 resource could not be removed · see manual cleanup instructions',
+      actionShow: true,
+      timer:    '00:09.2',
+      timerClass: 'warn',
+      label:    'Rollback time',
+      counter:  '<span class="now" style="color:var(--status-fail);">1</span> resource remains',
+      progress: 100,
+      progressClass: 'warn',
+      footer: `
+        <button class="btn btn-ghost">⎘ Copy cleanup script</button>
+        <button class="btn btn-ghost">Save Report</button>
+        <button class="btn btn-warn">↗ Open in Fabric Portal</button>`
+    }
+  };
+
+  const headTitle = document.getElementById('headTitle');
+  const headEyebrow = document.getElementById('headEyebrow');
+  const currentAction = document.getElementById('currentAction');
+  const currentActionText = document.getElementById('currentActionText');
+  const timer = document.getElementById('timer');
+  const timerLabel = document.getElementById('timerLabel');
+  const stepCounter = document.getElementById('stepCounter');
+  const progressFill = document.getElementById('progressFill');
+  const progressBar = document.getElementById('progressBar');
+  const actionBar = document.getElementById('actionBar');
+  const deployHead = document.getElementById('deployHead');
+  const confettiLayer = document.getElementById('confettiLayer');
+
+  function applyState(name) {
+    const s = states[name];
+    if (!s) return;
+
+    headEyebrow.innerHTML = s.eyebrow;
+    headTitle.textContent = s.title;
+    deployHead.classList.remove('success-state', 'fail-state', 'warn-state');
+    if (s.titleClass) deployHead.classList.add(s.titleClass);
+
+    if (s.actionShow && s.action) {
+      currentAction.style.display = 'flex';
+      currentActionText.textContent = s.action;
+    } else {
+      currentAction.style.display = 'none';
+    }
+
+    timer.textContent = s.timer;
+    timer.className = 'timer' + (s.timerClass ? ' ' + s.timerClass : '');
+    timerLabel.textContent = s.label;
+    stepCounter.innerHTML = s.counter;
+    progressFill.style.width = s.progress + '%';
+    progressBar.className = 'progress-bar' + (s.progressClass ? ' ' + s.progressClass : '');
+    actionBar.innerHTML = s.footer;
+
+    document.querySelectorAll('.state').forEach(el => {
+      el.classList.toggle('active', el.dataset.state === name);
+    });
+
+    document.querySelectorAll('.state-pill').forEach(p => {
+      p.classList.toggle('active', p.dataset.state === name);
+    });
+
+    if (name === 'succeeded') spawnConfetti();
+  }
+
+  document.querySelectorAll('.state-pill').forEach(p => {
+    p.addEventListener('click', () => applyState(p.dataset.state));
+  });
+
+  /* ── Confetti for success state ── */
+  function spawnConfetti() {
+    if (!confettiLayer) return;
+    confettiLayer.innerHTML = '';
+    const colors = ['var(--accent)', 'var(--status-ok)', '#c5a038', '#2d7ff9', '#b87333'];
+    for (let i = 0; i < 28; i++) {
+      const c = document.createElement('div');
+      c.className = 'confetto';
+      c.style.left = (5 + Math.random() * 90) + '%';
+      c.style.background = colors[i % colors.length];
+      c.style.animationDelay = (Math.random() * 240) + 'ms';
+      c.style.animationDuration = (1400 + Math.random() * 600) + 'ms';
+      c.style.opacity = '0.85';
+      c.style.borderRadius = (Math.random() > 0.5 ? '2px' : '100px');
+      c.style.transform = `rotate(${Math.random() * 360}deg)`;
+      confettiLayer.appendChild(c);
+    }
+  }
+
+  /* ── Live timer + log line tick for executing state ── */
+  let t0 = 18.4;
+  const runningTime = document.getElementById('runningTime');
+  setInterval(() => {
+    const isExec = document.querySelector('.state.active')?.dataset.state === 'executing';
+    if (!isExec) return;
+    t0 += 0.1;
+    const sec = t0.toFixed(1);
+    const mm = String(Math.floor(t0 / 60)).padStart(2, '0');
+    const ss = String((t0 % 60).toFixed(1)).padStart(4, '0');
+    timer.textContent = `${mm}:${ss}`;
+    if (runningTime) runningTime.textContent = (t0 - 7).toFixed(1) + 's';
+  }, 100);
+
+})();
+</script>
+</body>
+</html>
