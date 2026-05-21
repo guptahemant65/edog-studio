@@ -314,6 +314,113 @@ class ConnectionManager {
   }
 
   /**
+   * Walk all upstream ancestors of a node via BFS.
+   * Handles diamond patterns via visited set; safe on deep graphs.
+   * @param {string} nodeId
+   * @returns {Array<string>} Upstream node IDs (does NOT include nodeId itself)
+   */
+  getUpstreamChain(nodeId) {
+    var visited = {};
+    var result = [];
+    var queue = [nodeId];
+    visited[nodeId] = true;
+    while (queue.length > 0) {
+      var current = queue.shift();
+      var incoming = this.getIncomingConnections(current);
+      for (var i = 0; i < incoming.length; i++) {
+        var src = incoming[i].sourceNodeId;
+        if (!visited[src]) {
+          visited[src] = true;
+          result.push(src);
+          queue.push(src);
+        }
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Walk all downstream descendants of a node via BFS.
+   * Handles diamond patterns via visited set; safe on deep graphs.
+   * @param {string} nodeId
+   * @returns {Array<string>} Downstream node IDs (does NOT include nodeId itself)
+   */
+  getDownstreamChain(nodeId) {
+    var visited = {};
+    var result = [];
+    var queue = [nodeId];
+    visited[nodeId] = true;
+    while (queue.length > 0) {
+      var current = queue.shift();
+      var outgoing = this.getOutgoingConnections(current);
+      for (var i = 0; i < outgoing.length; i++) {
+        var tgt = outgoing[i].targetNodeId;
+        if (!visited[tgt]) {
+          visited[tgt] = true;
+          result.push(tgt);
+          queue.push(tgt);
+        }
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Get connection IDs forming the lineage chain (upstream + downstream)
+   * for a node. Includes every edge where both endpoints are in the lineage
+   * (the node, its ancestors, or its descendants).
+   * @param {string} nodeId
+   * @returns {Array<string>} Connection IDs
+   */
+  getLineageConnections(nodeId) {
+    var upstream = this.getUpstreamChain(nodeId);
+    var downstream = this.getDownstreamChain(nodeId);
+    var inLineage = {};
+    inLineage[nodeId] = true;
+    var i;
+    for (i = 0; i < upstream.length; i++) inLineage[upstream[i]] = true;
+    for (i = 0; i < downstream.length; i++) inLineage[downstream[i]] = true;
+
+    var result = [];
+    var connIds = Object.keys(this._connections);
+    for (i = 0; i < connIds.length; i++) {
+      var conn = this._connections[connIds[i]].data;
+      if (inLineage[conn.sourceNodeId] && inLineage[conn.targetNodeId]) {
+        result.push(connIds[i]);
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Add/remove the lineage highlight class on a connection's SVG group.
+   * @param {string} connectionId
+   * @param {boolean} active
+   */
+  setConnectionLineage(connectionId, active) {
+    var entry = this._connections[connectionId];
+    if (!entry || !entry.groupEl) return;
+    if (active) {
+      entry.groupEl.classList.add('iw-conn--in-lineage');
+    } else {
+      entry.groupEl.classList.remove('iw-conn--in-lineage');
+    }
+  }
+
+  /**
+   * Clear the lineage highlight class from every connection.
+   */
+  clearAllConnectionLineage() {
+    var connIds = Object.keys(this._connections);
+    for (var i = 0; i < connIds.length; i++) {
+      var entry = this._connections[connIds[i]];
+      if (entry && entry.groupEl) {
+        entry.groupEl.classList.remove('iw-conn--in-lineage');
+      }
+    }
+  }
+
+  /**
    * Load connections from state (e.g., template hydration).
    * @param {Array} connections — ConnectionData[]
    */

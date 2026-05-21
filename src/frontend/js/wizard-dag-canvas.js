@@ -108,6 +108,8 @@ class DagCanvas {
     this._nodeData = {};        // nodeId -> DagNodeData plain object
     this._selectedNodeId = null;
     this._selectedNodeIds = []; // multi-select support
+    this._lineageFocusId = null; // node currently driving lineage highlight
+    this._lineageHoverTimer = null; // debounce timer for hover-driven lineage
     this._nextNodeId = 1;
     this._nextConnectionId = 1;
     this._viewport = { panX: 0, panY: 0, zoom: 1.0 };
@@ -302,6 +304,7 @@ class DagCanvas {
 
     this._nodes[id] = node;
     this._nodeData[id] = nodeData;
+    this._attachLineageHover(id, node);
 
     // Undo: remove node, Redo: re-add node
     var capturedData = this._cloneNodeData(nodeData);
@@ -396,12 +399,161 @@ class DagCanvas {
     if (nodeId && this._nodes[nodeId]) {
       this._nodes[nodeId].setSelected(true);
       this._selectedNodeIds = [nodeId];
+      this.highlightLineage(nodeId);
       this._eventBus.emit(IW_EVENTS.NODE_SELECTED, { nodeId: nodeId });
     } else {
       this._selectedNodeId = null;
       this._selectedNodeIds = [];
+      this.clearLineage();
       this._eventBus.emit(IW_EVENTS.SELECTION_CLEARED);
     }
+  }
+
+  /**
+   * Highlight a node's full upstream + downstream lineage chain.
+   * Adds .iw-nd--in-lineage to chain nodes, .iw-nd--upstream / --downstream
+   * for direction, .iw-nd--lineage-focus to the focused node, and
+   * .iw-conn--in-lineage to chain edges. Toggles a container-level class
+   * .iw-dag-canvas--lineage-active so CSS can dim everything else.
+   * @param {string} nodeId
+   */
+  highlightLineage(nodeId) {
+    if (!nodeId || !this._nodes[nodeId] || !this._connectionMgr) return;
+
+    // Cancel any pending hover-debounce so we don't re-trigger after this.
+    if (this._lineageHoverTimer) {
+      clearTimeout(this._lineageHoverTimer);
+      this._lineageHoverTimer = null;
+    }
+
+    // Avoid redundant DOM churn if the same node is already focused.
+    if (this._lineageFocusId === nodeId) return;
+
+    // Clear any previous lineage state before applying the new one.
+    this._clearLineageClasses();
+
+    var upstream = this._connectionMgr.getUpstreamChain(nodeId);
+    var downstream = this._connectionMgr.getDownstreamChain(nodeId);
+    var connIds = this._connectionMgr.getLineageConnections(nodeId);
+
+    var i, node;
+    for (i = 0; i < upstream.length; i++) {
+      node = this._nodes[upstream[i]];
+      if (node && node.getElement) {
+        var upEl = node.getElement();
+        if (upEl) {
+          upEl.classList.add('iw-nd--in-lineage');
+          upEl.classList.add('iw-nd--upstream');
+        }
+      }
+    }
+    for (i = 0; i < downstream.length; i++) {
+      node = this._nodes[downstream[i]];
+      if (node && node.getElement) {
+        var dnEl = node.getElement();
+        if (dnEl) {
+          dnEl.classList.add('iw-nd--in-lineage');
+          dnEl.classList.add('iw-nd--downstream');
+        }
+      }
+    }
+    var focusNode = this._nodes[nodeId];
+    if (focusNode && focusNode.getElement) {
+      var focusEl = focusNode.getElement();
+      if (focusEl) {
+        focusEl.classList.add('iw-nd--in-lineage');
+        focusEl.classList.add('iw-nd--lineage-focus');
+      }
+    }
+
+    for (i = 0; i < connIds.length; i++) {
+      this._connectionMgr.setConnectionLineage(connIds[i], true);
+    }
+
+    if (this._viewportEl) {
+      this._viewportEl.classList.add('iw-dag-canvas--lineage-active');
+    }
+
+    this._lineageFocusId = nodeId;
+  }
+
+  /**
+   * Clear all lineage highlight classes from nodes, connections, and the
+   * container. Also cancels any pending hover-debounce timer.
+   */
+  clearLineage() {
+    if (this._lineageHoverTimer) {
+      clearTimeout(this._lineageHoverTimer);
+      this._lineageHoverTimer = null;
+    }
+    if (!this._lineageFocusId) return;
+    this._clearLineageClasses();
+    if (this._viewportEl) {
+      this._viewportEl.classList.remove('iw-dag-canvas--lineage-active');
+    }
+    this._lineageFocusId = null;
+  }
+
+  /**
+   * Strip every lineage class from every node + connection. Idempotent.
+   */
+  _clearLineageClasses() {
+    var ids = Object.keys(this._nodes);
+    for (var i = 0; i < ids.length; i++) {
+      var node = this._nodes[ids[i]];
+      if (!node || !node.getElement) continue;
+      var el = node.getElement();
+      if (!el) continue;
+      el.classList.remove('iw-nd--in-lineage');
+      el.classList.remove('iw-nd--upstream');
+      el.classList.remove('iw-nd--downstream');
+      el.classList.remove('iw-nd--lineage-focus');
+    }
+    if (this._connectionMgr && this._connectionMgr.clearAllConnectionLineage) {
+      this._connectionMgr.clearAllConnectionLineage();
+    }
+  }
+
+  /**
+   * Attach mouseenter/mouseleave to a node's root element to drive
+   * lineage highlighting with a 150ms debounce. Hover never overrides
+   * a persistent selection-based highlight.
+   * @param {string} nodeId
+   * @param {DagNode} node
+   */
+  _attachLineageHover(nodeId, node) {
+    if (!node || !node.getElement) return;
+    var el = node.getElement();
+    if (!el) return;
+    var self = this;
+    el.addEventListener('mouseenter', function() {
+      // Don't fight a persistent selection — only hover-highlight when
+      // there's no selected node or when hovering the selected one.
+      if (self._selectedNodeId && self._selectedNodeId !== nodeId) {
+        return;
+      }
+      if (self._lineageHoverTimer) {
+        clearTimeout(self._lineageHoverTimer);
+      }
+      self._lineageHoverTimer = setTimeout(function() {
+        self._lineageHoverTimer = null;
+        self.highlightLineage(nodeId);
+      }, 150);
+    });
+    el.addEventListener('mouseleave', function() {
+      if (self._lineageHoverTimer) {
+        clearTimeout(self._lineageHoverTimer);
+        self._lineageHoverTimer = null;
+      }
+      // If a node is selected, restore its lineage rather than clearing.
+      if (self._selectedNodeId && self._nodes[self._selectedNodeId]) {
+        if (self._lineageFocusId !== self._selectedNodeId) {
+          self.highlightLineage(self._selectedNodeId);
+        }
+      } else {
+        self.clearLineage();
+      }
+    });
   }
 
   /**
@@ -1822,6 +1974,7 @@ class DagCanvas {
 
     this._nodes[id] = node;
     this._nodeData[id] = nodeData;
+    this._attachLineageHover(id, node);
   }
 
   /**

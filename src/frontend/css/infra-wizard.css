@@ -5372,6 +5372,44 @@ svg.iw-dag-connections {
 }
 .iw-deploy-actions .iw-btn { min-width: 140px; }
 
+/* ─── DAG Lineage Highlighting (F16) ─── */
+/* When lineage mode is active, dim everything not in the chain */
+.iw-dag-canvas--lineage-active .iw-nd {
+  opacity: 0.2;
+  transition: opacity 200ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1));
+}
+.iw-dag-canvas--lineage-active .iw-dag-connection-line {
+  opacity: 0.1;
+  transition: opacity 200ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1));
+}
+
+/* Nodes in the lineage chain stay bright */
+.iw-dag-canvas--lineage-active .iw-nd--in-lineage {
+  opacity: 1;
+}
+
+/* Upstream nodes get a subtle blue tint */
+.iw-nd--upstream {
+  box-shadow: 0 0 0 2px rgba(45, 127, 249, 0.4), 0 0 12px rgba(45, 127, 249, 0.15);
+}
+
+/* Downstream nodes get a subtle purple tint */
+.iw-nd--downstream {
+  box-shadow: 0 0 0 2px rgba(109, 92, 255, 0.4), 0 0 12px rgba(109, 92, 255, 0.15);
+}
+
+/* The focused node itself gets a strong highlight */
+.iw-nd--lineage-focus {
+  box-shadow: 0 0 0 3px var(--accent, #6d5cff), 0 0 16px rgba(109, 92, 255, 0.3);
+}
+
+/* Connections in the lineage chain stay visible + glow */
+.iw-dag-canvas--lineage-active .iw-conn--in-lineage .iw-dag-connection-line {
+  opacity: 1;
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 4px rgba(109, 92, 255, 0.4));
+}
+
 /* ─── DAG Validation (F16) ─── */
 .iw-nd--error {
   outline: 2px solid var(--level-error, #ef4444);
