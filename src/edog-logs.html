@@ -56279,7 +56279,7 @@ class SystemFilesTab {
       operation: op.operation,
       size: op.sizeBytes,
       sizeFormatted: this._formatSize(op.sizeBytes),
-      timestamp: op.timestamp.toISOString(),
+      timestamp: op.timestamp.toLocaleString(),
       iterationId: op.iterationId || null,
       durationMs: op.durationMs,
       isLock: op.isLock,
@@ -57864,12 +57864,12 @@ class SparkSessionsTab {
     const rows = [headers.join(",")];
     for (const s of this._sessions.values()) {
       if (s.transforms.length === 0) {
-        rows.push([s.id, s.iterationId, s.artifactName, s.workspaceName, s.status, s.warm, "", "", "", "", "", "", "", "", new Date(s.startedAt).toISOString(), "", "", "", "", ""].map(this._csvCell).join(","));
+        rows.push([s.id, s.iterationId, s.artifactName, s.workspaceName, s.status, s.warm, "", "", "", "", "", "", "", "", new Date(s.startedAt).toLocaleString(), "", "", "", "", ""].map(this._csvCell).join(","));
         continue;
       }
       for (const t of s.transforms) {
         const dur = (t.completedAt || Date.now()) - t.submittedAt;
-        rows.push([s.id, s.iterationId, s.artifactName, s.workspaceName, s.status, s.warm, t.id, t.name, t.nodeKind, t.refreshMode, t.gts, t.replId, t.state, t.terminalState, new Date(t.submittedAt).toISOString(), t.completedAt ? new Date(t.completedAt).toISOString() : "", dur, t.polls.length, t.error && t.error.code, t.error && t.error.message].map(this._csvCell).join(","));
+        rows.push([s.id, s.iterationId, s.artifactName, s.workspaceName, s.status, s.warm, t.id, t.name, t.nodeKind, t.refreshMode, t.gts, t.replId, t.state, t.terminalState, new Date(t.submittedAt).toLocaleString(), t.completedAt ? new Date(t.completedAt).toLocaleString() : "", dur, t.polls.length, t.error && t.error.code, t.error && t.error.message].map(this._csvCell).join(","));
       }
     }
     this._downloadFile(`spark-sessions-${this._stamp()}.csv`, rows.join("\n"), "text/csv");
@@ -58947,8 +58947,8 @@ class TokensTab {
       const data = visible.map(tok => ({
         type: tok.typeKey,
         audience: tok.audience,
-        issuedAt: new Date(tok.issuedAt).toISOString(),
-        expiresAt: new Date(tok.expiresAt).toISOString(),
+        issuedAt: new Date(tok.issuedAt).toLocaleString(),
+        expiresAt: new Date(tok.expiresAt).toLocaleString(),
         httpClientName: tok.httpClientName,
         usageCount: tok.usageCount,
         refreshCount: tok.refreshCount,
@@ -58962,8 +58962,8 @@ class TokensTab {
         rows.push([
           tok.typeKey,
           tok.audience,
-          new Date(tok.issuedAt).toISOString(),
-          new Date(tok.expiresAt).toISOString(),
+          new Date(tok.issuedAt).toLocaleString(),
+          new Date(tok.expiresAt).toLocaleString(),
           tok.httpClientName,
           String(tok.usageCount),
           String(tok.refreshCount),
@@ -58986,8 +58986,8 @@ class TokensTab {
     const data = {
       type: tok.typeKey,
       audience: tok.audience,
-      issuedAt: new Date(tok.issuedAt).toISOString(),
-      expiresAt: new Date(tok.expiresAt).toISOString(),
+      issuedAt: new Date(tok.issuedAt).toLocaleString(),
+      expiresAt: new Date(tok.expiresAt).toLocaleString(),
       usageCount: tok.usageCount,
       refreshCount: tok.refreshCount,
       claims: tok.jwtClaims
@@ -66980,7 +66980,7 @@ class PerfMarkersTab {
       + '<span class="perf-json-key">"durationMs"</span>: <span class="perf-json-number">' + m.durationMs + '</span>,\n'
       + '<span class="perf-json-key">"iterationId"</span>: <span class="perf-json-string">"' + this._esc(m.iterationId) + '"</span>,\n'
       + '<span class="perf-json-key">"isAnomaly"</span>: <span class="perf-json-bool">' + m.isAnomaly + '</span>,\n'
-      + '<span class="perf-json-key">"timestamp"</span>: <span class="perf-json-string">"' + m.timestamp.toISOString() + '"</span>'
+      + '<span class="perf-json-key">"timestamp"</span>: <span class="perf-json-string">"' + m.timestamp.toLocaleString() + '"</span>'
       + (m.isAnomaly ? ',\n<span class="perf-json-key">"anomalyMultiplier"</span>: <span class="perf-json-number">' + m.anomalyMultiplier + '</span>,\n'
         + '<span class="perf-json-key">"avgDuration"</span>: <span class="perf-json-number">' + m.avgDuration + '</span>' : '')
       + '</div>';
@@ -67139,7 +67139,7 @@ class PerfMarkersTab {
         summary: this._buildSummaryData(),
         markers: this._markers.map(m => ({
           operation: m.operation, durationMs: m.durationMs,
-          timestamp: m.timestamp.toISOString(), iterationId: m.iterationId,
+          timestamp: m.timestamp.toLocaleString(), iterationId: m.iterationId,
           correlationId: m.correlationId, isAnomaly: m.isAnomaly,
           anomalyMultiplier: m.anomalyMultiplier
         }))
@@ -67151,7 +67151,7 @@ class PerfMarkersTab {
       let csv = 'Operation,Duration (ms),Timestamp,Iteration,CorrelationId,Is Anomaly,Multiplier\n';
       for (let i = 0; i < this._markers.length; i++) {
         const m = this._markers[i];
-        csv += [cf(m.operation), cf(m.durationMs), cf(m.timestamp.toISOString()), cf(m.iterationId),
+        csv += [cf(m.operation), cf(m.durationMs), cf(m.timestamp.toLocaleString()), cf(m.iterationId),
           cf(m.correlationId), cf(m.isAnomaly), cf(m.anomalyMultiplier || '')].join(',') + '\n';
       }
       csv += '\nSummary\nOperation,Count,Min,Avg,Max,P50,P95,P99\n';
@@ -84998,7 +84998,7 @@ class WorkspaceExplorer {
     if (typeof v === 'number') d = new Date(v);
     else d = new Date(v);
     if (Number.isNaN(d.getTime())) return String(v);
-    return d.toISOString().replace('T', ' ').replace(/\.\d+Z$/, 'Z');
+    return d.toLocaleString();
   }
 
   /** Wire Copy buttons inside a preview section. */

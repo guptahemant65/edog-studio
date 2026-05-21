@@ -1492,12 +1492,12 @@ class SparkSessionsTab {
     const rows = [headers.join(",")];
     for (const s of this._sessions.values()) {
       if (s.transforms.length === 0) {
-        rows.push([s.id, s.iterationId, s.artifactName, s.workspaceName, s.status, s.warm, "", "", "", "", "", "", "", "", new Date(s.startedAt).toISOString(), "", "", "", "", ""].map(this._csvCell).join(","));
+        rows.push([s.id, s.iterationId, s.artifactName, s.workspaceName, s.status, s.warm, "", "", "", "", "", "", "", "", new Date(s.startedAt).toLocaleString(), "", "", "", "", ""].map(this._csvCell).join(","));
         continue;
       }
       for (const t of s.transforms) {
         const dur = (t.completedAt || Date.now()) - t.submittedAt;
-        rows.push([s.id, s.iterationId, s.artifactName, s.workspaceName, s.status, s.warm, t.id, t.name, t.nodeKind, t.refreshMode, t.gts, t.replId, t.state, t.terminalState, new Date(t.submittedAt).toISOString(), t.completedAt ? new Date(t.completedAt).toISOString() : "", dur, t.polls.length, t.error && t.error.code, t.error && t.error.message].map(this._csvCell).join(","));
+        rows.push([s.id, s.iterationId, s.artifactName, s.workspaceName, s.status, s.warm, t.id, t.name, t.nodeKind, t.refreshMode, t.gts, t.replId, t.state, t.terminalState, new Date(t.submittedAt).toLocaleString(), t.completedAt ? new Date(t.completedAt).toLocaleString() : "", dur, t.polls.length, t.error && t.error.code, t.error && t.error.message].map(this._csvCell).join(","));
       }
     }
     this._downloadFile(`spark-sessions-${this._stamp()}.csv`, rows.join("\n"), "text/csv");

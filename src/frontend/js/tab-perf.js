@@ -745,7 +745,7 @@ class PerfMarkersTab {
       + '<span class="perf-json-key">"durationMs"</span>: <span class="perf-json-number">' + m.durationMs + '</span>,\n'
       + '<span class="perf-json-key">"iterationId"</span>: <span class="perf-json-string">"' + this._esc(m.iterationId) + '"</span>,\n'
       + '<span class="perf-json-key">"isAnomaly"</span>: <span class="perf-json-bool">' + m.isAnomaly + '</span>,\n'
-      + '<span class="perf-json-key">"timestamp"</span>: <span class="perf-json-string">"' + m.timestamp.toISOString() + '"</span>'
+      + '<span class="perf-json-key">"timestamp"</span>: <span class="perf-json-string">"' + m.timestamp.toLocaleString() + '"</span>'
       + (m.isAnomaly ? ',\n<span class="perf-json-key">"anomalyMultiplier"</span>: <span class="perf-json-number">' + m.anomalyMultiplier + '</span>,\n'
         + '<span class="perf-json-key">"avgDuration"</span>: <span class="perf-json-number">' + m.avgDuration + '</span>' : '')
       + '</div>';
@@ -904,7 +904,7 @@ class PerfMarkersTab {
         summary: this._buildSummaryData(),
         markers: this._markers.map(m => ({
           operation: m.operation, durationMs: m.durationMs,
-          timestamp: m.timestamp.toISOString(), iterationId: m.iterationId,
+          timestamp: m.timestamp.toLocaleString(), iterationId: m.iterationId,
           correlationId: m.correlationId, isAnomaly: m.isAnomaly,
           anomalyMultiplier: m.anomalyMultiplier
         }))
@@ -916,7 +916,7 @@ class PerfMarkersTab {
       let csv = 'Operation,Duration (ms),Timestamp,Iteration,CorrelationId,Is Anomaly,Multiplier\n';
       for (let i = 0; i < this._markers.length; i++) {
         const m = this._markers[i];
-        csv += [cf(m.operation), cf(m.durationMs), cf(m.timestamp.toISOString()), cf(m.iterationId),
+        csv += [cf(m.operation), cf(m.durationMs), cf(m.timestamp.toLocaleString()), cf(m.iterationId),
           cf(m.correlationId), cf(m.isAnomaly), cf(m.anomalyMultiplier || '')].join(',') + '\n';
       }
       csv += '\nSummary\nOperation,Count,Min,Avg,Max,P50,P95,P99\n';

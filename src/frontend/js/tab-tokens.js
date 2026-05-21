@@ -955,8 +955,8 @@ class TokensTab {
       const data = visible.map(tok => ({
         type: tok.typeKey,
         audience: tok.audience,
-        issuedAt: new Date(tok.issuedAt).toISOString(),
-        expiresAt: new Date(tok.expiresAt).toISOString(),
+        issuedAt: new Date(tok.issuedAt).toLocaleString(),
+        expiresAt: new Date(tok.expiresAt).toLocaleString(),
         httpClientName: tok.httpClientName,
         usageCount: tok.usageCount,
         refreshCount: tok.refreshCount,
@@ -970,8 +970,8 @@ class TokensTab {
         rows.push([
           tok.typeKey,
           tok.audience,
-          new Date(tok.issuedAt).toISOString(),
-          new Date(tok.expiresAt).toISOString(),
+          new Date(tok.issuedAt).toLocaleString(),
+          new Date(tok.expiresAt).toLocaleString(),
           tok.httpClientName,
           String(tok.usageCount),
           String(tok.refreshCount),
@@ -994,8 +994,8 @@ class TokensTab {
     const data = {
       type: tok.typeKey,
       audience: tok.audience,
-      issuedAt: new Date(tok.issuedAt).toISOString(),
-      expiresAt: new Date(tok.expiresAt).toISOString(),
+      issuedAt: new Date(tok.issuedAt).toLocaleString(),
+      expiresAt: new Date(tok.expiresAt).toLocaleString(),
       usageCount: tok.usageCount,
       refreshCount: tok.refreshCount,
       claims: tok.jwtClaims

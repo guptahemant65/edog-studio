@@ -5222,7 +5222,7 @@ class WorkspaceExplorer {
     if (typeof v === 'number') d = new Date(v);
     else d = new Date(v);
     if (Number.isNaN(d.getTime())) return String(v);
-    return d.toISOString().replace('T', ' ').replace(/\.\d+Z$/, 'Z');
+    return d.toLocaleString();
   }
 
   /** Wire Copy buttons inside a preview section. */

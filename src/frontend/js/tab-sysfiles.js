@@ -1226,7 +1226,7 @@ class SystemFilesTab {
       operation: op.operation,
       size: op.sizeBytes,
       sizeFormatted: this._formatSize(op.sizeBytes),
-      timestamp: op.timestamp.toISOString(),
+      timestamp: op.timestamp.toLocaleString(),
       iterationId: op.iterationId || null,
       durationMs: op.durationMs,
       isLock: op.isLock,
