@@ -71,7 +71,13 @@ class DagCanvasPage {
       eventBus: this._eventBus,
       canvas: this._canvas,
       undoManager: this._undoManager,
-      schemas: this._schemas
+      schemas: this._schemas,
+      onBatchExpand: function() {
+        // User opted into manual batch mode — dismiss the preset overlay.
+        if (self._presets && typeof self._presets._dismiss === 'function') {
+          self._presets._dismiss();
+        }
+      }
     });
 
     this._codePanel = new CodePreviewPanel({
@@ -131,6 +137,11 @@ class DagCanvasPage {
     // Keep presets schema-aware
     if (this._presets) {
       this._presets.updateSchemas(this._schemas);
+    }
+
+    // Keep palette batch-form schema dropdowns in sync with medallion level
+    if (this._palette && typeof this._palette.updateSchemas === 'function') {
+      this._palette.updateSchemas(this._schemas);
     }
 
     // Only restore canvas state on re-entry (when nodes already exist in state
