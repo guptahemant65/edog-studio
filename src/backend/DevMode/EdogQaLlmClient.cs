@@ -138,6 +138,15 @@ namespace Microsoft.LiveTable.Service.DevMode
         private const string EnvVarFewShotEnabled = "EDOG_QA_FEW_SHOT_ENABLED";
         private const string EnvVarFewShotExemplars = "EDOG_QA_FEW_SHOT_EXEMPLARS";
 
+        /// <summary>
+        /// Azure content filter policy name sent via <c>x-policy-id</c> header.
+        /// When set, overrides the deployment-level content filter for all
+        /// Architect and Editor calls. Create a permissive policy in Azure
+        /// Foundry portal to avoid false-positive content filter truncation
+        /// on large reasoning outputs containing source code diffs.
+        /// </summary>
+        private const string EnvVarContentFilterPolicy = "EDOG_QA_CONTENT_FILTER_POLICY";
+
         /// <summary>JSON Schema "name" field for the Architect plan strict schema.</summary>
         internal const string ArchitectSchemaName = "edog_architect_plan";
 
@@ -1631,6 +1640,17 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             using var request = new HttpRequestMessage(HttpMethod.Post, url);
             request.Headers.Add("api-key", apiKey);
+
+            // Azure content filter policy override — allows attaching a
+            // custom content filter (e.g. one with higher thresholds or
+            // annotate-only mode) to avoid false-positive truncation on
+            // large reasoning outputs containing source code diffs.
+            var policyId = (Environment.GetEnvironmentVariable(EnvVarContentFilterPolicy) ?? string.Empty).Trim();
+            if (policyId.Length > 0)
+            {
+                request.Headers.Add("x-policy-id", policyId);
+            }
+
             request.Content = new StringContent(requestBody, Encoding.UTF8, "application/json");
 
             var completionOption = isStream
