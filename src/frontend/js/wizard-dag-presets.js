@@ -228,10 +228,14 @@ class DagPresets {
     this._dismissed = false;
     this._destroyed = false;
     this._overlayEl = null;
+    this._hideTimer = null;
     this._unsubs = [];
 
     this._render();
-    this._updateVisibility();
+    // Do NOT call _updateVisibility() here — the page is still hidden
+    // (opacity:0, translateX(60px)). Showing + trapping focus while
+    // detached causes lifecycle issues. DagCanvasPage.activate() calls
+    // refreshVisibility() once the page is actually visible.
 
     // Listen for node add/remove to show/hide
     this._unsubs.push(
@@ -268,6 +272,10 @@ class DagPresets {
   destroy() {
     if (this._destroyed) return;
     this._destroyed = true;
+    if (this._hideTimer) {
+      clearTimeout(this._hideTimer);
+      this._hideTimer = null;
+    }
     this._releaseFocusTrap();
     var i;
     for (i = 0; i < this._unsubs.length; i++) {
@@ -402,23 +410,46 @@ class DagPresets {
 
   _updateVisibility() {
     if (this._destroyed || !this._overlayEl) return;
+
+    // Cancel any pending hide timeout — this is the root cause of the
+    // "presets not visible" bug.  show→hide→show within 200ms left a
+    // stale timeout that removed --visible AFTER the second show ran.
+    if (this._hideTimer) {
+      clearTimeout(this._hideTimer);
+      this._hideTimer = null;
+    }
+
     var nodeCount = this._canvas ? this._canvas.getNodeCount() : 0;
     var shouldShow = nodeCount === 0 && !this._dismissed;
     if (shouldShow) {
       this._overlayEl.classList.remove('iw-dag-presets-overlay--exiting');
       this._overlayEl.classList.add('iw-dag-presets-overlay--visible');
+      // Defensive: guarantee the overlay paints above every late-added sibling
+      if (this._overlayEl.parentNode &&
+          this._overlayEl.parentNode.lastElementChild !== this._overlayEl) {
+        this._overlayEl.parentNode.appendChild(this._overlayEl);
+      }
+      this._overlayEl.style.zIndex = '500';
+      this._overlayEl.style.opacity = '1';
+      this._overlayEl.style.pointerEvents = 'auto';
       this._trapFocus();
     } else {
       // Animate out if currently visible
       if (this._overlayEl.classList.contains('iw-dag-presets-overlay--visible')) {
         var overlay = this._overlayEl;
+        var self = this;
         overlay.classList.add('iw-dag-presets-overlay--exiting');
-        setTimeout(function() {
+        this._hideTimer = setTimeout(function() {
+          self._hideTimer = null;
           overlay.classList.remove('iw-dag-presets-overlay--visible');
           overlay.classList.remove('iw-dag-presets-overlay--exiting');
+          overlay.style.opacity = '';
+          overlay.style.pointerEvents = '';
         }, 200);
       } else {
         this._overlayEl.classList.remove('iw-dag-presets-overlay--visible');
+        this._overlayEl.style.opacity = '';
+        this._overlayEl.style.pointerEvents = '';
       }
       this._releaseFocusTrap();
     }

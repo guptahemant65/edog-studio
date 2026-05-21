@@ -17763,7 +17763,7 @@ table.ff-table tbody tr.overridden:hover { background: rgba(229, 148, 12, 0.10);
 .iw-dag-presets-overlay {
   position: absolute;
   inset: 0;
-  z-index: 50;
+  z-index: 500;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -73948,10 +73948,14 @@ class DagPresets {
     this._dismissed = false;
     this._destroyed = false;
     this._overlayEl = null;
+    this._hideTimer = null;
     this._unsubs = [];
 
     this._render();
-    this._updateVisibility();
+    // Do NOT call _updateVisibility() here — the page is still hidden
+    // (opacity:0, translateX(60px)). Showing + trapping focus while
+    // detached causes lifecycle issues. DagCanvasPage.activate() calls
+    // refreshVisibility() once the page is actually visible.
 
     // Listen for node add/remove to show/hide
     this._unsubs.push(
@@ -73988,6 +73992,10 @@ class DagPresets {
   destroy() {
     if (this._destroyed) return;
     this._destroyed = true;
+    if (this._hideTimer) {
+      clearTimeout(this._hideTimer);
+      this._hideTimer = null;
+    }
     this._releaseFocusTrap();
     var i;
     for (i = 0; i < this._unsubs.length; i++) {
@@ -74122,23 +74130,46 @@ class DagPresets {
 
   _updateVisibility() {
     if (this._destroyed || !this._overlayEl) return;
+
+    // Cancel any pending hide timeout — this is the root cause of the
+    // "presets not visible" bug.  show→hide→show within 200ms left a
+    // stale timeout that removed --visible AFTER the second show ran.
+    if (this._hideTimer) {
+      clearTimeout(this._hideTimer);
+      this._hideTimer = null;
+    }
+
     var nodeCount = this._canvas ? this._canvas.getNodeCount() : 0;
     var shouldShow = nodeCount === 0 && !this._dismissed;
     if (shouldShow) {
       this._overlayEl.classList.remove('iw-dag-presets-overlay--exiting');
       this._overlayEl.classList.add('iw-dag-presets-overlay--visible');
+      // Defensive: guarantee the overlay paints above every late-added sibling
+      if (this._overlayEl.parentNode &&
+          this._overlayEl.parentNode.lastElementChild !== this._overlayEl) {
+        this._overlayEl.parentNode.appendChild(this._overlayEl);
+      }
+      this._overlayEl.style.zIndex = '500';
+      this._overlayEl.style.opacity = '1';
+      this._overlayEl.style.pointerEvents = 'auto';
       this._trapFocus();
     } else {
       // Animate out if currently visible
       if (this._overlayEl.classList.contains('iw-dag-presets-overlay--visible')) {
         var overlay = this._overlayEl;
+        var self = this;
         overlay.classList.add('iw-dag-presets-overlay--exiting');
-        setTimeout(function() {
+        this._hideTimer = setTimeout(function() {
+          self._hideTimer = null;
           overlay.classList.remove('iw-dag-presets-overlay--visible');
           overlay.classList.remove('iw-dag-presets-overlay--exiting');
+          overlay.style.opacity = '';
+          overlay.style.pointerEvents = '';
         }, 200);
       } else {
         this._overlayEl.classList.remove('iw-dag-presets-overlay--visible');
+        this._overlayEl.style.opacity = '';
+        this._overlayEl.style.pointerEvents = '';
       }
       this._releaseFocusTrap();
     }
@@ -74668,16 +74699,22 @@ class DagCanvasPage {
       codeGen: this._codeGen
     });
 
-    this._presets = new DagPresets({
+    this._nodePopover = new NodePopover({
       containerEl: this._canvasContainer,
-      dagCanvas: this._canvas,
+      canvas: this._canvas,
       eventBus: this._eventBus,
       schemas: this._schemas
     });
 
-    this._nodePopover = new NodePopover({
+    // IMPORTANT: DagPresets MUST be constructed LAST so its overlay element
+    // is the final child of .iw-dag-canvas. Sibling paint order (with equal
+    // stacking context) follows DOM order — later siblings paint above. If
+    // anything (NodePopover, toolbar, etc.) is appended after the overlay,
+    // it will visually cover it even though the popover starts display:none.
+    // Pairs with the defensive re-append in DagPresets._updateVisibility().
+    this._presets = new DagPresets({
       containerEl: this._canvasContainer,
-      canvas: this._canvas,
+      dagCanvas: this._canvas,
       eventBus: this._eventBus,
       schemas: this._schemas
     });
@@ -74810,13 +74847,13 @@ class DagCanvasPage {
     this._unsubs = [];
 
     // Destroy sub-components in reverse creation order
-    if (this._nodePopover) {
-      this._nodePopover.destroy();
-      this._nodePopover = null;
-    }
     if (this._presets) {
       this._presets.destroy();
       this._presets = null;
+    }
+    if (this._nodePopover) {
+      this._nodePopover.destroy();
+      this._nodePopover = null;
     }
     if (this._codePanel) {
       this._codePanel.destroy();
@@ -92320,10 +92357,7 @@ class QaPanel {
       this._renderLlmPill({ state: 'refreshing' });
     }
     conn.invoke('QaGetCapabilities').then((report) => {
-      // Log the full report so the user can diagnose why V2 isn't
-      // ready (e.g., missing AZURE_OPENAI_* env vars, deployment
-      // not found) without having to hover the pill.
-      console.info('[qa-panel] QaGetCapabilities ←', report);
+      console.log('[QA-DIAG] QaGetCapabilities result:', JSON.stringify(report));
       this._renderLlmPill(report);
       // If the probe was mid-flight, poll once more after 4s. The
       // dual probe normally takes < 2s on a healthy tenant.
@@ -92424,6 +92458,7 @@ class QaPanel {
   }
 
   _setStage(stage) {
+    console.log('[QA-DIAG] Stage transition:', this._activeStage, '→', stage);
     this._activeStage = stage;
 
     const stageOrder = ['input', 'analysis', 'curation', 'execution', 'results'];
@@ -92524,6 +92559,7 @@ class QaPanel {
     if (!event || !event.data) return;
     const d = event.data;
     const type = d.eventType || d.EventType;
+    console.log('[QA-DIAG] ← event:', type, d);
 
     // Ignore stale events from a different correlation/run
     const evtCorr = d.correlationId || d.CorrelationId;
@@ -92532,38 +92568,49 @@ class QaPanel {
     switch (type) {
       // Analysis events -> qa-analysis.js
       case 'QaAnalysisProgress':
+        console.log('[QA-DIAG] Progress:', d.phase, d.phaseIndex + '/' + d.totalPhases, d.percentComplete + '%', d.detail || '');
         if (this._analysis) this._analysis.onProgress(d);
         break;
       case 'QaAnalysisWarning':
+        console.log('[QA-DIAG] Warning:', d.warning, d.message);
         if (this._analysis) this._analysis.onWarning(d);
         break;
       case 'QaAnalysisCancelled':
+        console.log('[QA-DIAG] Cancelled:', d.reason);
         if (this._analysis) this._analysis.onCancelled(d);
         break;
       case 'QaScenarioGenerated':
+        console.log('[QA-DIAG] Scenario:', d.title || d.Title, 'type=' + (d.stimulusType || d.StimulusType));
         if (this._analysis) this._analysis.onScenarioGenerated(d);
         break;
       case 'QaLintFindings':
+        console.log('[QA-DIAG] LintFindings:', (d.findings || d.Findings || []).length, 'findings');
         if (this._analysis) this._analysis.onLintFindings(d);
         break;
 
       // Execution events -> qa-execution.js
       case 'QaRunStarted':
+        console.log('[QA-DIAG] RunStarted:', d.runId, 'scenarios=' + (d.totalScenarios || d.TotalScenarios));
         if (this._execution) this._execution.onRunStarted(d);
         break;
       case 'QaScenarioStarted':
+        console.log('[QA-DIAG] ScenarioStarted:', d.scenarioId, d.title || d.Title);
         if (this._execution) this._execution.onScenarioStarted(d);
         break;
       case 'QaScenarioPhaseChanged':
+        console.log('[QA-DIAG] PhaseChanged:', d.scenarioId, d.phase || d.Phase);
         if (this._execution) this._execution.onPhaseChanged(d);
         break;
       case 'QaExpectationMatched':
+        console.log('[QA-DIAG] ExpectationMatched:', d.scenarioId, d.expectationIndex, 'passed=' + d.passed);
         if (this._execution) this._execution.onExpectationMatched(d);
         break;
       case 'QaScenarioCompleted':
+        console.log('[QA-DIAG] ScenarioCompleted:', d.scenarioId, 'verdict=' + (d.verdict || d.Verdict));
         if (this._execution) this._execution.onScenarioCompleted(d);
         break;
       case 'QaRunCompleted':
+        console.log('[QA-DIAG] *** RunCompleted:', d.runId, 'passed=' + d.passedCount, 'failed=' + d.failedCount);
         if (this._execution) this._execution.onRunCompleted(d);
         this._setStage('results');
         if (this._results) this._results.loadRun(d.runId || this._runId);
@@ -92571,6 +92618,7 @@ class QaPanel {
 
       // Error events
       case 'QaError':
+        console.log('[QA-DIAG] ERROR:', d.errorCode || d.ErrorCode, d.message || d.Message);
         this._handleError(d);
         break;
     }
@@ -92825,7 +92873,9 @@ class QaInput {
     };
 
     var self = this;
+    console.log('[QA-DIAG] ═══ QaStartCodeAnalysis invoke ═══', JSON.stringify(request));
     conn.invoke('QaStartCodeAnalysis', request).then(function (result) {
+      console.log('[QA-DIAG] QaStartCodeAnalysis result:', result);
       self._isAnalyzing = false;
       self._btn.textContent = 'Analyze';
 
@@ -93058,7 +93108,8 @@ class QaAnalysis {
   // ── Event Handlers (called by QaPanel) ──
 
   onProgress(data) {
-    // data: { phase, phaseIndex, totalPhases, percentComplete, detail, metrics }
+    console.log('[QA-DIAG] onProgress:', data.phase, data.phaseIndex + '/' + data.totalPhases,
+      data.percentComplete + '%', data.detail || '', data.metrics ? JSON.stringify(data.metrics) : '');
     this._isComplete = false;
     this._isCancelled = false;
 
@@ -93098,6 +93149,7 @@ class QaAnalysis {
     // for every emit — producing the duplicate "Review Scenarios"
     // buttons users saw in the curation handoff.
     if (data.phase === 'complete' && !this._isComplete) {
+      console.log('[QA-DIAG] *** ANALYSIS COMPLETE — scenarios received:', this._scenarios.length);
       this._isComplete = true;
       if (this._cancelBtn) this._cancelBtn.style.display = 'none';
       this._showProceedButton();
@@ -93105,6 +93157,7 @@ class QaAnalysis {
   }
 
   onCancelled(data) {
+    console.log('[QA-DIAG] onCancelled:', data.reason);
     this._isCancelled = true;
     // Mark the active phase as cancelled
     for (var i = 0; i < this._phases.length; i++) {
@@ -93123,9 +93176,8 @@ class QaAnalysis {
   }
 
   onWarning(data) {
-    // data: { warning, message }
     var msg = data.message || data.warning || 'Unknown warning';
-    console.warn('[QA] Pipeline warning:', msg);
+    console.warn('[QA-DIAG] onWarning:', data.warning, msg);
 
     // Show degradation indicator on the active phase
     for (var i = 0; i < this._phases.length; i++) {
@@ -93156,7 +93208,7 @@ class QaAnalysis {
     var msg = (data && data.message) || 'Unknown analysis error';
     var code = (data && (data.errorCode || data.ErrorCode)) || 'UNKNOWN';
     var recoverable = !!(data && (data.recoverable || data.Recoverable));
-    console.error('[QA] Analysis-phase error', code, msg);
+    console.error('[QA-DIAG] onAnalysisPhaseError:', code, msg, 'recoverable=' + recoverable);
 
     // Mark the scenario_generation phase as failed (red ✕).
     for (var i = 0; i < this._phases.length; i++) {
@@ -93191,12 +93243,14 @@ class QaAnalysis {
     icon.textContent = '\u26A0';
     panel.appendChild(icon);
 
+    var cause = data && data.cause;
+
     var body = document.createElement('div');
     body.className = 'qa-analysis-error-body';
 
     var title = document.createElement('div');
     title.className = 'qa-analysis-error-title';
-    title.textContent = this._titleForErrorCode(code);
+    title.textContent = this._titleForErrorCode(code, cause);
     body.appendChild(title);
 
     var message = document.createElement('div');
@@ -93208,12 +93262,19 @@ class QaAnalysis {
     actions.className = 'qa-analysis-error-actions';
 
     if (code === 'NO_SCENARIOS_GENERATED' || code.indexOf('LLM_PROVIDER_') === 0) {
-      var configLink = document.createElement('a');
-      configLink.href = 'https://aka.ms/edog-studio-llm-setup';
-      configLink.target = '_blank';
-      configLink.rel = 'noopener noreferrer';
-      configLink.textContent = 'Configure LLM provider \u2192';
-      actions.appendChild(configLink);
+      // Only show the "Configure LLM provider" CTA when the failure is
+      // actually a config issue. When the V2 pipeline ran but failed
+      // internally (zone failed, quarantined, projection rejected, etc.)
+      // the cause field carries a v2_* tag — skip the config link.
+      var isPipelineFailure = cause && cause.indexOf('v2_') === 0;
+      if (!isPipelineFailure) {
+        var configLink = document.createElement('a');
+        configLink.href = 'https://aka.ms/edog-studio-llm-setup';
+        configLink.target = '_blank';
+        configLink.rel = 'noopener noreferrer';
+        configLink.textContent = 'Configure LLM provider \u2192';
+        actions.appendChild(configLink);
+      }
     }
 
     if (recoverable) {
@@ -93235,7 +93296,24 @@ class QaAnalysis {
     panel.appendChild(body);
   }
 
-  _titleForErrorCode(code) {
+  _titleForErrorCode(code, cause) {
+    // When the V2 pipeline ran but failed internally, use a more
+    // specific title keyed on the cause instead of the generic
+    // "No scenarios were generated" that implies a config issue.
+    if (code === 'NO_SCENARIOS_GENERATED' && cause) {
+      switch (cause) {
+        case 'v2_zone_failed':
+          return 'LLM pipeline validation failed';
+        case 'v2_budget_skipped':
+          return 'LLM budget exhausted';
+        case 'v2_projection_rejected':
+          return 'Scenario projection failed';
+        case 'v2_all_quarantined':
+          return 'All scenarios quarantined';
+        case 'v2_no_testable_changes':
+          return 'No testable changes detected';
+      }
+    }
     switch (code) {
       case 'LLM_PROVIDER_AUTH':
         return 'LLM credentials rejected';
@@ -93255,8 +93333,11 @@ class QaAnalysis {
   }
 
   onScenarioGenerated(data) {
-    // data: { scenarioIndex, totalExpected, scenario: { id, title, category, priority, technique, invariantsAddressed, groundingEvidence, ... } }
     var scn = data.scenario;
+    console.log('[QA-DIAG] onScenarioGenerated:', scn ? scn.title : '(null)', 
+      'type=' + (scn && scn.stimulusType), 'cat=' + (scn && scn.category),
+      'confidence=' + (scn && scn.metadata && scn.metadata.confidence),
+      'index=' + data.scenarioIndex + '/' + data.totalExpected);
     if (!scn) return;
     // Defence-in-depth dedup. The qa topic stream's Phase 1 snapshot
     // (EdogPlaygroundHub.SubscribeToTopic) would otherwise replay every
@@ -93328,6 +93409,8 @@ class QaAnalysis {
    * on the analysis-phase footer as a heads-up.
    */
   onLintFindings(data) {
+    console.log('[QA-DIAG] onLintFindings:', (data && data.findings ? data.findings.length : 0), 
+      'findings, errors=' + (data && data.errorCount), 'warnings=' + (data && data.warningCount));
     if (!data) return;
     this._lintFindings = Array.isArray(data.findings) ? data.findings.slice() : [];
     // Surface a non-toast badge in the metrics line — purely informational.
@@ -93414,11 +93497,17 @@ class QaAnalysis {
    * @param {string} zoneId — impact zone identifier
    */
   fetchCatalogHealth(zoneId) {
+    console.log('[QA-DIAG] fetchCatalogHealth:', zoneId);
     var self = this;
     fetch('/api/contract/catalog/' + encodeURIComponent(zoneId))
       .then(function (r) { return r.json(); })
-      .then(function (snapshot) { self.renderCatalogHealth(snapshot); })
-      .catch(function (err) { console.error('[QA] catalog-health fetch failed:', err); });
+      .then(function (snapshot) {
+        console.log('[QA-DIAG] catalogHealth response:', snapshot.snapshotId, 
+          'slots=' + (snapshot.slots ? snapshot.slots.length : 0),
+          'providers=' + JSON.stringify(snapshot.providerStatus));
+        self.renderCatalogHealth(snapshot);
+      })
+      .catch(function (err) { console.error('[QA-DIAG] catalog-health fetch FAILED:', err); });
   }
 }
 
