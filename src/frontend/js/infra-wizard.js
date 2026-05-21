@@ -1968,9 +1968,11 @@ class ThemeSchemaPage {
         e.preventDefault();
         e.stopPropagation();
         var turnOn = !self._isMedallionOn();
+        console.log('[MEDALLION-TOGGLE] clicked. turnOn=' + turnOn, 'before:', JSON.stringify(self._schemas));
         self._schemas.bronze = turnOn;
         self._schemas.silver = turnOn;
         self._schemas.gold = turnOn;
+        console.log('[MEDALLION-TOGGLE] after:', JSON.stringify(self._schemas));
         self._updateMedallionUI();
       });
     }
@@ -1986,7 +1988,9 @@ class ThemeSchemaPage {
         if (!schema || !(schema in self._schemas) || schema === 'dbo') return;
         e.preventDefault();
         e.stopPropagation();
+        console.log('[MEDALLION-CHIP] clicked schema=' + schema, 'before:', JSON.stringify(self._schemas));
         self._schemas[schema] = !self._schemas[schema];
+        console.log('[MEDALLION-CHIP] after:', JSON.stringify(self._schemas), 'isMedallionOn=' + self._isMedallionOn());
         self._updateMedallionUI();
       });
     }
