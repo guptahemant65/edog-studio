@@ -3109,11 +3109,15 @@ class WorkspaceExplorer {
       html += `<span class="ws-meta-badge ws-badge-env">${this._esc(envLabel)}</span>`;
       var capName = ws._capacityDisplayName || '';
       var capSku = ws._capacitySku || '';
-      html += `<span class="ws-meta-badge ws-badge-capacity" title="Capacity ID: ${this._esc(capacityId)}${capSku ? ' \u00b7 SKU: ' + this._esc(capSku) : ''}">`;
-      html += `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><circle cx="6" cy="6" r="1"/><circle cx="6" cy="18" r="1"/></svg>`;
-      html += capName ? this._esc(capName) : this._esc(capacityId);
-      if (capSku) html += ` <span class="ws-capacity-sku">${this._esc(capSku)}</span>`;
-      html += '</span>';
+      var capRegion = ws._region || '';
+      html += '<div class="ws-capacity-info">';
+      html += '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><circle cx="6" cy="6" r="1"/><circle cx="6" cy="18" r="1"/></svg>';
+      html += '<span class="ws-capacity-detail">';
+      if (capName) html += `<span class="ws-capacity-name">${this._esc(capName)}</span>`;
+      html += `<span class="ws-capacity-id">${this._esc(capacityId)}</span>`;
+      if (capSku) html += `<span class="ws-capacity-sku">${this._esc(capSku)}</span>`;
+      if (capRegion) html += `<span class="ws-capacity-region">${this._esc(capRegion)}</span>`;
+      html += '</span></div>';
     }
     html += '<span id="ws-ts-workspace" class="ws-timestamp ws-timestamp--loading" title="Loading activity\u2026">' +
       '<span class="ws-timestamp-label">Last activity:</span>' +
