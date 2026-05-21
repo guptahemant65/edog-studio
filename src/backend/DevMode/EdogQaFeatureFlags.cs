@@ -52,6 +52,17 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// </summary>
         internal const string EnvVarLlmV2 = "EDOG_QA_LLM_V2";
 
+        /// <summary>
+        /// P10 typed-matcher contract kill switch. Accepts the usual truthy /
+        /// falsy spellings (on/1/true/enabled vs off/0/false/disabled). When
+        /// the env var is unset, the default is <c>true</c> (typed matchers
+        /// active). Set <c>EDOG_QA_CONTRACT_ENABLED=off</c> to fall back to
+        /// the pre-P10 legacy-only behaviour: projector ignores typed
+        /// matchers, validator skips the matcherTopicHashes grounding gate,
+        /// execution engine skips catalog-hash staleness checks.
+        /// </summary>
+        internal const string EnvVarQaContractEnabled = "EDOG_QA_CONTRACT_ENABLED";
+
         // ── Public surface ─────────────────────────────────────────────
 
         /// <summary>
@@ -62,10 +73,33 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// </summary>
         internal static LlmV2Mode LlmV2 => _llmV2.Value;
 
+        /// <summary>
+        /// P10 typed-matcher contract enable flag. <c>true</c> (default) means
+        /// the projector emits typed Matchers, the validator enforces the
+        /// matcherTopicHashes grounding gate, and the execution engine
+        /// validates catalog hashes. <c>false</c> falls back to legacy
+        /// expectation-only behaviour.
+        /// </summary>
+        internal static bool QaContractEnabled => _qaContractEnabled.Value;
+
         // ── Implementation ─────────────────────────────────────────────
 
         private static readonly Lazy<LlmV2Mode> _llmV2 = new(() =>
             ParseLlmV2(Environment.GetEnvironmentVariable(EnvVarLlmV2)));
+
+        private static readonly Lazy<bool> _qaContractEnabled = new(() =>
+            ParseQaContractEnabled(Environment.GetEnvironmentVariable(EnvVarQaContractEnabled)));
+
+        internal static bool ParseQaContractEnabled(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return true;
+            var v = raw.Trim().ToLowerInvariant();
+            return v switch
+            {
+                "off" or "0" or "false" or "disabled" or "no" => false,
+                _ => true,
+            };
+        }
 
         internal static LlmV2Mode ParseLlmV2(string raw)
         {

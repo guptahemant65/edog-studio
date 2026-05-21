@@ -312,6 +312,23 @@ class QaCuration {
       body.appendChild(this._renderGrounding(grounding));
     }
 
+    // P10 / P2-2: read-only typed matchers section. The Editor workbench
+    // owns full editing; here we just surface what the LLM produced so the
+    // user can decide approve/exclude without round-tripping through it.
+    var matchers = scn.matchers || scn.Matchers;
+    if (Array.isArray(matchers) && matchers.length > 0) {
+      body.appendChild(this._renderTypedMatchers(matchers));
+    }
+
+    // P10 / P2-2: catalogHashes provenance — show snapshotId so the user
+    // can correlate the scenario with the active catalog. Hashes are
+    // intentionally elided to keep the card scannable.
+    var catalogHashes = scn.catalogHashes || scn.CatalogHashes;
+    var snapshotId = catalogHashes && (catalogHashes.catalogSnapshotId || catalogHashes.CatalogSnapshotId);
+    if (snapshotId) {
+      body.appendChild(this._renderCatalogProvenance(snapshotId, catalogHashes));
+    }
+
     // F27 item 5: per-scenario lint findings list.
     if (perScn && perScn.length > 0) {
       body.appendChild(this._renderScenarioFindings(perScn));
@@ -507,6 +524,107 @@ class QaCuration {
 
     wrap.appendChild(toggle);
     wrap.appendChild(body);
+    return wrap;
+  }
+
+  /**
+   * P10 / P2-2: render typed matchers (read-only) for a scenario card. Each
+   * row shows topicField, assertion, and a compact value summary so the
+   * curator can sanity-check the LLM output before approving.
+   */
+  _renderTypedMatchers(matchers) {
+    var wrap = document.createElement('div');
+    wrap.className = 'qa-matchers';
+
+    var toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'qa-matchers-toggle';
+    toggle.textContent = '\u25B8 Matchers (' + matchers.length + ')';
+    toggle.setAttribute('aria-expanded', 'false');
+
+    var body = document.createElement('div');
+    body.className = 'qa-matchers-body';
+    body.style.display = 'none';
+
+    for (var i = 0; i < matchers.length; i++) {
+      var m = matchers[i];
+      if (!m) continue;
+      var row = document.createElement('div');
+      row.className = 'qa-matcher-row';
+
+      var field = document.createElement('code');
+      field.className = 'qa-matcher-field';
+      field.textContent = m.topicField || m.TopicField || '(no topic)';
+      row.appendChild(field);
+
+      var assertion = document.createElement('span');
+      assertion.className = 'qa-matcher-assertion';
+      var assertionText = m.assertion || m.Assertion || '';
+      assertion.textContent = typeof assertionText === 'string'
+        ? assertionText.toLowerCase()
+        : String(assertionText);
+      row.appendChild(assertion);
+
+      var valueEl = document.createElement('span');
+      valueEl.className = 'qa-matcher-value';
+      valueEl.textContent = this._summarizeMatcherValue(m.value || m.Value);
+      row.appendChild(valueEl);
+
+      body.appendChild(row);
+    }
+
+    toggle.addEventListener('click', function () {
+      var open = body.style.display !== 'none';
+      body.style.display = open ? 'none' : '';
+      toggle.setAttribute('aria-expanded', open ? 'false' : 'true');
+      toggle.textContent = (open ? '\u25B8' : '\u25BE') + ' Matchers (' + matchers.length + ')';
+    });
+
+    wrap.appendChild(toggle);
+    wrap.appendChild(body);
+    return wrap;
+  }
+
+  /** Compact, read-only summary of a typed matcher value payload. */
+  _summarizeMatcherValue(value) {
+    if (value == null) return '(no value)';
+    var type = value.type || value.Type;
+    if (value.value !== undefined && value.value !== null) {
+      return (type ? type + ': ' : '') + String(value.value);
+    }
+    if (value.Value !== undefined && value.Value !== null) {
+      return (type ? type + ': ' : '') + String(value.Value);
+    }
+    var min = value.min != null ? value.min : value.Min;
+    var max = value.max != null ? value.max : value.Max;
+    if (min != null || max != null) {
+      return '[' + (min != null ? min : '\u2212\u221E') + ', ' + (max != null ? max : '+\u221E') + ']';
+    }
+    var values = value.values || value.Values;
+    if (Array.isArray(values)) {
+      return '[' + values.map(function (v) { return String(v); }).join(', ') + ']';
+    }
+    return type || '(opaque)';
+  }
+
+  /** P10 / P2-2: catalogHashes provenance pill (snapshotId only). */
+  _renderCatalogProvenance(snapshotId, hashes) {
+    var wrap = document.createElement('div');
+    wrap.className = 'qa-catalog-provenance';
+
+    var label = document.createElement('span');
+    label.className = 'qa-catalog-provenance-label';
+    label.textContent = 'Catalog';
+    wrap.appendChild(label);
+
+    var idEl = document.createElement('code');
+    idEl.className = 'qa-catalog-provenance-id';
+    idEl.textContent = snapshotId;
+    var topicHashes = hashes && (hashes.matcherTopicHashes || hashes.MatcherTopicHashes);
+    var topicCount = topicHashes ? Object.keys(topicHashes).length : 0;
+    idEl.title = 'CatalogSnapshotId — grounded against ' + topicCount + ' topic hash(es).';
+    wrap.appendChild(idEl);
+
     return wrap;
   }
 

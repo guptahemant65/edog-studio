@@ -646,13 +646,18 @@ namespace Microsoft.LiveTable.Service.DevMode
             }
 
             var matcherTopicHashes = scenario.CatalogHashes?.MatcherTopicHashes;
+            // P10 kill switch (P2-1): only enforce the catalog-grounding gate
+            // when the contract flag is enabled. When off, typed matchers run
+            // ungated against the legacy code path.
+            var contractEnabled = EdogQaFeatureFlags.QaContractEnabled;
             // P10 fix (P0-1): only enforce the catalog-grounding gate when the
             // scenario claims grounding (CatalogSnapshotId set). When the
             // snapshot is unavailable (LLM emitted empty hashes), degrade
             // gracefully — the scenario still runs but loses staleness
             // protection. The execution-engine preflight handles the
             // "snapshot available but hashes empty" mismatch.
-            var hasGroundingClaim = !string.IsNullOrWhiteSpace(scenario.CatalogHashes?.CatalogSnapshotId);
+            var hasGroundingClaim = contractEnabled
+                && !string.IsNullOrWhiteSpace(scenario.CatalogHashes?.CatalogSnapshotId);
             for (int i = 0; i < scenario.Matchers.Count; i++)
             {
                 var matcher = scenario.Matchers[i];

@@ -409,7 +409,41 @@ class QaResults {
 
         expRow.appendChild(expIcon);
         expRow.appendChild(expDesc);
+
+        // P10 / P2-3: surface per-matcher diagnostics from
+        // ExpectationResult (topic, latency, failure reason). The execution
+        // engine already emits these via EvaluateContractMatchers /
+        // EvaluateExpectation; we just render what's on the wire.
+        var matched = exp.matchedEvent || exp.MatchedEvent;
+        var closest = exp.closestMiss || exp.ClosestMiss;
+        var topic = (matched && (matched.topic || matched.Topic))
+          || (closest && (closest.topic || closest.Topic));
+        if (topic) {
+          var topicEl = document.createElement('code');
+          topicEl.className = 'qa-result-exp-topic';
+          topicEl.textContent = topic;
+          topicEl.title = 'Observed topic';
+          expRow.appendChild(topicEl);
+        }
+
+        var latency = exp.matchLatencyMs != null ? exp.matchLatencyMs : exp.MatchLatencyMs;
+        if (latency != null && latency > 0) {
+          var latEl = document.createElement('span');
+          latEl.className = 'qa-result-exp-latency';
+          latEl.textContent = latency + 'ms';
+          latEl.title = 'Time from T0 to match';
+          expRow.appendChild(latEl);
+        }
+
         expList.appendChild(expRow);
+
+        var failureReason = exp.failureReason || exp.FailureReason;
+        if (failureReason) {
+          var reasonRow = document.createElement('div');
+          reasonRow.className = 'qa-result-exp-reason';
+          reasonRow.textContent = failureReason;
+          expList.appendChild(reasonRow);
+        }
       }
       detail.appendChild(expList);
     }

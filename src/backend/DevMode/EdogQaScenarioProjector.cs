@@ -221,7 +221,11 @@ namespace Microsoft.LiveTable.Service.DevMode
             // the Editor emits descriptive text (not JSON) in the legacy
             // expectations[*].matcherSpec field. Skip the JSON parse in
             // that case — the typed matchers path below handles matching.
-            var hasTypedMatchers = src.Matchers != null && src.Matchers.Count > 0;
+            // P10 kill switch (P2-1): when EDOG_QA_CONTRACT_ENABLED=off, ignore
+            // the typed matchers array entirely so we fall back to the legacy
+            // matcherSpec parse path. Same upstream LLM output, pre-P10 shape.
+            var contractEnabled = EdogQaFeatureFlags.QaContractEnabled;
+            var hasTypedMatchers = contractEnabled && src.Matchers != null && src.Matchers.Count > 0;
             var expectations = new List<Expectation>();
             for (var i = 0; i < src.Expectations.Count; i++)
             {
@@ -272,7 +276,12 @@ namespace Microsoft.LiveTable.Service.DevMode
                 });
             }
 
-            var typedMatchers = ProjectTypedMatchers(src.Matchers, reasons);
+            // P10 kill switch (P2-1): emit empty Matchers list when the
+            // contract flag is off so downstream stations stay on the legacy
+            // expectation-only path.
+            var typedMatchers = contractEnabled
+                ? ProjectTypedMatchers(src.Matchers, reasons)
+                : new List<Matcher>();
 
             if (reasons.Count > 0) return null;
 
