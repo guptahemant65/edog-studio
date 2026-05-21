@@ -1802,7 +1802,22 @@ namespace Microsoft.LiveTable.Service.DevMode
                 var status = statusEl.GetString();
                 if (!string.Equals(status, "completed", StringComparison.OrdinalIgnoreCase))
                 {
-                    return (null, default, $"status was '{status}', expected 'completed' (truncation or content-filter)");
+                    // Extract error details from the Responses API envelope.
+                    // 'error' field (status=failed): { code, message }
+                    // 'incomplete_details' field (status=incomplete): { reason }
+                    var errorDetail = string.Empty;
+                    if (root.TryGetProperty("error", out var errorObj) && errorObj.ValueKind == JsonValueKind.Object)
+                    {
+                        var errCode = errorObj.TryGetProperty("code", out var ec) && ec.ValueKind == JsonValueKind.String ? ec.GetString() : null;
+                        var errMsg = errorObj.TryGetProperty("message", out var em) && em.ValueKind == JsonValueKind.String ? em.GetString() : null;
+                        errorDetail = $" error: code={errCode ?? "null"}, message={Truncate(errMsg ?? "null", 300)}";
+                    }
+                    else if (root.TryGetProperty("incomplete_details", out var incDetails) && incDetails.ValueKind == JsonValueKind.Object)
+                    {
+                        var reason = incDetails.TryGetProperty("reason", out var r) && r.ValueKind == JsonValueKind.String ? r.GetString() : null;
+                        errorDetail = $" incomplete_details: reason={reason ?? "null"}";
+                    }
+                    return (null, default, $"status was '{status}', expected 'completed'.{errorDetail}");
                 }
 
                 if (!root.TryGetProperty("output", out var outputEl)
