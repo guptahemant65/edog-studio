@@ -373,6 +373,7 @@ class QaPanel {
     if (!event || !event.data) return;
     const d = event.data;
     const type = d.eventType || d.EventType;
+    console.log('[QA-DIAG] ← event:', type, d);
 
     // Ignore stale events from a different correlation/run
     const evtCorr = d.correlationId || d.CorrelationId;
@@ -381,18 +382,23 @@ class QaPanel {
     switch (type) {
       // Analysis events -> qa-analysis.js
       case 'QaAnalysisProgress':
+        console.log('[QA-DIAG] Progress:', d.phase, d.phaseIndex + '/' + d.totalPhases, d.percentComplete + '%', d.detail || '');
         if (this._analysis) this._analysis.onProgress(d);
         break;
       case 'QaAnalysisWarning':
+        console.log('[QA-DIAG] Warning:', d.warning, d.message);
         if (this._analysis) this._analysis.onWarning(d);
         break;
       case 'QaAnalysisCancelled':
+        console.log('[QA-DIAG] Cancelled:', d.reason);
         if (this._analysis) this._analysis.onCancelled(d);
         break;
       case 'QaScenarioGenerated':
+        console.log('[QA-DIAG] Scenario:', d.title || d.Title, 'type=' + (d.stimulusType || d.StimulusType));
         if (this._analysis) this._analysis.onScenarioGenerated(d);
         break;
       case 'QaLintFindings':
+        console.log('[QA-DIAG] LintFindings:', (d.findings || d.Findings || []).length, 'findings');
         if (this._analysis) this._analysis.onLintFindings(d);
         break;
 
@@ -420,6 +426,7 @@ class QaPanel {
 
       // Error events
       case 'QaError':
+        console.log('[QA-DIAG] ERROR:', d.errorCode || d.ErrorCode, d.message || d.Message);
         this._handleError(d);
         break;
     }
