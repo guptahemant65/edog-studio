@@ -66,7 +66,7 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         // 2. Spark/GTS — Livy session management
         private static readonly Regex SparkGtsPattern = new(
-            @"/(livy|livysessions|spark|sparkSessions)/",
+            @"/(livy|livysessions|spark|sparkSessions|customTransformExecution)/",
             RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         // 3. Notebook execution (Jupyter/Livy — sub-category of spark-gts)

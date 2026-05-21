@@ -8,6 +8,8 @@
 namespace Microsoft.LiveTable.Service.DevMode
 {
     using System;
+    using System.Collections.Concurrent;
+    using System.Collections.Generic;
     using System.Diagnostics;
     using System.Linq;
     using System.Threading;
@@ -39,7 +41,8 @@ namespace Microsoft.LiveTable.Service.DevMode
         private readonly string _iterationId;
         private readonly long _createdAtMs;
         private int _transformCount;
-        private volatile string _lastState;
+        private readonly ConcurrentDictionary<Guid, string> _lastStates = new();
+        private readonly ConcurrentDictionary<Guid, (string GtsSessionId, string ReplId)> _transformIdentity = new();
 
         public EdogSparkClientWrapper(ISparkClient inner, string trackingId, string iterationId)
         {
@@ -53,7 +56,26 @@ namespace Microsoft.LiveTable.Service.DevMode
         public SessionProperties SessionProperties
         {
             get => _inner.SessionProperties;
-            set => _inner.SessionProperties = value;
+            set
+            {
+                _inner.SessionProperties = value;
+                try
+                {
+                    // Emit keys only — values may contain tokens or other secrets.
+                    EdogTopicRouter.Publish("spark", new
+                    {
+                        sessionTrackingId = _trackingId,
+                        @event = "SessionPropertiesSet",
+                        iterationId = _iterationId,
+                        confKeys = value?.Conf?.Keys.ToArray(),
+                        confCount = value?.Conf?.Count ?? 0,
+                    });
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[EDOG] SparkWrapper.SessionProperties publish error: {ex.Message}");
+                }
+            }
         }
 
         /// <inheritdoc/>
@@ -78,6 +100,36 @@ namespace Microsoft.LiveTable.Service.DevMode
                 var sessionId = result.ComputeInfo?.SessionId?.ToString() ?? string.Empty;
                 var replId = result.ComputeInfo?.ReplId?.ToString() ?? string.Empty;
 
+                _transformIdentity[transformationId] = (sessionId, replId);
+
+                // Best-effort: pull generated Spark code via reflection so we don't
+                // tightly couple to FLT's Node API. Truncate to 4KB.
+                string sparkCode = string.Empty;
+                try
+                {
+                    if (node != null)
+                    {
+                        var nt = node.GetType();
+                        object code = null;
+                        var m = nt.GetMethod("GetCodeForLogging", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                        if (m != null && m.GetParameters().Length == 0)
+                        {
+                            code = m.Invoke(node, null);
+                        }
+                        if (code == null)
+                        {
+                            var p = nt.GetProperty("CustomCode", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                            code = p?.GetValue(node);
+                        }
+                        sparkCode = code as string ?? string.Empty;
+                        if (sparkCode.Length > 2048) sparkCode = sparkCode.Substring(0, 2048);
+                    }
+                }
+                catch (Exception)
+                {
+                    sparkCode = string.Empty;
+                }
+
                 EdogTopicRouter.Publish("spark", new
                 {
                     sessionTrackingId = _trackingId,
@@ -95,9 +147,10 @@ namespace Microsoft.LiveTable.Service.DevMode
                     retriable = result.Retriable,
                     retryAfterMs = result.RetryAfter?.TotalMilliseconds,
                     error = result.Error,
+                    sparkCodePreview = sparkCode,
                 });
 
-                _lastState = result.State.ToString();
+                _lastStates[transformationId] = result.State.ToString();
             }
             catch (Exception ex)
             {
@@ -123,7 +176,8 @@ namespace Microsoft.LiveTable.Service.DevMode
             try
             {
                 var newState = result.State.ToString();
-                var stateChanged = _lastState != newState;
+                var prevState = _lastStates.TryGetValue(transformationId, out var ls) ? ls : null;
+                var stateChanged = prevState != newState;
                 var isTerminal = result.State == TransformationState.Succeeded
                               || result.State == TransformationState.Failed
                               || result.State == TransformationState.Cancelled;
@@ -188,6 +242,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                     }
                 }
 
+                var identity = _transformIdentity.TryGetValue(transformationId, out var idv) ? idv : default;
+
                 EdogTopicRouter.Publish("spark", new
                 {
                     sessionTrackingId = _trackingId,
@@ -196,9 +252,11 @@ namespace Microsoft.LiveTable.Service.DevMode
                     transformationId = transformationId.ToString(),
                     nodeName = node?.Name ?? string.Empty,
                     state = newState,
-                    previousState = _lastState,
+                    previousState = prevState,
                     stateChanged,
                     isTerminal,
+                    gtsSessionId = identity.GtsSessionId ?? string.Empty,
+                    replId = identity.ReplId ?? string.Empty,
                     durationMs = sw.Elapsed.TotalMilliseconds,
                     retryAfterMs = result.RetryAfter?.TotalMilliseconds,
                     errorCode,
@@ -220,7 +278,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     violationsPerConstraint,
                 });
 
-                _lastState = newState;
+                _lastStates[transformationId] = newState;
             }
             catch (Exception ex)
             {
@@ -245,6 +303,8 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             try
             {
+                var identity = _transformIdentity.TryGetValue(transformationId, out var idv) ? idv : default;
+
                 EdogTopicRouter.Publish("spark", new
                 {
                     sessionTrackingId = _trackingId,
@@ -253,6 +313,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                     transformationId = transformationId.ToString(),
                     nodeName = node?.Name ?? string.Empty,
                     state = result.State.ToString(),
+                    gtsSessionId = identity.GtsSessionId ?? string.Empty,
+                    replId = identity.ReplId ?? string.Empty,
                     durationMs = sw.Elapsed.TotalMilliseconds,
                     error = result.Error,
                     retryAfterMs = result.RetryAfter?.TotalMilliseconds,
@@ -272,6 +334,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             try
             {
                 var lifetimeMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - _createdAtMs;
+                var lastState = _lastStates.Values.LastOrDefault();
 
                 EdogTopicRouter.Publish("spark", new
                 {
@@ -280,7 +343,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     iterationId = _iterationId,
                     lifetimeMs,
                     transformCount = _transformCount,
-                    lastState = _lastState,
+                    lastState,
                 });
             }
             catch (Exception ex)

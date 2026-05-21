@@ -28,7 +28,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             RegisterTopic("log", 10000);
             RegisterTopic("telemetry", 5000);
             RegisterTopic("fileop", 2000);
-            RegisterTopic("spark", 200);
+            RegisterTopic("spark", 2000);
             RegisterTopic("token", 1000);
             RegisterTopic("cache", 2000);
             RegisterTopic("http", 2000);
