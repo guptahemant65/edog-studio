@@ -75879,7 +75879,7 @@ var PIPELINE_STEPS = [
     id: 'create-lakehouse', index: 2, name: 'Create Lakehouse',
     method: 'POST', urlTemplate: '/api/fabric/workspaces/{workspaceId}/lakehouses',
     createsResource: true, resourceType: 'lakehouse',
-    isLRO: false, timeoutMs: 30000, autoRetries: 2, retryDelayMs: 1000
+    isLRO: false, timeoutMs: 30000, autoRetries: 4, retryDelayMs: 3000
   },
   {
     id: 'create-notebook', index: 3, name: 'Create Notebook',
@@ -76165,9 +76165,24 @@ class ExecutionPipeline {
         var response = await this._fetchWithTimeout(url, fetchOpts, stepDef.timeoutMs);
 
         if (!response.ok && response.status !== 202) {
-          // 409 on a resource-creating step means the item already exists.
-          // Resolve the existing resource's ID and continue instead of failing.
+          // 409 on a resource-creating step — two cases:
+          //   1. "AlreadyExists" → resolve existing resource by name, reuse its ID
+          //   2. "NotAvailableYet" → name is pending (prior create in flight), retry with longer delay
           if (response.status === 409 && stepDef.createsResource) {
+            var conflictBody = null;
+            try { conflictBody = await response.text(); } catch (_e) { /* ignore */ }
+            var isNotAvailableYet = conflictBody && conflictBody.indexOf('NotAvailableYet') !== -1;
+
+            if (isNotAvailableYet) {
+              // Fabric is still provisioning from a prior attempt — back off and retry
+              var notAvailDelay = Math.max(5000, stepDef.retryDelayMs * Math.pow(2, attempt + 1));
+              this._log(stepIndex, 'warn', 'Name pending provisioning — waiting ' + Math.round(notAvailDelay / 1000) + 's');
+              await this._sleep(notAvailDelay);
+              attempt++;
+              continue;
+            }
+
+            // Permanent conflict — try to resolve the existing resource
             var resolved = await this._resolveExistingResource(stepDef, context);
             if (resolved) {
               this._log(stepIndex, 'info', stepDef.resourceType + ' already exists — reusing ' + resolved.id.substring(0, 8) + '...');
@@ -76175,6 +76190,9 @@ class ExecutionPipeline {
               this._handleStepSuccess(stepIndex, resolved);
               return true;
             }
+            // Could not resolve — fall through to throw
+            var errMsg = 'HTTP 409' + (conflictBody ? ': ' + conflictBody.substring(0, 200) : '');
+            throw new Error(errMsg);
           }
           var errBody = null;
           try { errBody = await response.text(); } catch (_e) { /* ignore */ }
