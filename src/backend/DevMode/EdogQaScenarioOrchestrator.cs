@@ -222,6 +222,24 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             /// <summary>P10: compact structured catalog reference JSON for the Editor. May be empty.</summary>
             public string CatalogReferenceJson { get; set; }
+
+            /// <summary>
+            /// PA-1: test-file hunks split out of <see cref="RedactedDiff"/> so the Architect
+            /// prompt can present them as secondary evidence. May be empty when the PR
+            /// touches no test files (or when the splitter degraded). The Validator still
+            /// reads <see cref="UnifiedDiff"/> for evidence binding, so a split here never
+            /// loses grounding information downstream.
+            /// </summary>
+            public string TestDiff { get; set; }
+
+            /// <summary>
+            /// PE-1: trusted harness-context summary of PR intent (title + description +
+            /// linked work-items). Forwarded into <see cref="EdogQaLlmClient.ZoneContext.PrIntentSummary"/>
+            /// so the Architect can orient on the central behavioural change. May be empty
+            /// when no <c>PrContext</c> metadata is available (e.g. shadow-mode shortcut,
+            /// harness fixture).
+            /// </summary>
+            public string PrIntentSummary { get; set; }
         }
 
         // ── Output ─────────────────────────────────────────────────────
@@ -797,6 +815,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                     SlotPurposesText = zoneInput.SlotPurposesText ?? string.Empty,
                     FewShotExemplarsText = zoneInput.FewShotExemplarsText ?? string.Empty,
                     CatalogReferenceJson = zoneInput.CatalogReferenceJson ?? string.Empty,
+                    TestDiff = zoneInput.TestDiff ?? string.Empty,
+                    PrIntentSummary = zoneInput.PrIntentSummary ?? string.Empty,
                 };
 
                 // ── Architect ─────────────────────────────────────────

@@ -12,6 +12,7 @@ namespace Microsoft.LiveTable.Service.DevMode
     using System.IO;
     using System.Linq;
     using System.Net.Http;
+    using System.Text;
     using System.Text.RegularExpressions;
     using System.Threading;
     using System.Threading.Tasks;
@@ -1323,7 +1324,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                         retryable: false);
                 }
                 var v2 = await RunV2OrchestratorAsync(
-                    zones, diff, degradationFlags, allowLegacyFallback: false, cancellationToken)
+                    zones, diff, prContext, degradationFlags, allowLegacyFallback: false, cancellationToken)
                     .ConfigureAwait(false);
                 return v2; // allowLegacyFallback=false guarantees non-null
             }
@@ -1339,7 +1340,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 {
                     Console.WriteLine($"[QA-DIAG] Running V2 orchestrator (Auto+probeReady)");
                     var v2 = await RunV2OrchestratorAsync(
-                        zones, diff, degradationFlags, allowLegacyFallback: true, cancellationToken)
+                        zones, diff, prContext, degradationFlags, allowLegacyFallback: true, cancellationToken)
                         .ConfigureAwait(false);
                     if (v2 != null) return v2;
                     Console.WriteLine($"[QA-DIAG] V2 returned null → falling to legacy");
@@ -1366,7 +1367,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     .ConfigureAwait(false);
                 if (probeReady)
                 {
-                    _ = RunV2ShadowAsync(zones, diff, legacy.Count, cancellationToken);
+                    _ = RunV2ShadowAsync(zones, diff, prContext, legacy.Count, cancellationToken);
                 }
                 return legacy;
             }
@@ -1445,6 +1446,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         private async Task<List<Scenario>> RunV2OrchestratorAsync(
             List<ImpactZone> zones,
             string diff,
+            PrContext prContext,
             List<string> degradationFlags,
             bool allowLegacyFallback,
             CancellationToken cancellationToken)
@@ -1580,12 +1582,25 @@ namespace Microsoft.LiveTable.Service.DevMode
                 Console.WriteLine("[QA-DIAG] ContractCatalog not available — catalog context will not be injected into LLM prompt");
             }
 
+            // PA-1: split diff into impl vs test hunks so the Architect sees
+            // impl as primary signal and test as secondary evidence. The
+            // Validator continues to bind evidence against the FULL unified
+            // diff (ZoneInput.UnifiedDiff below), so no grounding info is lost.
+            var (implDiff, testDiff) = SplitDiffByPath(diff);
+
+            // PE-1: render a trusted PR_INTENT block once; the Architect uses
+            // it to orient on the central behavioural change before enumerating
+            // peripheral edge cases. Empty when no PrContext metadata exists.
+            var prIntentSummary = BuildPrIntentSummary(prContext);
+
             var inputs = zones.Take(10).Select((z, i) => new EdogQaScenarioOrchestrator.ZoneInput
             {
                 ZoneId = string.IsNullOrEmpty(z.ZoneId) ? $"zone-{i:00}" : z.ZoneId,
-                ZoneSummary = z.Community ?? z.PrimaryChange?.Method ?? string.Empty,
-                RedactedDiff = diff,
+                ZoneSummary = BuildZoneSummary(z),
+                RedactedDiff = implDiff,
                 UnifiedDiff = diff,
+                TestDiff = testDiff,
+                PrIntentSummary = prIntentSummary,
                 BaseSha = string.Empty,
                 HeadSha = string.Empty,
                 SlotPurposesText = slotPurposesText,
@@ -1721,6 +1736,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         private async Task RunV2ShadowAsync(
             List<ImpactZone> zones,
             string diff,
+            PrContext prContext,
             int legacyScenarioCount,
             CancellationToken cancellationToken)
         {
@@ -1730,7 +1746,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             linked.CancelAfter(TimeSpan.FromSeconds(120));
             try
             {
-                var v2Scenarios = await RunV2OrchestratorAsync(zones, diff, new List<string>(), allowLegacyFallback: true, linked.Token).ConfigureAwait(false);
+                var v2Scenarios = await RunV2OrchestratorAsync(zones, diff, prContext, new List<string>(), allowLegacyFallback: true, linked.Token).ConfigureAwait(false);
                 PublishWarning($"[shadow] LLM_V2 produced {(v2Scenarios?.Count ?? 0)} scenario(s); legacy produced {legacyScenarioCount}.");
             }
             catch (OperationCanceledException)
@@ -1741,6 +1757,160 @@ namespace Microsoft.LiveTable.Service.DevMode
             {
                 PublishWarning($"[shadow] LLM_V2 failed silently: {ex.GetType().Name}: {ex.Message}");
             }
+        }
+
+        // ──────────────────────────────────────────────
+        // PE-1 / PA-1 / PE-6: V2-prompt enrichment helpers
+        // ──────────────────────────────────────────────
+
+        /// <summary>
+        /// PE-1: render a trusted PR_INTENT block for the Architect from the
+        /// upstream <see cref="PrContext"/>. The block names the headline behavioural
+        /// change so the model orients on it before enumerating peripheral
+        /// edge cases. Returns an empty string when no usable metadata exists;
+        /// the prompt builder then omits the entire block.
+        /// </summary>
+        internal static string BuildPrIntentSummary(PrContext prContext)
+        {
+            if (prContext == null) return string.Empty;
+
+            var sb = new StringBuilder();
+            if (!string.IsNullOrWhiteSpace(prContext.Title))
+            {
+                sb.Append("TITLE: ").AppendLine(prContext.Title.Trim());
+            }
+            if (!string.IsNullOrWhiteSpace(prContext.Description))
+            {
+                var desc = prContext.Description.Trim();
+                if (desc.Length > 1200) desc = desc.Substring(0, 1200) + "…";
+                sb.Append("DESCRIPTION: ").AppendLine(desc);
+            }
+            if (prContext.WorkItems != null && prContext.WorkItems.Count > 0)
+            {
+                sb.AppendLine("WORK_ITEMS:");
+                foreach (var wi in prContext.WorkItems.Take(5))
+                {
+                    if (wi == null) continue;
+                    var title = (wi.Title ?? string.Empty).Trim();
+                    if (title.Length > 200) title = title.Substring(0, 200) + "…";
+                    sb.Append("  - AB#").Append(wi.Id).Append(": ").AppendLine(title);
+                }
+            }
+            return sb.ToString().TrimEnd();
+        }
+
+        /// <summary>
+        /// PE-6: render a structured ZONE_SUMMARY that names the primary change,
+        /// the up-to-5 highest-directness entry points, and the affected
+        /// interfaces. Replaces the previous "community-id or method-name"
+        /// summary that gave the Architect no orientation cue.
+        /// </summary>
+        internal static string BuildZoneSummary(ImpactZone z)
+        {
+            if (z == null) return string.Empty;
+
+            var sb = new StringBuilder();
+            var primary = z.PrimaryChange?.Method ?? z.Community ?? "unknown";
+            var primaryFile = z.PrimaryChange?.File;
+            sb.Append("primary_change: ").Append(primary);
+            if (!string.IsNullOrWhiteSpace(primaryFile)) sb.Append(" (").Append(primaryFile).Append(")");
+            sb.AppendLine();
+
+            if (z.EntryPoints != null && z.EntryPoints.Count > 0)
+            {
+                sb.AppendLine("entry_points:");
+                foreach (var ep in z.EntryPoints.Take(5))
+                {
+                    if (ep == null) continue;
+                    var node = ep.Node ?? string.Empty;
+                    sb.Append("  - ").Append(ep.StimulusType).Append(' ').Append(node)
+                      .Append(" (depth=").Append(ep.Depth)
+                      .Append(", directness=").Append(ep.DirectnessScore.ToString("F2", System.Globalization.CultureInfo.InvariantCulture))
+                      .AppendLine(")");
+                }
+            }
+
+            if (z.AffectedInterfaces != null && z.AffectedInterfaces.Count > 0)
+            {
+                sb.Append("affected_interfaces: ").AppendLine(string.Join(", ", z.AffectedInterfaces.Take(8)));
+            }
+
+            if (z.InterceptorTopics != null && z.InterceptorTopics.Count > 0)
+            {
+                sb.Append("inferred_topics: ").AppendLine(string.Join(", ", z.InterceptorTopics.Take(8)));
+            }
+
+            return sb.ToString().TrimEnd();
+        }
+
+        /// <summary>
+        /// PA-1: split a unified diff into (impl, test) halves by classifying
+        /// each <c>diff --git</c> block by its file path. A hunk is "test" when
+        /// the path contains <c>/test/</c>, <c>/tests/</c>, ends with
+        /// <c>Tests.cs</c>, or contains <c>.spec.</c>. Everything else (including
+        /// unparseable preamble) goes to "impl" so the Architect never loses
+        /// data even if the splitter degrades. The full diff is preserved
+        /// upstream via <c>ZoneInput.UnifiedDiff</c> for Validator binding.
+        /// </summary>
+        internal static (string implDiff, string testDiff) SplitDiffByPath(string unifiedDiff)
+        {
+            if (string.IsNullOrEmpty(unifiedDiff)) return (string.Empty, string.Empty);
+
+            // Walk the diff line-by-line; a new file block starts at "diff --git"
+            // (preferred) or at the "+++ b/<path>" line (fallback for diffs that
+            // omitted the git header). We append each line to whichever bucket
+            // the current file path indicates.
+            var implSb = new StringBuilder();
+            var testSb = new StringBuilder();
+            StringBuilder currentBucket = implSb; // preamble → impl (safe default)
+            string currentPath = null;
+
+            foreach (var rawLine in unifiedDiff.Split('\n'))
+            {
+                var line = rawLine.TrimEnd('\r');
+
+                if (line.StartsWith("diff --git ", StringComparison.Ordinal))
+                {
+                    // Parse path from "diff --git a/<path> b/<path>"
+                    currentPath = ExtractDiffGitPath(line);
+                    currentBucket = ClassifyDiffPath(currentPath) ? testSb : implSb;
+                }
+                else if ((line.StartsWith("+++ b/", StringComparison.Ordinal)
+                         || line.StartsWith("+++ B/", StringComparison.Ordinal))
+                         && currentPath == null)
+                {
+                    // Fallback: no diff --git header (e.g. plain unified diff).
+                    currentPath = line.Length > 6 ? line.Substring(6) : null;
+                    currentBucket = ClassifyDiffPath(currentPath) ? testSb : implSb;
+                }
+
+                currentBucket.Append(line).Append('\n');
+            }
+
+            return (implSb.ToString(), testSb.ToString());
+        }
+
+        private static string ExtractDiffGitPath(string diffGitLine)
+        {
+            // "diff --git a/<path> b/<path>" — take the b-side path (post-change).
+            var bMarker = " b/";
+            var idx = diffGitLine.IndexOf(bMarker, StringComparison.Ordinal);
+            if (idx < 0) return null;
+            var path = diffGitLine.Substring(idx + bMarker.Length).Trim();
+            return path.Length == 0 ? null : path;
+        }
+
+        private static bool ClassifyDiffPath(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return false;
+            var p = path.Replace('\\', '/');
+            var lower = p.ToLowerInvariant();
+            if (lower.Contains("/test/") || lower.Contains("/tests/")) return true;
+            if (lower.EndsWith("tests.cs", StringComparison.Ordinal)) return true;
+            if (lower.EndsWith(".test.cs", StringComparison.Ordinal)) return true;
+            if (lower.Contains(".spec.")) return true;
+            if (lower.EndsWith(".spec.ts", StringComparison.Ordinal) || lower.EndsWith(".spec.js", StringComparison.Ordinal)) return true;
+            return false;
         }
 
         private async Task<List<Scenario>> GenerateScenariosForZoneSafe(
