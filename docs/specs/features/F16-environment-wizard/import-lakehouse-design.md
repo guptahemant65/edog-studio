@@ -23,54 +23,57 @@ A new preset card "Import from Lakehouse" that:
 
 ## 3. Data Available from Fabric APIs
 
-| API | Returns | Used For |
-|-----|---------|----------|
-| `listWorkspaces()` | All accessible workspaces | Workspace picker |
-| `listTables(wsId, lhId)` | Table list with names | Basic table listing |
-| `listTablesViaCapacity(wsId, lhId, capId)` | Tables with schema info | Schema-enabled lakehouses |
-| **`getLatestDag()`** | **Full DAG: nodes + dependencies + types in one call** | **Primary source for import** |
-| `listLakehouses(wsId)` | Lakehouses in a workspace | Lakehouse picker |
+| API | Requires | Returns | Used For |
+|-----|----------|---------|----------|
+| `listWorkspaces()` | Bearer token | All accessible workspaces | Workspace picker |
+| `listTables(wsId, lhId)` | Bearer token | Table list with names | Fallback for non-FLT LH |
+| `listTablesViaCapacity(wsId, lhId, capId)` | Bearer token | Tables with schema info | Fallback for schema LH |
+| `getTableMetadata(wsId, lhId, schema, table)` | Bearer token | MLVs: `sourceEntities`. Tables: `allColumns` | Fallback connection data |
+| **`generatemwctoken`** | **Bearer + wsId + lhId + capId** | **MWC token + host URL** | **Acquire token for ANY lakehouse** |
+| **`getLatestDag()`** | **MWC token** | **Full DAG: nodes + dependencies + types** | **Primary import source** |
+| Fabric list lakehouses | Bearer token | Lakehouses in a workspace | Lakehouse picker |
 
-### Key insight: `getLatestDag()` has everything
+### Key insight: MWC tokens can be acquired for ANY lakehouse
 
-The FLT API `/liveTable/getLatestDag?showExtendedLineage=true` returns:
-```js
-{
-  nodes: [  // or nodeDefinitions / dagNodes
-    {
-      name: "slv_orders_clean",
-      type: "SqlMaterializedView",   // or nodeType / NodeType
-      dependencies: ["raw_orders", "raw_customers"],  // upstream connections!
-      // ... schema, refreshMode, etc.
-    },
-    ...
-  ]
-}
-```
+`generatemwctoken` is a Fabric metadata endpoint — it only needs a bearer
+token + workspace/lakehouse/capacity IDs. No "connected mode" required.
+The dev-server already handles this in `_get_mwc_token()` with per-tuple
+caching.
 
-Each node has `dependencies` (or `inputNodes`) — the actual upstream node
-names. This gives us the ENTIRE connection graph in one call. No need to
-fetch per-table metadata.
+This means `getLatestDag()` is the **primary path for ALL lakehouses**:
+1. User picks workspace → lakehouse
+2. Look up lakehouse's capacity ID (from workspace/capacity APIs)
+3. Acquire MWC token via `generatemwctoken` (dev-server caches it)
+4. Call `getLatestDag()` through FLT proxy with that token
+5. One call → full DAG with nodes, types, connections, schemas
 
-The control-panel already parses this flexibly (see `control-panel.js:241-263`):
+### Fallback: table listing + per-table metadata
+
+If `getLatestDag()` fails (no FLT running on that lakehouse, token error,
+lakehouse has never had MLVs defined), fall back to:
+1. `listTables()` / `listTablesViaCapacity()` → node listing
+2. `getTableMetadata()` per selected MLV → `sourceEntities` for connections
+
+## 4. Connection Replication Strategy
+
+**Primary (all lakehouses — via on-demand MWC token):**
+1. Acquire MWC token for the target lakehouse
+2. Call `getLatestDag()` → returns all nodes with `dependencies` arrays
+3. For each node, `dependencies` lists upstream node names
+4. If both the node AND its dependency were imported → create connection
+5. One API call. Zero per-node fetching.
+
+The control-panel already parses the DAG response flexibly (see
+`control-panel.js:241-263`):
 - `nodes` / `nodeDefinitions` / `dagNodes` / `Nodes`
 - `dependencies` / `Dependencies` / `inputNodes` / `InputNodes`
 - `type` / `Type` / `nodeType` / `NodeType`
 
-### Fallback: table listing
-
-`getLatestDag()` requires an FLT-connected lakehouse (has the MWC token).
-For lakehouses without FLT running, fall back to `listTables()` + 
-`listTablesViaCapacity()` for node discovery (no connections in this case).
-
-## 4. Connection Replication Strategy
-
-**Primary (FLT connected):** Parse `getLatestDag()` response. Each node's
-`dependencies` array contains the names of upstream nodes. For each 
-dependency that maps to an imported node, create a connection.
-
-**Fallback (no FLT):** Use `getTableMetadata()` per MLV which returns
-`sourceEntities`. Slower (N API calls vs 1) but works without FLT.
+**Fallback (no FLT service on lakehouse):**
+1. For each selected MLV, call `getTableMetadata(wsId, lhId, schema, name)`
+2. Read `sourceEntities` array (e.g., `["bronze.raw_orders"]`)
+3. Parse `schema.tableName`, match to imported nodes → create connection
+4. N API calls (one per MLV). Slower but works without FLT.
 
 ## 4. UI Flow
 
@@ -234,52 +237,82 @@ IX ──[canvas empty]──→ I0 (preset overlay reappears)
 | Scenario | Behavior |
 |----------|----------|
 | `listWorkspaces()` fails | Show error in dropdown: "Failed to load workspaces" |
-| `listLakehouses()` fails | Show error in LH dropdown, workspace remains selected |
-| `listTables()` fails | Show error message in step 2 area, Back button works |
-| `getTableMetadata()` fails for one table | Skip that table's connections, import node anyway |
+| `listLakehouses()` fails | Show error in LH dropdown, workspace stays selected |
+| `generatemwctoken` fails (no capacity) | Fall back to table listing + metadata path |
+| `getLatestDag()` fails (no FLT on LH) | Fall back to table listing + metadata path, toast: "No DAG found — importing from table catalog" |
+| `getLatestDag()` returns empty/null | Fall back to table listing |
+| `listTables()` fails (fallback also fails) | Show error in step 2, Back button works |
+| `getTableMetadata()` fails for one table | Skip that table's connections, import node anyway, toast warning |
 | Auth expired mid-flow | Show "Session expired" toast, dialog stays open for retry |
+| Timeout on metadata fetch | Skip after 10s, import node without connections |
+| Capacity ID unknown for lakehouse | Try `listCapacities()` to find it; if still unknown, skip MWC path, use fallback |
 
 ### 8.2 Empty/Edge States
 
 | Scenario | Behavior |
 |----------|----------|
-| Workspace has 0 lakehouses | Dropdown shows "No lakehouses found" |
-| Lakehouse has 0 tables | Step 2 shows "This lakehouse has no tables" |
+| Workspace has 0 lakehouses | Dropdown: "No lakehouses found" |
+| Lakehouse has 0 tables | Step 2: "This lakehouse has no tables" |
 | User selects 0 tables | Import button disabled |
-| All tables are MLVs (no source tables) | Import works, no connections (no sources to connect from) |
-| Import would exceed 100 node limit | Clamp: "Can import 12 of 18 selected (88 slots available)" |
+| All tables are MLVs (no sources) | Import works, connections between MLVs only |
+| Import would exceed 100 node limit | Clamp: "Can import 12 of 18 (88 slots left)" |
+| User has 100+ workspaces | Dropdown with search/filter, cap at 200 |
 
 ### 8.3 Duplicate Handling
 
 | Scenario | Behavior |
 |----------|----------|
-| Canvas already has a node named "raw_orders" | Skip duplicate, import others, toast: "Skipped 1 duplicate" |
+| Canvas already has "raw_orders" | Skip duplicate, import others, toast: "Skipped 1 duplicate" |
 | Import same lakehouse twice | Second import skips all existing names |
+| Different lakehouse, same table names | Import creates nodes (names may clash — prefix with LH name?) |
 
-### 8.4 Schema-Enabled vs Non-Schema Lakehouses
+### 8.4 Schema Considerations
 
-| Lakehouse Type | Behavior |
-|---------------|----------|
-| Schema-enabled (bronze/silver/gold) | Use `listTablesViaCapacity()`, group by actual schema |
-| Non-schema (dbo only) | Use `listTables()`, all under "dbo" group |
+| Scenario | Behavior |
+|----------|----------|
+| Schema-enabled lakehouse (bronze/silver/gold) | Use `listTablesViaCapacity()`, group by actual schema |
+| Non-schema lakehouse (dbo only) | Use `listTables()`, all under "dbo" group |
+| Medallion level mismatch — importing gold tables but wizard medallion=1 (bronze only) | Auto-upgrade medallion level to accommodate imported schemas. Toast: "Medallion level raised to include gold" |
+| Schema in lakehouse not in wizard schema set | Add the schema, update medallion level |
 
 ### 8.5 Connection Resolution
 
 | Scenario | Behavior |
 |----------|----------|
-| MLV sources table that's imported | Connection created |
-| MLV sources table that's NOT imported | Silently skipped |
-| MLV sources table in different lakehouse | Skipped (cross-LH references not supported) |
-| Circular reference in sourceEntities | Ignored (canvas already has cycle prevention) |
-| sourceEntities is empty or missing | No connections for this node |
+| MLV → imported source table | Connection created |
+| MLV → source NOT imported | Silently skipped |
+| MLV → source in different lakehouse | Skipped (cross-LH not supported) |
+| Circular reference | Ignored (canvas cycle prevention) |
+| `sourceEntities` empty/missing | No connections for this node |
+| `sourceEntities` uses fully qualified name (`schema.table`) | Parse both schema-prefixed and bare names |
+| Duplicate connection (same src→tgt already exists) | Canvas `addConnection` dedup handles this |
 
-## 9. Performance
+### 8.6 Canvas State Interactions
+
+| Scenario | Behavior |
+|----------|----------|
+| Canvas already has nodes from preset/manual | Import ADDS (appends), doesn't replace |
+| Import card clicked while batch form is open | Close batch form, open import dialog |
+| User navigates away (page 1) mid-import dialog | Dialog dismisses, state NOT preserved |
+| User clicks Back from step 2 to step 1 | Preserve workspace/LH selection |
+| Import while another import is in progress | Disabled (import button shows spinner) |
+
+### 8.7 Performance
 
 | Concern | Mitigation |
 |---------|-----------|
-| Listing 500+ tables in large lakehouse | Paginate or cap at 200 with "showing first 200" message |
-| Fetching metadata for 50 selected MLVs | Parallel fetch with concurrency limit (5 at a time) |
-| Creating 50 nodes + connections | Wrap in single `batchOperation()` |
+| 500+ tables in lakehouse | Show first 200 with "200 of 523 shown" + search filter |
+| Metadata fetch for 50 MLVs | Parallel with concurrency=5, progress indicator |
+| Creating 50+ nodes + connections | Single `batchOperation()`, autoLayout at end |
+| Slow workspace listing (100+ WS) | Show spinner, cache result for session |
+
+### 8.8 Special Characters
+
+| Scenario | Behavior |
+|----------|----------|
+| Table name has spaces: `"raw orders"` | Preserve as-is in node name |
+| Table name has brackets: `[raw_orders]` | Strip brackets for node name |
+| Table name has dots: `dbo.raw_orders` | Split on dot, use table part as name, schema part as schema |
 
 ## 10. Files to Modify
 
