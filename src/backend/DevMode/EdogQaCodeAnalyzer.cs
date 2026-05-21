@@ -562,8 +562,10 @@ namespace Microsoft.LiveTable.Service.DevMode
             // Phase 1: Parse diff into changed symbols
             ReportProgress("diff_parsing", 5, "Parsing PR diff...");
             var changedSymbols = ParseDiff(unifiedDiff);
+            Console.WriteLine($"[QA-DIAG] ParseDiff: {changedSymbols.Count} symbols from {unifiedDiff?.Length ?? 0} char diff");
             if (changedSymbols.Count == 0)
             {
+                Console.WriteLine($"[QA-DIAG] *** EARLY EXIT — 0 changed symbols, returning empty result");
                 ReportProgress("complete", 100, "No code changes detected in diff.");
                 result.TotalDurationMs = sw.ElapsedMilliseconds;
                 EdogQaTelemetry.IncrementAnalysisCompleted();
@@ -613,10 +615,12 @@ namespace Microsoft.LiveTable.Service.DevMode
             }
 
             // Phase 7: L4 — LLM scenario generation (parallel per zone)
+            Console.WriteLine($"[QA-DIAG] Phase 7: LLM generation for {result.ImpactZones.Count} zones");
             ReportProgress("llm_generation", 75, $"Generating scenarios for {result.ImpactZones.Count} impact zones...");
             result.Scenarios = await GenerateScenariosSafe(
                 result.ImpactZones, result.Graph, result.InterfaceResolutions,
                 unifiedDiff, prContext, result.DegradationFlags, cancellationToken);
+            Console.WriteLine($"[QA-DIAG] Phase 7 done: {result.Scenarios.Count} scenarios generated");
 
             // Phase 8: Deterministic post-LLM lint (F27 item 5). Runs even if
             // upstream phases degraded — useful findings exist whenever at
@@ -1266,18 +1270,14 @@ namespace Microsoft.LiveTable.Service.DevMode
             List<string> degradationFlags,
             CancellationToken cancellationToken)
         {
-            // F27 P9 T4-D follow-up: V2-or-legacy decision is gated by an
-            // awaitable capability probe (Architect + Editor dual probe).
-            // EdogDevModeRegistrar.RegisterQaServices is responsible for
-            // calling EdogQaCapabilityProbe.EnsureStarted at boot so this
-            // wait usually returns instantly. The 10s window only matters
-            // for the first analyzer call after a cold start.
             var requestedMode = EdogQaFeatureFlags.LlmV2;
+            Console.WriteLine($"[QA-DIAG] GenerateScenariosSafe: LlmV2Mode={requestedMode}, zones={zones.Count}");
 
-            // Off — user explicitly opted out. Skip the probe (would just
+            // Off — user explicitly opted out.Skip the probe (would just
             // burn ~$0.001 for no decision impact) and run legacy quiet.
             if (requestedMode == LlmV2Mode.Off)
             {
+                Console.WriteLine($"[QA-DIAG] LlmV2=Off → running legacy");
                 return await RunLegacyScenarioGenerationAsync(
                     zones, graph, resolutions, diff, prContext, degradationFlags, cancellationToken)
                     .ConfigureAwait(false);
@@ -1303,12 +1303,18 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             var probeReady = dual?.IsReady == true;
             var probeReason = dual?.Reason ?? "probe still in flight (10s window exceeded — first analysis after cold start may see this once)";
+            Console.WriteLine($"[QA-DIAG] Probe result: ready={probeReady}, reason={probeReason}");
+            if (dual?.Architect != null)
+                Console.WriteLine($"[QA-DIAG]   Architect: ready={dual.Architect.IsReady}, deployment={dual.Architect.Deployment}, errors=[{string.Join(", ", dual.Architect.Errors ?? new List<string>())}]");
+            if (dual?.Editor != null)
+                Console.WriteLine($"[QA-DIAG]   Editor: ready={dual.Editor.IsReady}, deployment={dual.Editor.Deployment}, errors=[{string.Join(", ", dual.Editor.Errors ?? new List<string>())}]");
 
             // On — strict V2 with no legacy fallback. A probe failure here
             // surfaces as a typed LLM_NOT_READY error so the UI can show
             // an actionable diagnostic instead of silent legacy output.
             if (requestedMode == LlmV2Mode.On)
             {
+                Console.WriteLine($"[QA-DIAG] LlmV2=On, probeReady={probeReady}");
                 if (!probeReady)
                 {
                     throw new LlmProviderException(
@@ -1328,16 +1334,18 @@ namespace Microsoft.LiveTable.Service.DevMode
             // where every legacy run silently shipped degraded output.
             if (requestedMode == LlmV2Mode.Auto)
             {
+                Console.WriteLine($"[QA-DIAG] LlmV2=Auto, probeReady={probeReady}");
                 if (probeReady)
                 {
+                    Console.WriteLine($"[QA-DIAG] Running V2 orchestrator (Auto+probeReady)");
                     var v2 = await RunV2OrchestratorAsync(
                         zones, diff, degradationFlags, allowLegacyFallback: true, cancellationToken)
                         .ConfigureAwait(false);
                     if (v2 != null) return v2;
-                    // v2 == null means config-missing; orchestrator emitted
-                    // a warning and we fall through to legacy below.
+                    Console.WriteLine($"[QA-DIAG] V2 returned null → falling to legacy");
                 }
                 degradationFlags.Add("llm_v2_fallback_to_legacy");
+                Console.WriteLine($"[QA-DIAG] FALLBACK to legacy: {probeReason}");
                 PublishWarning(
                     "LEGACY_LLM_FALLBACK: V2 (Architect+Editor) unavailable — " + probeReason
                     + " — running legacy single-prompt scenario generation. Set EDOG_QA_LLM_V2=off to silence this warning, or fix the config to unlock V2.");
@@ -1385,6 +1393,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             List<string> degradationFlags,
             CancellationToken cancellationToken)
         {
+            Console.WriteLine($"[QA-DIAG] RunLegacyScenarioGenerationAsync: {zones.Count} zones");
             var allScenarios = new List<Scenario>();
 
             var zonesToProcess = zones.Take(10).ToList();
@@ -1409,6 +1418,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"[QA-DIAG] Legacy generation EXCEPTION: {ex.GetType().Name}: {ex.Message}");
                 degradationFlags.Add("llm_failed");
                 PublishWarning($"Scenario generation failed: {ex.Message}");
             }
@@ -1439,8 +1449,11 @@ namespace Microsoft.LiveTable.Service.DevMode
             bool allowLegacyFallback,
             CancellationToken cancellationToken)
         {
+            Console.WriteLine($"[QA-DIAG] RunV2OrchestratorAsync: zones={zones.Count}, allowLegacyFallback={allowLegacyFallback}");
             var architectCfg = EdogQaLlmClient.ReadArchitectConfigFromEnv();
             var editorCfg = EdogQaLlmClient.ReadEditorConfigFromEnv();
+            Console.WriteLine($"[QA-DIAG]   Architect: endpoint={(architectCfg.Endpoint != null ? "SET" : "NULL")}, key={(architectCfg.ApiKey != null ? "SET" : "NULL")}, dep={architectCfg.Deployment}");
+            Console.WriteLine($"[QA-DIAG]   Editor: endpoint={(editorCfg.Endpoint != null ? "SET" : "NULL")}, key={(editorCfg.ApiKey != null ? "SET" : "NULL")}, dep={editorCfg.Deployment}");
             if (string.IsNullOrEmpty(architectCfg.Endpoint)
                 || string.IsNullOrEmpty(architectCfg.ApiKey)
                 || string.IsNullOrEmpty(editorCfg.Endpoint)

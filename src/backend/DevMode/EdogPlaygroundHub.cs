@@ -1126,6 +1126,9 @@ namespace Microsoft.LiveTable.Service.DevMode
             List<Scenario> scenarios = null;
             List<LintFinding> lintFindings = null;
 
+            Console.WriteLine($"[QA-DIAG] ═══ RunRealAnalysisPipelineAsync START ═══");
+            Console.WriteLine($"[QA-DIAG] PrUrl={request.PrUrl ?? "(null)"}, PrId={request.PrId}");
+
             // Phase 1: Fetch real PR diff from ADO via dev-server proxy
             await BroadcastAnalysisProgressAsync(correlationId, analysisId, "fetching_diff", 0, 6, 5,
                 "Fetching PR diff from Azure DevOps...", sw.ElapsedMilliseconds).ConfigureAwait(false);
@@ -1172,11 +1175,13 @@ namespace Microsoft.LiveTable.Service.DevMode
                         prContext = TryParsePrContext(diffResult);
 
                         System.Diagnostics.Debug.WriteLine($"[QA] Real PR diff fetched: {realDiff?.Length ?? 0} chars, {filesDiffed} files; contract={(prContext != null ? "present" : "absent")}");
+                        Console.WriteLine($"[QA-DIAG] PR diff fetched OK: {realDiff?.Length ?? 0} chars, {filesDiffed}/{filesChanged} files, +{linesAdded}/-{linesRemoved}");
                     }
                     else
                     {
                         diffError = $"ADO proxy returned {(int)resp.StatusCode}: {body}";
                         System.Diagnostics.Debug.WriteLine($"[QA] PR diff fetch failed: {diffError}");
+                        Console.WriteLine($"[QA-DIAG] PR diff fetch FAILED: {diffError}");
                     }
                 }
                 catch (OperationCanceledException) { throw; }
@@ -1216,6 +1221,7 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             // Try real CodeAnalyzer pipeline
             var analyzer = EdogQaServiceLocator.CodeAnalyzer;
+            Console.WriteLine($"[QA-DIAG] CodeAnalyzer={(analyzer != null ? "present" : "NULL")}, diff={diffToAnalyze?.Length ?? 0} chars");
             if (analyzer != null)
             {
                 try
@@ -1271,6 +1277,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     var result = await analyzer.AnalyzeAsync(diffToAnalyze, prContext, ct, progressCallback).ConfigureAwait(false);
                     scenarios = result?.Scenarios;
                     lintFindings = result?.LintFindings;
+                    Console.WriteLine($"[QA-DIAG] AnalyzeAsync returned: scenarios={scenarios?.Count ?? 0}, lint={lintFindings?.Count ?? 0}, degradation=[{string.Join(", ", result?.DegradationFlags ?? new List<string>())}]");
 
                     // Surface degradation flags as warnings
                     if (result?.DegradationFlags?.Count > 0)
@@ -1292,6 +1299,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 catch (OperationCanceledException) { throw; }
                 catch (LlmProviderException llmEx)
                 {
+                    Console.WriteLine($"[QA-DIAG] LlmProviderException: kind={llmEx.KindCode}, msg={llmEx.Message}, retryable={llmEx.Retryable}");
                     // F27 P4: typed LLM provider failure. Emit a QaError
                     // with the wire-stable errorCode so the studio can
                     // render an actionable inline panel + optional Retry
@@ -1317,6 +1325,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 }
                 catch (Exception ex)
                 {
+                    Console.WriteLine($"[QA-DIAG] Analyzer EXCEPTION: {ex.GetType().Name}: {ex.Message}");
                     System.Diagnostics.Debug.WriteLine($"[QA] CodeAnalyzer failed: {ex.Message}");
                     await BroadcastQaEventAsync("QaAnalysisWarning", new
                     {
@@ -1353,6 +1362,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             // studio still shows the analysis work that completed.
             if (scenarios == null || scenarios.Count == 0)
             {
+                Console.WriteLine($"[QA-DIAG] *** NO SCENARIOS — scenarios={(scenarios == null ? "null" : $"empty(count={scenarios.Count})")}");
                 if (QaAnalysisFallbackPolicy.IsDemoFallbackEnabled())
                 {
                     EdogQaTelemetry.IncrementSyntheticScenariosFallback();
