@@ -1983,7 +1983,9 @@ class ThemeSchemaPage {
       });
     }
 
-    // Medallion chip clicks — simple independent toggles.
+    // Medallion chip clicks — enforce hierarchy: Bronze → Silver → Gold.
+    // Selecting a higher tier auto-enables all lower tiers.
+    // Deselecting a lower tier auto-disables all higher tiers.
     var chips = this._containerEl.querySelector('#iw-medallion-chips');
     if (chips) {
       chips.addEventListener('click', function(e) {
@@ -1993,7 +1995,18 @@ class ThemeSchemaPage {
         if (!schema || !(schema in self._schemas) || schema === 'dbo') return;
         e.preventDefault();
         e.stopPropagation();
-        self._schemas[schema] = !self._schemas[schema];
+        var wasOn = self._schemas[schema];
+        if (wasOn) {
+          // Deselecting: turn off this + everything above
+          if (schema === 'bronze') { self._schemas.bronze = false; self._schemas.silver = false; self._schemas.gold = false; }
+          else if (schema === 'silver') { self._schemas.silver = false; self._schemas.gold = false; }
+          else if (schema === 'gold') { self._schemas.gold = false; }
+        } else {
+          // Selecting: turn on this + everything below
+          if (schema === 'gold') { self._schemas.bronze = true; self._schemas.silver = true; self._schemas.gold = true; }
+          else if (schema === 'silver') { self._schemas.bronze = true; self._schemas.silver = true; }
+          else if (schema === 'bronze') { self._schemas.bronze = true; }
+        }
         self._updateMedallionUI();
       });
     }
