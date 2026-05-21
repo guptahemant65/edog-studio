@@ -967,6 +967,243 @@ def aggregate(pr_scores: list[PrScore]) -> dict[str, Any]:
     }
 
 
+# ─── Stability metric (Vex 2026) ─────────────────────────────────────────
+#
+# Answers the question: "if I run the same PR through the Architect N
+# times, do I get the same scenarios back?". Reads per-PR
+# ``actual_run_<i>.json`` fixtures (same schema as ``actual.json``) and
+# compares them pairwise:
+#
+#   - title_jaccard:    overlap of normalized scenario titles (we use the
+#                       ``topic`` field — the canonical title in this
+#                       schema) across each pair of runs
+#   - evidence_jaccard: overlap of ``(file_lower, line)`` evidence tuples
+#                       across each pair of runs
+#   - category_cosine:  cosine similarity of category-count vectors
+#   - overall:          0.4 * title + 0.4 * evidence + 0.2 * category
+#
+# Per-PR scores are averaged over all distinct pairs (i, j) with i<j.
+# Corpus stability = mean across PRs that contributed >= 2 runs.
+#
+# Operator workflow: capture N runs by invoking ``capture_v2_actuals.py``
+# repeatedly with ``--run-index 1..N`` (which writes ``actual_run_<i>.json``
+# alongside ``actual.json``), then run::
+#
+#     python tests/qa-eval/score_eval.py --stability-runs 3
+#
+# When ``--stability-runs`` is 1 (default) the section is omitted entirely
+# so the existing report shape is unchanged for non-stability callers.
+
+STABILITY_TITLE_WEIGHT = 0.4
+STABILITY_EVIDENCE_WEIGHT = 0.4
+STABILITY_CATEGORY_WEIGHT = 0.2
+STABILITY_DEFAULT_FLOOR = 0.0
+
+
+_TITLE_NORM_RE = re.compile(r"\s+")
+
+
+def _normalize_title(raw: str) -> str:
+    """Lowercase + collapse whitespace so trivial wording drift doesn't tank Jaccard."""
+    if not raw:
+        return ""
+    return _TITLE_NORM_RE.sub(" ", raw.strip().lower())
+
+
+def _jaccard(a: set, b: set) -> float:
+    if not a and not b:
+        return 1.0
+    union = a | b
+    if not union:
+        return 1.0
+    return len(a & b) / len(union)
+
+
+def _cosine(vec_a: dict[str, int], vec_b: dict[str, int]) -> float:
+    if not vec_a and not vec_b:
+        return 1.0
+    keys = set(vec_a) | set(vec_b)
+    dot = sum(vec_a.get(k, 0) * vec_b.get(k, 0) for k in keys)
+    norm_a = sum(v * v for v in vec_a.values()) ** 0.5
+    norm_b = sum(v * v for v in vec_b.values()) ** 0.5
+    if norm_a == 0 or norm_b == 0:
+        # One side has no scenarios — degenerate. Treat as "match" only if
+        # both sides are empty (handled above), else "no overlap".
+        return 0.0
+    return dot / (norm_a * norm_b)
+
+
+def _load_stability_run(path: Path) -> dict[str, Any]:
+    """Extract title set / evidence tuple set / category histogram from one run fixture."""
+    with path.open(encoding="utf-8") as fh:
+        blob = json.load(fh)
+    titles: set[str] = set()
+    evidence: set[tuple[str, int]] = set()
+    categories: dict[str, int] = defaultdict(int)
+    for scn in blob.get("scenarios", []):
+        title = _normalize_title(str(scn.get("topic") or scn.get("title") or ""))
+        if title:
+            titles.add(title)
+        cat = str(scn.get("category") or "").strip()
+        if cat:
+            categories[cat] += 1
+        for g in scn.get("grounding_changed_lines", []) or []:
+            file_key = str(g.get("path") or "").lower()
+            for line in g.get("lines", []) or []:
+                try:
+                    evidence.add((file_key, int(line)))
+                except (TypeError, ValueError):
+                    continue
+    return {"titles": titles, "evidence": evidence, "categories": dict(categories)}
+
+
+def _discover_stability_runs(pr_dir: Path, max_runs: int) -> list[Path]:
+    """Return up to ``max_runs`` ``actual_run_*.json`` paths sorted by index."""
+    runs: list[tuple[int, Path]] = []
+    pattern = re.compile(r"^actual_run_(\d+)\.json$")
+    for p in pr_dir.iterdir():
+        if not p.is_file():
+            continue
+        m = pattern.match(p.name)
+        if not m:
+            continue
+        runs.append((int(m.group(1)), p))
+    runs.sort(key=lambda t: t[0])
+    return [p for _, p in runs[:max_runs]]
+
+
+def compute_pr_stability(pr_dir: Path, max_runs: int) -> dict[str, Any] | None:
+    """Compute stability across the per-PR ``actual_run_*.json`` fixtures.
+
+    Returns ``None`` when fewer than 2 runs are available (stability is
+    undefined for a single sample). The caller is expected to surface
+    that via the schema_errors / report payload so the operator knows
+    to capture more runs.
+    """
+    paths = _discover_stability_runs(pr_dir, max_runs)
+    if len(paths) < 2:
+        return None
+    runs = [_load_stability_run(p) for p in paths]
+    pair_titles: list[float] = []
+    pair_evidence: list[float] = []
+    pair_categories: list[float] = []
+    for i in range(len(runs)):
+        for j in range(i + 1, len(runs)):
+            pair_titles.append(_jaccard(runs[i]["titles"], runs[j]["titles"]))
+            pair_evidence.append(_jaccard(runs[i]["evidence"], runs[j]["evidence"]))
+            pair_categories.append(_cosine(runs[i]["categories"], runs[j]["categories"]))
+    title = sum(pair_titles) / len(pair_titles)
+    evidence = sum(pair_evidence) / len(pair_evidence)
+    category = sum(pair_categories) / len(pair_categories)
+    overall = (
+        STABILITY_TITLE_WEIGHT * title
+        + STABILITY_EVIDENCE_WEIGHT * evidence
+        + STABILITY_CATEGORY_WEIGHT * category
+    )
+    return {
+        "runs_compared": len(runs),
+        "run_files": [p.name for p in paths],
+        "title_jaccard": round(title, 4),
+        "evidence_jaccard": round(evidence, 4),
+        "category_cosine": round(category, 4),
+        "overall": round(overall, 4),
+    }
+
+
+def aggregate_stability(per_pr: dict[str, dict[str, Any]], floor: float, runs_requested: int) -> dict[str, Any]:
+    """Macro-average per-PR stability into a single corpus-level block."""
+    if not per_pr:
+        return {
+            "runs": runs_requested,
+            "title_jaccard": 0.0,
+            "evidence_jaccard": 0.0,
+            "category_cosine": 0.0,
+            "overall": 0.0,
+            "floor": floor,
+            "prs_with_stability": 0,
+            "per_pr": {},
+        }
+    n = len(per_pr)
+    title = sum(s["title_jaccard"] for s in per_pr.values()) / n
+    evidence = sum(s["evidence_jaccard"] for s in per_pr.values()) / n
+    category = sum(s["category_cosine"] for s in per_pr.values()) / n
+    overall = sum(s["overall"] for s in per_pr.values()) / n
+    return {
+        "runs": runs_requested,
+        "title_jaccard": round(title, 4),
+        "evidence_jaccard": round(evidence, 4),
+        "category_cosine": round(category, 4),
+        "overall": round(overall, 4),
+        "floor": floor,
+        "prs_with_stability": n,
+        "per_pr": per_pr,
+    }
+
+
+# ─── Architect determinism finding ───────────────────────────────────────
+#
+# The stability metric measures the *symptom* (runs disagree). The most
+# common *cause* is an LLM call whose temperature isn't pinned. We grep
+# the C# Architect/Analyst request-body builders here as a build-time
+# audit so an unpinned temperature shows up next to the stability score
+# instead of being something an operator has to remember to check.
+
+_ARCHITECT_CLIENT_PATH = REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaLlmClient.cs"
+_REQUEST_BODY_BUILDERS = (
+    "BuildAnalystRequestBody",
+    "BuildArchitectRequestBody",
+    "BuildEditorRequestBody",
+)
+
+
+def audit_architect_temperature() -> dict[str, Any]:
+    """Inspect EdogQaLlmClient.cs and report whether temperature is pinned.
+
+    Returns ``{"available": False}`` when the C# source is missing
+    (e.g. running the harness against a partial checkout)."""
+    if not _ARCHITECT_CLIENT_PATH.exists():
+        return {"available": False, "reason": "EdogQaLlmClient.cs not found"}
+
+    src = _ARCHITECT_CLIENT_PATH.read_text(encoding="utf-8")
+    findings: dict[str, dict[str, Any]] = {}
+    for builder in _REQUEST_BODY_BUILDERS:
+        # Find the builder's body — from the method signature to the next
+        # top-level closing brace. We use a simple heuristic: take the
+        # next 60 lines after the signature, which comfortably covers
+        # each builder in the current source.
+        idx = src.find(builder + "(")
+        if idx < 0:
+            findings[builder] = {"present": False}
+            continue
+        snippet = src[idx : idx + 4000]
+        # Pinned == an explicit ``temperature = 0`` (or 0.0) in the payload.
+        pinned = bool(re.search(r"\btemperature\s*=\s*0(?:\.0+)?\b", snippet))
+        # Mentioned-but-not-pinned == any temperature reference in the snippet.
+        mentioned = bool(re.search(r"\btemperature\b", snippet))
+        findings[builder] = {
+            "present": True,
+            "temperature_pinned_to_zero": pinned,
+            "temperature_mentioned": mentioned,
+        }
+    any_unpinned = any(
+        f.get("present") and not f.get("temperature_pinned_to_zero")
+        for f in findings.values()
+    )
+    return {
+        "available": True,
+        "source": _ARCHITECT_CLIENT_PATH.relative_to(REPO_ROOT).as_posix(),
+        "builders": findings,
+        "all_pinned": not any_unpinned,
+        "note": (
+            "Architect/Analyst/Editor request bodies do not set 'temperature' "
+            "explicitly — the deployment default applies. Pin to 0 if "
+            "stability.overall drifts below floor."
+        )
+        if any_unpinned
+        else "All request-body builders pin temperature to 0.",
+    }
+
+
 # ─── Floor enforcement ────────────────────────────────────────────────────
 
 
@@ -981,13 +1218,18 @@ def evaluate_floors(
     aggregate_blob: dict[str, Any],
     floors: dict[str, Any],
     pr_scores: list[PrScore],
+    stability: dict[str, Any] | None = None,
 ) -> tuple[str, list[str]]:
     """Return ``('PASS' | 'DEGRADED' | 'FAIL', violations)``.
 
     ``DEGRADED`` means at least one regression-guard tripped but no
     absolute floor breached. ``FAIL`` means at least one absolute floor
     breached. Regression guards require a prior baseline.json with
-    aggregate numbers; absent prior baseline = no regression check."""
+    aggregate numbers; absent prior baseline = no regression check.
+
+    When ``stability`` is provided and its ``overall`` < its ``floor``,
+    a stability violation is appended — the harness fails because we
+    can't trust scores that drift between runs."""
     absolute = floors.get("absolute", {})
     violations: list[str] = []
 
@@ -1028,6 +1270,14 @@ def evaluate_floors(
 
     if violations:
         return "FAIL", violations
+    if stability and stability.get("prs_with_stability", 0) > 0:
+        overall = float(stability.get("overall", 0.0))
+        floor = float(stability.get("floor", 0.0))
+        if overall < floor:
+            return "FAIL", [
+                f"stability_overall {overall} < floor {floor} "
+                f"(prs_with_stability={stability.get('prs_with_stability', 0)})",
+            ]
     return "PASS", []
 
 
@@ -1046,6 +1296,7 @@ def build_report(
     matcher: str = MATCHER_DEFAULT,
     *,
     strict_category: bool = False,
+    stability_runs: int = 1,
 ) -> dict[str, Any]:
     pr_scores: list[PrScore] = []
     pending_grading: list[str] = []
@@ -1096,10 +1347,33 @@ def build_report(
 
     agg = aggregate(pr_scores)
     floors = load_floors()
-    verdict, violations = evaluate_floors(agg, floors, pr_scores)
+
+    stability_block: dict[str, Any] | None = None
+    if stability_runs > 1:
+        per_pr_stability: dict[str, dict[str, Any]] = {}
+        for pr_dir in pr_dirs:
+            pr_number = pr_dir.name.removeprefix("PR-")
+            s = compute_pr_stability(pr_dir, stability_runs)
+            if s is None:
+                # Note: missing stability fixtures are a configuration
+                # gap, not a scoring error. We surface it so the operator
+                # knows to run capture_v2_actuals.py more times, but we
+                # do not fail the harness on PRs that simply lack data.
+                schema_errors.append(
+                    f"{pr_dir.name}: --stability-runs={stability_runs} requested but fewer "
+                    f"than 2 actual_run_*.json fixtures present (need at least 2 to "
+                    f"measure stability). Run capture_v2_actuals.py --run-index N."
+                )
+                continue
+            per_pr_stability[pr_number] = s
+        floor = float(floors.get("stability", {}).get("floor", STABILITY_DEFAULT_FLOOR))
+        stability_block = aggregate_stability(per_pr_stability, floor, stability_runs)
+        stability_block["determinism_audit"] = audit_architect_temperature()
+
+    verdict, violations = evaluate_floors(agg, floors, pr_scores, stability_block)
 
     return {
-        "schema_version": "1.4",  # T4-A: added category-cluster matcher + category_label_accuracy metric
+        "schema_version": "1.5",  # +stability block (Vex 2026)
         "verdict": verdict,
         "floor_violations": violations,
         "enforcement": floors.get("enforcement", "report_only"),
@@ -1129,6 +1403,7 @@ def build_report(
             "version": "1.1" if not strict_category else "1.0",
         },
         "aggregate": agg,
+        "stability": stability_block,
         "prs_scored": [p.to_json() for p in pr_scores],
         "prs_pending_grading": pending_grading,
         "prs_ungraded": ungraded,
@@ -1169,6 +1444,21 @@ def print_human(report: dict[str, Any]) -> None:
         print("  Floor violations:")
         for v in report["floor_violations"]:
             print(f"    - {v}")
+        print()
+    stab = report.get("stability")
+    if stab:
+        print("  Stability (across captured runs):")
+        print(f"    runs requested:       {stab.get('runs', 0)}")
+        print(f"    PRs with stability:   {stab.get('prs_with_stability', 0)}")
+        print(f"    title_jaccard:        {stab.get('title_jaccard', 0.0):.3f}")
+        print(f"    evidence_jaccard:     {stab.get('evidence_jaccard', 0.0):.3f}")
+        print(f"    category_cosine:      {stab.get('category_cosine', 0.0):.3f}")
+        print(f"    overall:              {stab.get('overall', 0.0):.3f}  (floor {stab.get('floor', 0.0):.3f})")
+        audit = stab.get("determinism_audit") or {}
+        if audit.get("available") and not audit.get("all_pinned", True):
+            print(f"    determinism:          UNPINNED  ({audit.get('note', '')})")
+        elif audit.get("available"):
+            print("    determinism:          OK  (temperature pinned to 0)")
         print()
     if report["schema_errors"]:
         print("  Schema errors:")
@@ -1237,7 +1527,24 @@ def main(argv: list[str] | None = None) -> int:
             "to reproduce pre-T4-A scores byte-for-byte."
         ),
     )
+    parser.add_argument(
+        "--stability-runs",
+        type=int,
+        default=1,
+        metavar="N",
+        help=(
+            "Vex 2026: measure scenario-generation stability across N "
+            "captured runs per PR. Reads actual_run_<i>.json fixtures "
+            "(1..N) alongside actual.json and reports title Jaccard, "
+            "evidence Jaccard, category cosine, and weighted overall "
+            "(0.4/0.4/0.2). Default 1 skips stability entirely. "
+            "Floor is configurable via score_floors.json#stability.floor."
+        ),
+    )
     args = parser.parse_args(argv)
+
+    if args.stability_runs < 1:
+        parser.error("--stability-runs must be >= 1")
 
     pr_dirs = discover_pr_dirs()
     if not pr_dirs:
@@ -1249,6 +1556,7 @@ def main(argv: list[str] | None = None) -> int:
         span_expansion_n=args.span_expansion,
         matcher=args.matcher,
         strict_category=args.strict_category,
+        stability_runs=args.stability_runs,
     )
 
     if args.output is not None:

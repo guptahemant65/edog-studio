@@ -361,6 +361,12 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <summary>Completed run result (populated after execution).</summary>
         public QaRunResult Result { get; set; }
 
+        /// <summary>
+        /// Snapshot of curator dispositions captured at submission time.
+        /// Forwarded onto QaRunResult when the run completes.
+        /// </summary>
+        public QaCuratorApproval CuratorApproval { get; set; }
+
         /// <summary>When the run was created.</summary>
         public DateTimeOffset CreatedAt { get; set; }
     }
@@ -677,12 +683,63 @@ namespace Microsoft.LiveTable.Service.DevMode
 
                 // Generate runId and store
                 var runId = $"run-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}";
+
+                // ─── Curator approval rate (Pixel/Vex 2026) ────────────
+                // Compute disposition counts from the submission. The frontend
+                // sends EditedScenarioIds (ids touched in the editor overlay)
+                // and TotalGenerated (analyzer output before any deletions).
+                // Older clients omit both — we fall back to "no edits known"
+                // and treat the submitted count as the universe.
+                int totalGenerated = submission.TotalGenerated > 0
+                    ? submission.TotalGenerated
+                    : submission.Scenarios.Count;
+                var editedIds = submission.EditedScenarioIds ?? new List<string>();
+                var editedSet = new HashSet<string>(editedIds, StringComparer.Ordinal);
+                int approvedEdited = 0;
+                foreach (var scn in submission.Scenarios)
+                {
+                    if (scn != null && scn.Id != null && editedSet.Contains(scn.Id))
+                    {
+                        approvedEdited++;
+                    }
+                }
+                int approvedUnedited = submission.Scenarios.Count - approvedEdited;
+                int rejected = Math.Max(0, totalGenerated - approvedUnedited - approvedEdited);
+                float approvalRate = totalGenerated > 0
+                    ? (float)(approvedUnedited + approvedEdited) / totalGenerated
+                    : 0f;
+                float uneditedRate = totalGenerated > 0
+                    ? (float)approvedUnedited / totalGenerated
+                    : 0f;
+
+                var curatorApproval = new QaCuratorApproval
+                {
+                    TotalGenerated = totalGenerated,
+                    ApprovedUnedited = approvedUnedited,
+                    ApprovedEdited = approvedEdited,
+                    Rejected = rejected,
+                    ApprovalRate = approvalRate,
+                    UneditedRate = uneditedRate,
+                };
+
+                Console.WriteLine(
+                    $"[QA-DIAG] Curator approval: {approvedUnedited + approvedEdited}/{totalGenerated} " +
+                    $"approved ({approvalRate:P0}), {approvedUnedited} unedited ({uneditedRate:P0}), " +
+                    $"{approvedEdited} edited, {rejected} rejected");
+
+                EdogQaTelemetry.EmitContractEvent(
+                    "qa_curator_approval",
+                    submission.AnalysisId ?? "unknown",
+                    $"{uneditedRate:F2}",
+                    $"total={totalGenerated};unedited={approvedUnedited};edited={approvedEdited};rejected={rejected}");
+
                 var entry = new QaRunEntry
                 {
                     RunId = runId,
                     AnalysisId = submission.AnalysisId,
                     CorrelationId = submission.CorrelationId,
                     Scenarios = submission.Scenarios,
+                    CuratorApproval = curatorApproval,
                     CreatedAt = DateTimeOffset.UtcNow,
                 };
                 QaHubState.StoreRun(runId, entry);
@@ -2289,7 +2346,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                 {
                     TotalExecutionMs = engineRunResult?.TotalDurationMs ?? totalDurationMs,
                     AverageScenarioMs = completedCount > 0 ? totalDurationMs / completedCount : 0
-                }
+                },
+                CuratorApproval = runEntry.CuratorApproval,
             };
             QaHubState.StoreRunResult(runId, runResult);
 

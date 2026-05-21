@@ -15,5 +15,9 @@
     "max_precision_drop": 0.05,
     "p0_p1_recall_drop_blocking": 0.0
   },
+  "stability": {
+    "floor": 0.75,
+    "comment": "Vex 2026 — overall stability = 0.4*title_jaccard + 0.4*evidence_jaccard + 0.2*category_cosine across actual_run_*.json fixtures. Only enforced when --stability-runs > 1 AND at least one PR contributed >= 2 run fixtures. 0.75 is a starter floor; tune once we have ground-truth from N>=3 captures across the corpus."
+  },
   "enforcement": "report_only"
 }

@@ -116,6 +116,23 @@ class QaResults {
       summary.appendChild(durEl);
     }
 
+    // Curator approval rate (Pixel 2026): a small stats row next to the
+    // verdict/timing block. Backend (EdogPlaygroundHub.QaSubmitCuratedScenarios)
+    // captures this from the submission and forwards it onto the run result.
+    var ca = run.curatorApproval || (s && s.curatorApproval);
+    if (ca && ca.totalGenerated > 0) {
+      var approved = (ca.approvedUnedited || 0) + (ca.approvedEdited || 0);
+      var pct = function (n) { return Math.round((n / ca.totalGenerated) * 100) + '%'; };
+      var caEl = document.createElement('div');
+      caEl.className = 'qa-results-curator';
+      caEl.textContent =
+        'Curator: ' + approved + '/' + ca.totalGenerated + ' approved (' + pct(approved) + '), ' +
+        (ca.approvedUnedited || 0) + ' unedited (' + pct(ca.approvedUnedited || 0) + '), ' +
+        (ca.approvedEdited || 0) + ' edited, ' +
+        (ca.rejected || 0) + ' rejected';
+      summary.appendChild(caEl);
+    }
+
     this._container.appendChild(summary);
 
     // ── F27 P7: Compare toolbar + warnings + removed-from-target ghost rows ──

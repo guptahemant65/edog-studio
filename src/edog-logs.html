@@ -57536,6 +57536,18 @@ class SparkSessionsTab {
     const prev = t.state;
     t.previousState = d.previousState || prev;
     t.state = d.state || t.state;
+
+    // If poll reports a terminal state, mark it terminal immediately.
+    // TransformCompleted may arrive later — don't wait for it.
+    // This prevents the "transforms show Failed but session says running" desync.
+    if (!t.terminalState) {
+      var lower = (t.state || '').toLowerCase();
+      if (lower === 'failed' || lower === 'succeeded' || lower === 'cancelled' || lower === 'faulted') {
+        t.terminalState = t.state;
+        t.completedAt = t.completedAt || now;
+      }
+    }
+
     t.polls.push({
       at: now,
       state: t.state,
@@ -96623,6 +96635,8 @@ class QaCuration {
     this._submitBtn = null;
     this._scenarios = [];       // full scenario objects
     this._approved = new Set(); // set of approved scenario IDs
+    this._edited = new Set();   // set of scenario IDs the curator opened + saved
+    this._totalGenerated = 0;   // snapshot of analyzer output, before deletions
     this._analysisId = null;
     this._lintFindings = [];    // F27 item 5 — deterministic linter findings
     this._lintByScenario = new Map(); // scenarioId -> array of findings
@@ -96647,6 +96661,8 @@ class QaCuration {
     this._scenarios = scenarios.slice();
     this._analysisId = analysisId;
     this._approved = new Set(this._scenarios.map(function (s) { return s.id; }));
+    this._edited = new Set();
+    this._totalGenerated = this._scenarios.length;
 
     // Index findings for O(1) lookup during card render.
     this._lintFindings = Array.isArray(lintFindings) ? lintFindings.slice() : [];
@@ -97017,10 +97033,14 @@ class QaCuration {
     this._submitBtn.textContent = 'Submitting\u2026';
 
     var corrId = this._panel.getCorrelationId();
+    var editedIds = [];
+    this._edited.forEach(function (id) { editedIds.push(id); });
     var submission = {
       correlationId: corrId,
       analysisId: this._analysisId,
-      scenarios: approved
+      scenarios: approved,
+      editedScenarioIds: editedIds,
+      totalGenerated: this._totalGenerated || this._scenarios.length
     };
 
     conn.invoke('QaSubmitCuratedScenarios', submission).then(function (result) {
@@ -97062,6 +97082,9 @@ class QaCuration {
     for (var i = 0; i < this._scenarios.length; i++) {
       if (this._scenarios[i].id === updated.id) {
         this._scenarios[i] = updated;
+        if (updated && updated.id) {
+          this._edited.add(updated.id);
+        }
         break;
       }
     }
@@ -97997,6 +98020,23 @@ class QaResults {
       durEl.className = 'qa-results-duration';
       durEl.textContent = 'Duration: ' + (run.totalDurationMs / 1000).toFixed(1) + 's';
       summary.appendChild(durEl);
+    }
+
+    // Curator approval rate (Pixel 2026): a small stats row next to the
+    // verdict/timing block. Backend (EdogPlaygroundHub.QaSubmitCuratedScenarios)
+    // captures this from the submission and forwards it onto the run result.
+    var ca = run.curatorApproval || (s && s.curatorApproval);
+    if (ca && ca.totalGenerated > 0) {
+      var approved = (ca.approvedUnedited || 0) + (ca.approvedEdited || 0);
+      var pct = function (n) { return Math.round((n / ca.totalGenerated) * 100) + '%'; };
+      var caEl = document.createElement('div');
+      caEl.className = 'qa-results-curator';
+      caEl.textContent =
+        'Curator: ' + approved + '/' + ca.totalGenerated + ' approved (' + pct(approved) + '), ' +
+        (ca.approvedUnedited || 0) + ' unedited (' + pct(ca.approvedUnedited || 0) + '), ' +
+        (ca.approvedEdited || 0) + ' edited, ' +
+        (ca.rejected || 0) + ' rejected';
+      summary.appendChild(caEl);
     }
 
     this._container.appendChild(summary);

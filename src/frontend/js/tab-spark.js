@@ -377,6 +377,18 @@ class SparkSessionsTab {
     const prev = t.state;
     t.previousState = d.previousState || prev;
     t.state = d.state || t.state;
+
+    // If poll reports a terminal state, mark it terminal immediately.
+    // TransformCompleted may arrive later — don't wait for it.
+    // This prevents the "transforms show Failed but session says running" desync.
+    if (!t.terminalState) {
+      var lower = (t.state || '').toLowerCase();
+      if (lower === 'failed' || lower === 'succeeded' || lower === 'cancelled' || lower === 'faulted') {
+        t.terminalState = t.state;
+        t.completedAt = t.completedAt || now;
+      }
+    }
+
     t.polls.push({
       at: now,
       state: t.state,

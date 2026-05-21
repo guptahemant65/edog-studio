@@ -90,6 +90,22 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         /// <summary>Curated scenarios to queue for execution.</summary>
         public List<QaSubmittedScenario> Scenarios { get; set; }
+
+        /// <summary>
+        /// IDs of scenarios that the curator opened in the editor and saved
+        /// (i.e. modified before approval). Used by the hub to compute the
+        /// curator approval rate (unedited vs edited vs rejected).
+        /// Optional — older clients may omit; treated as empty.
+        /// </summary>
+        public List<string> EditedScenarioIds { get; set; } = new();
+
+        /// <summary>
+        /// Total scenarios produced by the analyzer for this analysis, before
+        /// any curator deletions. Used together with the submitted Scenarios
+        /// list to derive the rejected count. Zero means "unknown / older
+        /// client" and the hub will fall back to Scenarios.Count.
+        /// </summary>
+        public int TotalGenerated { get; set; }
     }
 
     /// <summary>
@@ -420,6 +436,40 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         /// <summary>Performance metrics.</summary>
         public QaPerformanceReport Performance { get; set; }
+
+        /// <summary>
+        /// Curator approval rate snapshot for this run (how many of the
+        /// generated scenarios were kept unedited / edited / rejected).
+        /// Null when the submission predates the approval-tracking wire.
+        /// </summary>
+        public QaCuratorApproval CuratorApproval { get; set; }
+    }
+
+    /// <summary>
+    /// Snapshot of curator dispositions for a single run, computed by
+    /// EdogPlaygroundHub.QaSubmitCuratedScenarios and carried forward
+    /// onto the QaRunResult so the studio UI can render a tiny "9/11
+    /// approved (82%), 7 unedited (64%), 2 edited, 2 rejected" stat row.
+    /// </summary>
+    public sealed class QaCuratorApproval
+    {
+        /// <summary>Total scenarios produced by the analyzer.</summary>
+        public int TotalGenerated { get; set; }
+
+        /// <summary>Approved scenarios the curator did not modify.</summary>
+        public int ApprovedUnedited { get; set; }
+
+        /// <summary>Approved scenarios the curator opened and saved edits on.</summary>
+        public int ApprovedEdited { get; set; }
+
+        /// <summary>Generated minus approved — the implicit-reject bucket.</summary>
+        public int Rejected { get; set; }
+
+        /// <summary>(unedited + edited) / totalGenerated, in [0, 1].</summary>
+        public float ApprovalRate { get; set; }
+
+        /// <summary>unedited / totalGenerated, in [0, 1].</summary>
+        public float UneditedRate { get; set; }
     }
 
     /// <summary>

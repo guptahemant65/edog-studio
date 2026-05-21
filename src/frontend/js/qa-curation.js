@@ -12,6 +12,8 @@ class QaCuration {
     this._submitBtn = null;
     this._scenarios = [];       // full scenario objects
     this._approved = new Set(); // set of approved scenario IDs
+    this._edited = new Set();   // set of scenario IDs the curator opened + saved
+    this._totalGenerated = 0;   // snapshot of analyzer output, before deletions
     this._analysisId = null;
     this._lintFindings = [];    // F27 item 5 — deterministic linter findings
     this._lintByScenario = new Map(); // scenarioId -> array of findings
@@ -36,6 +38,8 @@ class QaCuration {
     this._scenarios = scenarios.slice();
     this._analysisId = analysisId;
     this._approved = new Set(this._scenarios.map(function (s) { return s.id; }));
+    this._edited = new Set();
+    this._totalGenerated = this._scenarios.length;
 
     // Index findings for O(1) lookup during card render.
     this._lintFindings = Array.isArray(lintFindings) ? lintFindings.slice() : [];
@@ -406,10 +410,14 @@ class QaCuration {
     this._submitBtn.textContent = 'Submitting\u2026';
 
     var corrId = this._panel.getCorrelationId();
+    var editedIds = [];
+    this._edited.forEach(function (id) { editedIds.push(id); });
     var submission = {
       correlationId: corrId,
       analysisId: this._analysisId,
-      scenarios: approved
+      scenarios: approved,
+      editedScenarioIds: editedIds,
+      totalGenerated: this._totalGenerated || this._scenarios.length
     };
 
     conn.invoke('QaSubmitCuratedScenarios', submission).then(function (result) {
@@ -451,6 +459,9 @@ class QaCuration {
     for (var i = 0; i < this._scenarios.length; i++) {
       if (this._scenarios[i].id === updated.id) {
         this._scenarios[i] = updated;
+        if (updated && updated.id) {
+          this._edited.add(updated.id);
+        }
         break;
       }
     }
