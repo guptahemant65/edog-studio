@@ -747,10 +747,24 @@ namespace Microsoft.LiveTable.Service.DevMode
                 ["properties"] = new Dictionary<string, object>
                 {
                     ["stimulusSlotHash"] = new Dictionary<string, object> { ["type"] = "string" },
+                    // Strict mode forbids additionalProperties as a schema
+                    // (map types). Emit as array-of-pairs instead; the custom
+                    // TopicHashPairConverter on SnakeCasePropertyNames converts
+                    // back to Dictionary<string, string> during deserialization.
                     ["matcherTopicHashes"] = new Dictionary<string, object>
                     {
-                        ["type"] = "object",
-                        ["additionalProperties"] = new Dictionary<string, object> { ["type"] = "string" },
+                        ["type"] = "array",
+                        ["items"] = new Dictionary<string, object>
+                        {
+                            ["type"] = "object",
+                            ["additionalProperties"] = false,
+                            ["required"] = new[] { "topic", "hash" },
+                            ["properties"] = new Dictionary<string, object>
+                            {
+                                ["topic"] = new Dictionary<string, object> { ["type"] = "string" },
+                                ["hash"] = new Dictionary<string, object> { ["type"] = "string" },
+                            },
+                        },
                     },
                     ["catalogSnapshotId"] = new Dictionary<string, object> { ["type"] = "string" },
                 },
@@ -2017,7 +2031,75 @@ namespace Microsoft.LiveTable.Service.DevMode
         {
             PropertyNameCaseInsensitive = true,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new TopicHashPairConverter() },
         };
+
+        /// <summary>
+        /// Converts between <c>Dictionary&lt;string, string&gt;</c> and the
+        /// strict-mode-compatible array-of-pairs format used in the Editor
+        /// schema. Reads both <c>[{ "topic":"T", "hash":"H" }]</c> (LLM)
+        /// and <c>{ "T":"H" }</c> (storage/legacy) so existing scenarios
+        /// and tests keep working.
+        /// </summary>
+        private sealed class TopicHashPairConverter : System.Text.Json.Serialization.JsonConverter<Dictionary<string, string>>
+        {
+            public override Dictionary<string, string> Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+            {
+                if (reader.TokenType == JsonTokenType.StartObject)
+                {
+                    // Standard dict format: { "topic1": "hash1", ... }
+                    var dict = new Dictionary<string, string>(StringComparer.Ordinal);
+                    while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
+                    {
+                        var key = reader.GetString();
+                        reader.Read();
+                        dict[key] = reader.GetString() ?? string.Empty;
+                    }
+                    return dict;
+                }
+
+                if (reader.TokenType == JsonTokenType.StartArray)
+                {
+                    // Array-of-pairs format: [{ "topic": "T", "hash": "H" }, ...]
+                    var dict = new Dictionary<string, string>(StringComparer.Ordinal);
+                    while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
+                    {
+                        if (reader.TokenType != JsonTokenType.StartObject) continue;
+                        string topic = null, hash = null;
+                        while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
+                        {
+                            var prop = reader.GetString();
+                            reader.Read();
+                            if (string.Equals(prop, "topic", StringComparison.OrdinalIgnoreCase))
+                                topic = reader.GetString();
+                            else if (string.Equals(prop, "hash", StringComparison.OrdinalIgnoreCase))
+                                hash = reader.GetString();
+                        }
+                        if (topic != null) dict[topic] = hash ?? string.Empty;
+                    }
+                    return dict;
+                }
+
+                if (reader.TokenType == JsonTokenType.Null)
+                    return new Dictionary<string, string>(StringComparer.Ordinal);
+
+                throw new JsonException($"Expected object or array for Dictionary<string,string>, got {reader.TokenType}");
+            }
+
+            public override void Write(Utf8JsonWriter writer, Dictionary<string, string> value, JsonSerializerOptions options)
+            {
+                // Serialize as standard dict format for SignalR/storage compat.
+                writer.WriteStartObject();
+                if (value != null)
+                {
+                    foreach (var kvp in value)
+                    {
+                        writer.WriteString(kvp.Key, kvp.Value);
+                    }
+                }
+                writer.WriteEndObject();
+            }
+        }
 
         private static string Truncate(string s, int max)
         {
