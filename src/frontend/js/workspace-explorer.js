@@ -3098,70 +3098,151 @@ class WorkspaceExplorer {
 
   _showWorkspaceContent(ws) {
     if (!this._contentEl) return;
-    const capacityId = ws.capacityId || '';
-    const envLabel = this._getEnvironmentLabel(ws);
+    var capacityId = ws.capacityId || '';
+    var envLabel = this._getEnvironmentLabel(ws);
+    var self = this;
 
-    let html = '<div class="ws-content-header">';
-    html += `<div class="ws-content-name">${this._esc(ws.displayName)}</div>`;
-    html += '<div class="ws-content-meta">';
-    html += `<span class="ws-guid" title="Click to copy" data-copy-id="${this._esc(ws.id)}">${this._esc(ws.id)}</span>`;
+    // Item type design tokens (kept in sync with workspace.css .ws-item-card--<type>).
+    var TYPE_META = {
+      'lakehouse':   { label: 'Lakehouse',   cls: 'lakehouse',   icon: '\u25C6' }, // ◆
+      'notebook':    { label: 'Notebook',    cls: 'notebook',    icon: '\u25B7' }, // ▷
+      'sqlendpoint': { label: 'SQLEndpoint', cls: 'sqlendpoint', icon: '\u2B22' }  // ⬢
+    };
+    function typeMeta(type) {
+      var key = (type || '').toLowerCase().replace(/\s+/g, '');
+      if (TYPE_META[key]) return TYPE_META[key];
+      return { label: type || 'Item', cls: 'default', icon: '\u25C7' /* ◇ */ };
+    }
+    function statusMeta(status) {
+      var s = (status || 'Active').toString();
+      var l = s.toLowerCase();
+      if (l.indexOf('error') >= 0 || l.indexOf('fail') >= 0) return { cls: 'error', label: s };
+      if (l.indexOf('provision') >= 0 && l.indexOf('provisioned') < 0) return { cls: 'pending', label: s };
+      if (l.indexOf('provisioned') >= 0) return { cls: 'ok', label: s };
+      return { cls: 'ok', label: s };
+    }
+
+    // ── Hero header ────────────────────────────────────────────
+    var html = '';
+    html += '<div class="ws-hero">';
+    html += '<div class="ws-hero-top">';
+    html += '<div class="ws-hero-identity">';
+    html += '<div class="ws-hero-name">' + this._esc(ws.displayName) + '</div>';
+    html += '<div class="ws-hero-idrow">';
+    html += '<span class="ws-guid" title="Click to copy" data-copy-id="' + this._esc(ws.id) + '">';
+    html += '<svg class="ws-guid-copy" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+    html += '<span class="ws-guid-text">' + this._esc(ws.id) + '</span>';
+    html += '</span>';
+    if (envLabel) {
+      html += '<span class="ws-env-pill ws-env-' + this._esc(envLabel.toLowerCase()) + '">' + this._esc(envLabel) + '</span>';
+    }
+    html += '</div>';
+    html += '</div>';
+
+    // Inline icon-only action buttons
+    html += '<div class="ws-hero-actions">';
+    html += '<button class="ws-icon-btn" data-action="rename-ws" title="Rename workspace" aria-label="Rename workspace">';
+    html += '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>';
+    html += '</button>';
+    html += '<button class="ws-icon-btn" data-action="open-fabric-ws" title="Open in Fabric" aria-label="Open in Fabric">';
+    html += '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
+    html += '</button>';
+    html += '<button class="ws-icon-btn danger" data-action="delete-ws" title="Delete workspace" aria-label="Delete workspace">';
+    html += '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>';
+    html += '</button>';
+    html += '</div>'; // /hero-actions
+    html += '</div>'; // /hero-top
+
+    // Capacity sub-card
     if (capacityId) {
-      html += `<span class="ws-meta-badge ws-badge-env">${this._esc(envLabel)}</span>`;
       var capName = ws._capacityDisplayName || '';
       var capSku = ws._capacitySku || '';
       var capRegion = ws._region || '';
-      html += '<div class="ws-capacity-info">';
-      html += '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><circle cx="6" cy="6" r="1"/><circle cx="6" cy="18" r="1"/></svg>';
-      html += '<span class="ws-capacity-detail">';
-      if (capName) html += `<span class="ws-capacity-name">${this._esc(capName)}</span>`;
-      html += `<span class="ws-capacity-id">${this._esc(capacityId)}</span>`;
-      if (capSku) html += `<span class="ws-capacity-sku">${this._esc(capSku)}</span>`;
-      if (capRegion) html += `<span class="ws-capacity-region">${this._esc(capRegion)}</span>`;
-      html += '</span></div>';
+      html += '<div class="ws-capacity-card">';
+      html += '<div class="ws-capacity-card-icon" aria-hidden="true">';
+      html += '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="8" rx="2"/><rect x="2" y="13" width="20" height="8" rx="2"/><circle cx="6" cy="7" r="1"/><circle cx="6" cy="17" r="1"/></svg>';
+      html += '</div>';
+      html += '<div class="ws-capacity-card-body">';
+      html += '<div class="ws-capacity-card-row1">';
+      html += '<span class="ws-capacity-card-name">' + this._esc(capName || 'Capacity') + '</span>';
+      if (capSku) html += '<span class="ws-capacity-card-sku">' + this._esc(capSku) + '</span>';
+      html += '</div>';
+      html += '<div class="ws-capacity-card-id">' + this._esc(capacityId) + '</div>';
+      if (capRegion) html += '<div class="ws-capacity-card-region"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>' + this._esc(capRegion) + '</div>';
+      html += '</div>';
+      html += '</div>';
     }
-    html += '<span id="ws-ts-workspace" class="ws-timestamp ws-timestamp--loading" title="Loading activity\u2026">' +
-      '<span class="ws-timestamp-label">Last activity:</span>' +
-      '<span class="ws-timestamp-value ws-timestamp-shimmer">\u2026</span>' +
-      '</span>';
-    html += '</div></div>';
 
-    // Action buttons with icons
-    html += '<div class="ws-content-actions">';
-    html += '<button class="ws-action-btn" data-action="rename-ws"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>Rename</button>';
-    html += '<button class="ws-action-btn" data-action="open-fabric-ws"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Open in Fabric</button>';
-    html += '<button class="ws-action-btn danger" data-action="delete-ws"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>Delete</button>';
+    // Activity timestamp with clock icon
+    html += '<div class="ws-hero-activity">';
+    html += '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+    html += '<span id="ws-ts-workspace" class="ws-timestamp ws-timestamp--loading" title="Loading activity\u2026">';
+    html += '<span class="ws-timestamp-label">Last activity:</span>';
+    html += '<span class="ws-timestamp-value ws-timestamp-shimmer">\u2026</span>';
+    html += '</span>';
     html += '</div>';
 
-    // Items table
-    const children = this._children[ws.id] || [];
+    html += '</div>'; // /ws-hero
+
+    // ── Items section ─────────────────────────────────────────
+    var children = this._children[ws.id] || [];
     if (children.length > 0) {
-      html += `<div class="ws-section"><div class="ws-section-title">Items<span class="ws-section-count">(${children.length})</span></div>`;
-      html += '<table class="ws-table"><thead><tr>';
-      html += '<th>Name</th><th>Type</th><th>Status</th><th>Last Modified</th>';
-      html += '</tr></thead><tbody>';
-      for (const item of children) {
-        const isLH = this._isLakehouse(item);
-        const rowCls = isLH ? 'ws-table-row' : 'ws-table-row dimmed';
-        const modified = item.lastModified ? this._formatDate(item.lastModified) : '\u2014';
-        html += `<tr class="${rowCls}" data-item-id="${this._esc(item.id)}">`;
-        html += `<td class="ws-table-name">${this._esc(item.displayName)}</td>`;
-        html += `<td><span class="ws-type-badge">${this._esc(item.type || 'Item')}</span></td>`;
-        html += `<td>${this._esc(item.status || 'Active')}</td>`;
-        html += `<td class="ws-meta-modified">${modified}</td>`;
-        html += '</tr>';
+      html += '<div class="ws-section">';
+      html += '<div class="ws-section-title">Items<span class="ws-section-count">' + children.length + '</span></div>';
+      html += '<div class="ws-item-grid">';
+      for (var i = 0; i < children.length; i++) {
+        var item = children[i];
+        var meta = typeMeta(item.type);
+        var status = statusMeta(item.status);
+        var isLH = this._isLakehouse(item);
+        var clickableCls = isLH ? ' is-clickable' : '';
+        html += '<div class="ws-item-card ws-item-card--' + meta.cls + clickableCls + '" data-item-id="' + this._esc(item.id) + '"' + (isLH ? ' role="button" tabindex="0"' : '') + '>';
+        html += '<div class="ws-item-card-head">';
+        html += '<div class="ws-item-icon" aria-hidden="true">' + meta.icon + '</div>';
+        html += '<div class="ws-item-title-block">';
+        html += '<div class="ws-item-name">' + this._esc(item.displayName) + '</div>';
+        html += '<div class="ws-item-id" data-copy-id="' + this._esc(item.id) + '" title="Click to copy">' + this._esc(item.id) + '</div>';
+        html += '</div>';
+        html += '<div class="ws-item-type-pill">' + this._esc(meta.label) + '</div>';
+        html += '</div>';
+
+        // Footer: status + optional metadata
+        html += '<div class="ws-item-card-foot">';
+        html += '<span class="ws-status-dot ws-status-dot--' + status.cls + '" aria-hidden="true"></span>';
+        html += '<span class="ws-item-status-label">' + this._esc(status.label) + '</span>';
+        if (item.lastModified) {
+          var label = isLH ? 'Created' : 'Modified';
+          html += '<span class="ws-item-meta-sep">\u00B7</span>';
+          html += '<span class="ws-item-meta-time">' + label + ': ' + this._esc(this._formatDate(item.lastModified)) + '</span>';
+        }
+        if (isLH && item._sqlEndpoint) {
+          html += '<span class="ws-item-meta-sep">\u00B7</span>';
+          html += '<span class="ws-item-meta-time">SQL: ' + this._esc(item._sqlEndpoint) + '</span>';
+        }
+        html += '</div>';
+        html += '</div>';
       }
-      html += '</tbody></table></div>';
-    } else {
-      // If expanded but no children loaded yet, or genuinely empty
-      if (this._expanded.has(ws.id)) {
-        html += '<div class="ws-section"><div class="ws-section-title">Items</div>';
-        html += '<div class="ws-tree-item dimmed" style="justify-content:center">No items</div></div>';
-      }
+      html += '</div>'; // /ws-item-grid
+      html += '</div>'; // /ws-section
+    } else if (this._expanded.has(ws.id)) {
+      // Empty state
+      html += '<div class="ws-section">';
+      html += '<div class="ws-section-title">Items</div>';
+      html += '<div class="ws-empty-state">';
+      html += '<div class="ws-empty-illustration" aria-hidden="true">';
+      html += '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v13a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V7"/><path d="M3 7l2-4h14l2 4"/><path d="M3 7h18"/><path d="M10 12h4"/></svg>';
+      html += '</div>';
+      html += '<div class="ws-empty-title">No items in this workspace</div>';
+      html += '<div class="ws-empty-sub">Create a lakehouse or notebook to get started.</div>';
+      html += '</div>';
+      html += '</div>';
     }
 
     this._contentEl.innerHTML = html;
     this._bindContentActions(ws);
     this._populateTimestamp('ws-ts-workspace', ws.id, null, 'workspaceLastActivity', 'Last activity');
+    // Suppress unused-var lint in non-strict mode
+    void self;
   }
 
   _bindContentActions(ws) {
@@ -3174,11 +3255,13 @@ class WorkspaceExplorer {
         const copyId = idEl.dataset.copyId || ws.id;
         this._copyToClipboard(copyId, 'Copied!');
         idEl.classList.add('copied');
-        const origText = idEl.textContent;
-        idEl.textContent = 'Copied!';
+        // Prefer inner text span so we don't blow away an inline copy icon
+        const textEl = idEl.querySelector('.ws-guid-text') || idEl;
+        const origText = textEl.textContent;
+        textEl.textContent = 'Copied!';
         setTimeout(() => {
           idEl.classList.remove('copied');
-          idEl.textContent = origText;
+          textEl.textContent = origText;
         }, 1200);
       });
     }
@@ -3224,12 +3307,35 @@ class WorkspaceExplorer {
     });
 
     // Table row clicks → select that item
-    this._contentEl.querySelectorAll('.ws-table-row[data-item-id]').forEach(row => {
-      row.addEventListener('click', () => {
+    this._contentEl.querySelectorAll('.ws-table-row[data-item-id], .ws-item-card.is-clickable[data-item-id]').forEach(row => {
+      row.addEventListener('click', (ev) => {
+        // Don't hijack clicks on the inline ID copy element
+        if (ev.target && ev.target.closest && ev.target.closest('.ws-item-id[data-copy-id]')) return;
         const itemId = row.dataset.itemId;
         const children = this._children[ws.id] || [];
         const item = children.find(c => c.id === itemId);
         if (item) this._selectItem(item, ws);
+      });
+      row.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter' || ev.key === ' ') {
+          ev.preventDefault();
+          const itemId = row.dataset.itemId;
+          const children = this._children[ws.id] || [];
+          const item = children.find(c => c.id === itemId);
+          if (item) this._selectItem(item, ws);
+        }
+      });
+    });
+
+    // Click-to-copy on item-card IDs
+    this._contentEl.querySelectorAll('.ws-item-id[data-copy-id]').forEach(el => {
+      el.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const copyId = el.dataset.copyId;
+        if (!copyId) return;
+        this._copyToClipboard(copyId, 'ID copied');
+        el.classList.add('copied');
+        setTimeout(() => el.classList.remove('copied'), 900);
       });
     });
   }
