@@ -646,6 +646,13 @@ namespace Microsoft.LiveTable.Service.DevMode
             }
 
             var matcherTopicHashes = scenario.CatalogHashes?.MatcherTopicHashes;
+            // P10 fix (P0-1): only enforce the catalog-grounding gate when the
+            // scenario claims grounding (CatalogSnapshotId set). When the
+            // snapshot is unavailable (LLM emitted empty hashes), degrade
+            // gracefully — the scenario still runs but loses staleness
+            // protection. The execution-engine preflight handles the
+            // "snapshot available but hashes empty" mismatch.
+            var hasGroundingClaim = !string.IsNullOrWhiteSpace(scenario.CatalogHashes?.CatalogSnapshotId);
             for (int i = 0; i < scenario.Matchers.Count; i++)
             {
                 var matcher = scenario.Matchers[i];
@@ -683,7 +690,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                         });
                     }
 
-                    if (matcherTopicHashes == null || matcherTopicHashes.Count == 0)
+                    if (hasGroundingClaim && (matcherTopicHashes == null || matcherTopicHashes.Count == 0))
                     {
                         sink.Add(new QuarantineReason
                         {
@@ -692,7 +699,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                             FieldPath = "catalogHashes.matcherTopicHashes",
                         });
                     }
-                    else if (!string.IsNullOrWhiteSpace(topic) && !matcherTopicHashes.ContainsKey(topic))
+                    else if (hasGroundingClaim && matcherTopicHashes != null && !string.IsNullOrWhiteSpace(topic) && !matcherTopicHashes.ContainsKey(topic))
                     {
                         sink.Add(new QuarantineReason
                         {

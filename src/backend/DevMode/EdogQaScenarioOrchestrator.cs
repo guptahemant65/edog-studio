@@ -50,6 +50,7 @@ namespace Microsoft.LiveTable.Service.DevMode
     using System.Diagnostics;
     using System.Linq;
     using System.Net.Http;
+    using System.Text.Json;
     using System.Threading;
     using System.Threading.Tasks;
 
@@ -1339,9 +1340,32 @@ namespace Microsoft.LiveTable.Service.DevMode
                     Title = q.Scenario?.Title ?? string.Empty,
                     OriginalIndex = q.Scenario?.OriginalIndex,
                     Reasons = reasons,
+                    // P10 fix (P1-5): forward the full scenario payload so the
+                    // repair model can inspect typed matchers, catalog
+                    // hashes, grounding evidence, and stimulus spec — not
+                    // just the id/title.
+                    ScenarioJson = q.Scenario == null ? null : SafeSerializeScenario(q.Scenario),
                 });
             }
             return items;
+        }
+
+        private static readonly JsonSerializerOptions _repairSerializerOptions = new()
+        {
+            WriteIndented = false,
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+        };
+
+        private static string SafeSerializeScenario(EdogQaLlmClient.GeneratedScenario scenario)
+        {
+            try
+            {
+                return JsonSerializer.Serialize(scenario, _repairSerializerOptions);
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         private async Task<(EdogQaLlmClient.LlmClientResult repairResult, EdogQaScenarioValidator.ValidationResult validation, bool dispatched)> RunSingleScenarioEscalationAsync(

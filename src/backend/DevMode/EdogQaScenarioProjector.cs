@@ -521,7 +521,6 @@ namespace Microsoft.LiveTable.Service.DevMode
                 switch (assertion)
                 {
                     case MatcherAssertion.Equals:
-                    case MatcherAssertion.NotEquals:
                         if (extractedValue != null)
                             exact[field] = extractedValue;
                         break;
@@ -531,10 +530,16 @@ namespace Microsoft.LiveTable.Service.DevMode
                     case MatcherAssertion.InRange:
                         range[field] = ExtractTypedRangeBounds(tm.Value);
                         break;
+                    // P10 fix (P1-1): NotEquals / ContainsAll / OneOf / Length
+                    // have no faithful legacy representation — collapsing them
+                    // into Exact / Contains silently reversed or weakened the
+                    // semantics. The typed-matcher path
+                    // (EvaluateContractMatchers) handles these correctly, so
+                    // we deliberately omit them from the legacy projection.
+                    case MatcherAssertion.NotEquals:
                     case MatcherAssertion.ContainsAll:
                     case MatcherAssertion.OneOf:
-                        if (extractedValue is string sv)
-                            contains[field] = sv;
+                    case MatcherAssertion.Length:
                         break;
                 }
             }
@@ -577,6 +582,11 @@ namespace Microsoft.LiveTable.Service.DevMode
                     bounds.Min = min.GetDouble();
                 if (value.TryGetProperty("max", out var max) && max.ValueKind == JsonValueKind.Number)
                     bounds.Max = max.GetDouble();
+                // P10 fix (P1-2): preserve inclusivity flags from the typed payload.
+                if (value.TryGetProperty("minInclusive", out var minInc) && minInc.ValueKind == JsonValueKind.False)
+                    bounds.MinInclusive = false;
+                if (value.TryGetProperty("maxInclusive", out var maxInc) && maxInc.ValueKind == JsonValueKind.False)
+                    bounds.MaxInclusive = false;
             }
             return bounds;
         }
@@ -634,6 +644,11 @@ namespace Microsoft.LiveTable.Service.DevMode
                         bounds.Min = min.GetDouble();
                     if (p.Value.TryGetProperty("max", out var max) && max.ValueKind == JsonValueKind.Number)
                         bounds.Max = max.GetDouble();
+                    // P10 fix (P1-2): preserve inclusivity flags.
+                    if (p.Value.TryGetProperty("minInclusive", out var minInc) && minInc.ValueKind == JsonValueKind.False)
+                        bounds.MinInclusive = false;
+                    if (p.Value.TryGetProperty("maxInclusive", out var maxInc) && maxInc.ValueKind == JsonValueKind.False)
+                        bounds.MaxInclusive = false;
                     matcher.Range[p.Name] = bounds;
                 }
                 anyBranch |= matcher.Range.Count > 0;
@@ -730,11 +745,18 @@ namespace Microsoft.LiveTable.Service.DevMode
                     return new ScalarMatcherValue { Type = type, Value = ExtractValue(scalarValue) };
 
                 case MatcherAssertion.Exists:
-                    if (!root.TryGetProperty("expected", out var expected)
-                        || (expected.ValueKind != JsonValueKind.True && expected.ValueKind != JsonValueKind.False))
+                    // P10 fix (P1-6): the spec says Exists is value-agnostic —
+                    // the assertion checks presence, not a specific boolean.
+                    // Default `expected` to true (i.e. "must exist") when the
+                    // field is missing rather than quarantining the scenario.
+                    if (!root.TryGetProperty("expected", out var expected))
+                    {
+                        return new BooleanMatcherValue { Type = type, Expected = true };
+                    }
+                    if (expected.ValueKind != JsonValueKind.True && expected.ValueKind != JsonValueKind.False)
                     {
                         reasons.Add(MakeReason(CodeMatcherSpecEmpty, $"matchers[{index}].value.expected", null,
-                            "Exists matcher values require a boolean 'expected' field."));
+                            "Exists matcher 'expected' must be a boolean when provided."));
                         return null;
                     }
 

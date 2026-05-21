@@ -393,6 +393,15 @@ namespace Microsoft.LiveTable.Service.DevMode
             public int? OriginalIndex { get; set; }
 
             public List<RepairFeedbackReason> Reasons { get; set; } = new();
+
+            /// <summary>
+            /// P10 fix (P1-5): full JSON payload of the quarantined scenario.
+            /// Without this the repair loop sees only ScenarioId/Title/Reasons
+            /// and the model cannot see typed matchers, catalog hashes,
+            /// grounding evidence, technique, etc. — silently stripping the
+            /// fields it most needs to correct.
+            /// </summary>
+            public string ScenarioJson { get; set; }
         }
 
         /// <summary>

@@ -265,7 +265,6 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             var snapshot = new CatalogSnapshot
             {
-                SnapshotId = Guid.NewGuid().ToString("N")[..12],
                 AssembledAtUtc = DateTimeOffset.UtcNow,
                 ZoneId = zoneId,
                 FltBuildSha = "unknown",
@@ -276,7 +275,12 @@ namespace Microsoft.LiveTable.Service.DevMode
                 TopicFieldHashes = topicHashes,
             };
 
+            // P10 fix (P1-3): derive SnapshotId from the deterministic content
+            // hash so two assemblies of the same catalog produce the same id.
+            // Random GUIDs made every snapshot look "new" to consumers and
+            // defeated the staleness-detection comparison.
             snapshot.ContentHash = ComputeContentHash(snapshot);
+            snapshot.SnapshotId = snapshot.ContentHash;
             return snapshot;
         }
 

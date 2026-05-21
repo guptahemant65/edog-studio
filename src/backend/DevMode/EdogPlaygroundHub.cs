@@ -1508,7 +1508,29 @@ namespace Microsoft.LiveTable.Service.DevMode
                             endLine = g.EndLine,
                             reason = g.Reason,
                             invariantId = g.InvariantId,
-                        }).ToList()
+                        }).ToList(),
+                        // P10 fix (P0-2): broadcast typed matchers + catalog
+                        // hashes so the curation UI and downstream consumers
+                        // can render assertion semantics and verify catalog
+                        // grounding. Without these fields the wire payload
+                        // silently dropped the entire typed-contract envelope.
+                        matchers = (scn.Matchers ?? new List<Matcher>()).Select(m => new
+                        {
+                            topicField = m?.TopicField,
+                            assertion = m?.Assertion.ToString(),
+                            value = m?.Value,
+                        }).ToList(),
+                        catalogHashes = scn.CatalogHashes == null ? null : new
+                        {
+                            stimulusSlotHash = scn.CatalogHashes.StimulusSlotHash,
+                            catalogSnapshotId = scn.CatalogHashes.CatalogSnapshotId,
+                            // Array-of-pairs format keeps JSON dictionary
+                            // ordering stable across serializers and avoids
+                            // key-name encoding ambiguity in JS consumers.
+                            matcherTopicHashes = (scn.CatalogHashes.MatcherTopicHashes ?? new Dictionary<string, string>())
+                                .Select(kvp => new { topic = kvp.Key, hash = kvp.Value })
+                                .ToList(),
+                        }
                     }
                 }).ConfigureAwait(false);
 

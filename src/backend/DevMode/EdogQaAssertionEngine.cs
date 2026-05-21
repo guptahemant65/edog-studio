@@ -215,8 +215,9 @@ namespace Microsoft.LiveTable.Service.DevMode
                     var resolved = ResolveField(root, field);
                     if (resolved == null) return false;
                     if (!resolved.Value.TryGetDouble(out var numVal)) return false;
-                    if (bounds.Min.HasValue && numVal < bounds.Min.Value) return false;
-                    if (bounds.Max.HasValue && numVal > bounds.Max.Value) return false;
+                    // P10 fix (P1-2): honour RangeBounds inclusivity flags.
+                    if (bounds.Min.HasValue && (bounds.MinInclusive ? numVal < bounds.Min.Value : numVal <= bounds.Min.Value)) return false;
+                    if (bounds.Max.HasValue && (bounds.MaxInclusive ? numVal > bounds.Max.Value : numVal >= bounds.Max.Value)) return false;
                 }
             }
 
@@ -297,8 +298,9 @@ namespace Microsoft.LiveTable.Service.DevMode
                     var resolved = ResolveField(root, field);
                     if (resolved == null) return false;
                     if (!resolved.Value.TryGetDouble(out var numVal)) return false;
-                    if (bounds.Min.HasValue && numVal < bounds.Min.Value) return false;
-                    if (bounds.Max.HasValue && numVal > bounds.Max.Value) return false;
+                    // P10 fix (P1-2): honour RangeBounds inclusivity flags.
+                    if (bounds.Min.HasValue && (bounds.MinInclusive ? numVal < bounds.Min.Value : numVal <= bounds.Min.Value)) return false;
+                    if (bounds.Max.HasValue && (bounds.MaxInclusive ? numVal > bounds.Max.Value : numVal >= bounds.Max.Value)) return false;
                 }
             }
 
@@ -418,10 +420,10 @@ namespace Microsoft.LiveTable.Service.DevMode
                         failed.Add($"range({field}): '{resolved.Value}' is not numeric");
                     else
                     {
-                        if (bounds.Min.HasValue && num < bounds.Min.Value)
-                            failed.Add($"range({field}): {num} < min {bounds.Min.Value}");
-                        if (bounds.Max.HasValue && num > bounds.Max.Value)
-                            failed.Add($"range({field}): {num} > max {bounds.Max.Value}");
+                        if (bounds.Min.HasValue && (bounds.MinInclusive ? num < bounds.Min.Value : num <= bounds.Min.Value))
+                            failed.Add($"range({field}): {num} {(bounds.MinInclusive ? "<" : "<=")} min {bounds.Min.Value}");
+                        if (bounds.Max.HasValue && (bounds.MaxInclusive ? num > bounds.Max.Value : num >= bounds.Max.Value))
+                            failed.Add($"range({field}): {num} {(bounds.MaxInclusive ? ">" : ">=")} max {bounds.Max.Value}");
                     }
                 }
             }
@@ -497,8 +499,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                     if (resolved == null || !resolved.Value.TryGetDouble(out var num))
                         continue;
 
-                    bool inRange = (!bounds.Min.HasValue || num >= bounds.Min.Value)
-                        && (!bounds.Max.HasValue || num <= bounds.Max.Value);
+                    bool inRange = (!bounds.Min.HasValue || (bounds.MinInclusive ? num >= bounds.Min.Value : num > bounds.Min.Value))
+                        && (!bounds.Max.HasValue || (bounds.MaxInclusive ? num <= bounds.Max.Value : num < bounds.Max.Value));
                     if (inRange)
                     {
                         totalScore += 1.0;

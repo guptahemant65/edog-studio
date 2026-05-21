@@ -700,11 +700,17 @@ namespace Microsoft.LiveTable.Service.DevMode
     /// </summary>
     public sealed class RangeBounds
     {
-        /// <summary>Minimum value (inclusive), null if unbounded below.</summary>
+        /// <summary>Minimum value, null if unbounded below.</summary>
         public double? Min { get; set; }
 
-        /// <summary>Maximum value (inclusive), null if unbounded above.</summary>
+        /// <summary>Maximum value, null if unbounded above.</summary>
         public double? Max { get; set; }
+
+        /// <summary>Whether <see cref="Min"/> is inclusive. Defaults to true.</summary>
+        public bool MinInclusive { get; set; } = true;
+
+        /// <summary>Whether <see cref="Max"/> is inclusive. Defaults to true.</summary>
+        public bool MaxInclusive { get; set; } = true;
     }
 
     /// <summary>

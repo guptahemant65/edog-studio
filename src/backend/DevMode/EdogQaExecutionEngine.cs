@@ -691,12 +691,31 @@ namespace Microsoft.LiveTable.Service.DevMode
                 return string.Empty;
             }
 
+            // P10 fix (P1-4): when the snapshot is available (has slots /
+            // topic hashes) but the scenario carries empty hash fields, that
+            // is itself a staleness signal — the scenario was either
+            // generated without a catalog or against an unknown one.
+            var snapshotAvailable = snapshot.Slots != null && snapshot.Slots.Count > 0
+                && snapshot.TopicFieldHashes != null && snapshot.TopicFieldHashes.Count > 0;
+            var claimsGrounding = !string.IsNullOrWhiteSpace(scenario.CatalogHashes.CatalogSnapshotId);
+
+            if (snapshotAvailable && claimsGrounding && string.IsNullOrWhiteSpace(scenario.CatalogHashes.StimulusSlotHash))
+            {
+                return "Scenario claims catalog grounding but stimulus slot hash is empty.";
+            }
+
             if (!string.IsNullOrWhiteSpace(scenario.CatalogHashes.StimulusSlotHash)
                 && snapshot.Slots != null
                 && snapshot.Slots.Count > 0
                 && !snapshot.Slots.Any(slot => string.Equals(slot?.SlotHash, scenario.CatalogHashes.StimulusSlotHash, StringComparison.Ordinal)))
             {
                 return $"Scenario stimulus slot hash '{scenario.CatalogHashes.StimulusSlotHash}' is no longer present in the active catalog.";
+            }
+
+            if (snapshotAvailable && claimsGrounding
+                && (scenario.CatalogHashes.MatcherTopicHashes == null || scenario.CatalogHashes.MatcherTopicHashes.Count == 0))
+            {
+                return "Scenario claims catalog grounding but matcherTopicHashes is empty.";
             }
 
             if (scenario.CatalogHashes.MatcherTopicHashes != null
