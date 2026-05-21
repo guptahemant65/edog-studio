@@ -236,15 +236,16 @@ namespace Microsoft.LiveTable.Service.DevMode
 
                 if (hasTypedMatchers)
                 {
-                    // P10: skip legacy matcherSpec parsing; build a stub
-                    // expectation with the rationale and topic. The real
-                    // matcher work is done by ProjectTypedMatchers below.
+                    // P10: skip legacy matcherSpec parsing. Build a legacy
+                    // matcher from the typed matchers array by topic if
+                    // possible, so the assertion engine can evaluate them.
+                    var legacyMatcher = BuildLegacyMatcherFromTyped(src.Matchers, expSrc.Topic);
                     expectations.Add(new Expectation
                     {
                         Id = $"exp-{i + 1}",
                         Type = expType,
                         Topic = expSrc.Topic,
-                        Matcher = null,
+                        Matcher = legacyMatcher,
                         Description = expSrc.Rationale,
                     });
                     continue;
@@ -478,6 +479,107 @@ namespace Microsoft.LiveTable.Service.DevMode
         // emits them (the engine carries those on Expectation directly,
         // not on Matcher).
         // ──────────────────────────────────────────────────────────────
+
+        // ──────────────────────────────────────────────────────────────
+        // P10: Convert typed matchers → legacy LegacyMatcher for a
+        // specific expectation topic. Groups all typed matchers whose
+        // topicField starts with the expectation's topic into a single
+        // LegacyMatcher so the assertion engine can evaluate them.
+        // ──────────────────────────────────────────────────────────────
+
+        private static LegacyMatcher BuildLegacyMatcherFromTyped(
+            IReadOnlyList<EdogQaLlmClient.GeneratedMatcher> typedMatchers,
+            string expectationTopic)
+        {
+            if (typedMatchers == null || typedMatchers.Count == 0)
+                return new LegacyMatcher();
+
+            var exact = new Dictionary<string, object>();
+            var exists = new List<string>();
+            var range = new Dictionary<string, RangeBounds>();
+            var contains = new Dictionary<string, string>();
+
+            foreach (var tm in typedMatchers)
+            {
+                if (tm == null) continue;
+                var field = tm.TopicField ?? string.Empty;
+
+                // Match matchers to this expectation by topic prefix.
+                // topicField format is "topic.field" or just "field".
+                if (!string.IsNullOrEmpty(expectationTopic)
+                    && !field.StartsWith(expectationTopic + ".", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(field, expectationTopic, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (!Enum.TryParse<MatcherAssertion>(tm.Assertion, true, out var assertion))
+                    continue;
+
+                var extractedValue = ExtractTypedMatcherValue(tm.Value);
+
+                switch (assertion)
+                {
+                    case MatcherAssertion.Equals:
+                    case MatcherAssertion.NotEquals:
+                        if (extractedValue != null)
+                            exact[field] = extractedValue;
+                        break;
+                    case MatcherAssertion.Exists:
+                        exists.Add(field);
+                        break;
+                    case MatcherAssertion.InRange:
+                        range[field] = ExtractTypedRangeBounds(tm.Value);
+                        break;
+                    case MatcherAssertion.ContainsAll:
+                    case MatcherAssertion.OneOf:
+                        if (extractedValue is string sv)
+                            contains[field] = sv;
+                        break;
+                }
+            }
+
+            var matcher = new LegacyMatcher();
+            if (exact.Count > 0) matcher.Exact = exact;
+            if (exists.Count > 0) matcher.Exists = exists;
+            if (range.Count > 0) matcher.Range = range;
+            if (contains.Count > 0) matcher.Contains = contains;
+            return matcher;
+        }
+
+        private static object ExtractTypedMatcherValue(JsonElement value)
+        {
+            if (value.ValueKind != JsonValueKind.Object) return null;
+            if (value.TryGetProperty("value", out var v))
+            {
+                return v.ValueKind switch
+                {
+                    JsonValueKind.String => v.GetString(),
+                    JsonValueKind.Number => v.TryGetInt64(out var l) ? (object)l : v.GetDouble(),
+                    JsonValueKind.True => true,
+                    JsonValueKind.False => false,
+                    _ => v.GetRawText(),
+                };
+            }
+            if (value.TryGetProperty("expected", out var exp))
+            {
+                return exp.ValueKind == JsonValueKind.True;
+            }
+            return null;
+        }
+
+        private static RangeBounds ExtractTypedRangeBounds(JsonElement value)
+        {
+            var bounds = new RangeBounds();
+            if (value.ValueKind == JsonValueKind.Object)
+            {
+                if (value.TryGetProperty("min", out var min) && min.ValueKind == JsonValueKind.Number)
+                    bounds.Min = min.GetDouble();
+                if (value.TryGetProperty("max", out var max) && max.ValueKind == JsonValueKind.Number)
+                    bounds.Max = max.GetDouble();
+            }
+            return bounds;
+        }
 
         private static LegacyMatcher ProjectMatcher(
             JsonElement root,
