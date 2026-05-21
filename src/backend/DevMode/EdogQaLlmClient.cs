@@ -840,7 +840,12 @@ namespace Microsoft.LiveTable.Service.DevMode
                         },
                     },
                     ["stimulusSpec"] = new Dictionary<string, object> { ["type"] = "string" },
-                    ["stimulus"] = BuildOptionalProperty("object"),
+                    // Stimulus payload is an opaque typed JSON object that
+                    // varies by stimulusType. Strict mode forbids open objects
+                    // (no additionalProperties schema allowed). Emit as a JSON
+                    // string; the projector reads stimulusSpec (the canonical
+                    // source) not this field.
+                    ["stimulus"] = BuildOptionalProperty("string"),
                     ["expectations"] = new Dictionary<string, object>
                     {
                         ["type"] = "array",
