@@ -2715,11 +2715,44 @@ class WorkspaceExplorer {
       } else {
         const data = await this._api.listWorkspaces();
         this._workspaces = (data && data.value) || [];
+        // Enrich workspaces with capacity display names (best-effort)
+        this._enrichCapacityNames();
       }
       this._renderTree();
     } catch (err) {
       this._treeEl.innerHTML = '<div class="ws-tree-item dimmed" style="justify-content:center">Could not load workspaces</div>';
       this._toast(`Failed to load workspaces: ${err.message}`, 'error');
+    }
+  }
+
+  /** Fetch capacities once and stamp _capacityDisplayName + _capacitySku on each workspace. */
+  _enrichCapacityNames() {
+    var self = this;
+    if (this._capacityMap) {
+      this._applyCapacityMap();
+      return;
+    }
+    this._api.listCapacities().then(function(data) {
+      var caps = (data && data.value) || [];
+      self._capacityMap = {};
+      for (var i = 0; i < caps.length; i++) {
+        self._capacityMap[caps[i].id] = { displayName: caps[i].displayName || '', sku: caps[i].sku || '', region: caps[i].region || '' };
+      }
+      self._applyCapacityMap();
+      self._renderTree();
+    }).catch(function() { /* best-effort — capacity names are a nice-to-have */ });
+  }
+
+  _applyCapacityMap() {
+    if (!this._capacityMap) return;
+    for (var i = 0; i < this._workspaces.length; i++) {
+      var ws = this._workspaces[i];
+      var cap = this._capacityMap[ws.capacityId];
+      if (cap) {
+        ws._capacityDisplayName = cap.displayName;
+        ws._capacitySku = cap.sku;
+        ws._region = cap.region;
+      }
     }
   }
 
@@ -3074,6 +3107,13 @@ class WorkspaceExplorer {
     html += `<span class="ws-guid" title="Click to copy" data-copy-id="${this._esc(ws.id)}">${this._esc(ws.id)}</span>`;
     if (capacityId) {
       html += `<span class="ws-meta-badge ws-badge-env">${this._esc(envLabel)}</span>`;
+      var capName = ws._capacityDisplayName || '';
+      var capSku = ws._capacitySku || '';
+      html += `<span class="ws-meta-badge ws-badge-capacity" title="Capacity ID: ${this._esc(capacityId)}${capSku ? ' \u00b7 SKU: ' + this._esc(capSku) : ''}">`;
+      html += `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><circle cx="6" cy="6" r="1"/><circle cx="6" cy="18" r="1"/></svg>`;
+      html += capName ? this._esc(capName) : this._esc(capacityId);
+      if (capSku) html += ` <span class="ws-capacity-sku">${this._esc(capSku)}</span>`;
+      html += '</span>';
     }
     html += '<span id="ws-ts-workspace" class="ws-timestamp ws-timestamp--loading" title="Loading activity\u2026">' +
       '<span class="ws-timestamp-label">Last activity:</span>' +

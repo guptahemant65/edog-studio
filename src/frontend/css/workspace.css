@@ -1639,6 +1639,26 @@
   color: var(--accent);
 }
 
+.ws-badge-capacity {
+  background: var(--surface-2, #f3f4f6);
+  color: var(--text, #1a1d23);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  cursor: default;
+}
+.ws-badge-capacity svg { opacity: 0.5; flex-shrink: 0; }
+.ws-capacity-sku {
+  background: var(--accent-dim, rgba(109,92,255,0.08));
+  color: var(--accent, #6d5cff);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
 .ws-badge-region {
   background: var(--surface-2);
   color: var(--text-muted);
