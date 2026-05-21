@@ -76598,9 +76598,9 @@ class ExecutionPipeline {
 
         // Log status + timing from Fabric on each poll
         var statusLabel = data.status || 'Unknown';
-        var startTime = data.startTimeUtc ? new Date(data.startTimeUtc).toLocaleTimeString() : null;
+        var jobStart = data.startTimeUtc ? new Date(data.startTimeUtc).toLocaleTimeString() : null;
         var statusMsg = 'Status: ' + statusLabel;
-        if (startTime) statusMsg += ' (started ' + startTime + ')';
+        if (jobStart) statusMsg += ' (started ' + jobStart + ')';
         this._log(stepDef.index, 'info', statusMsg);
 
         if (status === 'completed') {
