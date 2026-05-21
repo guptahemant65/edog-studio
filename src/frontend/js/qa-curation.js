@@ -612,18 +612,15 @@ class QaCuration {
     var wrap = document.createElement('div');
     wrap.className = 'qa-catalog-provenance';
 
-    var label = document.createElement('span');
-    label.className = 'qa-catalog-provenance-label';
-    label.textContent = 'Catalog';
-    wrap.appendChild(label);
-
-    var idEl = document.createElement('code');
-    idEl.className = 'qa-catalog-provenance-id';
-    idEl.textContent = snapshotId;
+    var pill = document.createElement('span');
+    pill.className = 'qa-catalog-pill';
+    var idStr = String(snapshotId || '');
+    var shortId = idStr.length > 12 ? idStr.slice(0, 12) : idStr;
+    pill.textContent = '\u25C6 ' + shortId;
     var topicHashes = hashes && (hashes.matcherTopicHashes || hashes.MatcherTopicHashes);
     var topicCount = topicHashes ? Object.keys(topicHashes).length : 0;
-    idEl.title = 'CatalogSnapshotId — grounded against ' + topicCount + ' topic hash(es).';
-    wrap.appendChild(idEl);
+    pill.title = 'CatalogSnapshotId: ' + idStr + ' — grounded against ' + topicCount + ' topic hash(es).';
+    wrap.appendChild(pill);
 
     return wrap;
   }
