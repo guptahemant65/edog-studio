@@ -1983,10 +1983,9 @@ class ThemeSchemaPage {
         var schema = chip.getAttribute('data-schema');
         if (!schema) return;
         self._schemas[schema] = !self._schemas[schema];
-        // If all off, turn toggle off
-        if (!self._schemas.bronze && !self._schemas.silver && !self._schemas.gold) {
-          self._medallionOn = false;
-        }
+        // Sync toggle: ON if any schema is active, OFF only if all are off
+        var anyOn = self._schemas.bronze || self._schemas.silver || self._schemas.gold;
+        self._medallionOn = anyOn;
         self._updateMedallionUI();
       });
     }
