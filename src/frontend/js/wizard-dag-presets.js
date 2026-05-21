@@ -329,6 +329,7 @@ class DagPresets {
     overlay.appendChild(inner);
     this._overlayEl = overlay;
     this._containerEl.appendChild(overlay);
+    console.log('[PRESETS] _render: overlay appended to', this._containerEl.className, 'nodeCount=', this._canvas ? this._canvas.getNodeCount() : 'N/A');
   }
 
   _buildCard(preset, index) {
@@ -404,6 +405,7 @@ class DagPresets {
     if (this._destroyed || !this._overlayEl) return;
     var nodeCount = this._canvas ? this._canvas.getNodeCount() : 0;
     var shouldShow = nodeCount === 0 && !this._dismissed;
+    console.log('[PRESETS] _updateVisibility: nodeCount=' + nodeCount + ' dismissed=' + this._dismissed + ' shouldShow=' + shouldShow + ' overlayInDOM=' + !!this._overlayEl.parentNode);
     if (shouldShow) {
       this._overlayEl.classList.remove('iw-dag-presets-overlay--exiting');
       this._overlayEl.classList.add('iw-dag-presets-overlay--visible');
