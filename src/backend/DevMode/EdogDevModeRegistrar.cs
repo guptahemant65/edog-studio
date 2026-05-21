@@ -492,6 +492,19 @@ namespace Microsoft.LiveTable.Service.DevMode
         {
             try
             {
+                // Diagnostic: dump AZURE_OPENAI_* env vars as the FLT process sees them
+                Console.WriteLine("[QA-DIAG] ═══ RegisterQaServices: env var check ═══");
+                foreach (var key in new[] {
+                    "AZURE_OPENAI_PRO_ENDPOINT", "AZURE_OPENAI_PRO_API_KEY", "AZURE_OPENAI_PRO_DEPLOYMENT",
+                    "AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_DEPLOYMENT",
+                    "AZURE_OPENAI_ARCHITECT_ENDPOINT", "AZURE_OPENAI_ARCHITECT_API_KEY",
+                    "AZURE_OPENAI_EDITOR_ENDPOINT", "AZURE_OPENAI_EDITOR_API_KEY",
+                    "EDOG_QA_LLM_V2" })
+                {
+                    var val = Environment.GetEnvironmentVariable(key);
+                    Console.WriteLine($"[QA-DIAG]   {key}={(val != null ? (val.Length > 15 ? val[..15] + "..." : val) : "NULL")}");
+                }
+
                 // Register the "qa" topic buffer for QA engine status/progress events
                 EdogTopicRouter.RegisterTopic("qa", 500);
 
