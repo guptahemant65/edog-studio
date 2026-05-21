@@ -15535,16 +15535,18 @@ table.ff-table tbody tr.overridden:hover { background: rgba(229, 148, 12, 0.10);
   width: 16px;
   height: 16px;
   border-radius: 3px;
-  border: 1.5px solid currentColor;
+  border: 1.5px solid var(--border-bright, rgba(0,0,0,0.15));
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 10px;
+  color: transparent;
   transition: all 80ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1));
 }
 .iw-medallion-chip.active .iw-medallion-check {
   background: currentColor;
-  color: white;
+  border-color: currentColor;
+  color: #ffffff;
 }
 
 /* ─── Stub Pages (3-5) ─── */
