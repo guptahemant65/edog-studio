@@ -5371,3 +5371,102 @@ svg.iw-dag-connections {
   flex-wrap: wrap;
 }
 .iw-deploy-actions .iw-btn { min-width: 140px; }
+
+/* ─── DAG Validation (F16) ─── */
+.iw-nd--error {
+  outline: 2px solid var(--level-error, #ef4444);
+  outline-offset: 2px;
+}
+.iw-nd--warning {
+  outline: 2px dashed var(--level-warning, var(--level-warn, #f59e0b));
+  outline-offset: 2px;
+}
+.iw-nd-vbadge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  z-index: 10;
+  pointer-events: none;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.25);
+}
+.iw-nd-vbadge--error {
+  background: var(--level-error, #ef4444);
+}
+.iw-nd-vbadge--warning {
+  background: var(--level-warning, var(--level-warn, #f59e0b));
+}
+
+.iw-validation-bar {
+  padding: 8px 16px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border, #e2e5ea);
+  background: var(--bg-elevated, transparent);
+  flex-wrap: wrap;
+}
+.iw-validation-bar--clean {
+  color: var(--status-succeeded, #10b981);
+}
+.iw-validation-bar--errors {
+  color: var(--level-error, #ef4444);
+  background: rgba(239, 68, 68, 0.04);
+}
+.iw-validation-bar--warnings {
+  color: var(--level-warning, var(--level-warn, #f59e0b));
+  background: rgba(245, 158, 11, 0.04);
+}
+.iw-validation-bar__icon {
+  font-size: 11px;
+  line-height: 1;
+}
+.iw-validation-bar__label {
+  font-weight: 600;
+  margin-right: 4px;
+}
+.iw-validation-bar__items {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.iw-validation-bar__chip {
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  color: inherit;
+  cursor: pointer;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: inherit;
+  transition: background 120ms ease;
+}
+.iw-validation-bar__chip:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+.iw-validation-bar__chip--error {
+  color: var(--level-error, #ef4444);
+}
+.iw-validation-bar__chip--warning {
+  color: var(--level-warning, var(--level-warn, #f59e0b));
+}
+.iw-validation-bar__more {
+  font-size: 11px;
+  opacity: 0.7;
+}

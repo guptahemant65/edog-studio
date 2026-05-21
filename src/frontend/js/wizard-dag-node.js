@@ -225,6 +225,34 @@ class DagNode {
     };
   }
 
+  /**
+   * Apply or clear a validation state on this node.
+   * Adds CSS modifier class (.iw-nd--error / .iw-nd--warning) plus a
+   * floating corner badge (● for error, ▲ for warning). Pass null to clear.
+   * @param {('error'|'warning'|null)} severity
+   * @param {string} [message] — optional tooltip text
+   */
+  setValidation(severity, message) {
+    if (!this._groupEl) return;
+    this._groupEl.classList.remove('iw-nd--error', 'iw-nd--warning');
+    if (this._vbadgeEl && this._vbadgeEl.parentNode) {
+      this._vbadgeEl.parentNode.removeChild(this._vbadgeEl);
+      this._vbadgeEl = null;
+    }
+    if (!severity) return;
+
+    var modCls = severity === 'error' ? 'iw-nd--error' : 'iw-nd--warning';
+    this._groupEl.classList.add(modCls);
+
+    var badge = document.createElement('div');
+    badge.className = 'iw-nd-vbadge iw-nd-vbadge--' + severity;
+    badge.textContent = severity === 'error' ? '\u25CF' : '\u25B2';
+    badge.setAttribute('aria-hidden', 'true');
+    if (message) badge.setAttribute('title', message);
+    this._vbadgeEl = badge;
+    this._groupEl.appendChild(badge);
+  }
+
   /** Show/hide connection ports */
   showPorts(visible) {
     if (!this._groupEl) return;
@@ -265,6 +293,7 @@ class DagNode {
     this._badgeEl = null;
     this._schemaEl = null;
     this._barEl = null;
+    this._vbadgeEl = null;
     this._portIn = null;
     this._portOut = null;
     this._boundDragMove = null;

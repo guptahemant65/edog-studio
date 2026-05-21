@@ -780,6 +780,32 @@ class DagCanvas {
     return Object.keys(this._nodeData).length;
   }
 
+  /**
+   * Apply a validation badge to a single node.
+   * @param {string} nodeId
+   * @param {('error'|'warning'|null)} severity — null clears
+   * @param {string} [message]
+   */
+  setNodeValidation(nodeId, severity, message) {
+    var node = this._nodes[nodeId];
+    if (node && typeof node.setValidation === 'function') {
+      node.setValidation(severity, message);
+    }
+  }
+
+  /**
+   * Clear validation badges from every node on the canvas.
+   */
+  clearAllValidation() {
+    var ids = Object.keys(this._nodes);
+    for (var i = 0; i < ids.length; i++) {
+      var n = this._nodes[ids[i]];
+      if (n && typeof n.setValidation === 'function') {
+        n.setValidation(null);
+      }
+    }
+  }
+
   /* ═══════════════════════════════════════════════════════════════
      LIFECYCLE
      ═══════════════════════════════════════════════════════════════ */
