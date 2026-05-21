@@ -1609,6 +1609,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     },
                 },
                 reasoning = new { effort = AnalystReasoningEffort },
+                temperature = 0,
                 max_output_tokens = AnalystMaxOutputTokens,
                 text = new
                 {
@@ -1645,6 +1646,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     },
                 },
                 reasoning = new { effort = ArchitectReasoningEffort },
+                temperature = 0,
                 max_output_tokens = ArchitectMaxOutputTokens,
                 stream = true,
                 text = new
@@ -1682,6 +1684,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     },
                 },
                 reasoning = new { effort = EditorReasoningEffort },
+                temperature = 0,
                 max_output_tokens = EditorMaxOutputTokens,
                 text = new
                 {
