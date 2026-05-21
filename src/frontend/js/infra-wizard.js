@@ -1983,9 +1983,7 @@ class ThemeSchemaPage {
       });
     }
 
-    // Medallion chip clicks — individual schema selection.
-    // Chips are independent toggles. At least one must stay ON
-    // to keep the medallion switch active.
+    // Medallion chip clicks — simple independent toggles.
     var chips = this._containerEl.querySelector('#iw-medallion-chips');
     if (chips) {
       chips.addEventListener('click', function(e) {
@@ -1995,15 +1993,7 @@ class ThemeSchemaPage {
         if (!schema || !(schema in self._schemas) || schema === 'dbo') return;
         e.preventDefault();
         e.stopPropagation();
-        var wasOn = self._schemas[schema];
-        // Don't allow deselecting the LAST active schema — use the toggle for that
-        if (wasOn) {
-          var otherOn = (schema !== 'bronze' && self._schemas.bronze) ||
-                        (schema !== 'silver' && self._schemas.silver) ||
-                        (schema !== 'gold' && self._schemas.gold);
-          if (!otherOn) return; // Can't deselect last one — use toggle to turn all off
-        }
-        self._schemas[schema] = !wasOn;
+        self._schemas[schema] = !self._schemas[schema];
         self._updateMedallionUI();
       });
     }
