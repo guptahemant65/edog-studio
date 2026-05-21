@@ -436,7 +436,8 @@ class ExecutionPipeline {
         var lhInfo = (artifacts.lakehouseId) ? {
           id: artifacts.lakehouseId,
           name: context.lakehouseName,
-          workspaceId: artifacts.workspaceId
+          workspaceId: artifacts.workspaceId,
+          notebookName: context.notebookName
         } : null;
         return engine.generateNotebookPayload(cells, lhInfo);
       }

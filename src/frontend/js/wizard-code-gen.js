@@ -281,14 +281,39 @@ class CodeGenerationEngine {
     // any non-ASCII chars users put in node names or SQL content.
     var base64Payload = btoa(unescape(encodeURIComponent(notebookJson)));
 
+    var parts = [{
+      path: 'notebook-content.py',
+      payload: base64Payload,
+      payloadType: 'InlineBase64'
+    }];
+
+    // Fabric requires a .platform part when updateMetadata=true.
+    // This sets the item-level metadata so Fabric knows the notebook's
+    // display name and default lakehouse at the platform layer.
+    if (lakehouse && lakehouse.notebookName) {
+      var platformJson = JSON.stringify({
+        '$schema': 'https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json',
+        metadata: {
+          type: 'Notebook',
+          displayName: lakehouse.notebookName,
+          description: ''
+        },
+        config: {
+          version: '2.0',
+          logicalId: '00000000-0000-0000-0000-000000000000'
+        }
+      });
+      parts.push({
+        path: '.platform',
+        payload: btoa(unescape(encodeURIComponent(platformJson))),
+        payloadType: 'InlineBase64'
+      });
+    }
+
     return {
       definition: {
         format: 'ipynb',
-        parts: [{
-          path: 'notebook-content.py',
-          payload: base64Payload,
-          payloadType: 'InlineBase64'
-        }]
+        parts: parts
       }
     };
   }
