@@ -84,6 +84,7 @@ class NodePalette {
     // Drag state
     this._dragType = null;
     this._dragActive = false;
+    this._dragSourceEl = null;
 
     // Bound handlers (for removal)
     this._boundMouseMove = this._onMouseMove.bind(this);
@@ -339,6 +340,7 @@ class NodePalette {
       self._dragStartY = e.clientY;
       self._dragActive = false;
       self._dragName = def.name;
+      self._dragSourceEl = item;
     });
 
     // Click fallback (single-add) — also ignore the toggle.
@@ -802,10 +804,12 @@ class NodePalette {
       this._createGhost(this._dragName);
     }
 
-    // Move ghost to cursor
+    // Move ghost centered on cursor
     if (this._ghostEl) {
-      this._ghostEl.style.left = e.clientX + 'px';
-      this._ghostEl.style.top = e.clientY + 'px';
+      var gw = this._ghostEl.offsetWidth || 160;
+      var gh = this._ghostEl.offsetHeight || 48;
+      this._ghostEl.style.left = (e.clientX - gw / 2) + 'px';
+      this._ghostEl.style.top = (e.clientY - gh / 2) + 'px';
     }
   }
 
@@ -853,15 +857,34 @@ class NodePalette {
      ═══════════════════════════════════════════════════════════════ */
 
   _createGhost(label) {
+    // Build a ghost that looks like an actual DAG node — not just a text label.
+    var iconMap = { 'sql-table': '◇', 'sql-mlv': '◆', 'pyspark-mlv': '◆' };
+    var clsMap = { 'sql-table': 'iw-type-table', 'sql-mlv': 'iw-type-mlv', 'pyspark-mlv': 'iw-type-pyspark' };
+    var icon = iconMap[this._dragType] || '◇';
+    var cls = clsMap[this._dragType] || '';
+
     var ghost = document.createElement('div');
     ghost.className = 'iw-palette-ghost';
-    ghost.textContent = label;
+    ghost.innerHTML =
+      '<span class="iw-palette-ghost-icon ' + cls + '">' + icon + '</span>' +
+      '<span class="iw-palette-ghost-name">' + label + '</span>';
     ghost.style.position = 'fixed';
     ghost.style.pointerEvents = 'none';
     ghost.style.zIndex = '5000';
-    ghost.style.opacity = '0.85';
     document.body.appendChild(ghost);
     this._ghostEl = ghost;
+
+    // Dim the source palette item
+    if (this._dragSourceEl) {
+      this._dragSourceEl.classList.add('iw-palette-item--dragging');
+    }
+
+    // Highlight the canvas drop zone
+    var canvasEl = this._canvas ? this._canvas.getElement() : null;
+    if (canvasEl) {
+      var container = canvasEl.closest('.iw-dag-canvas');
+      if (container) container.classList.add('iw-dag-canvas--drop-target');
+    }
   }
 
   _removeGhost() {
@@ -869,6 +892,19 @@ class NodePalette {
       this._ghostEl.parentNode.removeChild(this._ghostEl);
     }
     this._ghostEl = null;
+
+    // Restore source palette item
+    if (this._dragSourceEl) {
+      this._dragSourceEl.classList.remove('iw-palette-item--dragging');
+    }
+    this._dragSourceEl = null;
+
+    // Remove canvas drop-zone highlight
+    var canvasEl = this._canvas ? this._canvas.getElement() : null;
+    if (canvasEl) {
+      var container = canvasEl.closest('.iw-dag-canvas');
+      if (container) container.classList.remove('iw-dag-canvas--drop-target');
+    }
   }
 
   /* ═══════════════════════════════════════════════════════════════

@@ -1803,18 +1803,48 @@
   position: fixed;
   pointer-events: none;
   z-index: 5000;
-  opacity: 0.85;
-  transform: rotate(-2deg);
-  padding: var(--s3, 12px) var(--s4, 16px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
   background: var(--surface, #ffffff);
   border-radius: var(--r-l, 10px);
-  border: 1.5px solid var(--accent, #6d5cff);
-  box-shadow: var(--sh-xl, 0 12px 40px rgba(0,0,0,0.10), 0 4px 12px rgba(0,0,0,0.06));
-  display: none;
+  border: 2px solid var(--accent, #6d5cff);
+  box-shadow: 0 16px 48px rgba(0,0,0,0.14), 0 6px 16px rgba(0,0,0,0.08);
   font-size: var(--sm, 12px);
   font-weight: 600;
   font-family: var(--mono, 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace);
   color: var(--text, #1a1d23);
+  animation: iw-ghost-pickup 150ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1)) both;
+  will-change: transform;
+}
+@keyframes iw-ghost-pickup {
+  from { opacity: 0; transform: scale(0.85) rotate(-1deg); }
+  to   { opacity: 0.92; transform: scale(1.05) rotate(-2deg); }
+}
+.iw-palette-ghost-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+.iw-palette-ghost-icon.iw-type-table  { color: #2d7ff9; }
+.iw-palette-ghost-icon.iw-type-mlv    { color: var(--accent, #6d5cff); }
+.iw-palette-ghost-icon.iw-type-pyspark { color: #e5940c; }
+.iw-palette-ghost-name {
+  white-space: nowrap;
+}
+
+/* Source item dims while being dragged */
+.iw-palette-item--dragging {
+  opacity: 0.35;
+  transform: scale(0.96);
+  transition: all 150ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1));
+}
+
+/* Canvas drop-zone highlight */
+.iw-dag-canvas--drop-target {
+  outline: 2px dashed var(--accent, #6d5cff);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--accent, #6d5cff) 3%, var(--surface-2, #f8f9fb));
 }
 
 /* ─── Palette Batch Add (F16) ─── */

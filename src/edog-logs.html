@@ -16264,18 +16264,48 @@ table.ff-table tbody tr.overridden:hover { background: rgba(229, 148, 12, 0.10);
   position: fixed;
   pointer-events: none;
   z-index: 5000;
-  opacity: 0.85;
-  transform: rotate(-2deg);
-  padding: var(--s3, 12px) var(--s4, 16px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
   background: var(--surface, #ffffff);
   border-radius: var(--r-l, 10px);
-  border: 1.5px solid var(--accent, #6d5cff);
-  box-shadow: var(--sh-xl, 0 12px 40px rgba(0,0,0,0.10), 0 4px 12px rgba(0,0,0,0.06));
-  display: none;
+  border: 2px solid var(--accent, #6d5cff);
+  box-shadow: 0 16px 48px rgba(0,0,0,0.14), 0 6px 16px rgba(0,0,0,0.08);
   font-size: var(--sm, 12px);
   font-weight: 600;
   font-family: var(--mono, 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace);
   color: var(--text, #1a1d23);
+  animation: iw-ghost-pickup 150ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1)) both;
+  will-change: transform;
+}
+@keyframes iw-ghost-pickup {
+  from { opacity: 0; transform: scale(0.85) rotate(-1deg); }
+  to   { opacity: 0.92; transform: scale(1.05) rotate(-2deg); }
+}
+.iw-palette-ghost-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+.iw-palette-ghost-icon.iw-type-table  { color: #2d7ff9; }
+.iw-palette-ghost-icon.iw-type-mlv    { color: var(--accent, #6d5cff); }
+.iw-palette-ghost-icon.iw-type-pyspark { color: #e5940c; }
+.iw-palette-ghost-name {
+  white-space: nowrap;
+}
+
+/* Source item dims while being dragged */
+.iw-palette-item--dragging {
+  opacity: 0.35;
+  transform: scale(0.96);
+  transition: all 150ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1));
+}
+
+/* Canvas drop-zone highlight */
+.iw-dag-canvas--drop-target {
+  outline: 2px dashed var(--accent, #6d5cff);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--accent, #6d5cff) 3%, var(--surface-2, #f8f9fb));
 }
 
 /* ─── Palette Batch Add (F16) ─── */
@@ -73063,6 +73093,7 @@ class NodePalette {
     // Drag state
     this._dragType = null;
     this._dragActive = false;
+    this._dragSourceEl = null;
 
     // Bound handlers (for removal)
     this._boundMouseMove = this._onMouseMove.bind(this);
@@ -73318,6 +73349,7 @@ class NodePalette {
       self._dragStartY = e.clientY;
       self._dragActive = false;
       self._dragName = def.name;
+      self._dragSourceEl = item;
     });
 
     // Click fallback (single-add) — also ignore the toggle.
@@ -73781,10 +73813,12 @@ class NodePalette {
       this._createGhost(this._dragName);
     }
 
-    // Move ghost to cursor
+    // Move ghost centered on cursor
     if (this._ghostEl) {
-      this._ghostEl.style.left = e.clientX + 'px';
-      this._ghostEl.style.top = e.clientY + 'px';
+      var gw = this._ghostEl.offsetWidth || 160;
+      var gh = this._ghostEl.offsetHeight || 48;
+      this._ghostEl.style.left = (e.clientX - gw / 2) + 'px';
+      this._ghostEl.style.top = (e.clientY - gh / 2) + 'px';
     }
   }
 
@@ -73832,15 +73866,34 @@ class NodePalette {
      ═══════════════════════════════════════════════════════════════ */
 
   _createGhost(label) {
+    // Build a ghost that looks like an actual DAG node — not just a text label.
+    var iconMap = { 'sql-table': '◇', 'sql-mlv': '◆', 'pyspark-mlv': '◆' };
+    var clsMap = { 'sql-table': 'iw-type-table', 'sql-mlv': 'iw-type-mlv', 'pyspark-mlv': 'iw-type-pyspark' };
+    var icon = iconMap[this._dragType] || '◇';
+    var cls = clsMap[this._dragType] || '';
+
     var ghost = document.createElement('div');
     ghost.className = 'iw-palette-ghost';
-    ghost.textContent = label;
+    ghost.innerHTML =
+      '<span class="iw-palette-ghost-icon ' + cls + '">' + icon + '</span>' +
+      '<span class="iw-palette-ghost-name">' + label + '</span>';
     ghost.style.position = 'fixed';
     ghost.style.pointerEvents = 'none';
     ghost.style.zIndex = '5000';
-    ghost.style.opacity = '0.85';
     document.body.appendChild(ghost);
     this._ghostEl = ghost;
+
+    // Dim the source palette item
+    if (this._dragSourceEl) {
+      this._dragSourceEl.classList.add('iw-palette-item--dragging');
+    }
+
+    // Highlight the canvas drop zone
+    var canvasEl = this._canvas ? this._canvas.getElement() : null;
+    if (canvasEl) {
+      var container = canvasEl.closest('.iw-dag-canvas');
+      if (container) container.classList.add('iw-dag-canvas--drop-target');
+    }
   }
 
   _removeGhost() {
@@ -73848,6 +73901,19 @@ class NodePalette {
       this._ghostEl.parentNode.removeChild(this._ghostEl);
     }
     this._ghostEl = null;
+
+    // Restore source palette item
+    if (this._dragSourceEl) {
+      this._dragSourceEl.classList.remove('iw-palette-item--dragging');
+    }
+    this._dragSourceEl = null;
+
+    // Remove canvas drop-zone highlight
+    var canvasEl = this._canvas ? this._canvas.getElement() : null;
+    if (canvasEl) {
+      var container = canvasEl.closest('.iw-dag-canvas');
+      if (container) container.classList.remove('iw-dag-canvas--drop-target');
+    }
   }
 
   /* ═══════════════════════════════════════════════════════════════
