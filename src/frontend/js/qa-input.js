@@ -111,7 +111,9 @@ class QaInput {
     };
 
     var self = this;
+    console.log('[QA-DIAG] ═══ QaStartCodeAnalysis invoke ═══', JSON.stringify(request));
     conn.invoke('QaStartCodeAnalysis', request).then(function (result) {
+      console.log('[QA-DIAG] QaStartCodeAnalysis result:', result);
       self._isAnalyzing = false;
       self._btn.textContent = 'Analyze';
 

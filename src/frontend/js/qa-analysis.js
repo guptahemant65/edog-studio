@@ -122,7 +122,8 @@ class QaAnalysis {
   // ── Event Handlers (called by QaPanel) ──
 
   onProgress(data) {
-    // data: { phase, phaseIndex, totalPhases, percentComplete, detail, metrics }
+    console.log('[QA-DIAG] onProgress:', data.phase, data.phaseIndex + '/' + data.totalPhases,
+      data.percentComplete + '%', data.detail || '', data.metrics ? JSON.stringify(data.metrics) : '');
     this._isComplete = false;
     this._isCancelled = false;
 
@@ -162,6 +163,7 @@ class QaAnalysis {
     // for every emit — producing the duplicate "Review Scenarios"
     // buttons users saw in the curation handoff.
     if (data.phase === 'complete' && !this._isComplete) {
+      console.log('[QA-DIAG] *** ANALYSIS COMPLETE — scenarios received:', this._scenarios.length);
       this._isComplete = true;
       if (this._cancelBtn) this._cancelBtn.style.display = 'none';
       this._showProceedButton();
@@ -169,6 +171,7 @@ class QaAnalysis {
   }
 
   onCancelled(data) {
+    console.log('[QA-DIAG] onCancelled:', data.reason);
     this._isCancelled = true;
     // Mark the active phase as cancelled
     for (var i = 0; i < this._phases.length; i++) {
@@ -187,9 +190,8 @@ class QaAnalysis {
   }
 
   onWarning(data) {
-    // data: { warning, message }
     var msg = data.message || data.warning || 'Unknown warning';
-    console.warn('[QA] Pipeline warning:', msg);
+    console.warn('[QA-DIAG] onWarning:', data.warning, msg);
 
     // Show degradation indicator on the active phase
     for (var i = 0; i < this._phases.length; i++) {
@@ -220,7 +222,7 @@ class QaAnalysis {
     var msg = (data && data.message) || 'Unknown analysis error';
     var code = (data && (data.errorCode || data.ErrorCode)) || 'UNKNOWN';
     var recoverable = !!(data && (data.recoverable || data.Recoverable));
-    console.error('[QA] Analysis-phase error', code, msg);
+    console.error('[QA-DIAG] onAnalysisPhaseError:', code, msg, 'recoverable=' + recoverable);
 
     // Mark the scenario_generation phase as failed (red ✕).
     for (var i = 0; i < this._phases.length; i++) {
@@ -319,8 +321,11 @@ class QaAnalysis {
   }
 
   onScenarioGenerated(data) {
-    // data: { scenarioIndex, totalExpected, scenario: { id, title, category, priority, technique, invariantsAddressed, groundingEvidence, ... } }
     var scn = data.scenario;
+    console.log('[QA-DIAG] onScenarioGenerated:', scn ? scn.title : '(null)', 
+      'type=' + (scn && scn.stimulusType), 'cat=' + (scn && scn.category),
+      'confidence=' + (scn && scn.metadata && scn.metadata.confidence),
+      'index=' + data.scenarioIndex + '/' + data.totalExpected);
     if (!scn) return;
     // Defence-in-depth dedup. The qa topic stream's Phase 1 snapshot
     // (EdogPlaygroundHub.SubscribeToTopic) would otherwise replay every
@@ -392,6 +397,8 @@ class QaAnalysis {
    * on the analysis-phase footer as a heads-up.
    */
   onLintFindings(data) {
+    console.log('[QA-DIAG] onLintFindings:', (data && data.findings ? data.findings.length : 0), 
+      'findings, errors=' + (data && data.errorCount), 'warnings=' + (data && data.warningCount));
     if (!data) return;
     this._lintFindings = Array.isArray(data.findings) ? data.findings.slice() : [];
     // Surface a non-toast badge in the metrics line — purely informational.
@@ -478,10 +485,16 @@ class QaAnalysis {
    * @param {string} zoneId — impact zone identifier
    */
   fetchCatalogHealth(zoneId) {
+    console.log('[QA-DIAG] fetchCatalogHealth:', zoneId);
     var self = this;
     fetch('/api/contract/catalog/' + encodeURIComponent(zoneId))
       .then(function (r) { return r.json(); })
-      .then(function (snapshot) { self.renderCatalogHealth(snapshot); })
-      .catch(function (err) { console.error('[QA] catalog-health fetch failed:', err); });
+      .then(function (snapshot) {
+        console.log('[QA-DIAG] catalogHealth response:', snapshot.snapshotId, 
+          'slots=' + (snapshot.slots ? snapshot.slots.length : 0),
+          'providers=' + JSON.stringify(snapshot.providerStatus));
+        self.renderCatalogHealth(snapshot);
+      })
+      .catch(function (err) { console.error('[QA-DIAG] catalog-health fetch FAILED:', err); });
   }
 }

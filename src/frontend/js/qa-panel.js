@@ -169,10 +169,7 @@ class QaPanel {
       this._renderLlmPill({ state: 'refreshing' });
     }
     conn.invoke('QaGetCapabilities').then((report) => {
-      // Log the full report so the user can diagnose why V2 isn't
-      // ready (e.g., missing AZURE_OPENAI_* env vars, deployment
-      // not found) without having to hover the pill.
-      console.info('[qa-panel] QaGetCapabilities ←', report);
+      console.log('[QA-DIAG] QaGetCapabilities result:', JSON.stringify(report));
       this._renderLlmPill(report);
       // If the probe was mid-flight, poll once more after 4s. The
       // dual probe normally takes < 2s on a healthy tenant.
@@ -273,6 +270,7 @@ class QaPanel {
   }
 
   _setStage(stage) {
+    console.log('[QA-DIAG] Stage transition:', this._activeStage, '→', stage);
     this._activeStage = stage;
 
     const stageOrder = ['input', 'analysis', 'curation', 'execution', 'results'];
@@ -404,21 +402,27 @@ class QaPanel {
 
       // Execution events -> qa-execution.js
       case 'QaRunStarted':
+        console.log('[QA-DIAG] RunStarted:', d.runId, 'scenarios=' + (d.totalScenarios || d.TotalScenarios));
         if (this._execution) this._execution.onRunStarted(d);
         break;
       case 'QaScenarioStarted':
+        console.log('[QA-DIAG] ScenarioStarted:', d.scenarioId, d.title || d.Title);
         if (this._execution) this._execution.onScenarioStarted(d);
         break;
       case 'QaScenarioPhaseChanged':
+        console.log('[QA-DIAG] PhaseChanged:', d.scenarioId, d.phase || d.Phase);
         if (this._execution) this._execution.onPhaseChanged(d);
         break;
       case 'QaExpectationMatched':
+        console.log('[QA-DIAG] ExpectationMatched:', d.scenarioId, d.expectationIndex, 'passed=' + d.passed);
         if (this._execution) this._execution.onExpectationMatched(d);
         break;
       case 'QaScenarioCompleted':
+        console.log('[QA-DIAG] ScenarioCompleted:', d.scenarioId, 'verdict=' + (d.verdict || d.Verdict));
         if (this._execution) this._execution.onScenarioCompleted(d);
         break;
       case 'QaRunCompleted':
+        console.log('[QA-DIAG] *** RunCompleted:', d.runId, 'passed=' + d.passedCount, 'failed=' + d.failedCount);
         if (this._execution) this._execution.onRunCompleted(d);
         this._setStage('results');
         if (this._results) this._results.loadRun(d.runId || this._runId);
