@@ -79560,24 +79560,26 @@ class ThemeSchemaPage {
     this._onValidationChange = options.onValidationChange;
 
     this._selectedTheme = null;
-    // NOTE: medallion-on state is DERIVED from this._schemas (see _isMedallionOn).
-    // Do not store a separate _medallionOn flag — it has caused desync bugs where
-    // a chip click turned the toggle off (see fix history for the chip handler).
-    this._schemas = { dbo: true, bronze: false, silver: false, gold: false };
+    // Medallion state is a single level: 0=none, 1=bronze, 2=bronze+silver, 3=all.
+    // Schemas are DERIVED from the level. This eliminates the entire class of
+    // desync bugs that plagued the old three-boolean + hierarchy approach.
+    this._medallionLevel = 0;
 
     this._render();
     this._bindEvents();
   }
 
-  _isMedallionOn() {
-    return !!(this._schemas.bronze || this._schemas.silver || this._schemas.gold);
+  _getSchemas() {
+    var lvl = this._medallionLevel;
+    return { dbo: true, bronze: lvl >= 1, silver: lvl >= 2, gold: lvl >= 3 };
   }
 
   activate(wizardState) {
-    // Restore state if navigating back
     if (wizardState && wizardState.theme) {
       this._selectedTheme = wizardState.theme;
-      this._schemas = Object.assign({ dbo: true, bronze: false, silver: false, gold: false }, wizardState.schemas);
+      // Reconstruct level from schemas (handles back-navigation restore)
+      var s = wizardState.schemas || {};
+      this._medallionLevel = s.gold ? 3 : s.silver ? 2 : s.bronze ? 1 : 0;
       this._updateThemeUI();
       this._updateMedallionUI();
     }
@@ -79593,7 +79595,7 @@ class ThemeSchemaPage {
 
   collectState(state) {
     state.theme = this._selectedTheme;
-    state.schemas = Object.assign({}, this._schemas);
+    state.schemas = this._getSchemas();
     state.dirty = true;
   }
 
@@ -79675,52 +79677,37 @@ class ThemeSchemaPage {
       });
     }
 
-    // Medallion toggle — flips ALL three medallion schemas together.
-    // _isMedallionOn() reads schemas, so we don't track a separate flag.
+    // Medallion toggle — switches between level 0 (off) and level 3 (all on).
     var toggle = this._containerEl.querySelector('#iw-medallion-toggle');
     if (toggle) {
       toggle.addEventListener('click', function(e) {
         e.preventDefault();
         e.stopPropagation();
-        var isOn = self._isMedallionOn();
-        if (isOn) {
-          // Turn OFF: disable all medallion schemas
-          self._schemas.bronze = false;
-          self._schemas.silver = false;
-          self._schemas.gold = false;
-        } else {
-          // Turn ON: enable all three by default
-          self._schemas.bronze = true;
-          self._schemas.silver = true;
-          self._schemas.gold = true;
-        }
+        self._medallionLevel = self._medallionLevel > 0 ? 0 : 3;
         self._updateMedallionUI();
       });
     }
 
-    // Medallion chip clicks — enforce hierarchy: Bronze → Silver → Gold.
-    // Selecting a higher tier auto-enables all lower tiers.
-    // Deselecting a lower tier auto-disables all higher tiers.
+    // Medallion chip clicks — each chip maps to a level (bronze=1, silver=2, gold=3).
+    // Clicking an active chip at or below current level drops to that level - 1.
+    // Clicking an inactive chip raises to that level.
+    var CHIP_LEVEL = { bronze: 1, silver: 2, gold: 3 };
     var chips = this._containerEl.querySelector('#iw-medallion-chips');
     if (chips) {
       chips.addEventListener('click', function(e) {
         var chip = e.target.closest('.iw-medallion-chip');
         if (!chip) return;
         var schema = chip.getAttribute('data-schema');
-        if (!schema || !(schema in self._schemas) || schema === 'dbo') return;
+        var chipLevel = CHIP_LEVEL[schema];
+        if (!chipLevel) return;
         e.preventDefault();
         e.stopPropagation();
-        var wasOn = self._schemas[schema];
-        if (wasOn) {
-          // Deselecting: turn off this + everything above
-          if (schema === 'bronze') { self._schemas.bronze = false; self._schemas.silver = false; self._schemas.gold = false; }
-          else if (schema === 'silver') { self._schemas.silver = false; self._schemas.gold = false; }
-          else if (schema === 'gold') { self._schemas.gold = false; }
+        if (self._medallionLevel >= chipLevel) {
+          // Deselect: drop to one level below this chip
+          self._medallionLevel = chipLevel - 1;
         } else {
-          // Selecting: turn on this + everything below
-          if (schema === 'gold') { self._schemas.bronze = true; self._schemas.silver = true; self._schemas.gold = true; }
-          else if (schema === 'silver') { self._schemas.bronze = true; self._schemas.silver = true; }
-          else if (schema === 'bronze') { self._schemas.bronze = true; }
+          // Select: raise to this chip's level
+          self._medallionLevel = chipLevel;
         }
         self._updateMedallionUI();
       });
@@ -79744,7 +79731,8 @@ class ThemeSchemaPage {
   _updateMedallionUI() {
     var toggle = this._containerEl.querySelector('#iw-medallion-toggle');
     var chipsContainer = this._containerEl.querySelector('#iw-medallion-chips');
-    var on = this._isMedallionOn();
+    var lvl = this._medallionLevel;
+    var on = lvl > 0;
 
     if (toggle) {
       toggle.classList.toggle('on', on);
@@ -79755,15 +79743,13 @@ class ThemeSchemaPage {
       chipsContainer.classList.toggle('show', on);
     }
 
-    // Update individual chips
+    // Each chip is active if the level reaches its threshold
+    var CHIP_LEVEL = { bronze: 1, silver: 2, gold: 3 };
     var chipEls = this._containerEl.querySelectorAll('.iw-medallion-chip');
     for (var i = 0; i < chipEls.length; i++) {
       var schema = chipEls[i].getAttribute('data-schema');
-      if (this._schemas[schema]) {
-        chipEls[i].classList.add('active');
-      } else {
-        chipEls[i].classList.remove('active');
-      }
+      var threshold = CHIP_LEVEL[schema] || 99;
+      chipEls[i].classList.toggle('active', lvl >= threshold);
     }
   }
 
