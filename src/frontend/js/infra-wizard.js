@@ -1845,11 +1845,17 @@ class ThemeSchemaPage {
     this._onValidationChange = options.onValidationChange;
 
     this._selectedTheme = null;
-    this._medallionOn = false;
+    // NOTE: medallion-on state is DERIVED from this._schemas (see _isMedallionOn).
+    // Do not store a separate _medallionOn flag — it has caused desync bugs where
+    // a chip click turned the toggle off (see fix history for the chip handler).
     this._schemas = { dbo: true, bronze: false, silver: false, gold: false };
 
     this._render();
     this._bindEvents();
+  }
+
+  _isMedallionOn() {
+    return !!(this._schemas.bronze || this._schemas.silver || this._schemas.gold);
   }
 
   activate(wizardState) {
@@ -1857,7 +1863,6 @@ class ThemeSchemaPage {
     if (wizardState && wizardState.theme) {
       this._selectedTheme = wizardState.theme;
       this._schemas = Object.assign({ dbo: true, bronze: false, silver: false, gold: false }, wizardState.schemas);
-      this._medallionOn = this._schemas.bronze || this._schemas.silver || this._schemas.gold;
       this._updateThemeUI();
       this._updateMedallionUI();
     }
@@ -1914,7 +1919,7 @@ class ThemeSchemaPage {
           '<span style="font-size:10px;color:var(--text-muted,#8e95a5)">Always included</span>' +
         '</div>' +
         '<div class="iw-schema-row" style="margin-top:12px">' +
-          '<button class="iw-toggle-track" id="iw-medallion-toggle">' +
+          '<button type="button" class="iw-toggle-track" id="iw-medallion-toggle" aria-pressed="false" aria-label="Toggle medallion schemas">' +
             '<div class="iw-toggle-thumb"></div>' +
           '</button>' +
           '<span class="iw-toggle-label">Add medallion schemas</span>' +
@@ -1955,37 +1960,33 @@ class ThemeSchemaPage {
       });
     }
 
-    // Medallion toggle
+    // Medallion toggle — flips ALL three medallion schemas together.
+    // _isMedallionOn() reads schemas, so we don't track a separate flag.
     var toggle = this._containerEl.querySelector('#iw-medallion-toggle');
     if (toggle) {
-      toggle.addEventListener('click', function() {
-        self._medallionOn = !self._medallionOn;
-        if (self._medallionOn) {
-          // Enable all by default when toggling on
-          self._schemas.bronze = true;
-          self._schemas.silver = true;
-          self._schemas.gold = true;
-        } else {
-          self._schemas.bronze = false;
-          self._schemas.silver = false;
-          self._schemas.gold = false;
-        }
+      toggle.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var turnOn = !self._isMedallionOn();
+        self._schemas.bronze = turnOn;
+        self._schemas.silver = turnOn;
+        self._schemas.gold = turnOn;
         self._updateMedallionUI();
       });
     }
 
-    // Medallion chip clicks
+    // Medallion chip clicks — flip just one schema. Toggle visibility follows
+    // automatically because _isMedallionOn() is derived from schemas.
     var chips = this._containerEl.querySelector('#iw-medallion-chips');
     if (chips) {
       chips.addEventListener('click', function(e) {
         var chip = e.target.closest('.iw-medallion-chip');
         if (!chip) return;
         var schema = chip.getAttribute('data-schema');
-        if (!schema) return;
+        if (!schema || !(schema in self._schemas) || schema === 'dbo') return;
+        e.preventDefault();
+        e.stopPropagation();
         self._schemas[schema] = !self._schemas[schema];
-        // Sync toggle: ON if any schema is active, OFF only if all are off
-        var anyOn = self._schemas.bronze || self._schemas.silver || self._schemas.gold;
-        self._medallionOn = anyOn;
         self._updateMedallionUI();
       });
     }
@@ -2008,21 +2009,15 @@ class ThemeSchemaPage {
   _updateMedallionUI() {
     var toggle = this._containerEl.querySelector('#iw-medallion-toggle');
     var chipsContainer = this._containerEl.querySelector('#iw-medallion-chips');
+    var on = this._isMedallionOn();
 
     if (toggle) {
-      if (this._medallionOn) {
-        toggle.classList.add('on');
-      } else {
-        toggle.classList.remove('on');
-      }
+      toggle.classList.toggle('on', on);
+      toggle.setAttribute('aria-pressed', on ? 'true' : 'false');
     }
 
     if (chipsContainer) {
-      if (this._medallionOn) {
-        chipsContainer.classList.add('show');
-      } else {
-        chipsContainer.classList.remove('show');
-      }
+      chipsContainer.classList.toggle('show', on);
     }
 
     // Update individual chips
