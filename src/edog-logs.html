@@ -79516,18 +79516,25 @@ class ThemeSchemaPage {
       toggle.addEventListener('click', function(e) {
         e.preventDefault();
         e.stopPropagation();
-        var turnOn = !self._isMedallionOn();
-        console.log('[MEDALLION-TOGGLE] clicked. turnOn=' + turnOn, 'before:', JSON.stringify(self._schemas));
-        self._schemas.bronze = turnOn;
-        self._schemas.silver = turnOn;
-        self._schemas.gold = turnOn;
-        console.log('[MEDALLION-TOGGLE] after:', JSON.stringify(self._schemas));
+        var isOn = self._isMedallionOn();
+        if (isOn) {
+          // Turn OFF: disable all medallion schemas
+          self._schemas.bronze = false;
+          self._schemas.silver = false;
+          self._schemas.gold = false;
+        } else {
+          // Turn ON: enable all three by default
+          self._schemas.bronze = true;
+          self._schemas.silver = true;
+          self._schemas.gold = true;
+        }
         self._updateMedallionUI();
       });
     }
 
-    // Medallion chip clicks — flip just one schema. Toggle visibility follows
-    // automatically because _isMedallionOn() is derived from schemas.
+    // Medallion chip clicks — individual schema selection.
+    // Chips are independent toggles. At least one must stay ON
+    // to keep the medallion switch active.
     var chips = this._containerEl.querySelector('#iw-medallion-chips');
     if (chips) {
       chips.addEventListener('click', function(e) {
@@ -79537,9 +79544,15 @@ class ThemeSchemaPage {
         if (!schema || !(schema in self._schemas) || schema === 'dbo') return;
         e.preventDefault();
         e.stopPropagation();
-        console.log('[MEDALLION-CHIP] clicked schema=' + schema, 'before:', JSON.stringify(self._schemas));
-        self._schemas[schema] = !self._schemas[schema];
-        console.log('[MEDALLION-CHIP] after:', JSON.stringify(self._schemas), 'isMedallionOn=' + self._isMedallionOn());
+        var wasOn = self._schemas[schema];
+        // Don't allow deselecting the LAST active schema — use the toggle for that
+        if (wasOn) {
+          var otherOn = (schema !== 'bronze' && self._schemas.bronze) ||
+                        (schema !== 'silver' && self._schemas.silver) ||
+                        (schema !== 'gold' && self._schemas.gold);
+          if (!otherOn) return; // Can't deselect last one — use toggle to turn all off
+        }
+        self._schemas[schema] = !wasOn;
         self._updateMedallionUI();
       });
     }
