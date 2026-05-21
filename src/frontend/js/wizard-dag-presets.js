@@ -16,6 +16,20 @@
 
 var DAG_PRESETS_DATA = [
   {
+    id: 'import-lakehouse',
+    title: 'Import from Lakehouse',
+    subtitle: 'Replicate an existing lakehouse \u2014 cherry-pick its tables.',
+    nodeCount: 'N',
+    badge: 'Advanced',
+    action: 'import',
+    svg: function() {
+      // Download / import arrow into a tray
+      return '<path d="M60 8 L60 36" class="iw-dag-presets-line" stroke-linecap="round"/>'
+        + '<path d="M48 26 L60 38 L72 26" class="iw-dag-presets-line" fill="none" stroke-linecap="round" stroke-linejoin="round"/>'
+        + '<path d="M30 46 L30 52 L90 52 L90 46" class="iw-dag-presets-line" fill="none" stroke-linecap="round" stroke-linejoin="round"/>';
+    }
+  },
+  {
     id: 'single-source-mlv',
     title: 'Single Source MLV',
     subtitle: 'One table, one view — quickest FLT setup.',
@@ -225,6 +239,7 @@ class DagPresets {
     this._canvas = options.dagCanvas;
     this._eventBus = options.eventBus;
     this._schemas = options.schemas || { dbo: true, bronze: false, silver: false, gold: false };
+    this._onImport = typeof options.onImport === 'function' ? options.onImport : null;
     this._dismissed = false;
     this._destroyed = false;
     this._overlayEl = null;
@@ -370,7 +385,10 @@ class DagPresets {
     // Stats line
     var stats = document.createElement('div');
     stats.className = 'iw-dag-presets-card-stats';
-    stats.innerHTML = '<span class="iw-dag-presets-stat">' + preset.nodeCount + ' nodes</span>'
+    var nodeLabel = (typeof preset.nodeCount === 'number')
+      ? (preset.nodeCount + ' nodes')
+      : (preset.nodeCount + ' nodes');
+    stats.innerHTML = '<span class="iw-dag-presets-stat">' + nodeLabel + '</span>'
       + '<span class="iw-dag-presets-badge iw-dag-presets-badge--' + preset.badge.toLowerCase() + '">'
       + preset.badge + '</span>';
     body.appendChild(stats);
@@ -389,6 +407,15 @@ class DagPresets {
 
   _applyPreset(preset) {
     if (!this._canvas) return;
+    // Special preset that opens an external dialog instead of building nodes.
+    if (preset.action === 'import') {
+      if (this._onImport) {
+        this._onImport();
+      } else {
+        if (window.edogToast) window.edogToast('Import from Lakehouse is not available here', 'warning');
+      }
+      return;
+    }
     var canvas = this._canvas;
     var schemas = this._schemas;
     if (typeof canvas.batchOperation === 'function') {

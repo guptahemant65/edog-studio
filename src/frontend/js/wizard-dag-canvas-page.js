@@ -7,7 +7,7 @@
  * @author Pixel — EDOG Studio hivemind
  */
 
-/* global DagCanvas, NodePalette, CodePreviewPanel, CodeGenerationEngine, WizardEventBus, UndoRedoManager, AutoLayoutEngine, DagPresets, NodePopover, IW_EVENTS */
+/* global DagCanvas, NodePalette, CodePreviewPanel, CodeGenerationEngine, WizardEventBus, UndoRedoManager, AutoLayoutEngine, DagPresets, NodePopover, ImportLakehouseDialog, IW_EVENTS */
 
 class DagCanvasPage {
   constructor(options) {
@@ -15,9 +15,13 @@ class DagCanvasPage {
     this._eventBus = options.eventBus;
     this._schemas = options.schemas || { dbo: true, bronze: false, silver: false, gold: false };
     this._theme = options.theme || 'default';
+    this._apiClient = options.apiClient || null;
+    this._onMedallionUpgrade = typeof options.onMedallionUpgrade === 'function'
+      ? options.onMedallionUpgrade : null;
     this._onStateChange = options.onStateChange || function() {};
     this._destroyed = false;
     this._firstActivateDone = false;
+    this._importDialog = null;
 
     // Root container
     this._rootEl = document.createElement('div');
@@ -111,7 +115,8 @@ class DagCanvasPage {
       containerEl: this._canvasContainer,
       dagCanvas: this._canvas,
       eventBus: this._eventBus,
-      schemas: this._schemas
+      schemas: this._schemas,
+      onImport: function() { self._openImportDialog(); }
     });
 
     // Wire state-change notifications back to the wizard
@@ -497,6 +502,10 @@ class DagCanvasPage {
     this._unsubs = [];
 
     // Destroy sub-components in reverse creation order
+    if (this._importDialog) {
+      this._importDialog.destroy();
+      this._importDialog = null;
+    }
     if (this._presets) {
       this._presets.destroy();
       this._presets = null;
@@ -551,6 +560,64 @@ class DagCanvasPage {
   }
 
   // ── Private Helpers ───────────────────────────────────────────
+
+  _openImportDialog() {
+    var self = this;
+    if (this._destroyed) return;
+    if (typeof ImportLakehouseDialog === 'undefined') {
+      if (window.edogToast) window.edogToast('Import dialog unavailable', 'error');
+      return;
+    }
+    // Tear down any existing instance
+    if (this._importDialog) {
+      this._importDialog.destroy();
+      this._importDialog = null;
+    }
+    // Hide the preset overlay so the import dialog owns the space
+    if (this._presets && typeof this._presets._dismiss === 'function') {
+      this._presets._dismiss();
+    }
+    this._importDialog = new ImportLakehouseDialog({
+      containerEl: this._canvasContainer,
+      apiClient: this._apiClient,
+      canvas: this._canvas,
+      eventBus: this._eventBus,
+      schemas: this._schemas,
+      onMedallionUpgrade: function(level) {
+        if (self._onMedallionUpgrade) self._onMedallionUpgrade(level);
+        // Keep local + sub-component schemas in sync
+        self._schemas = { dbo: true, bronze: level >= 1, silver: level >= 2, gold: level >= 3 };
+        if (self._presets && typeof self._presets.updateSchemas === 'function') {
+          self._presets.updateSchemas(self._schemas);
+        }
+        if (self._palette && typeof self._palette.updateSchemas === 'function') {
+          self._palette.updateSchemas(self._schemas);
+        }
+      },
+      onComplete: function(result) {
+        if (self._importDialog) { self._importDialog.destroy(); self._importDialog = null; }
+        // Refresh palette node count + code preview, run validation
+        if (self._palette && typeof self._palette.updateNodeCount === 'function' && self._canvas) {
+          self._palette.updateNodeCount(self._canvas.getNodeCount());
+        }
+        self._refreshCodePreview();
+        self._runValidation();
+        if (self._codePanel && result && result.nodeCount > 0
+            && typeof self._codePanel.expand === 'function') {
+          self._codePanel.expand();
+        }
+      },
+      onCancel: function() {
+        if (self._importDialog) { self._importDialog.destroy(); self._importDialog = null; }
+        // Re-show preset overlay if canvas is still empty
+        if (self._presets) {
+          self._presets._dismissed = false;
+          self._presets.refreshVisibility();
+        }
+      }
+    });
+    this._importDialog.show();
+  }
 
   _refreshCodePreview() {
     if (!this._codePanel || !this._canvas) return;

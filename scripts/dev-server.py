@@ -2632,6 +2632,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_feature_flags_raw(wire_key)
         elif self.path.startswith("/api/mwc/tables"):
             self._serve_mwc_tables()
+        elif self.path.startswith("/api/import-dag"):
+            self._serve_import_dag()
         elif self.path.startswith("/api/mwc/table-stats"):
             self._serve_table_stats()
         elif self.path.startswith("/api/onelake/table-metadata"):
@@ -5404,6 +5406,79 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         _atomic_write(CONFIG_PATH, json.dumps(cfg, indent=2))
 
         self._json_response(200, info)
+
+    def _serve_import_dag(self):
+        """GET /api/import-dag — fetch getLatestDag for an arbitrary lakehouse.
+
+        Acquires a LiveTable MWC token on demand for the target ws/lh/cap and
+        proxies a single GET to the FLT controller's getLatestDag endpoint.
+        Used by the wizard's "Import from Lakehouse" flow to replicate an
+        existing lakehouse's DAG topology without requiring connected mode.
+
+        Query params: wsId, lhId, capId (all required).
+        Returns: 200 with DAG JSON on success; 404 when lakehouse has no FLT
+                 service / never had MLVs defined; structured error otherwise.
+        """
+        parsed = urllib.parse.urlparse(self.path)
+        params = urllib.parse.parse_qs(parsed.query)
+        ws_id = params.get("wsId", [None])[0]
+        lh_id = params.get("lhId", [None])[0]
+        cap_id = params.get("capId", [None])[0]
+        if not all([ws_id, lh_id, cap_id]):
+            self._json_response(
+                400,
+                {"error": "missing_params", "message": "wsId, lhId, and capId are required"},
+            )
+            return
+
+        bearer, _ = _read_cache(BEARER_CACHE)
+        if not bearer:
+            bearer = _ensure_bearer()
+        if not bearer:
+            self._json_response(401, {"error": "no_bearer", "message": "No bearer token available"})
+            return
+
+        try:
+            mwc_token, host = _get_mwc_token(bearer, ws_id, lh_id, cap_id, workload_type="LiveTable")
+        except urllib.error.HTTPError as e:
+            body = ""
+            with contextlib.suppress(Exception):
+                body = e.read().decode("utf-8", "replace")[:500]
+            self._json_response(e.code, {"error": "mwc_token_error", "message": body or str(e)})
+            return
+        except Exception as e:
+            self._json_response(502, {"error": "mwc_token_error", "message": str(e)})
+            return
+
+        target_url = (
+            f"{host}/webapi/capacities/{cap_id}/workloads/LiveTable"
+            f"/LiveTableService/automatic"
+            f"/v1/workspaces/{ws_id}/lakehouses/{lh_id}"
+            f"/liveTable/getLatestDag?showExtendedLineage=true"
+        )
+
+        try:
+            req = urllib.request.Request(target_url, method="GET")
+            req.add_header("Authorization", f"MwcToken {mwc_token}")
+            req.add_header("Content-Type", "application/json")
+            ctx = ssl.create_default_context()
+            with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
+                resp_body = resp.read()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(resp_body)))
+            self.end_headers()
+            self.wfile.write(resp_body)
+        except urllib.error.HTTPError as e:
+            err_body = ""
+            with contextlib.suppress(Exception):
+                err_body = e.read().decode("utf-8", "replace")[:500]
+            self._json_response(
+                e.code,
+                {"error": "flt_import_error", "message": str(e), "detail": err_body},
+            )
+        except Exception as e:
+            self._json_response(502, {"error": "flt_import_error", "message": str(e)})
 
     def _serve_mwc_tables(self):
         """GET /api/mwc/tables — list lakehouse tables across all schemas.

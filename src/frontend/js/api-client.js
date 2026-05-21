@@ -565,6 +565,40 @@ class FabricApiClient {
     return this._fltFetch('/liveTable/getLatestDag?showExtendedLineage=true');
   }
 
+  /**
+   * Fetch getLatestDag for an arbitrary lakehouse (disconnected mode).
+   *
+   * Used by the wizard's "Import from Lakehouse" flow. The dev-server
+   * acquires a LiveTable MWC token on demand for the target ws/lh/cap
+   * and proxies the call. Returns null on any failure so callers can
+   * gracefully fall back to the table-listing path.
+   *
+   * @param {string} workspaceId
+   * @param {string} lakehouseId
+   * @param {string} capacityId
+   * @returns {Promise<object|null>} DAG payload or null.
+   */
+  async getLatestDagForLakehouse(workspaceId, lakehouseId, capacityId) {
+    if (!workspaceId || !lakehouseId || !capacityId) return null;
+    try {
+      const qs = new URLSearchParams({
+        wsId: workspaceId,
+        lhId: lakehouseId,
+        capId: capacityId,
+      }).toString();
+      const resp = await fetch(`/api/import-dag?${qs}`);
+      if (!resp.ok) {
+        console.warn('Import DAG fetch failed:', resp.status);
+        return null;
+      }
+      const text = await resp.text();
+      return text ? JSON.parse(text) : null;
+    } catch (e) {
+      console.warn('Import DAG fetch error:', e.message);
+      return null;
+    }
+  }
+
   async runDag(iterationId) {
     if (!this._mwcToken) return null;
     return this._fltFetch(`/liveTableSchedule/runDAG/${iterationId}`, { method: 'POST' });

@@ -135,6 +135,7 @@ JS_MODULES = [
     "js/wizard-node-palette.js",
     "js/wizard-code-preview.js",
     "js/wizard-dag-presets.js",
+    "js/wizard-import-lakehouse.js",
     "js/wizard-node-popover.js",
     "js/wizard-dag-canvas-page.js",
     "js/wizard-review-summary.js",

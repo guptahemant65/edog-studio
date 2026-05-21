@@ -536,9 +536,28 @@ class InfraWizardDialog {
     // Page 2: DAG Canvas (Build)
     var page2Content = this._pageContainerEl.querySelector('#iw-page-2 .iw-page-content');
     this._pages[2] = new DagCanvasPage({
+      apiClient: this._api,
       eventBus: this._eventBus,
       schemas: this._state.schemas,
       theme: this._state.theme,
+      onMedallionUpgrade: function(level) {
+        // Update wizard state so review summary + downstream pages see it.
+        self._state.schemas = {
+          dbo: true,
+          bronze: level >= 1,
+          silver: level >= 2,
+          gold: level >= 3
+        };
+        // Reflect on the Theme/Schema page (already constructed) so
+        // back-navigation shows the upgraded medallion level instead
+        // of the stale one. Uses the same activate() path that
+        // back-navigation already takes.
+        if (self._pages[1] && typeof self._pages[1].activate === 'function') {
+          self._pages[1].activate({ theme: self._state.theme, schemas: self._state.schemas });
+        }
+        self._state.dirty = true;
+        if (self.onStateChange) self.onStateChange(self._state);
+      },
       onStateChange: function() {
         self._state.dirty = true;
         if (self.onStateChange) self.onStateChange(self._state);
