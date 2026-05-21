@@ -755,7 +755,7 @@
 
 .sp-transform-row {
   display: grid;
-  grid-template-columns: 18px minmax(0, 1.4fr) auto auto auto;
+  grid-template-columns: 18px minmax(0, 1.2fr) max-content 88px minmax(80px, max-content) max-content;
   align-items: center;
   gap: 10px;
   padding: 8px 14px 8px 17px;

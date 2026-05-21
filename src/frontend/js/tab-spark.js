@@ -757,7 +757,7 @@ class SparkSessionsTab {
       }
     }
     const violationBadge = totalViolations > 0
-      ? `<span class="sp-violation-badge" data-tt="${totalViolations} data quality violations">▲ ${totalViolations}</span>`
+      ? `<span class="sp-violation-badge" aria-label="${totalViolations} data quality violations" data-tt="${totalViolations} data quality violations">\u25B2 ${totalViolations}</span>`
       : "";
 
     const lcPct = live ? Math.min(95, (elapsed / Math.max(elapsed, 60000)) * 100) : 100;
@@ -849,7 +849,7 @@ class SparkSessionsTab {
       var rv = t.refreshOutput.totalViolations;
       if (rp != null) rowsMeta += `<span class="sp-t-rows" data-tt="${this._fmtNum(rp)} rows processed">${this._fmtNum(rp)} rows</span>`;
       if (rd > 0) rowsMeta += `<span class="sp-t-dropped" data-tt="${this._fmtNum(rd)} rows dropped">-${this._fmtNum(rd)}</span>`;
-      if (rv > 0) rowsMeta += `<span class="sp-t-violations" data-tt="${rv} constraint violations">▲ ${rv}</span>`;
+      if (rv > 0) rowsMeta += `<span class="sp-t-violations" aria-label="${rv} constraint violations" data-tt="${rv} constraint violations">\u25B2 ${rv}</span>`;
     }
     var stateTransition = "";
     if (t.previousState && t.previousState !== t.state) {
