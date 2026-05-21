@@ -744,6 +744,22 @@ class SparkSessionsTab {
         ? `<span class="sp-warm-badge cold" data-tt="Cold start (${this._fmtDuration(s.createdDurationMs)})">Cold</span>`
         : "";
 
+    // Surface lifetimeMs on disposed sessions
+    const lifetimeBadge = (s.disposed && s.lifetimeMs > 0)
+      ? `<span class="sp-lifetime-badge" data-tt="Session lifetime: ${this._fmtDuration(s.lifetimeMs)}">${this._fmtDuration(s.lifetimeMs)}</span>`
+      : "";
+
+    // Violation badge — aggregate across all transforms
+    var totalViolations = 0;
+    for (var vi = 0; vi < s.transforms.length; vi++) {
+      if (s.transforms[vi].refreshOutput && s.transforms[vi].refreshOutput.totalViolations > 0) {
+        totalViolations += s.transforms[vi].refreshOutput.totalViolations;
+      }
+    }
+    const violationBadge = totalViolations > 0
+      ? `<span class="sp-violation-badge" data-tt="${totalViolations} data quality violations">▲ ${totalViolations}</span>`
+      : "";
+
     const lcPct = live ? Math.min(95, (elapsed / Math.max(elapsed, 60000)) * 100) : 100;
     const markers = s.transforms.map((t) => {
       const at = ((t.submittedAt - s.startedAt) / Math.max(elapsed, 1)) * 100;
@@ -766,11 +782,15 @@ class SparkSessionsTab {
 
     let errorChip = "";
     if (failedTxf && failedTxf.error) {
+      var errSrc = failedTxf.error.source ? `<span class="sp-err-src-tag">${this._esc(failedTxf.error.source)}</span>` : "";
+      var errStage = failedTxf.error.stage ? `<span class="sp-err-stage-tag">${this._esc(failedTxf.error.stage)}</span>` : "";
+      var retriableTag = failedTxf.error.retriable ? `<span class="sp-tag retriable">Retriable</span>` : "";
       errorChip = `
         <div class="sp-error-chip" data-action="open-error" data-sid="${this._esc(s.id)}" data-tid="${this._esc(failedTxf.id)}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
           ${failedTxf.error.code ? `<span class="sp-err-code">${this._esc(failedTxf.error.code)}</span>` : ""}
           <span class="sp-err-msg">${this._esc(failedTxf.error.message || "Transform failed")}</span>
+          ${errSrc}${errStage}${retriableTag}
         </div>`;
     }
 
@@ -790,7 +810,9 @@ class SparkSessionsTab {
             </div>
           </div>
           <div class="sp-card-head-right">
+            ${violationBadge}
             ${warmBadge}
+            ${lifetimeBadge}
             <span class="sp-elapsed${live ? " live" : ""}" data-elapsed="${s.id}">${this._fmtElapsed(elapsed, live)}</span>
             <button class="sp-expand-btn" data-action="toggle-expand" data-sid="${this._esc(s.id)}" title="Toggle transforms">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
@@ -819,12 +841,29 @@ class SparkSessionsTab {
     const rmBadge = t.refreshMode ? `<span class="sp-rm-badge ${this._rmClass(t.refreshMode)}" data-tt="Refresh: ${this._esc(t.refreshMode)}">${this._esc(this._rmShort(t.refreshMode))}</span>` : "";
     const stripHtml = this._stateStripHtml(t);
 
+    // Surface hidden data: rows processed, violations, nodeId, previousState
+    var rowsMeta = "";
+    if (t.refreshOutput) {
+      var rp = t.refreshOutput.totalRowsProcessed;
+      var rd = t.refreshOutput.totalRowsDropped;
+      var rv = t.refreshOutput.totalViolations;
+      if (rp != null) rowsMeta += `<span class="sp-t-rows" data-tt="${this._fmtNum(rp)} rows processed">${this._fmtNum(rp)} rows</span>`;
+      if (rd > 0) rowsMeta += `<span class="sp-t-dropped" data-tt="${this._fmtNum(rd)} rows dropped">-${this._fmtNum(rd)}</span>`;
+      if (rv > 0) rowsMeta += `<span class="sp-t-violations" data-tt="${rv} constraint violations">▲ ${rv}</span>`;
+    }
+    var stateTransition = "";
+    if (t.previousState && t.previousState !== t.state) {
+      stateTransition = `<span class="sp-t-prev-state">${this._esc(t.previousState)} \u2192 </span>`;
+    }
+    var nodeIdChip = t.nodeId ? `<span class="sp-t-node-id" data-tt="Node: ${this._esc(t.nodeId)}">${this._esc(this._shortId(t.nodeId, 6))}</span>` : "";
+
     return `
       <div class="sp-transform-row${selected}" data-action="select-txf" data-sid="${this._esc(s.id)}" data-tid="${this._esc(t.id)}">
         <div class="sp-t-icon ${kindCls}">${this._esc(kindLetter)}</div>
-        <div class="sp-t-name">${rmBadge}${this._highlight(t.name)} <span class="sp-t-id">#${this._esc(this._shortId(t.id, 6))}</span></div>
+        <div class="sp-t-name">${rmBadge}${this._highlight(t.name)} <span class="sp-t-id">#${this._esc(this._shortId(t.id, 6))}</span>${nodeIdChip}</div>
+        <div class="sp-t-metrics">${rowsMeta}</div>
         <div class="sp-state-strip" data-tt="${this._esc(stateLabel)}">${stripHtml}</div>
-        <div class="sp-t-state-label">${live ? `<span class="sp-pulse" style="background:${this._stateColor(t)}"></span>` : ""}<span class="${stateCls}">${this._esc(stateLabel)}</span></div>
+        <div class="sp-t-state-label">${live ? `<span class="sp-pulse" style="background:${this._stateColor(t)}"></span>` : ""}${stateTransition}<span class="${stateCls}">${this._esc(stateLabel)}</span></div>
         <div class="sp-t-duration">${this._fmtDuration(dur)}</div>
       </div>`;
   }
@@ -982,6 +1021,9 @@ class SparkSessionsTab {
         ${this._metaCellHtml("Iteration", s.iterationId ? this._shortId(s.iterationId, 12) : "—", s.iterationId || "")}
         ${this._metaCellHtml("Artifact", s.artifactName || "—", s.artifactId || "")}
         ${this._metaCellHtml("Workspace", s.workspaceName || "—", s.workspaceId || "")}
+        ${s.tenantId ? this._metaCellHtml("Tenant", this._shortId(s.tenantId, 12), s.tenantId) : ""}
+        ${s.disposedAt ? this._metaCellHtml("Disposed", new Date(s.disposedAt).toLocaleString(), "") : ""}
+        ${s.lifetimeMs > 0 ? this._metaCellHtml("Lifetime", this._fmtDuration(s.lifetimeMs), "") : ""}
       </div>
       <div class="sp-detail-tabs">
         ${tabs.map((tb) => `<button class="sp-dtab${this._detailTab === tb.id ? " active" : ""}${tb.dim ? " dim" : ""}" data-dtab="${tb.id}">
@@ -1042,11 +1084,20 @@ class SparkSessionsTab {
       const cls = t.terminalState === "Succeeded" ? "terminal-ok" : t.terminalState === "Failed" ? "terminal-err" : t.terminalState === "Cancelled" ? "terminal-cancel" : ((t.state || "").toLowerCase().includes("cleanup") ? "cleanup" : (t.state || "").toLowerCase().includes("exec") ? "exec" : "init");
       const dur = (t.completedAt || now) - t.submittedAt;
       const sel = (this._selectedTxfId === t.id) ? " selected" : "";
+      var subSegs = "";
+      if (t.submitDurationMs > 0) {
+        var qPct = Math.min((t.submitDurationMs / Math.max(dur, 1)) * 100, 40);
+        subSegs += '<div class="sp-wf-sub queue" style="width:' + qPct.toFixed(1) + '%" data-tt="Queue: ' + this._fmtDuration(t.submitDurationMs) + '"></div>';
+      }
+      if (t.completeDurationMs > 0) {
+        var fPct = Math.min((t.completeDurationMs / Math.max(dur, 1)) * 100, 30);
+        subSegs += '<div class="sp-wf-sub finalize" style="width:' + fPct.toFixed(1) + '%;margin-left:auto" data-tt="Finalize: ' + this._fmtDuration(t.completeDurationMs) + '"></div>';
+      }
       rows += `
         <div class="sp-wf-row${sel}" data-action="select-txf-wf" data-tid="${this._esc(t.id)}">
           <div class="sp-wf-name"><span class="sp-depth">└</span>${this._esc(t.name)}</div>
           <div class="sp-wf-track">
-            <div class="sp-wf-span ${cls}" style="left:${s0.toFixed(2)}%;width:${w.toFixed(2)}%" data-tt="${this._esc(t.name)} · ${this._fmtDuration(dur)}">${this._fmtDuration(dur)}</div>
+            <div class="sp-wf-span ${cls}" style="left:${s0.toFixed(2)}%;width:${w.toFixed(2)}%" data-tt="${this._esc(t.name)} · ${this._fmtDuration(dur)}">${subSegs}<span class="sp-wf-dur">${this._fmtDuration(dur)}</span></div>
           </div>
         </div>`;
     }
