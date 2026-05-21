@@ -2024,6 +2024,15 @@ class WorkspaceExplorer {
 
     /** @type {Set<HTMLElement>} Sample-rows blocks with a modal currently open. */
     this._openSampleModals = new Set();
+
+    /**
+     * Cache for OneLake DFS timestamps keyed by either workspace ID or
+     * `${wsId}::${lhId}`. Values: `{ workspaceCreatedAt, workspaceLastActivity,
+     * lakehouseCreatedAt }`. Lazy-populated on first inspector/content render
+     * to avoid blocking the initial tree load.
+     * @type {Map<string, object>}
+     */
+    this._timestampCache = new Map();
   }
 
   async init() {
@@ -3066,6 +3075,10 @@ class WorkspaceExplorer {
     if (capacityId) {
       html += `<span class="ws-meta-badge ws-badge-env">${this._esc(envLabel)}</span>`;
     }
+    html += '<span id="ws-ts-workspace" class="ws-timestamp ws-timestamp--loading" title="Loading activity\u2026">' +
+      '<span class="ws-timestamp-label">Last activity:</span>' +
+      '<span class="ws-timestamp-value ws-timestamp-shimmer">\u2026</span>' +
+      '</span>';
     html += '</div></div>';
 
     // Action buttons with icons
@@ -3104,6 +3117,7 @@ class WorkspaceExplorer {
 
     this._contentEl.innerHTML = html;
     this._bindContentActions(ws);
+    this._populateTimestamp('ws-ts-workspace', ws.id, null, 'workspaceLastActivity', 'Last activity');
   }
 
   _bindContentActions(ws) {
@@ -3206,6 +3220,10 @@ class WorkspaceExplorer {
     if (lastMod) {
       html += `<span class="ws-modified">Modified ${lastMod}</span>`;
     }
+    html += '<span id="ws-ts-lakehouse" class="ws-timestamp ws-timestamp--loading" title="Loading creation date\u2026">' +
+      '<span class="ws-timestamp-label">Created:</span>' +
+      '<span class="ws-timestamp-value ws-timestamp-shimmer">\u2026</span>' +
+      '</span>';
     html += '</div>';
     html += '</div></div>';
 
@@ -3228,6 +3246,9 @@ class WorkspaceExplorer {
     html += '<div id="ws-tables-list">Loading tables...</div></div>';
 
     this._contentEl.innerHTML = html;
+
+    // Lazy-fetch OneLake creation date for this lakehouse.
+    this._populateTimestamp('ws-ts-lakehouse', ws.id, lh.id, 'lakehouseCreatedAt', 'Created');
 
     // Bind GUID click-to-copy
     const guidEl = this._contentEl.querySelector('.ws-guid[data-copy-id]');
@@ -5913,6 +5934,107 @@ class WorkspaceExplorer {
     } catch {
       return '\u2014';
     }
+  }
+
+  /**
+   * Format an ISO8601 timestamp as a relative phrase ("3 days ago", "just now",
+   * "Yesterday") for recent dates, falling back to an absolute date for older
+   * ones. Used for OneLake-derived created/modified timestamps.
+   * @param {string|null|undefined} isoStr
+   * @returns {string} Relative label or em-dash on failure.
+   */
+  _formatRelativeTime(isoStr) {
+    if (!isoStr) return '\u2014';
+    try {
+      var d = new Date(isoStr);
+      if (isNaN(d.getTime())) return '\u2014';
+      var diff = Date.now() - d.getTime();
+      if (diff < 0) diff = 0;
+      var SEC = 1000, MIN = 60 * SEC, HR = 60 * MIN, DAY = 24 * HR;
+      if (diff < MIN) return 'just now';
+      if (diff < HR) {
+        var m = Math.floor(diff / MIN);
+        return m + (m === 1 ? ' minute ago' : ' minutes ago');
+      }
+      if (diff < DAY) {
+        var h = Math.floor(diff / HR);
+        return h + (h === 1 ? ' hour ago' : ' hours ago');
+      }
+      if (diff < 2 * DAY) return 'Yesterday';
+      if (diff < 30 * DAY) {
+        var dys = Math.floor(diff / DAY);
+        return dys + ' days ago';
+      }
+      return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+    } catch {
+      return '\u2014';
+    }
+  }
+
+  /**
+   * Format an ISO8601 timestamp as a full localized date+time for tooltips.
+   * @param {string|null|undefined} isoStr
+   * @returns {string}
+   */
+  _formatFullDateTime(isoStr) {
+    if (!isoStr) return '';
+    try {
+      var d = new Date(isoStr);
+      if (isNaN(d.getTime())) return '';
+      return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) +
+        ', ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    } catch {
+      return '';
+    }
+  }
+
+  /**
+   * Lazy-load OneLake DFS timestamps with per-key caching. Returns null when
+   * the endpoint fails so callers can simply skip the timestamp display.
+   * @param {string} wsId
+   * @param {string} [lhId]
+   * @returns {Promise<object|null>}
+   */
+  async _fetchTimestamps(wsId, lhId) {
+    if (!wsId || !this._api || typeof this._api.getItemTimestamps !== 'function') {
+      return null;
+    }
+    var key = lhId ? wsId + '::' + lhId : wsId;
+    if (this._timestampCache.has(key)) return this._timestampCache.get(key);
+    var data = await this._api.getItemTimestamps(wsId, lhId);
+    if (data) this._timestampCache.set(key, data);
+    return data;
+  }
+
+  /**
+   * After a content panel has rendered, populate a `.ws-timestamp` placeholder
+   * once the OneLake DFS round-trip resolves. Bails silently if the panel was
+   * navigated away from before the fetch completed.
+   * @param {string} placeholderId - DOM id of the placeholder element.
+   * @param {string} wsId
+   * @param {string|null} lhId  Pass `null` for a workspace-only fetch.
+   * @param {'workspaceLastActivity'|'workspaceCreatedAt'|'lakehouseCreatedAt'} field
+   * @param {string} labelText - Prefix shown before the value ("Created", etc.).
+   */
+  async _populateTimestamp(placeholderId, wsId, lhId, field, labelText) {
+    var el = document.getElementById(placeholderId);
+    if (!el) return;
+    var data = await this._fetchTimestamps(wsId, lhId || undefined);
+    // Re-resolve — the DOM may have been swapped out during the await.
+    el = document.getElementById(placeholderId);
+    if (!el) return;
+    if (!data || !data[field]) {
+      el.remove();
+      return;
+    }
+    var iso = data[field];
+    var rel = this._formatRelativeTime(iso);
+    var full = this._formatFullDateTime(iso);
+    el.classList.remove('ws-timestamp--loading');
+    el.setAttribute('title', labelText + ': ' + full);
+    el.innerHTML =
+      '<span class="ws-timestamp-label">' + this._esc(labelText) + ':</span>' +
+      '<span class="ws-timestamp-value">' + this._esc(rel) + '</span>';
   }
 
   _esc(text) {

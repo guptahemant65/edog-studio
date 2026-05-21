@@ -24,7 +24,7 @@ import urllib.parse
 import urllib.request
 import zlib
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+from datetime import datetime, timezone
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from socketserver import ThreadingMixIn
@@ -2640,6 +2640,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_onelake_table_metadata()
         elif self.path.startswith("/api/onelake/table-preview-rows"):
             self._serve_onelake_table_rows()
+        elif self.path.startswith("/api/onelake/item-timestamps"):
+            self._serve_onelake_item_timestamps()
         elif self.path.startswith("/api/notebook/content"):
             self._serve_notebook_content()
         elif self.path.startswith("/api/notebook/kernel-specs"):
@@ -6184,6 +6186,135 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 "warnings": warnings,
             },
         )
+
+    def _serve_onelake_item_timestamps(self):
+        """GET /api/onelake/item-timestamps — surface OneLake DFS filesystem timestamps.
+
+        Query params:
+            wsId (required): Workspace object ID.
+            lhId (optional): Lakehouse object ID. When supplied, the lakehouse's
+                creation time (Windows FILETIME on the first child under the
+                lakehouse directory — typically ``Tables/``) is included.
+
+        Returns (200):
+            {
+                "workspaceCreatedAt":   ISO8601 UTC string (earliest artifact lastModified) or null,
+                "workspaceLastActivity": ISO8601 UTC string (latest artifact lastModified) or null,
+                "lakehouseCreatedAt":   ISO8601 UTC string or null  // only when lhId given
+            }
+
+        Notes:
+            - OneLake DFS returns ``lastModified`` as an HTTP-date string
+              (RFC 7231, e.g. ``"Tue, 19 May 2026 16:53:35 GMT"``).
+            - ``creationTime`` is a Windows FILETIME — 100-ns ticks since
+              1601-01-01 UTC; we convert to unix seconds with
+              ``ticks / 10_000_000 - 11_644_473_600``.
+        """
+        parsed = urllib.parse.urlparse(self.path)
+        params = urllib.parse.parse_qs(parsed.query)
+        ws_id = params.get("wsId", [None])[0]
+        lh_id = params.get("lhId", [None])[0]
+
+        if not ws_id:
+            self._json_response(
+                400, {"error": "missing_params", "message": "wsId is required"}
+            )
+            return
+
+        try:
+            token = _ensure_onelake_bearer()
+        except RuntimeError as e:
+            self._json_response(401, {"error": "onelake_bearer_unavailable", "message": str(e)})
+            return
+
+        ctx = ssl.create_default_context()
+        result: dict = {
+            "workspaceCreatedAt": None,
+            "workspaceLastActivity": None,
+            "lakehouseCreatedAt": None,
+        }
+
+        # Workspace: list root artifacts and extract earliest/latest lastModified.
+        try:
+            ws_url = f"{ONELAKE_HOST}/{ws_id}?resource=filesystem&recursive=false"
+            req = urllib.request.Request(ws_url, headers={"Authorization": f"Bearer {token}"})
+            with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
+                ws_payload = json.loads(resp.read())
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", "replace")[:200]
+            self._json_response(e.code, {"error": "onelake_error", "message": body})
+            return
+        except Exception as e:
+            self._json_response(502, {"error": "fetch_error", "message": str(e)})
+            return
+
+        earliest: datetime | None = None
+        latest: datetime | None = None
+        for entry in ws_payload.get("paths", []):
+            lm = entry.get("lastModified")
+            if not lm:
+                continue
+            try:
+                # HTTP-date is always GMT; strptime treats trailing "GMT" as a literal.
+                dt = datetime.strptime(lm, "%a, %d %b %Y %H:%M:%S GMT").replace(
+                    tzinfo=timezone.utc
+                )
+            except ValueError:
+                continue
+            if earliest is None or dt < earliest:
+                earliest = dt
+            if latest is None or dt > latest:
+                latest = dt
+
+        if earliest is not None:
+            result["workspaceCreatedAt"] = earliest.isoformat()
+        if latest is not None:
+            result["workspaceLastActivity"] = latest.isoformat()
+
+        # Lakehouse: read children of the lakehouse directory to pull the
+        # FILETIME creationTime from the first folder (Tables/).
+        if lh_id:
+            try:
+                qs = urllib.parse.urlencode(
+                    {
+                        "directory": lh_id,
+                        "recursive": "false",
+                        "resource": "filesystem",
+                    }
+                )
+                lh_url = f"{ONELAKE_HOST}/{ws_id}?{qs}"
+                req2 = urllib.request.Request(
+                    lh_url, headers={"Authorization": f"Bearer {token}"}
+                )
+                with urllib.request.urlopen(req2, timeout=15, context=ctx) as resp2:
+                    lh_payload = json.loads(resp2.read())
+            except urllib.error.HTTPError as e:
+                if e.code != 404:
+                    body = e.read().decode("utf-8", "replace")[:200]
+                    self._json_response(e.code, {"error": "onelake_error", "message": body})
+                    return
+                lh_payload = {"paths": []}
+            except Exception as e:
+                self._json_response(502, {"error": "fetch_error", "message": str(e)})
+                return
+
+            for entry in lh_payload.get("paths", []):
+                ct = entry.get("creationTime")
+                if not ct:
+                    continue
+                try:
+                    ticks = int(ct)
+                except (TypeError, ValueError):
+                    continue
+                unix_seconds = ticks / 10_000_000 - 11_644_473_600
+                try:
+                    created = datetime.fromtimestamp(unix_seconds, tz=timezone.utc)
+                except (OverflowError, OSError, ValueError):
+                    continue
+                result["lakehouseCreatedAt"] = created.isoformat()
+                break
+
+        self._json_response(200, result)
 
     def _serve_mwc_token(self):
         """POST /api/edog/mwc-token — explicitly generate and return an MWC token."""

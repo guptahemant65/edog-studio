@@ -3131,3 +3131,40 @@
   width: 100%;
   animation: ws-cd-autoClose 3s linear forwards;
 }
+
+/* ─── OneLake DFS timestamps (workspace last activity, lakehouse created) ─── */
+.ws-timestamp {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-muted, #8e95a5);
+  white-space: nowrap;
+}
+.ws-timestamp-label {
+  font-weight: 500;
+  opacity: 0.85;
+}
+.ws-timestamp-value {
+  font-weight: 500;
+  color: var(--text-secondary, var(--text-muted, #8e95a5));
+}
+.ws-timestamp--loading .ws-timestamp-value {
+  opacity: 0.6;
+}
+.ws-timestamp-shimmer {
+  display: inline-block;
+  min-width: 32px;
+  background: linear-gradient(90deg,
+    var(--surface-2, rgba(255,255,255,0.04)) 0%,
+    var(--surface-3, rgba(255,255,255,0.08)) 50%,
+    var(--surface-2, rgba(255,255,255,0.04)) 100%);
+  background-size: 200% 100%;
+  animation: ws-timestamp-shimmer 1.4s ease-in-out infinite;
+  border-radius: 3px;
+  color: transparent;
+}
+@keyframes ws-timestamp-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}

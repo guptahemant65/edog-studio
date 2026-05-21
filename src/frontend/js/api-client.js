@@ -252,6 +252,30 @@ class FabricApiClient {
     return resp.json();
   }
 
+  /**
+   * Fetch OneLake DFS filesystem timestamps for a workspace (and optionally a lakehouse).
+   *
+   * Returns `{ workspaceCreatedAt, workspaceLastActivity, lakehouseCreatedAt }`
+   * where each value is an ISO8601 UTC string or null. Returns null on failure
+   * so callers can render gracefully without try/catch.
+   *
+   * @param {string} workspaceId
+   * @param {string} [lakehouseId]
+   * @returns {Promise<{workspaceCreatedAt: string|null, workspaceLastActivity: string|null, lakehouseCreatedAt: string|null}|null>}
+   */
+  async getItemTimestamps(workspaceId, lakehouseId) {
+    if (!workspaceId) return null;
+    var qs = 'wsId=' + encodeURIComponent(workspaceId);
+    if (lakehouseId) qs += '&lhId=' + encodeURIComponent(lakehouseId);
+    try {
+      var resp = await fetch('/api/onelake/item-timestamps?' + qs);
+      if (!resp.ok) return null;
+      return await resp.json();
+    } catch (e) {
+      return null;
+    }
+  }
+
   // --- Fabric CRUD APIs ---
 
   /**
