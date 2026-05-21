@@ -1125,6 +1125,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             var sw = System.Diagnostics.Stopwatch.StartNew();
             List<Scenario> scenarios = null;
             List<LintFinding> lintFindings = null;
+            List<string> analysisDegradationFlags = null;
 
             Console.WriteLine($"[QA-DIAG] ═══ RunRealAnalysisPipelineAsync START ═══");
             Console.WriteLine($"[QA-DIAG] PrUrl={request.PrUrl ?? "(null)"}, PrId={request.PrId}");
@@ -1277,6 +1278,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     var result = await analyzer.AnalyzeAsync(diffToAnalyze, prContext, ct, progressCallback).ConfigureAwait(false);
                     scenarios = result?.Scenarios;
                     lintFindings = result?.LintFindings;
+                    analysisDegradationFlags = result?.DegradationFlags;
                     Console.WriteLine($"[QA-DIAG] AnalyzeAsync returned: scenarios={scenarios?.Count ?? 0}, lint={lintFindings?.Count ?? 0}, degradation=[{string.Join(", ", result?.DegradationFlags ?? new List<string>())}]");
 
                     // Surface degradation flags as warnings
@@ -1382,18 +1384,64 @@ namespace Microsoft.LiveTable.Service.DevMode
                 }
                 else
                 {
+                    // Build an actionable message. When degradation flags
+                    // indicate a specific V2 pipeline failure, surface that
+                    // instead of the generic "configure LLM" message so the
+                    // user knows WHY zero scenarios were produced.
+                    var degradation = analysisDegradationFlags;
+                    string noScenariosMessage;
+                    string noScenariosCause = null;
+                    if (degradation != null && degradation.Contains("llm_v2_zone_failed"))
+                    {
+                        noScenariosMessage = "No scenarios produced. The LLM pipeline ran but all "
+                            + "zone(s) failed the Architect/Editor/Validator gates. "
+                            + "Check the QaAnalysisWarning events above for the specific failure code.";
+                        noScenariosCause = "v2_zone_failed";
+                    }
+                    else if (degradation != null && degradation.Contains("llm_v2_budget_all_skipped"))
+                    {
+                        noScenariosMessage = "No scenarios produced. The LLM budget gate tripped "
+                            + "before any zone could run. Increase EDOG_QA_MAX_BUDGET_USD or check "
+                            + "QaAnalysisWarning for budget details.";
+                        noScenariosCause = "v2_budget_skipped";
+                    }
+                    else if (degradation != null && degradation.Contains("llm_v2_projection_rejected"))
+                    {
+                        noScenariosMessage = "No scenarios produced. The validator accepted scenarios "
+                            + "but projection rejected all of them (grounding evidence ref resolution failed). "
+                            + "Check QaAnalysisWarning for details.";
+                        noScenariosCause = "v2_projection_rejected";
+                    }
+                    else if (degradation != null && degradation.Contains("llm_v2_all_quarantined"))
+                    {
+                        noScenariosMessage = "No scenarios produced. The LLM generated scenarios but "
+                            + "all were quarantined by the validator. Check QaAnalysisWarning for details.";
+                        noScenariosCause = "v2_all_quarantined";
+                    }
+                    else if (degradation != null && degradation.Contains("llm_v2_no_testable_changes"))
+                    {
+                        noScenariosMessage = "No scenarios produced. The Architect determined this PR "
+                            + "has no testable behavior changes (comment-only, whitespace, or generated files).";
+                        noScenariosCause = "v2_no_testable_changes";
+                    }
+                    else
+                    {
+                        noScenariosMessage = "No scenarios produced. Configure the LLM provider "
+                            + "(AZURE_OPENAI_ENDPOINT + AZURE_OPENAI_API_KEY or run the dev-server proxy "
+                            + "with a populated donna-app/.env) or set EDOG_QA_DEMO_FALLBACK=1 to use "
+                            + "the hand-coded demo scenarios for screenshots / walkthroughs.";
+                    }
+
                     await PublishQaErrorAsync(
                         correlationId,
                         runId: null,
                         errorCode: "NO_SCENARIOS_GENERATED",
-                        message: "No scenarios produced. Configure the LLM provider " +
-                                 "(AZURE_OPENAI_ENDPOINT + AZURE_OPENAI_API_KEY or run the dev-server proxy " +
-                                 "with a populated donna-app/.env) or set EDOG_QA_DEMO_FALLBACK=1 to use " +
-                                 "the hand-coded demo scenarios for screenshots / walkthroughs.",
+                        message: noScenariosMessage,
                         scenarioId: null,
                         phase: "scenario_generation",
                         severity: "error",
-                        recoverable: false).ConfigureAwait(false);
+                        recoverable: false,
+                        cause: noScenariosCause).ConfigureAwait(false);
                     scenarios = new List<Scenario>();
                 }
             }
@@ -2606,7 +2654,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         private async Task PublishQaErrorAsync(
             string correlationId, string runId, string errorCode,
             string message, string scenarioId, string phase,
-            string severity, bool recoverable)
+            string severity, bool recoverable, string cause = null)
         {
             await BroadcastQaEventAsync("QaError", new
             {
@@ -2619,7 +2667,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                 scenarioId,
                 phase,
                 severity,
-                recoverable
+                recoverable,
+                cause
             }).ConfigureAwait(false);
         }
     }

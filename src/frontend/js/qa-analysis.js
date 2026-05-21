@@ -257,12 +257,14 @@ class QaAnalysis {
     icon.textContent = '\u26A0';
     panel.appendChild(icon);
 
+    var cause = data && data.cause;
+
     var body = document.createElement('div');
     body.className = 'qa-analysis-error-body';
 
     var title = document.createElement('div');
     title.className = 'qa-analysis-error-title';
-    title.textContent = this._titleForErrorCode(code);
+    title.textContent = this._titleForErrorCode(code, cause);
     body.appendChild(title);
 
     var message = document.createElement('div');
@@ -274,12 +276,19 @@ class QaAnalysis {
     actions.className = 'qa-analysis-error-actions';
 
     if (code === 'NO_SCENARIOS_GENERATED' || code.indexOf('LLM_PROVIDER_') === 0) {
-      var configLink = document.createElement('a');
-      configLink.href = 'https://aka.ms/edog-studio-llm-setup';
-      configLink.target = '_blank';
-      configLink.rel = 'noopener noreferrer';
-      configLink.textContent = 'Configure LLM provider \u2192';
-      actions.appendChild(configLink);
+      // Only show the "Configure LLM provider" CTA when the failure is
+      // actually a config issue. When the V2 pipeline ran but failed
+      // internally (zone failed, quarantined, projection rejected, etc.)
+      // the cause field carries a v2_* tag — skip the config link.
+      var isPipelineFailure = cause && cause.indexOf('v2_') === 0;
+      if (!isPipelineFailure) {
+        var configLink = document.createElement('a');
+        configLink.href = 'https://aka.ms/edog-studio-llm-setup';
+        configLink.target = '_blank';
+        configLink.rel = 'noopener noreferrer';
+        configLink.textContent = 'Configure LLM provider \u2192';
+        actions.appendChild(configLink);
+      }
     }
 
     if (recoverable) {
@@ -301,7 +310,24 @@ class QaAnalysis {
     panel.appendChild(body);
   }
 
-  _titleForErrorCode(code) {
+  _titleForErrorCode(code, cause) {
+    // When the V2 pipeline ran but failed internally, use a more
+    // specific title keyed on the cause instead of the generic
+    // "No scenarios were generated" that implies a config issue.
+    if (code === 'NO_SCENARIOS_GENERATED' && cause) {
+      switch (cause) {
+        case 'v2_zone_failed':
+          return 'LLM pipeline validation failed';
+        case 'v2_budget_skipped':
+          return 'LLM budget exhausted';
+        case 'v2_projection_rejected':
+          return 'Scenario projection failed';
+        case 'v2_all_quarantined':
+          return 'All scenarios quarantined';
+        case 'v2_no_testable_changes':
+          return 'No testable changes detected';
+      }
+    }
     switch (code) {
       case 'LLM_PROVIDER_AUTH':
         return 'LLM credentials rejected';

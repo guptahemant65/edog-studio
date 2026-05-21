@@ -1500,6 +1500,78 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             var result = await orchestrator.RunAsync(inputs, config, progress: null, cancellationToken).ConfigureAwait(false);
 
+            // ── Zone outcome diagnostics ──────────────────────────────
+            // Surface per-zone outcomes so zero-scenario runs are debuggable
+            // instead of silently returning an empty list.
+            foreach (var zr in result.Zones)
+            {
+                Console.WriteLine(
+                    $"[QA-DIAG] Zone '{zr.ZoneId}': outcome={zr.Outcome}, reason={zr.OutcomeReason}, "
+                    + $"accepted={zr.Accepted?.Count ?? 0}, quarantined={zr.Quarantined?.Count ?? 0}, "
+                    + $"errors=[{string.Join(", ", zr.Errors ?? new List<string>())}], "
+                    + $"elapsed={zr.ElapsedMs}ms, cost=${zr.CostUsd:F6}, "
+                    + $"repair={zr.RepairAttempts}x branch={zr.RepairBranch}");
+            }
+            Console.WriteLine(
+                $"[QA-DIAG] Orchestrator totals: merged={result.MergedScenarios.Count}, "
+                + $"projectionRejected={result.ProjectionRejected?.Count ?? 0}, "
+                + $"duplicates={result.Duplicates?.Count ?? 0}, "
+                + $"budget={result.BudgetGateTripped} ({result.BudgetGateReason})");
+
+            // When the orchestrator ran but produced zero merged scenarios,
+            // surface the per-zone reason as a degradation flag so the hub
+            // can emit an actionable error instead of the generic "configure
+            // LLM provider" message. The flags are keyed so the hub can
+            // discriminate failure mode.
+            if (result.MergedScenarios.Count == 0 && result.Zones.Count > 0)
+            {
+                var totalAccepted = result.Zones.Sum(z => z.Accepted?.Count ?? 0);
+                var totalQuarantined = result.Zones.Sum(z => z.Quarantined?.Count ?? 0);
+                var totalProjectionRejected = result.ProjectionRejected?.Count ?? 0;
+                var failedZones = result.Zones.Where(z => z.Outcome == EdogQaScenarioOrchestrator.ZoneOutcome.Failed).ToList();
+                var skippedZones = result.Zones.Where(z => z.Outcome == EdogQaScenarioOrchestrator.ZoneOutcome.SkippedForBudget).ToList();
+                var noTestableZones = result.Zones.Where(z => z.Outcome == EdogQaScenarioOrchestrator.ZoneOutcome.NoTestableChanges).ToList();
+
+                if (failedZones.Count > 0)
+                {
+                    var firstError = failedZones[0].Errors?.FirstOrDefault() ?? failedZones[0].OutcomeReason ?? "unknown";
+                    degradationFlags.Add("llm_v2_zone_failed");
+                    PublishWarning(
+                        $"LLM_V2_ZONE_FAILED: {failedZones.Count}/{result.Zones.Count} zone(s) failed pipeline "
+                        + $"validation — {firstError}. The LLM was called but the response did not pass "
+                        + "the Architect/Editor/Validator gates.");
+                }
+                else if (totalProjectionRejected > 0 && totalAccepted > 0)
+                {
+                    degradationFlags.Add("llm_v2_projection_rejected");
+                    PublishWarning(
+                        $"LLM_V2_PROJECTION_REJECTED: {totalAccepted} scenario(s) accepted by validator "
+                        + $"but all {totalProjectionRejected} rejected during projection (grounding ref resolution). "
+                        + "Check the Architect plan's evidence IDs.");
+                }
+                else if (totalQuarantined > 0 && totalAccepted == 0)
+                {
+                    degradationFlags.Add("llm_v2_all_quarantined");
+                    PublishWarning(
+                        $"LLM_V2_ALL_QUARANTINED: Editor produced {totalQuarantined} scenario(s) but all "
+                        + "were quarantined by the validator. Check validator gate diagnostics.");
+                }
+                else if (skippedZones.Count == result.Zones.Count)
+                {
+                    degradationFlags.Add("llm_v2_budget_all_skipped");
+                    PublishWarning(
+                        $"LLM_V2_BUDGET_ALL_SKIPPED: All {skippedZones.Count} zone(s) were skipped because "
+                        + $"the budget gate tripped ({result.BudgetGateReason}) before any zone could run.");
+                }
+                else if (noTestableZones.Count > 0 && noTestableZones.Count == result.Zones.Count)
+                {
+                    degradationFlags.Add("llm_v2_no_testable_changes");
+                    PublishWarning(
+                        $"LLM_V2_NO_TESTABLE_CHANGES: Architect determined all {noTestableZones.Count} zone(s) "
+                        + "have no testable behavior changes (comment-only, whitespace, generated files).");
+                }
+            }
+
             if (result.BudgetGateTripped)
             {
                 var skippedCount = result.Zones.Count(z => z.Outcome == EdogQaScenarioOrchestrator.ZoneOutcome.SkippedForBudget);
