@@ -2230,9 +2230,9 @@ class WorkspaceExplorer {
   // Context menu actions
 
   _ctxNewInfra() {
+    // Always create a fresh wizard — destroy any lingering instance
     if (InfraWizardDialog.isActive()) {
-      InfraWizardDialog.getActive().restore();
-      return;
+      InfraWizardDialog.getActive().destroy();
     }
     const wizard = new InfraWizardDialog(this._api, {
       existingWorkspaces: this._workspaces
