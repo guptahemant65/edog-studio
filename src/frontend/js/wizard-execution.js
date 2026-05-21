@@ -45,7 +45,7 @@ var PIPELINE_STEPS = [
   },
   {
     id: 'write-cells', index: 4, name: 'Write Notebook Cells',
-    method: 'POST', urlTemplate: '/api/fabric/workspaces/{workspaceId}/items/{notebookId}/updateDefinition',
+    method: 'POST', urlTemplate: '/api/fabric/workspaces/{workspaceId}/items/{notebookId}/updateDefinition?updateMetadata=true',
     createsResource: false,
     isLRO: true, lroType: 'operation',
     timeoutMs: 60000, autoRetries: 2, retryDelayMs: 2000,
@@ -432,7 +432,13 @@ class ExecutionPipeline {
           context.theme,
           context.schemas
         );
-        return engine.generateNotebookPayload(cells);
+        // Thread lakehouse binding so the notebook knows where to run queries.
+        var lhInfo = (artifacts.lakehouseId) ? {
+          id: artifacts.lakehouseId,
+          name: context.lakehouseName,
+          workspaceId: artifacts.workspaceId
+        } : null;
+        return engine.generateNotebookPayload(cells, lhInfo);
       }
       case 5: return {};
       default: return null;

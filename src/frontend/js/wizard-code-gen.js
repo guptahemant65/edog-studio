@@ -231,10 +231,32 @@ class CodeGenerationEngine {
 
   /**
    * Wrap cells into a Fabric API notebook payload.
-   * @param {Array} cells  Cell objects from generateCells()
-   * @returns {Object} Fabric notebook format
+   * @param {Array}  cells          Cell objects from generateCells()
+   * @param {object} [lakehouse]    Default lakehouse binding
+   * @param {string} [lakehouse.id]            Lakehouse item ID
+   * @param {string} [lakehouse.name]          Lakehouse display name
+   * @param {string} [lakehouse.workspaceId]   Workspace ID the lakehouse lives in
+   * @returns {Object} Fabric notebook definition payload
    */
-  generateNotebookPayload(cells) {
+  generateNotebookPayload(cells, lakehouse) {
+    var meta = {
+      kernel_info: { name: 'synapse_pyspark' },
+      language_info: { name: 'python' }
+    };
+
+    // Attach the default lakehouse so Spark knows where to run queries.
+    // Without this, every SQL/MLV cell fails with "lakehouse not found".
+    if (lakehouse && lakehouse.id) {
+      meta.dependencies = {
+        lakehouse: {
+          default_lakehouse: lakehouse.id,
+          default_lakehouse_name: lakehouse.name || '',
+          default_lakehouse_workspace_id: lakehouse.workspaceId || '',
+          known_lakehouses: [{ id: lakehouse.id }]
+        }
+      };
+    }
+
     var notebookJson = JSON.stringify({
       cells: cells.map(function(c) {
         return {
@@ -249,10 +271,7 @@ class CodeGenerationEngine {
           execution_count: null
         };
       }),
-      metadata: {
-        kernel_info: { name: 'synapse_pyspark' },
-        language_info: { name: 'python' }
-      },
+      metadata: meta,
       nbformat: 4,
       nbformat_minor: 5
     });

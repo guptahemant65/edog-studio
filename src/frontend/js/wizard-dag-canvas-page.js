@@ -80,16 +80,22 @@ class DagCanvasPage {
       codeGen: this._codeGen
     });
 
-    this._presets = new DagPresets({
+    this._nodePopover = new NodePopover({
       containerEl: this._canvasContainer,
-      dagCanvas: this._canvas,
+      canvas: this._canvas,
       eventBus: this._eventBus,
       schemas: this._schemas
     });
 
-    this._nodePopover = new NodePopover({
+    // IMPORTANT: DagPresets MUST be constructed LAST so its overlay element
+    // is the final child of .iw-dag-canvas. Sibling paint order (with equal
+    // stacking context) follows DOM order — later siblings paint above. If
+    // anything (NodePopover, toolbar, etc.) is appended after the overlay,
+    // it will visually cover it even though the popover starts display:none.
+    // Pairs with the defensive re-append in DagPresets._updateVisibility().
+    this._presets = new DagPresets({
       containerEl: this._canvasContainer,
-      canvas: this._canvas,
+      dagCanvas: this._canvas,
       eventBus: this._eventBus,
       schemas: this._schemas
     });
@@ -222,13 +228,13 @@ class DagCanvasPage {
     this._unsubs = [];
 
     // Destroy sub-components in reverse creation order
-    if (this._nodePopover) {
-      this._nodePopover.destroy();
-      this._nodePopover = null;
-    }
     if (this._presets) {
       this._presets.destroy();
       this._presets = null;
+    }
+    if (this._nodePopover) {
+      this._nodePopover.destroy();
+      this._nodePopover = null;
     }
     if (this._codePanel) {
       this._codePanel.destroy();
