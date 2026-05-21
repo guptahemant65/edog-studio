@@ -217,6 +217,11 @@ namespace Microsoft.LiveTable.Service.DevMode
             if (reasons.Count > 0) return null;
 
             // Expectations — each carries its own MatcherSpec.
+            // P10 typed contract: when the scenario has typed matchers[],
+            // the Editor emits descriptive text (not JSON) in the legacy
+            // expectations[*].matcherSpec field. Skip the JSON parse in
+            // that case — the typed matchers path below handles matching.
+            var hasTypedMatchers = src.Matchers != null && src.Matchers.Count > 0;
             var expectations = new List<Expectation>();
             for (var i = 0; i < src.Expectations.Count; i++)
             {
@@ -226,6 +231,22 @@ namespace Microsoft.LiveTable.Service.DevMode
                     reasons.Add(MakeReason(CodeEnumParseFailed,
                         $"expectations[{i}].type", null,
                         $"Expectation type '{expSrc.Type}' is not a valid enum value."));
+                    continue;
+                }
+
+                if (hasTypedMatchers)
+                {
+                    // P10: skip legacy matcherSpec parsing; build a stub
+                    // expectation with the rationale and topic. The real
+                    // matcher work is done by ProjectTypedMatchers below.
+                    expectations.Add(new Expectation
+                    {
+                        Id = $"exp-{i + 1}",
+                        Type = expType,
+                        Topic = expSrc.Topic,
+                        Matcher = null,
+                        Description = expSrc.Rationale,
+                    });
                     continue;
                 }
 
