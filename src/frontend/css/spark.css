@@ -123,3 +123,10 @@
 
 .sp-raw-output { font-family: var(--mono); font-size: 11px; background: var(--surface-2, #f3f4f6); padding: 12px; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; max-height: 300px; overflow-y: auto; }
 .sp-t-retry-badge { font-size: 9px; background: var(--sp-orange, #f59e0b); color: #fff; padding: 1px 4px; border-radius: 3px; font-weight: 700; margin-left: 4px; }
+
+/* ─── Spark: full GUIDs + names ─── */
+.sp-meta-value { word-break: break-all; font-family: var(--mono, 'JetBrains Mono', monospace); font-size: 11px; }
+.sp-t-id { word-break: break-all; font-size: 10px; }
+.sp-t-node-id { word-break: break-all; }
+.sp-gts-id-label { word-break: break-all; font-family: var(--mono, 'JetBrains Mono', monospace); font-size: 11px; }
+.sp-repl-id { word-break: break-all; font-family: var(--mono, 'JetBrains Mono', monospace); font-size: 11px; }

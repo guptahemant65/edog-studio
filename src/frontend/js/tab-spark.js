@@ -840,7 +840,7 @@ class SparkSessionsTab {
       const color = this._hashColor(gtsId);
       gtsHtml += `<div class="sp-gts-chip" data-tt="GTS ${this._esc(gtsId)} · ${repls.size} REPL${repls.size === 1 ? "" : "s"}">
         <span class="sp-gts-dot" style="background:${color}"></span>
-        <span>${this._esc(this._shortId(gtsId, 10))}</span>
+        <span>${this._esc(gtsId)}</span>
         <span class="sp-gts-count">${repls.size}</span>
       </div>`;
     }
@@ -923,13 +923,13 @@ class SparkSessionsTab {
     if (t.previousState && t.previousState !== t.state) {
       stateTransition = `<span class="sp-t-prev-state">${this._esc(t.previousState)} \u2192 </span>`;
     }
-    var nodeIdChip = t.nodeId ? `<span class="sp-t-node-id" data-tt="Node: ${this._esc(t.nodeId)}">${this._esc(this._shortId(t.nodeId, 6))}</span>` : "";
+    var nodeIdChip = t.nodeId ? `<span class="sp-t-node-id" data-tt="Node: ${this._esc(t.nodeId)}">${this._esc(t.nodeId)}</span>` : "";
     var retryBadge = (t.submitAttempts && t.submitAttempts.length > 0) ? `<span class="sp-t-retry-badge" data-tt="${t.submitAttempts.length} prior attempt${t.submitAttempts.length > 1 ? 's' : ''}">${t.submitAttempts.length}x</span>` : "";
 
     return `
       <div class="sp-transform-row${selected}" data-action="select-txf" data-sid="${this._esc(s.id)}" data-tid="${this._esc(t.id)}">
         <div class="sp-t-icon ${kindCls}">${this._esc(kindLetter)}</div>
-        <div class="sp-t-name">${rmBadge}${this._highlight(t.name)} <span class="sp-t-id">#${this._esc(this._shortId(t.id, 6))}</span>${nodeIdChip}${retryBadge}</div>
+        <div class="sp-t-name">${rmBadge}${this._highlight(t.name)} <span class="sp-t-id">${this._esc(t.id)}</span>${nodeIdChip}${retryBadge}</div>
         <div class="sp-t-metrics">${rowsMeta}</div>
         <div class="sp-state-strip" data-tt="${this._esc(stateLabel)}">${stripHtml}</div>
         <div class="sp-t-state-label">${live ? `<span class="sp-pulse" style="background:${this._stateColor(t)}"></span>` : ""}${stateTransition}<span class="${stateCls}">${this._esc(stateLabel)}</span></div>
@@ -1084,7 +1084,7 @@ class SparkSessionsTab {
         <div class="sp-detail-head-row">
           <div class="sp-status-icon" style="background:${this._statusColor(s.status)}">${this._statusIconSvg(s.status)}</div>
           <div style="flex:1;min-width:0;">
-            <div class="sp-session-id">${this._esc(this._shortId(s.id, 16))}</div>
+            <div class="sp-session-id">${this._esc(s.id)}</div>
             <div class="sp-session-meta">${this._esc(s.artifactName || "—")} · ${this._esc(s.workspaceName || "—")}</div>
           </div>
           <span class="sp-elapsed${live ? " live" : ""}">${this._fmtElapsed(elapsed, live)}</span>
@@ -1094,11 +1094,11 @@ class SparkSessionsTab {
         </div>
       </div>
       <div class="sp-detail-meta">
-        ${this._metaCellHtml("Session", this._shortId(s.id, 16), s.id)}
-        ${this._metaCellHtml("Iteration", s.iterationId ? this._shortId(s.iterationId, 12) : "—", s.iterationId || "")}
+        ${this._metaCellHtml("Session", s.id, s.id)}
+        ${this._metaCellHtml("Iteration", s.iterationId || "—", s.iterationId || "")}
         ${this._metaCellHtml("Artifact", s.artifactName || "—", s.artifactId || "")}
         ${this._metaCellHtml("Workspace", s.workspaceName || "—", s.workspaceId || "")}
-        ${s.tenantId ? this._metaCellHtml("Tenant", this._shortId(s.tenantId, 12), s.tenantId) : ""}
+        ${s.tenantId ? this._metaCellHtml("Tenant", s.tenantId, s.tenantId) : ""}
         ${s.disposedAt ? this._metaCellHtml("Disposed", new Date(s.disposedAt).toLocaleString(), "") : ""}
         ${s.lifetimeMs > 0 ? this._metaCellHtml("Lifetime", this._fmtDuration(s.lifetimeMs), "") : ""}
       </div>
@@ -1336,7 +1336,7 @@ class SparkSessionsTab {
         replRows += `
           <div class="sp-repl-row">
             <div>
-              <div class="sp-repl-id"><span class="sp-repl-dot" style="background:${color}"></span>${this._esc(this._shortId(replId, 12))}</div>
+              <div class="sp-repl-id"><span class="sp-repl-dot" style="background:${color}"></span>${this._esc(replId)}</div>
               <div class="sp-repl-txf-list">${txfHtml || `<span class="sp-muted">No transforms bound.</span>`}</div>
             </div>
             <div class="sp-repl-stamp">${earliest ? `+${this._fmtDuration(earliest - s.startedAt)}` : ""}</div>
@@ -1346,7 +1346,7 @@ class SparkSessionsTab {
         <div class="sp-repl-group">
           <div class="sp-repl-head">
             <span class="sp-gts-pin" style="background:${color}"></span>
-            <span class="sp-gts-id-label">${this._esc(this._shortId(gtsId, 14))}</span>
+            <span class="sp-gts-id-label">${this._esc(gtsId)}</span>
             <span class="sp-gts-meta-label">GTS session</span>
             <span class="sp-repl-count">${repls.size} REPL${repls.size === 1 ? "" : "s"}</span>
           </div>
