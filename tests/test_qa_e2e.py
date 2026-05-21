@@ -1850,129 +1850,100 @@ def test_qa_editor_prompt_declares_category_selection_guide() -> None:
 
 
 def test_qa_architect_prompt_declares_coverage_and_line_precision() -> None:
-    """The Architect system prompt MUST declare two things shipped in T1g:
+    """The Architect system prompt MUST declare two disciplines that survived
+    the 2-step Analyst→Architect refactor (2026 P10): evidence-line precision
+    and the category guide. Coverage breadth moved to the Analyst (Step 1) —
+    the Architect now consumes the Analyst's exhaustive observations and
+    generates one sketch per item, so the breadth burden lives in the
+    Analyst prompt's "Be exhaustive" instruction.
 
-    1. COVERAGE BREADTH — enumerate distinct behavioural classes
-       (schema additions, defensive guards, validation paths, etc.)
-       so the Architect emits one sketch per behaviour, not one per file.
-       Discovered during T1g triage: PR-975848 lines 178-198 (the
-       fraction-computation core, 3 P0 scenarios) had zero coverage
-       because the Architect emitted only one sketch per impacted file.
-
-    2. EVIDENCE LINE PRECISION — anchor grounding evidence to the line
+    1. EVIDENCE LINE PRECISION — anchor grounding evidence to the line
        where the BEHAVIOUR LIVES, not the function signature or hunk
        header. Discovered during T1g triage: sk-2/sk-3 on PR-975848
        grounded at line 172 (the hunk header) when the actual fraction
        computation lives at 178-198, leaving 20 lines of P0 code uncovered.
+
+    2. CATEGORY SELECTION — the closed-set ontology the scorer treats
+       as a primary key (HappyPath / ErrorPath / EdgeCase / Regression /
+       Performance).
     """
     src = REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaLlmClient.cs"
     text = src.read_text(encoding="utf-8")
-    assert "COVERAGE BREADTH" in text, (
-        "Architect prompt must contain a COVERAGE BREADTH directive enumerating distinct behavioural classes"
-    )
     assert "EVIDENCE LINE PRECISION" in text, (
         "Architect prompt must contain an EVIDENCE LINE PRECISION directive "
         "telling the model to anchor evidence at behaviour lines, not function signatures"
-    )
-    # The defensive-code prioritisation rule pairs with the Editor's
-    # CATEGORY guide — if the Architect doesn't sketch them, no amount
-    # of Editor category-tuning can recover the recall.
-    assert "DEFENSIVE CODE BIAS" in text, (
-        "Architect prompt must contain a DEFENSIVE CODE BIAS directive prioritising guard-sketches"
     )
     # NOT the function signature / hunk header — the most common
     # off-by-N-lines failure mode.
     assert "NOT the function signature" in text, (
         "Architect prompt must explicitly tell the model NOT to anchor evidence at function signatures"
     )
+    # Category selection guide must still pin the closed-set ontology.
+    assert "CATEGORY SELECTION" in text, (
+        "Architect prompt must contain a CATEGORY SELECTION guide enumerating the closed-set category vocabulary"
+    )
+    for cat in ("HappyPath", "ErrorPath", "EdgeCase", "Regression", "Performance"):
+        assert cat in text, f"Architect category guide must enumerate {cat!r}"
+    # Step-1 Analyst owns the exhaustive observation burden — the
+    # Architect explicitly references the Analyst's lists rather than
+    # re-deriving them from the diff.
+    assert "Analyst" in text, (
+        "Architect prompt must reference the Analyst's frozen observations as the source of truth"
+    )
 
 
 def test_qa_architect_prompt_declares_t2_granularity_and_category_policy() -> None:
-    """T2 (2026-05-18): the Architect prompt MUST declare four
-    additional disciplines required to lift macro_recall on n=6 from
-    0.391 to 0.55+.
+    """T2 + 2026-P10 refactor: after the 2-step Analyst→Architect split, the
+    Architect prompt MUST still encode the disciplines that the live-eval
+    n=6 diagnostic identified as macro_recall blockers.
 
-    Discovered during T2 diagnostic (n=6 corpus, T1g baseline):
+    The split moved exhaustiveness and signature-only filtering to the
+    Analyst (Step 1) — pure observation. The Architect (Step 2) keeps the
+    judgment-side disciplines:
 
-    * **14 of 51 expected scenarios missed via category-only mismatch**:
-      Architect labels net-new behaviour on existing code paths as
-      Regression; curator labels them HappyPath/EdgeCase. The PR-type
-      heuristic + the strict ONLY-when Regression trigger list address
-      this dominant failure mode.
-
-    * **8 of 51 missed entirely (no line overlap)**: granularity
-      collapse — Architect emitted 1 sketch covering 3 evidence
-      anchors (PR-966141 enum-arm + int-cast + test row), and missed
-      contract-bearing xmldoc warnings entirely (PR-966141 lines
-      208-213). The independently-revertable invariant test + the
-      contract-comment surfacing rule address this second failure mode.
-
-    * **Anti-quota guard**: the granularity rule must not become a
-      sketch quota. The rubber-duck critique flagged "tiny PRs have
-      3-6 invariants" as quota-shaped wording that hallucinates
-      sketches on truly-tiny PRs (5-LoC log message PRs would
-      synthesize 5 fake invariants to satisfy the count).
+    * Independently-revertable invariant — one sketch per semantic unit.
+    * Strict Regression triggers — feature additions are NOT Regression.
+    * 1:1 sketch-to-change mapping — the Editor materializes one scenario
+      per sketch, so the scenario count is pinned by the Architect.
     """
     src = REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaLlmClient.cs"
     text = src.read_text(encoding="utf-8")
-    # 1. Granularity discipline — independently-revertable invariant test
-    assert "GRANULARITY RULE" in text, (
-        "Architect prompt must declare a GRANULARITY RULE section so it emits one sketch "
-        "per semantic invariant, not one per code region"
+    # 1. Independently-revertable invariant — the granularity criterion
+    #    that prevents collapsing 3 sketches into 1.
+    assert "independently-revertable invariant" in text, (
+        "Architect prompt must use the independently-revertable invariant "
+        "criterion so it emits one sketch per semantic invariant (parallel "
+        "guards, impl + test-row-flip)"
     )
-    assert "independently-revertable invariant test" in text, (
-        "Architect's GRANULARITY RULE must use the independently-revertable invariant "
-        "test as the split criterion (parallel guards, impl + test-row-flip)"
+    # 2. Regression-trigger triple — the only conditions under which a
+    #    sketch may be classified Regression.
+    assert "Regression = ONLY when" in text, (
+        "Architect prompt must declare an ONLY-when Regression trigger list "
+        "so feature-PR additions default to HappyPath/EdgeCase"
     )
-    # 2. Anti-quota guard — the most common over-fire failure mode
-    assert "ANTI-QUOTA GUARD" in text, (
-        "Architect prompt must contain an ANTI-QUOTA GUARD so the granularity rule "
-        "does not hallucinate invariants on truly-tiny PRs"
-    )
-    assert "ceilings, not quotas" in text, (
-        "Architect's anti-quota guard must spell out that LoC-banded ranges are ceilings, not quotas"
-    )
-    # 3. PR-type category heuristic — the dominant Regression-overuse fix
-    assert "PR-TYPE CATEGORY HEURISTIC" in text, (
-        "Architect prompt must declare a PR-TYPE CATEGORY HEURISTIC that defaults "
-        "feature PRs to HappyPath/EdgeCase and reserves Regression for an ONLY-when triple-trigger list"
-    )
-    # The three ONLY-when triggers must be enumerated explicitly so the
-    # heuristic cannot collapse back to "Regression = any change to
-    # pre-existing code".
     for trigger_phrase in (
-        "FLIPS a test assertion",
-        "explicitly says 'fix'",
-        "restores a prior invariant",
+        "FLIPS a test",
+        "'fix'",
+        "restores a demonstrably-broken",
     ):
         assert trigger_phrase in text, (
             f"Architect's Regression trigger list must enumerate {trigger_phrase!r} explicitly"
         )
-    # The PR-type default must be spelled out so feature-PR sketches
+    # The PR-type default must still be spelled out so feature-PR sketches
     # don't default to Regression by inertia.
-    assert "feature additions default to HappyPath/EdgeCase" in text, (
-        "Architect prompt must declare that feature-PR additions default to HappyPath/EdgeCase"
+    assert "NOT Regression" in text, (
+        "Architect prompt must declare that new behaviour on an existing function is NOT Regression"
     )
-    # CATEGORY PRECEDENCE must override the PR-type default when a
-    # specific Regression trigger fires inside a feature PR (test-row
-    # flip is still Regression even if the rest of the PR is feature).
-    assert "CATEGORY PRECEDENCE" in text, (
-        "Architect prompt must declare a CATEGORY PRECEDENCE rule so specific evidence "
-        "(test-flip, restored invariant) overrides the PR-type default"
+    # 3. 1:1 sketch-to-change mapping — pinned post-split because the
+    #    Editor's strict 1:1 sketch-to-scenario mapping is downstream of it.
+    assert "1:1" in text and "behavioralChanges.Count" in text, (
+        "Architect prompt must declare strict 1:1 scenarioSketches/behavioralChanges count parity"
     )
-    # 4. Contract-bearing comments — surface xmldoc warnings as evidence
-    assert "CONTRACT-BEARING COMMENTS" in text, (
-        "Architect prompt must declare a CONTRACT-BEARING COMMENTS rule so xmldoc warnings "
-        "and contract-scoping comments are surfaced as evidence + dedicated sketches"
-    )
-    for tag in ("<warning>", "<remarks>", "<exception>"):
-        assert tag in text, f"Architect's contract-comment rule must name the {tag!r} xmldoc tag"
-    # The rule must have a negative side: typo/formatting/rename-only
-    # comment changes are NOT evidence. Without the negative side the
-    # rule over-fires on doc polish PRs.
-    assert "typo fixes" in text and "formatting/whitespace" in text, (
-        "Architect's contract-comment rule must enumerate negative examples "
-        "(typo fixes, formatting/whitespace) to prevent over-firing on doc polish"
+    # 4. The 2-step pipeline contract must be visible — worked examples
+    #    are the replacement for the long rule-enumeration prompt.
+    assert "WORKED EXAMPLE 1" in text and "WORKED EXAMPLE 2" in text, (
+        "Architect prompt must carry the two worked examples (feature-flag PR + defensive PR) "
+        "that demonstrate one-sketch-per-observation generation from Analyst output"
     )
 
 

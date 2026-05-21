@@ -114,6 +114,17 @@ namespace Microsoft.LiveTable.Service.DevMode
             EdogQaLlmClient.ZoneContext zone,
             CancellationToken ct);
 
+        /// <summary>
+        /// Step-1 Analyst stage delegate. Observation-only pass that produces
+        /// the structured payload the Architect consumes as frozen trusted
+        /// context. Split from <see cref="ArchitectStageDelegate"/> so the
+        /// orchestrator can run them as two sequential calls with independent
+        /// override seams for testing.
+        /// </summary>
+        public delegate Task<EdogQaLlmClient.LlmClientResult> AnalystStageDelegate(
+            EdogQaLlmClient.ZoneContext zone,
+            CancellationToken ct);
+
         public delegate Task<EdogQaLlmClient.LlmClientResult> EditorStageDelegate(
             EdogQaLlmClient.ArchitectPlan plan,
             EdogQaLlmClient.ZoneContext zone,
@@ -161,6 +172,17 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             /// <summary>Test override for the Architect stage. When non-null, the orchestrator does not call <see cref="EdogQaLlmClient.ArchitectOnceAsync"/>.</summary>
             public ArchitectStageDelegate ArchitectOverride { get; set; }
+
+            /// <summary>
+            /// Test override for the Analyst stage (Step 1 of the 2-step
+            /// Analyst→Architect pipeline). When non-null, the orchestrator does
+            /// not call <see cref="EdogQaLlmClient.AnalystOnceAsync"/>. When this
+            /// AND <see cref="Architect"/> are both null, the Analyst pass is
+            /// skipped entirely and the Architect runs without observations
+            /// (graceful degradation — the Architect prompt handles the
+            /// missing-observations case).
+            /// </summary>
+            public AnalystStageDelegate AnalystOverride { get; set; }
 
             /// <summary>Test override for the Editor stage. When non-null, the orchestrator does not call EditorOnceAsync.</summary>
             public EditorStageDelegate EditorOverride { get; set; }
@@ -327,6 +349,23 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             /// <summary>Contract-options revision snapshot captured for this run.</summary>
             public long OptionsRevision { get; set; }
+
+            // ── Analyst (Step 1 of the 2-step Analyst→Architect pipeline) ──
+
+            /// <summary>Analyst pass input tokens (additive to <see cref="InputTokens"/>).</summary>
+            public int AnalystInputTokens { get; set; }
+
+            /// <summary>Analyst pass output tokens (additive to <see cref="OutputTokens"/>).</summary>
+            public int AnalystOutputTokens { get; set; }
+
+            /// <summary>Analyst pass reasoning tokens (additive to <see cref="ReasoningTokens"/>).</summary>
+            public int AnalystReasoningTokens { get; set; }
+
+            /// <summary>Wall-clock duration of the Analyst pass in ms.</summary>
+            public long AnalystElapsedMs { get; set; }
+
+            /// <summary>Wire-stable failure code if the Analyst pass failed (non-fatal — Architect ran without observations). Empty on success or when the pass was skipped.</summary>
+            public string AnalystFailureCode { get; set; } = string.Empty;
         }
 
         public sealed class DedupDuplicate
@@ -819,7 +858,62 @@ namespace Microsoft.LiveTable.Service.DevMode
                     PrIntentSummary = zoneInput.PrIntentSummary ?? string.Empty,
                 };
 
-                // ── Architect ─────────────────────────────────────────
+                // ── Step 1: Analyst (observation only, non-fatal on failure) ──
+                // The Analyst pass produces a structured payload of changed
+                // surfaces / behavioral paths / boundary conditions / error paths
+                // that the Architect consumes as frozen trusted context. Any
+                // failure here is non-fatal: we wipe AnalystObservations on the
+                // zone context and let the Architect run without them. The
+                // Architect prompt is built to handle either case.
+                //
+                // The pass is SKIPPED entirely when there is neither an override
+                // nor a live Architect config — that keeps existing test harnesses
+                // (which only set ArchitectOverride/EditorOverride) deterministic
+                // and avoids spurious "config missing" errors in the analyst slot.
+                if (config.AnalystOverride != null || config.Architect != null)
+                {
+                    EdogQaLlmClient.LlmClientResult analystResult = null;
+                    try
+                    {
+                        if (config.AnalystOverride != null)
+                        {
+                            analystResult = await config.AnalystOverride(zoneCtx, ct).ConfigureAwait(false);
+                        }
+                        else
+                        {
+                            analystResult = await EdogQaLlmClient.AnalystOnceAsync(_httpClient, config.Architect, zoneCtx, ct).ConfigureAwait(false);
+                        }
+                    }
+                    catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[QA-DIAG] Analyst pass failed (non-fatal): {ex.GetType().Name}: {ex.Message}");
+                        zr.AnalystFailureCode = EdogQaLlmClient.ErrorCodeAnalystNetworkError;
+                    }
+
+                    if (analystResult != null)
+                    {
+                        zr.AnalystInputTokens = analystResult.AnalystInputTokens;
+                        zr.AnalystOutputTokens = analystResult.AnalystOutputTokens;
+                        zr.AnalystReasoningTokens = analystResult.AnalystReasoningTokens;
+                        zr.AnalystElapsedMs = analystResult.AnalystElapsedMs;
+                        zr.InputTokens += analystResult.AnalystInputTokens;
+                        zr.OutputTokens += analystResult.AnalystOutputTokens;
+                        zr.ReasoningTokens += analystResult.AnalystReasoningTokens;
+
+                        if (analystResult.Status == EdogQaLlmClient.LlmClientStatus.Ok
+                            && !string.IsNullOrWhiteSpace(analystResult.AnalystObservations))
+                        {
+                            zoneCtx.AnalystObservations = analystResult.AnalystObservations;
+                        }
+                        else if (analystResult.Errors != null && analystResult.Errors.Count > 0)
+                        {
+                            zr.AnalystFailureCode = StableCodePrefix(analystResult.Errors[0]);
+                        }
+                    }
+                }
+
+                // ── Step 2: Architect ─────────────────────────────────
                 EdogQaLlmClient.LlmClientResult architectResult;
                 try
                 {
@@ -920,6 +1014,80 @@ namespace Microsoft.LiveTable.Service.DevMode
                     });
                     storeResult(zr);
                     return;
+                }
+
+                // ── Coverage checker (deterministic, no LLM call) ────
+                // Parse analyst observations and verify every behavioral
+                // path + error path has at least one scenarioSketch that
+                // references it. Log uncovered observations as warnings.
+                if (!string.IsNullOrWhiteSpace(zoneCtx.AnalystObservations)
+                    && architectResult.Plan?.ScenarioSketches != null)
+                {
+                    try
+                    {
+                        var analystDoc = System.Text.Json.JsonDocument.Parse(zoneCtx.AnalystObservations);
+                        var expectedIds = new HashSet<string>(StringComparer.Ordinal);
+                        foreach (var listName in new[] { "behavioralPaths", "errorPaths" })
+                        {
+                            if (analystDoc.RootElement.TryGetProperty(listName, out var arr)
+                                && arr.ValueKind == System.Text.Json.JsonValueKind.Array)
+                            {
+                                foreach (var item in arr.EnumerateArray())
+                                {
+                                    if (item.TryGetProperty("id", out var idEl)
+                                        && idEl.ValueKind == System.Text.Json.JsonValueKind.String)
+                                    {
+                                        var id = idEl.GetString();
+                                        if (!string.IsNullOrEmpty(id)) expectedIds.Add(id);
+                                    }
+                                }
+                            }
+                        }
+
+                        // Collect all IDs referenced by sketches (via title or evidenceRefs)
+                        var coveredIds = new HashSet<string>(StringComparer.Ordinal);
+                        foreach (var sketch in architectResult.Plan.ScenarioSketches)
+                        {
+                            if (sketch.EvidenceRefs != null)
+                            {
+                                foreach (var r in sketch.EvidenceRefs)
+                                {
+                                    if (!string.IsNullOrEmpty(r)) coveredIds.Add(r);
+                                }
+                            }
+                        }
+
+                        var uncovered = new List<string>();
+                        foreach (var id in expectedIds)
+                        {
+                            if (!coveredIds.Contains(id)) uncovered.Add(id);
+                        }
+
+                        if (uncovered.Count > 0)
+                        {
+                            Console.WriteLine(
+                                $"[QA-DIAG] Coverage gap: {uncovered.Count}/{expectedIds.Count} analyst observations "
+                                + $"uncovered by Architect sketches: [{string.Join(", ", uncovered)}]");
+                            SafeReport(progress, new OrchestratorEvent
+                            {
+                                Kind = OrchestratorEventKind.ZoneValidated,
+                                ZoneId = zr.ZoneId,
+                                ZoneInputIndex = zoneInputIndex,
+                                Message = $"Coverage gap: {uncovered.Count} analyst observations without sketches",
+                                ErrorCode = "COVERAGE_GAP",
+                            });
+                        }
+                        else
+                        {
+                            Console.WriteLine($"[QA-DIAG] Coverage check passed: all {expectedIds.Count} analyst observations covered");
+                        }
+
+                        analystDoc.Dispose();
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[QA-DIAG] Coverage check failed (non-fatal): {ex.GetType().Name}: {ex.Message}");
+                    }
                 }
 
                 // ── Editor ───────────────────────────────────────────
