@@ -76165,6 +76165,17 @@ class ExecutionPipeline {
         var response = await this._fetchWithTimeout(url, fetchOpts, stepDef.timeoutMs);
 
         if (!response.ok && response.status !== 202) {
+          // 409 on a resource-creating step means the item already exists.
+          // Resolve the existing resource's ID and continue instead of failing.
+          if (response.status === 409 && stepDef.createsResource) {
+            var resolved = await this._resolveExistingResource(stepDef, context);
+            if (resolved) {
+              this._log(stepIndex, 'info', stepDef.resourceType + ' already exists — reusing ' + resolved.id.substring(0, 8) + '...');
+              this._handleResponse(stepDef, resolved);
+              this._handleStepSuccess(stepIndex, resolved);
+              return true;
+            }
+          }
           var errBody = null;
           try { errBody = await response.text(); } catch (_e) { /* ignore */ }
           var errMsg = 'HTTP ' + response.status + (errBody ? ': ' + errBody.substring(0, 200) : '');
@@ -76240,6 +76251,53 @@ class ExecutionPipeline {
       url = url.replace('{jobInstanceId}', encodeURIComponent(artifacts.jobInstanceId));
     }
     return url;
+  }
+
+  /**
+   * On 409 Conflict, look up the existing resource by name and return { id }.
+   * This lets the pipeline reuse an already-created workspace/lakehouse/notebook
+   * instead of failing.
+   */
+  async _resolveExistingResource(stepDef, context) {
+    try {
+      var artifacts = this._state.artifacts;
+      var listUrl, targetName;
+
+      switch (stepDef.index) {
+        case 0: // workspace
+          listUrl = '/api/fabric/workspaces?$top=500';
+          targetName = context.workspaceName;
+          break;
+        case 2: // lakehouse
+          if (!artifacts.workspaceId) return null;
+          listUrl = '/api/fabric/workspaces/' + encodeURIComponent(artifacts.workspaceId) + '/lakehouses';
+          targetName = context.lakehouseName;
+          break;
+        case 3: // notebook
+          if (!artifacts.workspaceId) return null;
+          listUrl = '/api/fabric/workspaces/' + encodeURIComponent(artifacts.workspaceId) + '/notebooks';
+          targetName = context.notebookName;
+          break;
+        default:
+          return null;
+      }
+
+      var resp = await fetch(listUrl, {
+        headers: { 'Content-Type': 'application/json' },
+        signal: this._abortController.signal
+      });
+      if (!resp.ok) return null;
+
+      var data = await resp.json();
+      var items = data.value || data || [];
+      var lower = (targetName || '').toLowerCase();
+      for (var i = 0; i < items.length; i++) {
+        if ((items[i].displayName || '').toLowerCase() === lower) {
+          return { id: items[i].id, displayName: items[i].displayName };
+        }
+      }
+    } catch (_e) { /* resolve is best-effort */ }
+    return null;
   }
 
   _buildRequestBody(stepDef, context, artifacts) {
