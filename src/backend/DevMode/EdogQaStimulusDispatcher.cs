@@ -189,18 +189,19 @@ namespace Microsoft.LiveTable.Service.DevMode
                     "/devmode/qa/dispatch supports DiInvocation, SignalRBroadcast, FileEvent, and TimerTick stimuli only.");
             }
 
+            var dispatchPayload = BuildDispatchPayload(stimulus);
             using var request = new HttpRequestMessage(
                 HttpMethod.Post,
                 BuildQaUri("/devmode/qa/dispatch"))
             {
-                Content = CreateJsonContent(stimulus),
+                Content = CreateJsonContent(dispatchPayload),
             };
 
             ApplyControlTokenHeader(request, controlToken);
             return await SendContractRequestAsync(request, GetContractTimeoutMs(stimulus), ct).ConfigureAwait(false);
         }
 
-        /// <summary>Dispatches an async DAG stimulus and returns the correlationId.</summary>
+        /// <summary>Dispatches an async DAG stimulus and returns the dispatchId.</summary>
         internal async Task<string> DispatchDagAsync(Stimulus stimulus, string controlToken, CancellationToken ct)
         {
             if (stimulus == null)
@@ -208,44 +209,45 @@ namespace Microsoft.LiveTable.Service.DevMode
                 throw new ArgumentNullException(nameof(stimulus));
             }
 
+            var dispatchPayload = BuildDispatchPayload(stimulus);
             using var request = new HttpRequestMessage(
                 HttpMethod.Post,
-                BuildQaUri("/devmode/qa/dispatch/dag"))
+                BuildQaUri("/devmode/qa/dispatch/async"))
             {
-                Content = CreateJsonContent(stimulus),
+                Content = CreateJsonContent(dispatchPayload),
             };
 
             ApplyControlTokenHeader(request, controlToken);
             var envelope = await SendContractRequestAsync(request, GetContractTimeoutMs(stimulus), ct).ConfigureAwait(false);
-            return envelope?.CorrelationId;
+            return envelope?.CorrelationId ?? ReadStringFromDynamic(envelope, "dispatchId");
         }
 
-        /// <summary>Polls the async DAG dispatch status by correlationId.</summary>
-        internal async Task<object> PollDagAsync(string correlationId, CancellationToken ct)
+        /// <summary>Polls the async DAG dispatch status by dispatchId.</summary>
+        internal async Task<object> PollDagAsync(string dispatchId, CancellationToken ct)
         {
-            if (string.IsNullOrWhiteSpace(correlationId))
+            if (string.IsNullOrWhiteSpace(dispatchId))
             {
-                return CreateErrorEnvelope("correlationId is required.");
+                return CreateErrorEnvelope("dispatchId is required.");
             }
 
             using var request = new HttpRequestMessage(
                 HttpMethod.Get,
-                BuildQaUri($"/devmode/qa/dispatch/dag/{Uri.EscapeDataString(correlationId)}"));
+                BuildQaUri($"/devmode/qa/dispatch/{Uri.EscapeDataString(dispatchId)}"));
 
             return await SendContractRequestAsync(request, ContractDispatchTimeoutsMs[StimulusType.DagTrigger], ct).ConfigureAwait(false);
         }
 
         /// <summary>Cancels an in-flight async DAG dispatch.</summary>
-        internal async Task CancelDagAsync(string correlationId, CancellationToken ct)
+        internal async Task CancelDagAsync(string dispatchId, CancellationToken ct)
         {
-            if (string.IsNullOrWhiteSpace(correlationId))
+            if (string.IsNullOrWhiteSpace(dispatchId))
             {
                 return;
             }
 
             using var request = new HttpRequestMessage(
                 HttpMethod.Delete,
-                BuildQaUri($"/devmode/qa/dispatch/dag/{Uri.EscapeDataString(correlationId)}"));
+                BuildQaUri($"/devmode/qa/dispatch/{Uri.EscapeDataString(dispatchId)}"));
 
             var envelope = await SendContractRequestAsync(
                 request,
@@ -280,6 +282,75 @@ namespace Microsoft.LiveTable.Service.DevMode
                 JsonSerializer.Serialize(payload),
                 Encoding.UTF8,
                 "application/json");
+        }
+
+        /// <summary>
+        /// Maps an EDOG <see cref="Stimulus"/> to the FLT <c>QaDispatchRequest</c> shape:
+        /// <c>{ StimulusKind, SlotId, Params, TimeoutMs, CorrelationId }</c>.
+        /// The FLT controller binds to this flat DTO, not the EDOG discriminated-union model.
+        /// </summary>
+        private static object BuildDispatchPayload(Stimulus stimulus)
+        {
+            var kind = stimulus.Type.ToString();
+            string slotId = null;
+            Dictionary<string, object> @params = new();
+            string correlationId = null;
+
+            switch (stimulus.Type)
+            {
+                case StimulusType.DiInvocation when stimulus.DiInvocation != null:
+                    slotId = $"{stimulus.DiInvocation.ServiceType}.{stimulus.DiInvocation.Method}";
+                    @params["serviceType"] = stimulus.DiInvocation.ServiceType;
+                    @params["method"] = stimulus.DiInvocation.Method;
+                    if (stimulus.DiInvocation.Args?.Count > 0)
+                        @params["args"] = stimulus.DiInvocation.Args;
+                    break;
+
+                case StimulusType.SignalRBroadcast when stimulus.SignalRBroadcast != null:
+                    slotId = $"{stimulus.SignalRBroadcast.Hub}.{stimulus.SignalRBroadcast.Method}";
+                    @params["hub"] = stimulus.SignalRBroadcast.Hub;
+                    @params["method"] = stimulus.SignalRBroadcast.Method;
+                    correlationId = Guid.NewGuid().ToString("N");
+                    break;
+
+                case StimulusType.DagTrigger when stimulus.DagTrigger != null:
+                    slotId = stimulus.DagTrigger.IterationId ?? "current";
+                    @params["iterationId"] = stimulus.DagTrigger.IterationId;
+                    if (stimulus.DagTrigger.NodeFilter != null)
+                        @params["nodeFilter"] = stimulus.DagTrigger.NodeFilter;
+                    break;
+
+                case StimulusType.FileEvent when stimulus.FileEvent != null:
+                    slotId = stimulus.FileEvent.Path;
+                    @params["path"] = stimulus.FileEvent.Path;
+                    if (stimulus.FileEvent.Content != null)
+                        @params["content"] = stimulus.FileEvent.Content;
+                    break;
+
+                case StimulusType.TimerTick when stimulus.TimerTick != null:
+                    slotId = stimulus.TimerTick.TickSource;
+                    @params["tickSource"] = stimulus.TimerTick.TickSource;
+                    if (stimulus.TimerTick.Topic != null)
+                        @params["topic"] = stimulus.TimerTick.Topic;
+                    break;
+            }
+
+            return new
+            {
+                StimulusKind = kind,
+                SlotId = slotId,
+                Params = @params,
+                CorrelationId = correlationId,
+            };
+        }
+
+        /// <summary>Reads a string property from a dynamic/anonymous object by reflection.</summary>
+        private static string ReadStringFromDynamic(object obj, string propertyName)
+        {
+            if (obj == null) return null;
+            var prop = obj.GetType().GetProperty(propertyName,
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.IgnoreCase);
+            return prop?.GetValue(obj)?.ToString();
         }
 
         private int GetContractTimeoutMs(Stimulus stimulus)

@@ -136,42 +136,132 @@ namespace Microsoft.LiveTable.Service.DevMode
     {
         private readonly EdogQaDiRegistryProvider _diProvider;
         private readonly EdogQaOmniSharpProvider _omniSharpProvider;
+        private readonly EdogQaDagScanner _dagScanner;
+        private readonly EdogQaFileTimerScanner _fileTimerScanner;
         private object _capabilitiesForRun;
 
         public EdogQaContractCatalog(
             EdogQaDiRegistryProvider diProvider,
-            EdogQaOmniSharpProvider omniSharpProvider)
+            EdogQaOmniSharpProvider omniSharpProvider,
+            EdogQaDagScanner dagScanner,
+            EdogQaFileTimerScanner fileTimerScanner)
         {
             _diProvider = diProvider;
             _omniSharpProvider = omniSharpProvider;
+            _dagScanner = dagScanner;
+            _fileTimerScanner = fileTimerScanner;
         }
 
         /// <summary>
         /// Assembles a catalog snapshot for the given zone.
         /// </summary>
-        public CatalogSnapshot Assemble(string zoneId)
+        public CatalogSnapshot Assemble(string zoneId, string fltRepoRoot = null, object swagger = null, string frameworkEndpointsJson = null)
         {
             var slots = new List<QaContractSlot>();
             var topicHashes = new Dictionary<string, string>();
             var providerStatus = new Dictionary<string, string>();
 
-            // HTTP provider
-            providerStatus["http"] = "ok";
+            // HTTP provider — parse runtime Swagger into HTTP slots
+            try
+            {
+                var httpSlots = HttpSlotProvider.FromSwagger(zoneId, swagger);
+                slots.AddRange(httpSlots);
+                providerStatus["http"] = httpSlots.Count > 0 ? "ok" : "empty";
+            }
+            catch (Exception ex)
+            {
+                providerStatus["http"] = "failed";
+                EdogQaTelemetry.EmitContractEvent(EdogQaTelemetry.EventCatalogProviderDegraded,
+                    zoneId, "PROVIDER_FAILED", $"http: {ex.Message}");
+            }
 
-            // SignalR provider
-            providerStatus["signalr"] = "ok";
+            // SignalR provider — parse framework-endpoints.json
+            try
+            {
+                var signalRSlots = SignalRSlotProvider.FromFrameworkEndpoints(frameworkEndpointsJson);
+                slots.AddRange(signalRSlots);
+                providerStatus["signalr"] = signalRSlots.Count > 0 ? "ok" : "empty";
+            }
+            catch (Exception ex)
+            {
+                providerStatus["signalr"] = "failed";
+                EdogQaTelemetry.EmitContractEvent(EdogQaTelemetry.EventCatalogProviderDegraded,
+                    zoneId, "PROVIDER_FAILED", $"signalr: {ex.Message}");
+            }
 
-            // DI provider
-            providerStatus["di"] = "ok";
+            // DI provider — enumerate [EdogDirectInvokeSeam]-tagged services
+            try
+            {
+                var diSlots = _diProvider?.GetContractSlots() ?? new List<QaContractSlot>();
+                slots.AddRange(diSlots);
+                providerStatus["di"] = diSlots.Count > 0 ? "ok" : "empty";
+            }
+            catch (Exception ex)
+            {
+                providerStatus["di"] = "failed";
+                EdogQaTelemetry.EmitContractEvent(EdogQaTelemetry.EventCatalogProviderDegraded,
+                    zoneId, "PROVIDER_FAILED", $"di: {ex.Message}");
+            }
 
-            // DAG provider
-            providerStatus["dag"] = "ok";
+            // DAG provider — Roslyn scan for [DagDefinition] classes
+            try
+            {
+                var dagSlots = fltRepoRoot != null ? _dagScanner?.Scan(fltRepoRoot) : Array.Empty<QaContractSlot>();
+                slots.AddRange(dagSlots);
+                providerStatus["dag"] = dagSlots.Count > 0 ? "ok" : "empty";
+            }
+            catch (Exception ex)
+            {
+                providerStatus["dag"] = "failed";
+                EdogQaTelemetry.EmitContractEvent(EdogQaTelemetry.EventCatalogProviderDegraded,
+                    zoneId, "PROVIDER_FAILED", $"dag: {ex.Message}");
+            }
 
-            // FileEvent provider
-            providerStatus["file_event"] = "ok";
+            // FileEvent + TimerTick provider — Roslyn scan for seam attributes
+            try
+            {
+                var fileTimerSlots = fltRepoRoot != null ? _fileTimerScanner?.Scan(fltRepoRoot) : Array.Empty<QaContractSlot>();
+                foreach (var slot in fileTimerSlots)
+                {
+                    slots.Add(slot);
+                }
+                var fileCount = fileTimerSlots.Count(s => s.Kind == StimulusType.FileEvent);
+                var timerCount = fileTimerSlots.Count(s => s.Kind == StimulusType.TimerTick);
+                providerStatus["file_event"] = fileCount > 0 ? "ok" : "empty";
+                providerStatus["timer_tick"] = timerCount > 0 ? "ok" : "empty";
+            }
+            catch (Exception ex)
+            {
+                providerStatus["file_event"] = "failed";
+                providerStatus["timer_tick"] = "failed";
+                EdogQaTelemetry.EmitContractEvent(EdogQaTelemetry.EventCatalogProviderDegraded,
+                    zoneId, "PROVIDER_FAILED", $"file_timer: {ex.Message}");
+            }
 
-            // TimerTick provider
-            providerStatus["timer_tick"] = "ok";
+            // Topic field hashes from OmniSharp anonymous-type discovery
+            try
+            {
+                if (fltRepoRoot != null && _omniSharpProvider != null)
+                {
+                    var hashes = _omniSharpProvider.ComputeTopicFieldHashes(fltRepoRoot);
+                    foreach (var kvp in hashes)
+                    {
+                        topicHashes[kvp.Key] = kvp.Value;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                EdogQaTelemetry.EmitContractEvent(EdogQaTelemetry.EventCatalogProviderDegraded,
+                    zoneId, "PROVIDER_FAILED", $"topic_fields: {ex.Message}");
+            }
+
+            // Assembler-side cap assertions (§2.4)
+            if (slots.Count > 500)
+            {
+                EdogQaTelemetry.EmitContractEvent(EdogQaTelemetry.EventCatalogOverflow,
+                    zoneId, "SLOT_CAP_EXCEEDED", $"slotCount={slots.Count} cap=500");
+            }
 
             var snapshot = new CatalogSnapshot
             {
