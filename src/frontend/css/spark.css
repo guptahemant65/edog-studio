@@ -120,3 +120,6 @@
 .sp-wf-sub.finalize { right: 0; background: var(--sp-teal, #10b981); }
 .sp-wf-span { position: relative; display: flex; align-items: center; }
 .sp-wf-dur { position: relative; z-index: 1; }
+
+.sp-raw-output { font-family: var(--mono); font-size: 11px; background: var(--surface-2, #f3f4f6); padding: 12px; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; max-height: 300px; overflow-y: auto; }
+.sp-t-retry-badge { font-size: 9px; background: var(--sp-orange, #f59e0b); color: #fff; padding: 1px 4px; border-radius: 3px; font-weight: 700; margin-left: 4px; }

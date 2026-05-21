@@ -10357,6 +10357,9 @@ mark {
 .sp-wf-span { position: relative; display: flex; align-items: center; }
 .sp-wf-dur { position: relative; z-index: 1; }
 
+.sp-raw-output { font-family: var(--mono); font-size: 11px; background: var(--surface-2, #f3f4f6); padding: 12px; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; max-height: 300px; overflow-y: auto; }
+.sp-t-retry-badge { font-size: 9px; background: var(--sp-orange, #f59e0b); color: #fff; padding: 1px 4px; border-radius: 3px; font-weight: 700; margin-left: 4px; }
+
     /* === css/api-playground.css === */
 /* ═══════════════════════════════════════════════════════════════
    F09 — API Playground (3-panel layout)
@@ -57431,6 +57434,7 @@ class SparkSessionsTab {
       case "TransformCompleted": this._onCompleted(data); break;
       case "TransformCancelled": this._onCancelled(data); break;
       case "Disposed": this._onDisposed(data); break;
+      case "SessionPropertiesSet": this._onSessionPropertiesSet(data); break;
       default: break;
     }
 
@@ -57507,6 +57511,20 @@ class SparkSessionsTab {
     this._mergePendingCreated(s, sid);
     const t = this._getOrCreateTransform(s, d.transformationId);
     const now = Date.now();
+    // Retry detection: if this transform already had a prior submission with state,
+    // archive it into submitAttempts before overwriting (BS4).
+    if (t.state && t.submittedAt && (t.gts || t.submitDurationMs != null)) {
+      if (!t.submitAttempts) t.submitAttempts = [];
+      t.submitAttempts.push({
+        attempt: t.submitAttempts.length + 1,
+        state: t.state,
+        submittedAt: t.submittedAt,
+        submitDurationMs: t.submitDurationMs,
+        gts: t.gts,
+        replId: t.replId,
+        error: t.submitError || null,
+      });
+    }
     t.name = d.nodeName || t.name;
     t.nodeId = d.nodeId || t.nodeId;
     t.nodeKind = (d.nodeKind || t.nodeKind || "").toLowerCase();
@@ -57518,7 +57536,9 @@ class SparkSessionsTab {
     t.submitDurationMs = typeof d.durationMs === "number" ? d.durationMs : t.submitDurationMs;
     t.retriable = !!d.retriable;
     t.retryAfterMs = d.retryAfterMs ?? null;
+    if (d.sparkCode) t.sparkCode = d.sparkCode;
     if (d.error) t.submitError = d.error;
+    else t.submitError = null;
     if (t.gts) {
       if (!s.gtsRepls.has(t.gts)) s.gtsRepls.set(t.gts, new Set());
       if (t.replId) s.gtsRepls.get(t.gts).add(t.replId);
@@ -57527,15 +57547,27 @@ class SparkSessionsTab {
     this._recomputeStatus(s);
   }
 
+  _onSessionPropertiesSet(d) {
+    const sid = d.sessionTrackingId;
+    if (!sid) return;
+    const s = this._getOrCreateSession(sid);
+    this._mergePendingCreated(s, sid);
+    s.sparkConf = d.conf || {};
+    s._sessionRawEvents.push({ at: Date.now(), kind: "SessionPropertiesSet", data: d });
+  }
+
   _onPolled(d) {
     const sid = d.sessionTrackingId;
     if (!sid) return;
     const s = this._getOrCreateSession(sid);
+    this._mergePendingCreated(s, sid);
     const t = this._getOrCreateTransform(s, d.transformationId);
     const now = Date.now();
     const prev = t.state;
     t.previousState = d.previousState || prev;
     t.state = d.state || t.state;
+    if (d.gtsSessionId && !t.gts) t.gts = d.gtsSessionId;
+    if (d.replId && !t.replId) t.replId = d.replId;
 
     // If poll reports a terminal state, mark it terminal immediately.
     // TransformCompleted may arrive later — don't wait for it.
@@ -57546,6 +57578,21 @@ class SparkSessionsTab {
         t.terminalState = t.state;
         t.completedAt = t.completedAt || now;
       }
+    }
+
+    // Bug C: poll events carry full error details on terminal failure — populate
+    // t.error immediately so the Error tab works even if TransformCompleted is
+    // suppressed (state already terminal).
+    if (!t.error && d.errorCode) {
+      t.error = {
+        code: d.errorCode || null,
+        message: d.errorMessage || null,
+        source: d.errorSource || null,
+        stage: d.errorStage || null,
+        stackTrace: Array.isArray(d.stackTrace) ? d.stackTrace : null,
+        retriable: !!d.retriable,
+        retryAfterMs: d.retryAfterMs ?? null,
+      };
     }
 
     t.polls.push({
@@ -57567,12 +57614,15 @@ class SparkSessionsTab {
     const sid = d.sessionTrackingId;
     if (!sid) return;
     const s = this._getOrCreateSession(sid);
+    this._mergePendingCreated(s, sid);
     const t = this._getOrCreateTransform(s, d.transformationId);
     const now = Date.now();
     t.state = d.state || t.state;
     t.terminalState = d.state || null;
     t.completedAt = now;
     t.completeDurationMs = typeof d.durationMs === "number" ? d.durationMs : null;
+    if (d.gtsSessionId && !t.gts) t.gts = d.gtsSessionId;
+    if (d.replId && !t.replId) t.replId = d.replId;
     if (d.state === "Succeeded") {
       t.refreshOutput = {
         refreshPolicy: d.refreshPolicy || null,
@@ -57597,6 +57647,7 @@ class SparkSessionsTab {
         retryAfterMs: d.retryAfterMs ?? null,
       };
     }
+    if (d.rawOutput) t.rawOutput = d.rawOutput;
     s._sessionRawEvents.push({ at: now, kind: "TransformCompleted", data: d });
     this._recomputeStatus(s);
   }
@@ -57605,12 +57656,15 @@ class SparkSessionsTab {
     const sid = d.sessionTrackingId;
     if (!sid) return;
     const s = this._getOrCreateSession(sid);
+    this._mergePendingCreated(s, sid);
     const t = this._getOrCreateTransform(s, d.transformationId);
     const now = Date.now();
     t.state = d.state || "Cancelled";
     t.terminalState = "Cancelled";
     t.completedAt = now;
     t.completeDurationMs = typeof d.durationMs === "number" ? d.durationMs : null;
+    if (d.gtsSessionId && !t.gts) t.gts = d.gtsSessionId;
+    if (d.replId && !t.replId) t.replId = d.replId;
     if (d.error) {
       t.error = { code: null, message: d.error, source: null, stage: null, stackTrace: null, retriable: false, retryAfterMs: d.retryAfterMs ?? null };
     }
@@ -57622,6 +57676,7 @@ class SparkSessionsTab {
     const sid = d.sessionTrackingId;
     if (!sid) return;
     const s = this._getOrCreateSession(sid);
+    this._mergePendingCreated(s, sid);
     const now = Date.now();
     s.disposed = true;
     s.disposedAt = now;
@@ -57656,6 +57711,7 @@ class SparkSessionsTab {
       disposedAt: null,
       lifetimeMs: null,
       transformCount: null,
+      sparkConf: null,
       _sessionRawEvents: [],
     };
     this._sessions.set(id, s);
@@ -57685,6 +57741,9 @@ class SparkSessionsTab {
       retriable: false,
       retryAfterMs: null,
       refreshOutput: null,
+      rawOutput: null,
+      sparkCode: null,
+      submitAttempts: null,
       error: null,
       submitError: null,
     };
@@ -58027,11 +58086,12 @@ class SparkSessionsTab {
       stateTransition = `<span class="sp-t-prev-state">${this._esc(t.previousState)} \u2192 </span>`;
     }
     var nodeIdChip = t.nodeId ? `<span class="sp-t-node-id" data-tt="Node: ${this._esc(t.nodeId)}">${this._esc(this._shortId(t.nodeId, 6))}</span>` : "";
+    var retryBadge = (t.submitAttempts && t.submitAttempts.length > 0) ? `<span class="sp-t-retry-badge" data-tt="${t.submitAttempts.length} prior attempt${t.submitAttempts.length > 1 ? 's' : ''}">${t.submitAttempts.length}x</span>` : "";
 
     return `
       <div class="sp-transform-row${selected}" data-action="select-txf" data-sid="${this._esc(s.id)}" data-tid="${this._esc(t.id)}">
         <div class="sp-t-icon ${kindCls}">${this._esc(kindLetter)}</div>
-        <div class="sp-t-name">${rmBadge}${this._highlight(t.name)} <span class="sp-t-id">#${this._esc(this._shortId(t.id, 6))}</span>${nodeIdChip}</div>
+        <div class="sp-t-name">${rmBadge}${this._highlight(t.name)} <span class="sp-t-id">#${this._esc(this._shortId(t.id, 6))}</span>${nodeIdChip}${retryBadge}</div>
         <div class="sp-t-metrics">${rowsMeta}</div>
         <div class="sp-state-strip" data-tt="${this._esc(stateLabel)}">${stripHtml}</div>
         <div class="sp-t-state-label">${live ? `<span class="sp-pulse" style="background:${this._stateColor(t)}"></span>` : ""}${stateTransition}<span class="${stateCls}">${this._esc(stateLabel)}</span></div>
@@ -58160,8 +58220,11 @@ class SparkSessionsTab {
     const elapsed = (s.disposed && s.disposedAt ? s.disposedAt : now) - s.startedAt;
     const live = s.status === "running";
 
-    const hasError = !!(t && t.error) || !!s.createError;
+    const hasError = !!(t && (t.error || t.submitError)) || !!s.createError;
     const hasOutput = !!(t && t.refreshOutput);
+    const hasCode = !!(t && t.sparkCode);
+    const hasConf = !!(s.sparkConf && Object.keys(s.sparkConf).length);
+    const attemptCount = t && t.submitAttempts ? t.submitAttempts.length : 0;
 
     const tabs = [
       { id: "spans", label: "Spans", count: s.transforms.length },
@@ -58169,9 +58232,14 @@ class SparkSessionsTab {
       { id: "polls", label: "Polls", count: t ? t.polls.length : 0 },
       { id: "repls", label: "REPLs", count: this._totalRepls(s) },
       { id: "output", label: "Output", count: hasOutput ? 1 : 0, dim: !hasOutput },
+      { id: "code", label: "Code", count: hasCode ? 1 : 0, dim: !hasCode },
+      { id: "conf", label: "Conf", count: hasConf ? Object.keys(s.sparkConf).length : 0, dim: !hasConf },
       { id: "error", label: "Error", count: hasError ? 1 : 0, dim: !hasError, dot: hasError },
       { id: "raw", label: "Raw", count: s._sessionRawEvents.length },
     ];
+    if (attemptCount > 0) {
+      tabs.splice(1, 0, { id: "attempts", label: "Retries", count: attemptCount });
+    }
 
     this._elDetail.innerHTML = `
       <div class="sp-detail-head">
@@ -58226,6 +58294,9 @@ class SparkSessionsTab {
       case "polls": body.innerHTML = this._renderPollLogHtml(s, t); break;
       case "repls": body.innerHTML = this._renderReplMapHtml(s); break;
       case "output": body.innerHTML = this._renderOutputHtml(s, t); break;
+      case "code": body.innerHTML = this._renderCodeHtml(s, t); break;
+      case "conf": body.innerHTML = this._renderConfHtml(s); break;
+      case "attempts": body.innerHTML = this._renderAttemptsHtml(s, t); break;
       case "error": body.innerHTML = this._renderErrorHtml(s, t); break;
       case "raw": body.innerHTML = this._renderRawEventsHtml(s); break;
       default: body.innerHTML = "";
@@ -58451,44 +58522,119 @@ class SparkSessionsTab {
 
   _renderOutputHtml(s, t) {
     const ro = t && t.refreshOutput;
-    if (!ro) {
+    const raw = t && t.rawOutput;
+    if (!ro && !raw) {
       return `<div class="sp-empty"><div class="sp-empty-title">No refresh output</div><div class="sp-empty-sub">Available once a transform reaches the Succeeded state.</div></div>`;
     }
-    const rowsProcessed = ro.totalRowsProcessed ?? 0;
-    const rowsDropped = ro.totalRowsDropped ?? 0;
-    const violations = ro.totalViolations ?? 0;
-    let violationsList = "";
-    if (ro.violationsPerConstraint && typeof ro.violationsPerConstraint === "object") {
-      const entries = Object.entries(ro.violationsPerConstraint);
-      const max = Math.max(1, ...entries.map(([, v]) => Number(v) || 0));
-      violationsList = entries.map(([name, v]) => {
-        const n = Number(v) || 0;
-        const pct = (n / max) * 100;
-        return `<div class="sp-violation-row"><span class="sp-vr-name">${this._esc(name)}</span><div class="sp-vr-bar"><div style="width:${pct.toFixed(1)}%"></div></div><span class="sp-vr-count">${n}</span></div>`;
-      }).join("");
+    let mainHtml = "";
+    if (ro) {
+      const rowsProcessed = ro.totalRowsProcessed ?? 0;
+      const rowsDropped = ro.totalRowsDropped ?? 0;
+      const violations = ro.totalViolations ?? 0;
+      let violationsList = "";
+      if (ro.violationsPerConstraint && typeof ro.violationsPerConstraint === "object") {
+        const entries = Object.entries(ro.violationsPerConstraint);
+        const max = Math.max(1, ...entries.map(([, v]) => Number(v) || 0));
+        violationsList = entries.map(([name, v]) => {
+          const n = Number(v) || 0;
+          const pct = (n / max) * 100;
+          return `<div class="sp-violation-row"><span class="sp-vr-name">${this._esc(name)}</span><div class="sp-vr-bar"><div style="width:${pct.toFixed(1)}%"></div></div><span class="sp-vr-count">${n}</span></div>`;
+        }).join("");
+      }
+      mainHtml = `
+        <div class="sp-section-h">Refresh output <span class="sp-h-meta">${this._esc(ro.refreshTimestamp || "")}</span><span class="sp-h-line"></span></div>
+        <div class="sp-refresh-output">
+          <div class="sp-ro-stats">
+            <div class="sp-ro-stat"><div class="sp-ro-label">Rows processed</div><div class="sp-ro-value">${this._fmtNum(rowsProcessed)}</div></div>
+            <div class="sp-ro-stat policy"><div class="sp-ro-label">Policy</div><div class="sp-ro-value">${this._esc(ro.refreshPolicy || "—")}</div></div>
+            <div class="sp-ro-stat dropped"><div class="sp-ro-label">Dropped</div><div class="sp-ro-value${rowsDropped === 0 ? " zero" : ""}">${this._fmtNum(rowsDropped)}</div></div>
+            <div class="sp-ro-stat violations"><div class="sp-ro-label">Violations</div><div class="sp-ro-value${violations === 0 ? " zero" : ""}">${this._fmtNum(violations)}</div></div>
+          </div>
+          <div class="sp-ro-mlv">
+            <div class="sp-kvl">MLV</div><div class="sp-kvv">${this._esc(ro.mlvNamespace || "—")}.${this._esc(ro.mlvName || "—")}</div>
+            <div class="sp-kvl">MLV ID</div><div class="sp-kvv dim">${this._esc(ro.mlvId || "—")}</div>
+          </div>
+          ${ro.outputMessage ? `<div class="sp-ro-msg">${this._esc(ro.outputMessage)}</div>` : ""}
+        </div>
+        ${violationsList ? `<div class="sp-section-h">Violations per constraint<span class="sp-h-line"></span></div><div class="sp-violation-list">${violationsList}</div>` : ""}`;
     }
+    const rawHtml = raw ? `
+      <div class="sp-section-h">Raw output <span class="sp-h-meta">${raw.length} chars${raw.length >= 4096 ? " · truncated" : ""}</span><span class="sp-h-line"></span></div>
+      <pre class="sp-raw-event-pre">${this._esc(raw)}</pre>` : "";
+    return mainHtml + rawHtml;
+  }
+
+  _renderCodeHtml(s, t) {
+    if (!t || !t.sparkCode) {
+      return `<div class="sp-empty"><div class="sp-empty-title">No generated code</div><div class="sp-empty-sub">Spark code is captured on TransformSubmitted; full request body is on the HTTP tab.</div></div>`;
+    }
+    const code = t.sparkCode;
     return `
-      <div class="sp-section-h">Refresh output <span class="sp-h-meta">${this._esc(ro.refreshTimestamp || "")}</span><span class="sp-h-line"></span></div>
-      <div class="sp-refresh-output">
-        <div class="sp-ro-stats">
-          <div class="sp-ro-stat"><div class="sp-ro-label">Rows processed</div><div class="sp-ro-value">${this._fmtNum(rowsProcessed)}</div></div>
-          <div class="sp-ro-stat policy"><div class="sp-ro-label">Policy</div><div class="sp-ro-value">${this._esc(ro.refreshPolicy || "—")}</div></div>
-          <div class="sp-ro-stat dropped"><div class="sp-ro-label">Dropped</div><div class="sp-ro-value${rowsDropped === 0 ? " zero" : ""}">${this._fmtNum(rowsDropped)}</div></div>
-          <div class="sp-ro-stat violations"><div class="sp-ro-label">Violations</div><div class="sp-ro-value${violations === 0 ? " zero" : ""}">${this._fmtNum(violations)}</div></div>
+      <div class="sp-section-h">Generated Spark code <span class="sp-h-meta">${code.length} chars${code.length >= 4096 ? " · truncated" : ""}</span><span class="sp-h-line"></span></div>
+      <pre class="sp-raw-event-pre">${this._esc(code)}</pre>`;
+  }
+
+  _renderConfHtml(s) {
+    const conf = s && s.sparkConf;
+    if (!conf || !Object.keys(conf).length) {
+      return `<div class="sp-empty"><div class="sp-empty-title">No Spark conf captured</div><div class="sp-empty-sub">SessionProperties.set has not been observed for this session.</div></div>`;
+    }
+    const keys = Object.keys(conf).sort();
+    const rows = keys.map((k) => `<div class="sp-kvl">${this._esc(k)}</div><div class="sp-kvv">${this._esc(String(conf[k]))}</div>`).join("");
+    return `
+      <div class="sp-section-h">Spark configuration <span class="sp-h-meta">${keys.length} entries</span><span class="sp-h-line"></span></div>
+      <div class="sp-ro-mlv">${rows}</div>`;
+  }
+
+  _renderAttemptsHtml(s, t) {
+    const attempts = t && t.submitAttempts;
+    if (!attempts || !attempts.length) {
+      return `<div class="sp-empty"><div class="sp-empty-title">No retry history</div></div>`;
+    }
+    const rows = attempts.map((a) => {
+      const when = new Date(a.submittedAt).toLocaleTimeString();
+      const errTxt = a.error ? `<div class="sp-ro-msg">${this._esc(typeof a.error === "string" ? a.error : (a.error.message || JSON.stringify(a.error)))}</div>` : "";
+      return `
+        <div class="sp-raw-event">
+          <div class="sp-raw-event-head">
+            <span class="sp-raw-event-time">#${a.attempt} · ${this._esc(when)}</span>
+            <span class="sp-raw-event-kind">${this._esc(a.state || "—")}</span>
+          </div>
+          <div class="sp-ro-mlv">
+            <div class="sp-kvl">GTS</div><div class="sp-kvv dim">${this._esc(a.gts || "—")}</div>
+            <div class="sp-kvl">REPL</div><div class="sp-kvv dim">${this._esc(a.replId || "—")}</div>
+            <div class="sp-kvl">Submit ms</div><div class="sp-kvv">${a.submitDurationMs != null ? this._fmtDuration(a.submitDurationMs) : "—"}</div>
+          </div>
+          ${errTxt}
+        </div>`;
+    }).join("");
+    const current = `
+      <div class="sp-raw-event">
+        <div class="sp-raw-event-head">
+          <span class="sp-raw-event-time">#${attempts.length + 1} · current</span>
+          <span class="sp-raw-event-kind">${this._esc(t.state || "—")}</span>
         </div>
         <div class="sp-ro-mlv">
-          <div class="sp-kvl">MLV</div><div class="sp-kvv">${this._esc(ro.mlvNamespace || "—")}.${this._esc(ro.mlvName || "—")}</div>
-          <div class="sp-kvl">MLV ID</div><div class="sp-kvv dim">${this._esc(ro.mlvId || "—")}</div>
+          <div class="sp-kvl">GTS</div><div class="sp-kvv dim">${this._esc(t.gts || "—")}</div>
+          <div class="sp-kvl">REPL</div><div class="sp-kvv dim">${this._esc(t.replId || "—")}</div>
         </div>
-        ${ro.outputMessage ? `<div class="sp-ro-msg">${this._esc(ro.outputMessage)}</div>` : ""}
-      </div>
-      ${violationsList ? `<div class="sp-section-h">Violations per constraint<span class="sp-h-line"></span></div><div class="sp-violation-list">${violationsList}</div>` : ""}`;
+      </div>`;
+    return `
+      <div class="sp-section-h">Submit attempts <span class="sp-h-meta">${attempts.length + 1} total</span><span class="sp-h-line"></span></div>
+      ${rows}${current}`;
   }
 
   // ------------------------------ Error ---------------------------------------
 
   _renderErrorHtml(s, t) {
-    const err = (t && t.error) || (s.createError ? { message: typeof s.createError === "string" ? s.createError : (s.createError.message || JSON.stringify(s.createError)), code: null, source: "System", stage: "SessionCreate", stackTrace: null, retriable: false } : null);
+    let err = (t && t.error) || null;
+    if (!err && t && t.submitError) {
+      const m = typeof t.submitError === "string" ? t.submitError : (t.submitError.message || JSON.stringify(t.submitError));
+      err = { code: "SubmitFailed", message: m, source: "Submit", stage: "Submission", stackTrace: null, retriable: !!t.retriable, retryAfterMs: t.retryAfterMs ?? null };
+    }
+    if (!err && s.createError) {
+      err = { message: typeof s.createError === "string" ? s.createError : (s.createError.message || JSON.stringify(s.createError)), code: null, source: "System", stage: "SessionCreate", stackTrace: null, retriable: false };
+    }
     if (!err) {
       return `<div class="sp-empty"><div class="sp-empty-title">No errors recorded</div><div class="sp-empty-sub">This session has not reported any failures.</div></div>`;
     }
