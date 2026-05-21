@@ -1518,6 +1518,19 @@ namespace Microsoft.LiveTable.Service.DevMode
                 + $"duplicates={result.Duplicates?.Count ?? 0}, "
                 + $"budget={result.BudgetGateTripped} ({result.BudgetGateReason})");
 
+            // Log per-rejected-scenario reasons so the root cause is visible
+            // in stdout even when the frontend only shows the aggregate.
+            if (result.ProjectionRejected != null)
+            {
+                foreach (var rej in result.ProjectionRejected)
+                {
+                    var scnId = rej.Scenario?.Id ?? "(null)";
+                    var codes = string.Join(", ", (rej.Reasons ?? new List<EdogQaScenarioValidator.QuarantineReason>())
+                        .Select(r => $"{r.Code}: {r.Message}"));
+                    Console.WriteLine($"[QA-DIAG] Projection rejected '{scnId}': {codes}");
+                }
+            }
+
             // When the orchestrator ran but produced zero merged scenarios,
             // surface the per-zone reason as a degradation flag so the hub
             // can emit an actionable error instead of the generic "configure
@@ -1543,11 +1556,15 @@ namespace Microsoft.LiveTable.Service.DevMode
                 }
                 else if (totalProjectionRejected > 0 && totalAccepted > 0)
                 {
+                    var firstRejection = result.ProjectionRejected?.FirstOrDefault();
+                    var firstReason = firstRejection?.Reasons?.FirstOrDefault();
+                    var reasonDetail = firstReason != null
+                        ? $" First rejection: {firstReason.Code} — {firstReason.Message}"
+                        : string.Empty;
                     degradationFlags.Add("llm_v2_projection_rejected");
                     PublishWarning(
                         $"LLM_V2_PROJECTION_REJECTED: {totalAccepted} scenario(s) accepted by validator "
-                        + $"but all {totalProjectionRejected} rejected during projection (grounding ref resolution). "
-                        + "Check the Architect plan's evidence IDs.");
+                        + $"but all {totalProjectionRejected} rejected during projection.{reasonDetail}");
                 }
                 else if (totalQuarantined > 0 && totalAccepted == 0)
                 {

@@ -73679,6 +73679,53 @@ class NodePalette {
         seq++;
       }
       addedCount = added;
+
+      // Auto-connect new nodes based on schema layer adjacency.
+      // bronze→silver→gold: new nodes connect TO the next layer
+      // and FROM the previous layer.
+      if (added > 0) {
+        var NEXT_SCHEMA = { bronze: 'silver', silver: 'gold' };
+        var PREV_SCHEMA = { silver: 'bronze', gold: 'silver' };
+        var TYPE_TARGETS = { 'sql-table': ['sql-mlv', 'pyspark-mlv'], 'sql-mlv': ['pyspark-mlv'] };
+        var TYPE_SOURCES = { 'sql-mlv': ['sql-table'], 'pyspark-mlv': ['sql-table', 'sql-mlv'] };
+        var allNodes = self._canvas.getNodes();
+        var newNodeIds = [];
+        for (var ni = allNodes.length - added; ni < allNodes.length; ni++) {
+          if (allNodes[ni]) newNodeIds.push(allNodes[ni].id);
+        }
+
+        for (var ai = 0; ai < allNodes.length; ai++) {
+          var existing = allNodes[ai];
+          if (newNodeIds.indexOf(existing.id) !== -1) continue;
+
+          for (var bi = 0; bi < newNodeIds.length; bi++) {
+            var newId = newNodeIds[bi];
+            var shouldConnect = false;
+
+            if (schema !== 'dbo') {
+              // Medallion mode: connect by schema adjacency
+              if (existing.schema === NEXT_SCHEMA[schema]) {
+                // New node → existing next-layer node
+                self._canvas.addConnection(newId, existing.id);
+              }
+              if (existing.schema === PREV_SCHEMA[schema]) {
+                // Existing prev-layer node → new node
+                self._canvas.addConnection(existing.id, newId);
+              }
+            } else {
+              // No medallion: connect by type adjacency
+              var targets = TYPE_TARGETS[type];
+              var sources = TYPE_SOURCES[type];
+              if (targets && targets.indexOf(existing.type) !== -1) {
+                self._canvas.addConnection(newId, existing.id);
+              }
+              if (sources && sources.indexOf(existing.type) !== -1) {
+                self._canvas.addConnection(existing.id, newId);
+              }
+            }
+          }
+        }
+      }
     });
 
     if (addedCount > 0) {
