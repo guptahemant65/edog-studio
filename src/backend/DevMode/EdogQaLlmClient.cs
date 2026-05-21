@@ -211,6 +211,17 @@ namespace Microsoft.LiveTable.Service.DevMode
             public string BaseSha { get; set; }
 
             public string HeadSha { get; set; }
+
+            /// <summary>Pre-rendered slot purposes text for the Architect. May be empty.</summary>
+            public string SlotPurposesText { get; set; }
+
+            /// <summary>Pre-rendered few-shot exemplars text. May be empty.</summary>
+            public string FewShotExemplarsText { get; set; }
+
+            /// <summary>Compact structured catalog reference JSON for the Editor —
+            /// contains catalogSnapshotId, filtered slots (slotId, kind, slotHash, purpose),
+            /// and topicFieldHashes so the Editor can emit valid catalogHashes.</summary>
+            public string CatalogReferenceJson { get; set; }
         }
 
         /// <summary>
@@ -1514,7 +1525,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             sb.AppendLine("---BEGIN UNTRUSTED DIFF---");
             sb.AppendLine(zone.UntrustedRedactedDiff ?? string.Empty);
             sb.AppendLine("---END UNTRUSTED DIFF---");
-            AppendOptionalPromptHooks(sb);
+            AppendOptionalPromptHooks(sb, zone, includeCatalogReferences: false);
             return sb.ToString();
         }
 
@@ -1528,7 +1539,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             sb.AppendLine("---BEGIN UNTRUSTED DIFF---");
             sb.AppendLine(zone.UntrustedRedactedDiff ?? string.Empty);
             sb.AppendLine("---END UNTRUSTED DIFF---");
-            AppendOptionalPromptHooks(sb);
+            AppendOptionalPromptHooks(sb, zone, includeCatalogReferences: true);
 
             if (repair != null && ((repair.EditorErrors != null && repair.EditorErrors.Count > 0)
                                   || (repair.QuarantinedScenarios != null && repair.QuarantinedScenarios.Count > 0)))
@@ -1573,15 +1584,31 @@ namespace Microsoft.LiveTable.Service.DevMode
             return sb.ToString();
         }
 
-        private static void AppendOptionalPromptHooks(StringBuilder sb)
+        private static void AppendOptionalPromptHooks(StringBuilder sb, ZoneContext zone, bool includeCatalogReferences)
         {
             AppendOptionalBlock(sb, "ROLE SETTINGS", ReadPromptHook(EnvVarRoleSettings));
             AppendOptionalBlock(sb, "TEMPERATURE SETTINGS", ReadPromptHook(EnvVarTemperatureSettings));
-            AppendOptionalBlock(sb, "SLOT PURPOSES", ReadPromptHook(EnvVarSlotPurposes));
 
-            if (IsFewShotEnabled())
+            // Programmatic catalog values win; env vars are manual-override
+            // fallback only used when the catalog produced nothing for the
+            // corresponding block.
+            var slotPurposes = zone?.SlotPurposesText;
+            if (string.IsNullOrWhiteSpace(slotPurposes))
             {
-                AppendOptionalBlock(sb, "FEW-SHOT EXEMPLARS", ReadPromptHook(EnvVarFewShotExemplars));
+                slotPurposes = ReadPromptHook(EnvVarSlotPurposes);
+            }
+            AppendOptionalBlock(sb, "SLOT PURPOSES", slotPurposes);
+
+            string fewShot = zone?.FewShotExemplarsText;
+            if (string.IsNullOrWhiteSpace(fewShot) && IsFewShotEnabled())
+            {
+                fewShot = ReadPromptHook(EnvVarFewShotExemplars);
+            }
+            AppendOptionalBlock(sb, "FEW-SHOT EXEMPLARS", fewShot);
+
+            if (includeCatalogReferences && zone != null && !string.IsNullOrWhiteSpace(zone.CatalogReferenceJson))
+            {
+                AppendOptionalBlock(sb, "CATALOG REFERENCES", zone.CatalogReferenceJson);
             }
         }
 

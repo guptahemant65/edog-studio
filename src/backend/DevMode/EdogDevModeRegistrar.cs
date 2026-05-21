@@ -552,6 +552,25 @@ namespace Microsoft.LiveTable.Service.DevMode
                 EdogQaServiceLocator.ExecutionEngine = executionEngine;
                 EdogQaServiceLocator.CodeAnalyzer = codeAnalyzer;
 
+                // P10: assemble contract catalog with available providers.
+                // Non-fatal — if construction throws, the LLM pipeline simply
+                // falls back to env-var-only prompt hooks.
+                try
+                {
+                    var dagScanner = new EdogQaDagScanner();
+                    var fileTimerScanner = new EdogQaFileTimerScanner();
+                    EdogQaServiceLocator.ContractCatalog = new EdogQaContractCatalog(
+                        diRegistryProvider,
+                        omniSharpProvider,
+                        dagScanner,
+                        fileTimerScanner);
+                    Console.WriteLine("[EDOG] ✓ QA contract catalog registered");
+                }
+                catch (Exception catEx)
+                {
+                    Console.WriteLine($"[EDOG] ✗ QA contract catalog construction failed (non-fatal): {catEx.Message}");
+                }
+
                 Console.WriteLine("[EDOG] ✓ QA Testing engines registered");
 
                 // F27 P9 T4-D follow-up: kick the V2 capability probe so

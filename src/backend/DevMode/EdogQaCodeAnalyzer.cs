@@ -1488,6 +1488,98 @@ namespace Microsoft.LiveTable.Service.DevMode
                     ConfidenceCapIsInformational = true,
                 },
             };
+
+            // ── P10: assemble contract catalog for LLM prompt injection ──
+            // Best-effort, run-scoped. Catalog assembly failure is non-fatal —
+            // the orchestrator simply runs without enriched slot context.
+            string slotPurposesText = string.Empty;
+            string fewShotText = string.Empty;
+            string catalogRefJson = string.Empty;
+            var catalog = EdogQaServiceLocator.ContractCatalog;
+            if (catalog != null)
+            {
+                try
+                {
+                    string swaggerJson = null;
+                    string frameworkEndpointsJson = null;
+
+                    try
+                    {
+                        using var swaggerResponse = await SharedHttpClient.Value.GetAsync(
+                            "http://localhost:5555/api/ado-proxy/swagger", cancellationToken).ConfigureAwait(false);
+                        if (swaggerResponse.IsSuccessStatusCode)
+                        {
+                            swaggerJson = await swaggerResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+                        }
+                    }
+                    catch { /* swagger unavailable — catalog degrades gracefully */ }
+
+                    try
+                    {
+                        var fltBinPath = Environment.GetEnvironmentVariable("FLT_BIN_PATH") ?? string.Empty;
+                        var fwPath = System.IO.Path.Combine(fltBinPath, "framework-endpoints.json");
+                        if (System.IO.File.Exists(fwPath))
+                        {
+                            frameworkEndpointsJson = System.IO.File.ReadAllText(fwPath);
+                        }
+                    }
+                    catch { /* framework endpoints unavailable */ }
+
+                    var zoneId = zones.FirstOrDefault()?.ZoneId ?? "zone-00";
+                    object swaggerObj = null;
+                    if (!string.IsNullOrEmpty(swaggerJson))
+                    {
+                        try
+                        {
+                            swaggerObj = System.Text.Json.JsonSerializer.Deserialize<object>(swaggerJson);
+                        }
+                        catch { /* malformed swagger — treat as absent */ }
+                    }
+
+                    var snapshot = catalog.Assemble(zoneId, null, swaggerObj, frameworkEndpointsJson);
+
+                    if (snapshot != null && snapshot.Slots != null && snapshot.Slots.Count > 0)
+                    {
+                        slotPurposesText = catalog.BuildFewShotExemplars(snapshot);
+
+                        var selectedSlots = snapshot.Slots.Take(50).Select(s => new
+                        {
+                            slotId = s.SlotId,
+                            kind = s.Kind.ToString(),
+                            slotHash = s.SlotHash,
+                            purpose = s.Purpose,
+                        }).ToList();
+
+                        var refPayload = new
+                        {
+                            catalogSnapshotId = snapshot.SnapshotId,
+                            slotsIncluded = selectedSlots.Count,
+                            slotsTotal = snapshot.Slots.Count,
+                            slots = selectedSlots,
+                            topicFieldHashes = snapshot.TopicFieldHashes?
+                                .Select(kvp => new { topic = kvp.Key, hash = kvp.Value })
+                                .ToList(),
+                        };
+                        catalogRefJson = System.Text.Json.JsonSerializer.Serialize(refPayload);
+                    }
+
+                    Console.WriteLine(
+                        $"[QA-DIAG] Catalog assembled: {snapshot?.Slots?.Count ?? 0} slots, "
+                        + $"snapshotId={snapshot?.SnapshotId ?? "null"}, "
+                        + $"slotPurposes={slotPurposesText?.Length ?? 0} chars, "
+                        + $"catalogRef={catalogRefJson?.Length ?? 0} chars");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[QA-DIAG] Catalog assembly failed (non-fatal): {ex.GetType().Name}: {ex.Message}");
+                    degradationFlags.Add("catalog_assembly_failed");
+                }
+            }
+            else
+            {
+                Console.WriteLine("[QA-DIAG] ContractCatalog not available — catalog context will not be injected into LLM prompt");
+            }
+
             var inputs = zones.Take(10).Select((z, i) => new EdogQaScenarioOrchestrator.ZoneInput
             {
                 ZoneId = string.IsNullOrEmpty(z.ZoneId) ? $"zone-{i:00}" : z.ZoneId,
@@ -1496,6 +1588,9 @@ namespace Microsoft.LiveTable.Service.DevMode
                 UnifiedDiff = diff,
                 BaseSha = string.Empty,
                 HeadSha = string.Empty,
+                SlotPurposesText = slotPurposesText,
+                FewShotExemplarsText = fewShotText,
+                CatalogReferenceJson = catalogRefJson,
             }).ToArray();
 
             var result = await orchestrator.RunAsync(inputs, config, progress: null, cancellationToken).ConfigureAwait(false);

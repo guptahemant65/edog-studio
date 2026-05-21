@@ -36,6 +36,9 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <summary>Result aggregator (C05).</summary>
         internal static EdogQaResultAggregator ResultAggregator { get; set; }
 
+        /// <summary>Per-zone contract catalog assembler (P10). Optional — null when providers unavailable.</summary>
+        internal static EdogQaContractCatalog ContractCatalog { get; set; }
+
         /// <summary>True when all QA engines have been registered.</summary>
         internal static bool IsInitialized => ExecutionEngine != null;
     }

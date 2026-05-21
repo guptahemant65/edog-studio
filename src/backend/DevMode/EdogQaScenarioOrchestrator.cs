@@ -212,6 +212,15 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             /// <summary>Full unified diff passed to the validator's evidence-binding gate. May equal <see cref="RedactedDiff"/> if no separate unredacted view exists.</summary>
             public string UnifiedDiff { get; set; }
+
+            /// <summary>P10: pre-rendered slot purposes text for the Architect. May be empty.</summary>
+            public string SlotPurposesText { get; set; }
+
+            /// <summary>P10: pre-rendered few-shot exemplars text. May be empty.</summary>
+            public string FewShotExemplarsText { get; set; }
+
+            /// <summary>P10: compact structured catalog reference JSON for the Editor. May be empty.</summary>
+            public string CatalogReferenceJson { get; set; }
         }
 
         // ── Output ─────────────────────────────────────────────────────
@@ -784,6 +793,9 @@ namespace Microsoft.LiveTable.Service.DevMode
                     UntrustedRedactedDiff = zoneInput.RedactedDiff ?? string.Empty,
                     BaseSha = zoneInput.BaseSha ?? string.Empty,
                     HeadSha = zoneInput.HeadSha ?? string.Empty,
+                    SlotPurposesText = zoneInput.SlotPurposesText ?? string.Empty,
+                    FewShotExemplarsText = zoneInput.FewShotExemplarsText ?? string.Empty,
+                    CatalogReferenceJson = zoneInput.CatalogReferenceJson ?? string.Empty,
                 };
 
                 // ── Architect ─────────────────────────────────────────
