@@ -187,6 +187,13 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             /// <summary>Optional revisioned options provider captured once per run for prompt/config stability.</summary>
             public IQaContractOptionsProvider OptionsProvider { get; set; }
+
+            /// <summary>
+            /// Total number of reachable stimulus slots from the catalog snapshot.
+            /// Used to compute the max repair passes via <c>min(2, floor(reachableSlotCount / 8))</c>.
+            /// When 0 or negative, the orchestrator defaults to 1 repair pass maximum.
+            /// </summary>
+            public int ReachableSlotCount { get; set; }
         }
 
         // ── Input ──────────────────────────────────────────────────────
@@ -258,7 +265,7 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             // ── T1e: Editor repair-pass telemetry ────────────────────────
 
-            /// <summary>0 or 1. The orchestrator runs at most one repair pass per zone.</summary>
+            /// <summary>Number of repair passes executed. Capped at <c>min(2, floor(reachableSlotCount / 8))</c> per spec §4.2.</summary>
             public int RepairAttempts { get; set; }
 
             /// <summary>Wire-stable tag identifying the repair branch that fired. Empty when <see cref="RepairAttempts"/> = 0.</summary>
@@ -1079,7 +1086,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 // quarantined list as JSON-encoded diagnostic data
                 // (not free-text instructions — see SECURITY.md §3 A1).
                 if (config.EnableRepairLoop
-                    && zr.RepairAttempts == 0
+                    && zr.RepairAttempts < ComputeMaxRepairPasses(config.ReachableSlotCount)
                     && zr.Quarantined.Count > 0
                     && !isBudgetTripped()
                     && (config.EditorRepairOverride != null || config.Editor != null))
@@ -1366,6 +1373,21 @@ namespace Microsoft.LiveTable.Service.DevMode
                 unifiedDiff,
                 config.Validation);
             return (repairResult, validation, dispatched);
+        }
+
+        /// <summary>
+        /// Computes the maximum number of repair passes for a zone.
+        /// Per spec §4.2: <c>min(2, floor(reachableSlotCount / 8))</c>.
+        /// Returns at least 1 so every zone gets at least one repair attempt.
+        /// </summary>
+        internal static int ComputeMaxRepairPasses(int reachableSlotCount)
+        {
+            if (reachableSlotCount <= 0)
+            {
+                return 1;
+            }
+
+            return Math.Max(1, Math.Min(2, reachableSlotCount / 8));
         }
 
         private static int ComputeReachabilityCap(int acceptedCount, int quarantinedCount)
