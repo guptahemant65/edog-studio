@@ -153,6 +153,18 @@ class QaAnalysis {
       if (data.metrics.linesChanged != null) parts.push(data.metrics.linesChanged + ' lines');
       if (data.metrics.impactZonesFound != null) parts.push(data.metrics.impactZonesFound + ' impact zones');
       if (data.metrics.elapsedMs != null) parts.push((data.metrics.elapsedMs / 1000).toFixed(1) + 's');
+      // F27 P11: Architect-complete summary — when the orchestrator forwards
+      // testingGuidance counts on the metrics envelope, surface them inline
+      // so curators see "Architect projected N code paths + M error modes"
+      // before clicking Review Scenarios. Backend may emit any of
+      // codePathCount / errorModeCount / featureFlagComboCount / coverageGapCount.
+      if (data.metrics.codePathCount != null) parts.push(data.metrics.codePathCount + ' code paths');
+      if (data.metrics.errorModeCount != null) parts.push(data.metrics.errorModeCount + ' error modes');
+      if (data.metrics.featureFlagComboCount != null) parts.push(data.metrics.featureFlagComboCount + ' flag combos');
+      if (data.metrics.coverageGapCount != null && data.metrics.coverageGapCount > 0) {
+        parts.push(data.metrics.coverageGapCount + ' coverage gap'
+          + (data.metrics.coverageGapCount !== 1 ? 's' : ''));
+      }
       this._metricsEl.textContent = parts.join(' \u00B7 '); // middle dot separator
     }
 

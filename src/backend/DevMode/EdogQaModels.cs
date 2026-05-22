@@ -338,6 +338,20 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <c>LNT004_GroundingEvidenceMissing</c>.
         /// </summary>
         public List<GroundingEvidence> GroundingEvidence { get; set; } = new();
+
+        /// <summary>
+        /// F27 P11: Architect-emitted codePath IDs (cp-*) this scenario addresses.
+        /// Copied from the source ScenarioSketch by the orchestrator after
+        /// validation. Empty when P11 is disabled or no paths apply.
+        /// </summary>
+        public List<string> AddressesCodePathIds { get; set; } = new();
+
+        /// <summary>
+        /// F27 P11: Architect-emitted errorMode IDs (em-*) this scenario addresses.
+        /// Copied from the source ScenarioSketch by the orchestrator after
+        /// validation. Empty when P11 is disabled or no error modes apply.
+        /// </summary>
+        public List<string> AddressesErrorModeIds { get; set; } = new();
     }
 
     /// <summary>

@@ -63,6 +63,19 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// </summary>
         internal const string EnvVarQaContractEnabled = "EDOG_QA_CONTRACT_ENABLED";
 
+        /// <summary>
+        /// F27 P11 structured-elicitation rollout switch. Accepts the usual
+        /// truthy / falsy spellings (on/1/true/enabled/yes vs
+        /// off/0/false/disabled/no). When unset the default is <c>true</c>
+        /// (P11 active: testingGuidance schema, Architect prompt extension,
+        /// validator coverage checks, frontend rendering). Set
+        /// <c>EDOG_QA_P11_ELICITATION=off</c> to fall back to the pre-P11
+        /// pipeline: BuildArchitectPlanSchema returns the pre-P11 shape,
+        /// ArchitectSystemPrompt / EditorSystemPrompt omit their P11 blocks,
+        /// and the validator skips every P11 coverage check.
+        /// </summary>
+        internal const string EnvVarP11Elicitation = "EDOG_QA_P11_ELICITATION";
+
         // ── Public surface ─────────────────────────────────────────────
 
         /// <summary>
@@ -82,6 +95,14 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// </summary>
         internal static bool QaContractEnabled => _qaContractEnabled.Value;
 
+        /// <summary>
+        /// F27 P11 structured-elicitation enable flag. <c>true</c> (default)
+        /// activates the testingGuidance schema, Architect/Editor prompt
+        /// extensions, validator coverage checks, and frontend rendering.
+        /// <c>false</c> restores the pre-P11 pipeline bit-for-bit.
+        /// </summary>
+        internal static bool P11ElicitationEnabled => _p11Elicitation.Value;
+
         // ── Implementation ─────────────────────────────────────────────
 
         private static readonly Lazy<LlmV2Mode> _llmV2 = new(() =>
@@ -90,6 +111,9 @@ namespace Microsoft.LiveTable.Service.DevMode
         private static readonly Lazy<bool> _qaContractEnabled = new(() =>
             ParseQaContractEnabled(Environment.GetEnvironmentVariable(EnvVarQaContractEnabled)));
 
+        private static readonly Lazy<bool> _p11Elicitation = new(() =>
+            ParseP11Elicitation(Environment.GetEnvironmentVariable(EnvVarP11Elicitation)));
+
         internal static bool ParseQaContractEnabled(string raw)
         {
             if (string.IsNullOrWhiteSpace(raw)) return true;
@@ -97,6 +121,18 @@ namespace Microsoft.LiveTable.Service.DevMode
             return v switch
             {
                 "off" or "0" or "false" or "disabled" or "no" => false,
+                _ => true,
+            };
+        }
+
+        internal static bool ParseP11Elicitation(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return true;
+            var v = raw.Trim().ToLowerInvariant();
+            return v switch
+            {
+                "off" or "0" or "false" or "disabled" or "no" => false,
+                "on" or "1" or "true" or "enabled" or "yes" => true,
                 _ => true,
             };
         }

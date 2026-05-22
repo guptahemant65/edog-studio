@@ -18,6 +18,7 @@ class QaCuration {
     this._lintFindings = [];    // F27 item 5 — deterministic linter findings
     this._lintByScenario = new Map(); // scenarioId -> array of findings
     this._batchFindings = [];   // findings without a scenarioId (coverage gaps)
+    this._testingGuidance = null; // F27 P11 — aggregated testingGuidance block from architect events
   }
 
   init() {
@@ -34,12 +35,18 @@ class QaCuration {
    *   Each entry: { code, severity, message, scenarioId, invariantId }.
    *   Findings without a scenarioId are treated as batch-level (coverage gaps).
    */
-  loadScenarios(scenarios, analysisId, lintFindings) {
+  loadScenarios(scenarios, analysisId, lintFindings, testingGuidance) {
     this._scenarios = scenarios.slice();
     this._analysisId = analysisId;
     this._approved = new Set(this._scenarios.map(function (s) { return s.id; }));
     this._edited = new Set();
     this._totalGenerated = this._scenarios.length;
+
+    // F27 P11: testingGuidance is optional — Architect may have emitted it
+    // pre-projection. Each entry contains the 6 structured sections
+    // (codePaths, featureFlagMatrix, stimuliRequired, observableSignals,
+    // errorModesToTest, externalDependencyFailures) plus diagnosticNotes.
+    this._testingGuidance = testingGuidance || null;
 
     // Index findings for O(1) lookup during card render.
     this._lintFindings = Array.isArray(lintFindings) ? lintFindings.slice() : [];
@@ -141,6 +148,14 @@ class QaCuration {
 
     this._container.appendChild(bulkBar);
 
+    // F27 P11: testing guidance panel — collapsible, shows the Architect's
+    // six structured projections + diagnosticNotes. Rendered above batch
+    // findings so curators see "what we asked the model to think about"
+    // before "what the linter flagged".
+    if (this._testingGuidance) {
+      this._container.appendChild(this._renderTestingGuidance(this._testingGuidance));
+    }
+
     // Batch-level lint findings (coverage gaps, truth-table cells) appear
     // above the scenario list as a collapsible panel.
     if (this._batchFindings && this._batchFindings.length > 0) {
@@ -229,6 +244,37 @@ class QaCuration {
     titleRow.appendChild(prioEl);
 
     body.appendChild(titleRow);
+
+    // F27 P11: addressesCodePathIds / addressesErrorModeIds chip strip.
+    // Surfaces the Architect's coverage projection on each card so curators
+    // can see "this scenario exists to address cp-1, em-2". Hidden when
+    // empty — older scenarios from pre-P11 plans simply omit the strip.
+    var codePathIds = scn.addressesCodePathIds || scn.AddressesCodePathIds;
+    var errorModeIds = scn.addressesErrorModeIds || scn.AddressesErrorModeIds;
+    if ((Array.isArray(codePathIds) && codePathIds.length > 0)
+        || (Array.isArray(errorModeIds) && errorModeIds.length > 0)) {
+      var coverageStrip = document.createElement('div');
+      coverageStrip.className = 'qa-curation-coverage-strip';
+      if (Array.isArray(codePathIds)) {
+        for (var ci = 0; ci < codePathIds.length; ci++) {
+          var cpChip = document.createElement('span');
+          cpChip.className = 'qa-coverage-chip qa-coverage-codepath';
+          cpChip.textContent = codePathIds[ci];
+          cpChip.title = 'Addresses code path ' + codePathIds[ci];
+          coverageStrip.appendChild(cpChip);
+        }
+      }
+      if (Array.isArray(errorModeIds)) {
+        for (var ei = 0; ei < errorModeIds.length; ei++) {
+          var emChip = document.createElement('span');
+          emChip.className = 'qa-coverage-chip qa-coverage-errormode';
+          emChip.textContent = errorModeIds[ei];
+          emChip.title = 'Addresses error mode ' + errorModeIds[ei];
+          coverageStrip.appendChild(emChip);
+        }
+      }
+      body.appendChild(coverageStrip);
+    }
 
     // Category + stimulus metadata
     var metaEl = document.createElement('div');
@@ -708,6 +754,112 @@ class QaCuration {
     }
     panel.appendChild(list);
     return panel;
+  }
+
+  // F27 P11: testing guidance panel — six structured sections + diagnosticNotes.
+  // The shape is identical to TestingGuidance in EdogQaLlmClient.cs.
+  _renderTestingGuidance(guidance) {
+    var panel = document.createElement('div');
+    panel.className = 'qa-testing-guidance';
+
+    var header = document.createElement('div');
+    header.className = 'qa-testing-guidance-header';
+    var sectionCount = 0;
+    var fieldKeys = ['codePaths', 'featureFlagMatrix', 'stimuliRequired',
+      'observableSignals', 'errorModesToTest', 'externalDependencyFailures'];
+    for (var k = 0; k < fieldKeys.length; k++) {
+      var arr = guidance[fieldKeys[k]];
+      if (Array.isArray(arr) && arr.length > 0) sectionCount++;
+    }
+    header.textContent = '\u25C6 Testing guidance \u2014 ' + sectionCount + ' section'
+      + (sectionCount !== 1 ? 's' : '') + ' from the Architect';
+    panel.appendChild(header);
+
+    var body = document.createElement('div');
+    body.className = 'qa-testing-guidance-body';
+
+    if (Array.isArray(guidance.codePaths) && guidance.codePaths.length > 0) {
+      body.appendChild(this._renderGuidanceList('Code paths', guidance.codePaths, function (item) {
+        return (item.id || '') + ' [' + (item.changeKind || '') + '] '
+          + (item.description || '');
+      }));
+    }
+    if (Array.isArray(guidance.featureFlagMatrix) && guidance.featureFlagMatrix.length > 0) {
+      body.appendChild(this._renderGuidanceList('Feature flag matrix', guidance.featureFlagMatrix, function (item) {
+        var pairs = '';
+        if (Array.isArray(item.flags)) {
+          for (var fi = 0; fi < item.flags.length; fi++) {
+            if (fi > 0) pairs += ', ';
+            pairs += (item.flags[fi].name || '') + '=' + (item.flags[fi].value || '');
+          }
+        }
+        var mustCover = item.mustCover ? ' \u2713 must-cover' : '';
+        return (item.id || '') + ' {' + pairs + '}' + mustCover + ' \u2014 ' + (item.rationale || '');
+      }));
+    }
+    if (Array.isArray(guidance.stimuliRequired) && guidance.stimuliRequired.length > 0) {
+      body.appendChild(this._renderGuidanceList('Stimuli required', guidance.stimuliRequired, function (item) {
+        return (item.id || '') + ' [' + (item.kind || '') + '] ' + (item.description || '');
+      }));
+    }
+    if (Array.isArray(guidance.observableSignals) && guidance.observableSignals.length > 0) {
+      body.appendChild(this._renderGuidanceList('Observable signals', guidance.observableSignals, function (item) {
+        return (item.id || '') + ' [' + (item.kind || '') + '@' + (item.source || '') + '] '
+          + (item.description || '');
+      }));
+    }
+    if (Array.isArray(guidance.errorModesToTest) && guidance.errorModesToTest.length > 0) {
+      body.appendChild(this._renderGuidanceList('Error modes to test', guidance.errorModesToTest, function (item) {
+        return (item.id || '') + ' \u2014 ' + (item.description || '')
+          + ' (trigger: ' + (item.trigger || '?') + ', expected: ' + (item.expectedHandling || '?') + ')';
+      }));
+    }
+    if (Array.isArray(guidance.externalDependencyFailures) && guidance.externalDependencyFailures.length > 0) {
+      body.appendChild(this._renderGuidanceList('External dependency failures', guidance.externalDependencyFailures, function (item) {
+        return (item.id || '') + ' [' + (item.dependency || '') + '] '
+          + (item.failureMode || '') + ' \u2192 ' + (item.expectedSystemResponse || '');
+      }));
+    }
+
+    var notes = guidance.diagnosticNotes;
+    if (notes && typeof notes === 'string' && notes.trim().length > 0) {
+      var notesSection = document.createElement('div');
+      notesSection.className = 'qa-testing-guidance-section';
+      var notesTitle = document.createElement('div');
+      notesTitle.className = 'qa-testing-guidance-section-title';
+      notesTitle.textContent = 'Diagnostic notes';
+      notesSection.appendChild(notesTitle);
+      var notesEl = document.createElement('div');
+      notesEl.className = 'qa-testing-guidance-notes';
+      notesEl.textContent = notes;
+      notesSection.appendChild(notesEl);
+      body.appendChild(notesSection);
+    }
+
+    panel.appendChild(body);
+    return panel;
+  }
+
+  _renderGuidanceList(title, items, formatter) {
+    var section = document.createElement('div');
+    section.className = 'qa-testing-guidance-section';
+
+    var titleEl = document.createElement('div');
+    titleEl.className = 'qa-testing-guidance-section-title';
+    titleEl.textContent = title + ' (' + items.length + ')';
+    section.appendChild(titleEl);
+
+    var list = document.createElement('ul');
+    list.className = 'qa-testing-guidance-list';
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      if (!item) continue;
+      var li = document.createElement('li');
+      li.textContent = formatter(item);
+      list.appendChild(li);
+    }
+    section.appendChild(list);
+    return section;
   }
 
   // ── P10: Three-column workbench ─────────────────────────────────

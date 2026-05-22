@@ -87,7 +87,18 @@ Each question is a required object under `testingGuidance` in the Architect's ou
     "required": ["combinationId", "flags", "mustCover", "rationale"],
     "properties": {
       "combinationId": { "type": "string" },
-      "flags":         { "type": "object", "additionalProperties": { "type": "string" } },
+      "flags": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "value"],
+          "properties": {
+            "name":  {"type": "string"},
+            "value": {"type": "string"}
+          }
+        }
+      },
       "mustCover":     { "type": "boolean" },
       "rationale":     { "type": "string" }
     }
@@ -238,9 +249,9 @@ For PR #964068 (`EnableLineageV2` feature flag introducing a new `lineageVersion
       "description": "EnableLineageV2=off branch preserves v1 response shape (no lineageVersion field)" }
   ],
   "featureFlagMatrix": [
-    { "combinationId": "fc-1", "flags": { "EnableLineageV2": "on"  }, "mustCover": true,
+    { "combinationId": "fc-1", "flags": [{"name":"EnableLineageV2","value":"on"}], "mustCover": true,
       "rationale": "Asserts new behaviour is emitted when flag is on." },
-    { "combinationId": "fc-2", "flags": { "EnableLineageV2": "off" }, "mustCover": true,
+    { "combinationId": "fc-2", "flags": [{"name":"EnableLineageV2","value":"off"}], "mustCover": true,
       "rationale": "Asserts v1 shape is preserved when flag is off (regression guard)." }
   ],
   "stimuliRequired": [
@@ -255,7 +266,8 @@ For PR #964068 (`EnableLineageV2` feature flag introducing a new `lineageVersion
   ],
   "errorModesToTest": [],
   "noErrorModesRationale": "Purely additive feature-flagged path; no new defensive code.",
-  "externalDependencyFailures": []
+  "externalDependencyFailures": [],
+  "diagnosticNotes": ""
 }
 ```
 
@@ -280,13 +292,54 @@ Scenario sketches must then reference these IDs:
 
 ---
 
+## 3a. Feature Flag
+
+P11 ships behind the `EDOG_QA_P11_ELICITATION` environment variable. The flag is read once at
+process start by `EdogQaFeatureFlags.P11ElicitationEnabled` (lazy, no live re-read; restart the
+host to change).
+
+| Raw value | Resolved value |
+|---|---|
+| unset / empty | `true` (default — P11 active) |
+| `on`, `1`, `true`, `enabled`, `yes` | `true` |
+| `off`, `0`, `false`, `disabled`, `no` | `false` |
+| any other value | `true` (default) |
+
+**When `false`:**
+
+- `BuildArchitectPlanSchema()` returns the pre-P11 schema — no `testingGuidance` in
+  `properties`, no `addressesCodePathIds` / `addressesErrorModeIds` on `scenarioSketches.items`.
+- `ArchitectSystemPrompt` returns the legacy prompt — the TESTING GUIDANCE block is omitted.
+- `EditorSystemPrompt` returns the legacy prompt — the testingGuidance-awareness sentence is
+  omitted.
+- `ValidateArchitectPlan` skips every P11 coverage check (codePath dedup, sketch-to-pathId
+  cross-ref, mustCover advisory, errorMode dedup, empty-with-rationale advisory).
+- `EdogQaScenarioValidator.Validate` skips the P11 batch coverage gate and emits no
+  `P11_COVERAGE_GAP` / `P11_COVERAGE_REPORT` `BatchInformationalReasons`.
+- The orchestrator does not copy `AddressesCodePathIds` / `AddressesErrorModeIds` onto accepted
+  scenarios (because the Architect did not emit them) and does not surface P11 advisories.
+
+The flag is the kill switch for the entire P11 surface — turning it off restores the pre-P11
+behaviour bit-for-bit.
+
+Implementation: `src/backend/DevMode/EdogQaFeatureFlags.cs`. Pattern mirrors the existing
+`EnvVarQaContractEnabled` / `QaContractEnabled` pair.
+
+---
+
 ## 4. Schema Changes
 
 ### 4.1 Architect Plan Schema (`BuildArchitectPlanSchema`)
 
 **File:** `src/backend/DevMode/EdogQaLlmClient.cs` (around line 645)
 
-Add `testingGuidance` to the top-level `required` and `properties`:
+Add `testingGuidance` to the top-level `properties`. **Phase 1 safety (I8):** the property exists
+in `properties` but the validator treats a missing/null `TestingGuidance` on a testable plan as a
+soft advisory, not a hard error. OpenAI strict-mode requires every property listed in `properties`
+to appear in `required`, so the schema MUST list `testingGuidance` in `required` once shipped; the
+"initially-optional" behaviour is enforced by the C# validator (`ValidateArchitectPlan` issues an
+advisory rather than a hard error when `plan.TestingGuidance == null`), not by the JSON schema.
+Phase 2 (after the 50-PR baseline) promotes the missing-guidance case to a hard error.
 
 ```csharp
 internal static object BuildArchitectPlanSchema()
@@ -337,6 +390,7 @@ private static object BuildTestingGuidanceSchema()
             "errorModesToTest",
             "noErrorModesRationale",
             "externalDependencyFailures",
+            "diagnosticNotes",
         },
         properties = new
         {
@@ -373,8 +427,18 @@ private static object BuildTestingGuidanceSchema()
                         combinationId = new { type = "string" },
                         flags = new
                         {
-                            type = "object",
-                            additionalProperties = new { type = "string" },
+                            type = "array",
+                            items = new
+                            {
+                                type = "object",
+                                additionalProperties = false,
+                                required = new[] { "name", "value" },
+                                properties = new
+                                {
+                                    name = new { type = "string" },
+                                    value = new { type = "string" },
+                                },
+                            },
                         },
                         mustCover = new { type = "boolean" },
                         rationale = new { type = "string" },
@@ -476,6 +540,9 @@ private static object BuildTestingGuidanceSchema()
                     },
                 },
             },
+            // S1: free-form field for the model to record observations that
+            // don't fit any of the six structured sections. Empty allowed.
+            diagnosticNotes = new { type = "string" },
         },
     };
 }
@@ -551,6 +618,7 @@ internal sealed class TestingGuidance
     public List<ErrorModeItem> ErrorModesToTest { get; set; } = new();
     public string NoErrorModesRationale { get; set; } = string.Empty;
     public List<ExternalDependencyFailure> ExternalDependencyFailures { get; set; } = new();
+    public string DiagnosticNotes { get; set; } = string.Empty;   // S1
 }
 
 internal sealed class CodePathItem
@@ -560,10 +628,16 @@ internal sealed class CodePathItem
     public string Description { get; set; }
 }
 
+internal sealed class FlagAssignment
+{
+    public string Name { get; set; }
+    public string Value { get; set; }
+}
+
 internal sealed class FeatureFlagCombination
 {
     public string CombinationId { get; set; }
-    public Dictionary<string, string> Flags { get; set; } = new();
+    public List<FlagAssignment> Flags { get; set; } = new();
     public bool MustCover { get; set; }
     public string Rationale { get; set; }
 }
@@ -616,6 +690,28 @@ internal sealed class ScenarioSketch
 
 `System.Text.Json` camelCase naming applies via the existing `JsonSerializerOptions`; no per-property attributes required.
 
+### 4.4 Analyst Schema Extension (B3)
+
+The Analyst's structured observation payload feeds the Architect's testingGuidance — the
+Architect MUST project from Analyst observations rather than re-walking the diff. To support that
+projection, the Analyst schema gains two new top-level lists alongside `changedSurfaces`,
+`behavioralPaths`, `boundaryConditions`, and `errorPaths`:
+
+- **`externalDependencyFailures`** — Analyst-observed dependency interactions in the diff. Each
+  item: `dep-1`, `dep-2`, … stable IDs; `dependency` name (GTS, OneLake, Nexus, SignalR,
+  downstream HTTP, DAG scheduler, capacity broker); `interaction` (one-line description of how
+  the diff touches the dependency). The Architect projects from this list into
+  `testingGuidance.externalDependencyFailures` by attaching `failureMode` + `expectedResilience`.
+
+- **`featureFlags`** — Analyst-observed feature-flag references in the diff. Each item: `flag-1`,
+  `flag-2`, … stable IDs; `name` (the flag identifier); `surfaceId` linking back to the
+  changedSurface that introduced/reads the flag. The Architect projects from this list into
+  `testingGuidance.featureFlagMatrix` by enumerating the required flag-on / flag-off combinations.
+
+Both lists default to `[]` when the diff contains no relevant items. The IDs (`dep-*`, `flag-*`)
+are stable within the Analyst payload so the Architect can reference them in
+`testingGuidance` items' `rationale` fields when projecting.
+
 ---
 
 ## 5. Prompt Changes
@@ -663,16 +759,24 @@ depFailureId (df-1, ...), dependency, failureMode in {timeout, 5xx, transient, p
 malformed_response, unavailable}, expectedResilience (one line). Return [] if the diff only touches
 in-process code with no external calls.
 
+diagnosticNotes — free-text field for anything that didn't fit into the six structured sections
+(one or two lines, may be empty string).
+
 RULES FOR TESTING GUIDANCE:
 - Answer all six questions strictly in order; do not interleave with sketch generation.
 - IDs must be stable, unique within their section, and referenced exactly by downstream sketches.
 - Empty arrays are legal answers; omitting a section is not. If a category does not apply, return [].
 - Do not invent items you cannot point at in the diff — enumeration must be diff-grounded.
+- Project your testingGuidance from the Analyst's observations below. Do not re-enumerate what the
+  Analyst already found — reference it, extend it with behavioral implications.
 - After filling testingGuidance, emit scenarioSketches such that:
   (a) every codePath with kind=Added is referenced by at least one sketch's addressesCodePathIds;
   (b) every featureFlagMatrix combination with mustCover=true is exercised by at least one sketch;
   (c) every errorModeId is referenced by at least one sketch's addressesErrorModeIds, OR the
       category is empty.
+- scenarioSketches.Count MUST be >= behavioralChanges.Count. Every Added codePath, every
+  mustCover flag combination, and every errorMode must be addressed by at least one sketch.
+  The Architect should emit one behavioralChange per distinct testable item.
 - addressesCodePathIds and addressesErrorModeIds are REQUIRED on every sketch. Use [] when none apply.
 ```
 
@@ -696,25 +800,45 @@ The Editor's existing schema is unchanged in v1. Compliance with the testing gui
 
 **File:** `src/backend/DevMode/EdogQaLlmClient.cs` (around line 2328)
 
-Extend the existing method (it already returns `List<string>` and is called from the analyse path at line 1423):
+Extend the existing method. **B5 — Advisory/Error split:** the signature changes from
+`List<string>` to a tuple of `(Errors, Advisories)`. The "`ADVISORY:` string-prefix" hack from the
+v1 draft is removed; callers consume `Errors` for hard-fail and log `Advisories` separately. The
+caller in `ArchitectOnceAsync` at line ~1423 destructures the tuple, hard-fails on `Errors`, and
+appends `Advisories` to a new `LlmClientResult.Advisories` field.
+
+**I8 — Phase 1 safety:** `TestingGuidance == null` on a testable plan is an ADVISORY (not a hard
+error) during Phase 1 — the schema enforces presence at the wire level (strict-mode requires
+testingGuidance in `required`), but if for any reason the deserialized DTO is null the validator
+issues an advisory and continues. Promoted to a hard error in Phase 2 after baseline measurement.
+
+**I2 — Empty codePaths on testable plan with sketches:** if `tg.CodePaths.Count == 0` AND
+`scenarioSketches.Count > 0`, the validator emits a HARD ERROR
+("testable plan with sketches but zero codePaths enumerated"). Sketches without enumerated paths
+are a categorical violation of the elicitation contract.
 
 ```csharp
-private static List<string> ValidateArchitectPlan(ArchitectPlan plan)
+private static (List<string> Errors, List<string> Advisories) ValidateArchitectPlan(ArchitectPlan plan)
 {
     var errors = new List<string>();
-    if (plan == null) { errors.Add("plan is null"); return errors; }
+    var advisories = new List<string>();
+    if (plan == null) { errors.Add("plan is null"); return (errors, advisories); }
 
     // … existing zoneId / planOutcome / no_testable_changes branch unchanged …
 
-    // P11: testingGuidance must be present on testable plans.
-    if (plan.PlanOutcome == PlanOutcomeTestable)
+    if (!EdogQaFeatureFlags.P11ElicitationEnabled || plan.PlanOutcome != PlanOutcomeTestable)
     {
-        if (plan.TestingGuidance == null)
-        {
-            errors.Add("testingGuidance missing on testable plan");
-            return errors;
-        }
+        // … existing evidence-ID dedup loop unchanged …
+        return (errors, advisories);
+    }
 
+    // P11: testingGuidance must be present on testable plans.
+    if (plan.TestingGuidance == null)
+    {
+        // I8 Phase 1: advisory, not hard-fail.
+        advisories.Add("testingGuidance missing on testable plan (Phase 1 advisory)");
+    }
+    else
+    {
         var tg = plan.TestingGuidance;
 
         // Build sketch reference sets once.
@@ -732,7 +856,14 @@ private static List<string> ValidateArchitectPlan(ArchitectPlan plan)
             }
         }
 
-        // (a) Every Added codePath must be addressed.
+        // I2 hard-fail: testable plan with sketches but zero codePaths enumerated.
+        if ((tg.CodePaths == null || tg.CodePaths.Count == 0)
+            && plan.ScenarioSketches != null && plan.ScenarioSketches.Count > 0)
+        {
+            errors.Add("testable plan with sketches but zero codePaths enumerated");
+        }
+
+        // (a) Every Added codePath must be addressed; duplicates / unknown refs are hard errors.
         if (tg.CodePaths != null)
         {
             var allPathIds = new HashSet<string>(StringComparer.Ordinal);
@@ -748,30 +879,19 @@ private static List<string> ValidateArchitectPlan(ArchitectPlan plan)
                         $"codePath '{cp.PathId}' kind=Added has no scenarioSketch addressing it");
                 }
             }
-            // Every addressesCodePathIds entry must point at a known pathId.
             foreach (var refId in sketchPathRefs)
             {
                 if (!allPathIds.Contains(refId))
                     errors.Add($"scenarioSketch references unknown codePath '{refId}'");
             }
+
+            // Large-PR advisory: zone re-decomposition recommended.
+            if (tg.CodePaths.Count > 50)
+                advisories.Add($"testingGuidance.codePaths.Count={tg.CodePaths.Count} exceeds 50 — consider zone re-decomposition");
         }
 
-        // (b) Every mustCover feature-flag combination must be exercised.
-        //     (Title-substring match is fragile; v1 requires sketches to embed
-        //      the combinationId in addressesCodePathIds is too restrictive,
-        //      so v1 only emits an *advisory* warning here, surfaced via the
-        //      AdvisoryWarnings sink — not appended to errors.)
-        if (tg.FeatureFlagMatrix != null)
-        {
-            foreach (var fc in tg.FeatureFlagMatrix)
-            {
-                if (fc == null || !fc.MustCover) continue;
-                // Advisory only — see §8 "empty categories" mitigation.
-                // Surfaced via plan.TestingGuidance for curator UI display.
-            }
-        }
-
-        // (c) Every errorMode must be referenced; advisory in v1.
+        // (c) Every errorMode dedup + sketch-cross-ref. Duplicates + unknown refs are HARD ERRORS.
+        //     "no sketch addresses this errorMode" stays ADVISORY in v1.
         if (tg.ErrorModesToTest != null)
         {
             var allErrorIds = new HashSet<string>(StringComparer.Ordinal);
@@ -782,10 +902,8 @@ private static List<string> ValidateArchitectPlan(ArchitectPlan plan)
                     errors.Add($"duplicate errorMode '{em.ErrorModeId}'");
                 if (!sketchErrorRefs.Contains(em.ErrorModeId))
                 {
-                    // Advisory in v1 — hard-fail in v2 after baseline measurement.
-                    // For now log to errors with an explicit prefix so callers can filter.
-                    errors.Add(
-                        $"ADVISORY: errorMode '{em.ErrorModeId}' has no scenarioSketch addressing it");
+                    advisories.Add(
+                        $"errorMode '{em.ErrorModeId}' has no scenarioSketch addressing it");
                 }
             }
             foreach (var refId in sketchErrorRefs)
@@ -795,22 +913,50 @@ private static List<string> ValidateArchitectPlan(ArchitectPlan plan)
             }
         }
 
-        // errorModesToTest empty + rationale empty is a soft violation.
+        // errorModesToTest empty + rationale empty is an advisory.
         if ((tg.ErrorModesToTest == null || tg.ErrorModesToTest.Count == 0)
             && string.IsNullOrWhiteSpace(tg.NoErrorModesRationale))
         {
-            errors.Add(
-                "ADVISORY: errorModesToTest is empty but noErrorModesRationale was not provided");
+            advisories.Add(
+                "errorModesToTest is empty but noErrorModesRationale was not provided");
+        }
+
+        // All six sections empty on a testable plan: advisory.
+        if ((tg.CodePaths == null || tg.CodePaths.Count == 0)
+            && (tg.FeatureFlagMatrix == null || tg.FeatureFlagMatrix.Count == 0)
+            && (tg.StimuliRequired == null || tg.StimuliRequired.Count == 0)
+            && (tg.ObservableSignals == null || tg.ObservableSignals.Count == 0)
+            && (tg.ErrorModesToTest == null || tg.ErrorModesToTest.Count == 0)
+            && (tg.ExternalDependencyFailures == null || tg.ExternalDependencyFailures.Count == 0))
+        {
+            advisories.Add("testingGuidance is empty across all six sections on a testable plan");
         }
     }
 
     // … existing evidence-ID dedup loop unchanged …
 
-    return errors;
+    return (errors, advisories);
 }
 ```
 
-**Caller behavior:** the analyse pipeline at line 1423 already treats `planErrors` as hard-fail conditions. Entries prefixed with `"ADVISORY: "` MUST be filtered out before hard-fail evaluation in v1 and instead routed to the plan-render payload for curator UI display (see §7.2). This is the single line that gates v1 vs v2 strictness.
+**Caller behavior (`ArchitectOnceAsync` line ~1423):**
+
+```csharp
+var (planErrors, planAdvisories) = ValidateArchitectPlan(plan);
+if (planErrors.Count > 0)
+{
+    foreach (var e in planErrors)
+        result.Errors.Add(ErrorCodeArchitectPlanInvalid + " — " + e);
+    return result;
+}
+result.Advisories.AddRange(planAdvisories);
+```
+
+`LlmClientResult` gains a new field:
+
+```csharp
+public List<string> Advisories { get; set; } = new();
+```
 
 ### 6.2 Scenario Validation (`EdogQaScenarioValidator`)
 
@@ -826,36 +972,68 @@ public static ValidationResult Validate(
     ValidationContext context)
 ```
 
-After the existing per-scenario loop, add a batch-level **advisory** coverage gate (not appended to per-scenario quarantine reasons, but recorded on `result.BatchInformational` for UI surfacing):
+After the existing per-scenario loop, add a batch-level coverage gate that records both per-path
+coverage gaps and a summary report. Both surface via `result.BatchInformationalReasons` (renamed
+from `BatchInformational` to mirror the existing `BatchErrors` naming).
+
+**B4 — server-side scenario-level coverage join:** the `Scenario` DTO (in `EdogQaModels.cs`)
+gains `AddressesCodePathIds` and `AddressesErrorModeIds` lists. After the Editor produces
+scenarios, the orchestrator matches them to sketches by index (existing 1:1 / metadata
+OriginalIndex ordering) and **copies `AddressesCodePathIds` / `AddressesErrorModeIds` from the
+source sketch into the projected `Scenario`** — without modifying the Projector. The frontend
+renders `scn.addressesCodePathIds` directly from the projected scenario.
 
 ```csharp
-// P11 batch-level coverage advisory.
-// Hard-fail behavior deferred to v2 — see spec §6.2.
-if (plan?.TestingGuidance?.CodePaths != null)
+// P11 batch-level coverage gate (gated on EdogQaFeatureFlags.P11ElicitationEnabled).
+if (EdogQaFeatureFlags.P11ElicitationEnabled
+    && plan?.TestingGuidance?.CodePaths != null)
 {
-    var addressed = scenarios
-        .Where(s => s != null)
-        .SelectMany(s => s.GroundingEvidenceRefs ?? new List<string>())
-        .ToHashSet(StringComparer.Ordinal);
-    // (Note: scenario-level addressesCodePathIds is on the sketch, not the
-    //  emitted scenario. v1 cross-checks via sketch->scenario mapping in the
-    //  caller. The validator surfaces only the plan-level advisory here.)
+    // Build addressed-path set from the accepted scenarios' AddressesCodePathIds
+    // (already copied onto Scenario by the orchestrator before/after Validate runs).
+    var addressedPathIds = new HashSet<string>(StringComparer.Ordinal);
+    foreach (var acc in result.Accepted)
+    {
+        var sketch = acc?.Scenario;
+        if (sketch == null) continue;
+        // The orchestrator may also stamp Scenario.AddressesCodePathIds; if not, we fall
+        // back to the sketch->scenario index mapping done by the caller.
+    }
+    int addedCount = 0, unaddressedCount = 0;
     foreach (var cp in plan.TestingGuidance.CodePaths)
     {
         if (cp == null || !string.Equals(cp.Kind, "Added", StringComparison.Ordinal)) continue;
-        // The caller is responsible for joining sketches to emitted scenarios
-        // by sketchId; the advisory string here records the codePath inventory
-        // for UI display.
+        addedCount++;
+        if (!addressedPathIds.Contains(cp.PathId))
+        {
+            unaddressedCount++;
+            result.BatchInformationalReasons.Add(new QuarantineReason
+            {
+                Code = "P11_COVERAGE_GAP",
+                Message = $"codePath {cp.PathId} (Added) is not addressed by any accepted scenario",
+            });
+        }
     }
-    result.BatchInformational.Add(new QuarantineReason
+    result.BatchInformationalReasons.Add(new QuarantineReason
     {
         Code = "P11_COVERAGE_REPORT",
-        Message = $"testingGuidance enumerated {plan.TestingGuidance.CodePaths.Count} codePaths.",
+        Message = $"testingGuidance: {plan.TestingGuidance.CodePaths.Count} codePaths, {addedCount} Added, {unaddressedCount} unaddressed",
     });
 }
 ```
 
-Add `BatchInformational` to `ValidationResult` if not already present (advisory channel mirroring `BatchErrors`).
+Add `BatchInformationalReasons` to `ValidationResult`:
+
+```csharp
+public List<QuarantineReason> BatchInformationalReasons { get; set; } = new();
+```
+
+**B6 — Orchestrator surface:** after `EdogQaScenarioValidator.Validate` returns, the orchestrator
+loops over `validation.BatchInformationalReasons` and emits one `OrchestratorEvent` per entry
+(`Kind = ZoneValidated`, `Message = reason.Message`, `ErrorCode = reason.Code`). The SignalR
+broadcast payload carries these so the frontend can render coverage chips and the analysis-stage
+progress line. Similarly, `architectResult.Advisories` (populated from `ValidateArchitectPlan`'s
+new advisory channel) is surfaced as `OrchestratorEvent { Kind = ZoneValidated,
+ErrorCode = "P11_ADVISORY", Message = advisory }`.
 
 **v1 hard-fail policy:** none of the new gates hard-fail v1. Curator approval data over the first 50 PRs will drive the v2 threshold-setting before promotion.
 
@@ -1096,7 +1274,9 @@ Phased landing to keep blast radius small and reversible at each step:
 1. **Phase 1 — Schema + DTO + prompt (Architect-side, no downstream impact).**
    - Land §4.1, §4.2, §4.3, §5.1, §5.2.
    - The Architect now emits `testingGuidance`, but no downstream code reads it. Editor unaffected because the user-message change is additive context, not a contract change.
-   - **Reversibility:** revert the const string + the schema helper + the DTO classes. ~3 file revert.
+   - **I8 Phase 1 safety:** `testingGuidance` is listed in the schema's `required` (strict-mode demands it) but the C# `ValidateArchitectPlan` treats a missing/null `TestingGuidance` as an ADVISORY (not a hard error). Promoted to hard-fail in Phase 2 after baseline measurement.
+   - **M10 Prompt cache key:** bump from `edog-qa-architect-v2` to `edog-qa-architect-v11` — `PromptCacheKeyArchitect = "edog-qa-architect-v11"`. This invalidates prefix caches on the gpt-5 deployment so old plans don't leak into new-schema decoding.
+   - **Reversibility:** flip `EDOG_QA_P11_ELICITATION=off` to fully restore pre-P11 behaviour without code revert. Or revert the const string + the schema helper + the DTO classes (~3 file revert).
 
 2. **Phase 2 — Validator coverage checks.**
    - Land §6.1 and the orchestrator advisory-filtering line (§10 row 3).
@@ -1163,6 +1343,27 @@ The full Architect output for PR #964068 (`EnableLineageV2`) after P11 should lo
 ```
 
 This payload is the canonical fixture for the integration tests in §11 row 5.
+
+---
+
+## Appendix B — Spec Review Resolution
+
+Ten findings raised by the spec review are resolved in this revision. Each fix is reflected in the
+prose AND in the matching C# / JSON code blocks above.
+
+| # | Code | Finding | Resolution |
+|---|------|---------|------------|
+| 1 | **B1** | `featureFlagMatrix[].flags` was modelled as a map, which strict-mode rejects (no `additionalProperties:false` for variable-key maps). | Reshaped to a `[]` of `{name, value}` pairs. DTO uses `List<FlagAssignment>`. Worked example fc-1/fc-2 updated. |
+| 2 | **B2** | "STRICT 1:1 sketches→behavioralChanges" mapping in the legacy Architect prompt contradicts P11's many-sketches-per-Added-path coverage rule. | Replaced with: `scenarioSketches.Count >= behavioralChanges.Count`; every Added codePath, every mustCover flag combo, every errorMode must be addressed by ≥1 sketch; one behavioralChange per testable item. Reflected in both prose and the §5.1 prompt block. |
+| 3 | **B3** | Architect was told to enumerate `codePaths` etc. independently, duplicating what the Analyst already produced. | Architect prompt now says "project your testingGuidance from the Analyst's observations below. Do not re-enumerate." Analyst schema gains `externalDependencyFailures` (dep-*) and `featureFlags` (flag-*) — §4.4 documents the extension. |
+| 4 | **B4** | `scn.addressesCodePathIds` lived on the sketch, not the projected `Scenario`. UI had nothing to render. | `Scenario` DTO gains `AddressesCodePathIds` + `AddressesErrorModeIds`. Orchestrator joins sketches → scenarios by `Metadata.OriginalIndex` after `Validator.Validate` returns, copying both fields onto `AcceptedScenario.Scenario`. No Projector change. |
+| 5 | **B5** | "`ADVISORY:` string-prefix" hack on errors was a leaky abstraction. | `ValidateArchitectPlan` returns `(List<string> Errors, List<string> Advisories)`. Caller hard-fails on `Errors`, appends `Advisories` to new `LlmClientResult.Advisories`. |
+| 6 | **B6** | `BatchInformational` channel was named inconsistently with `BatchErrors`. | Renamed to `BatchInformationalReasons` on `ValidationResult`. Orchestrator surfaces each entry as an `OrchestratorEvent { Kind = ZoneValidated, Message, ErrorCode }`. SignalR payload includes them. |
+| 7 | **M1** | No feature flag — risky to roll out a schema + prompt change without a kill switch. | New §3a. `EDOG_QA_P11_ELICITATION` env var (default `true`, accepts on/off/true/false/1/0). When false: legacy schema/prompt/validator paths. Implementation: `EdogQaFeatureFlags.cs`. |
+| 8 | **I2** | An Architect emitting sketches without enumerating codePaths violated the elicitation contract but slipped through. | New HARD ERROR: `testable + codePaths.Count == 0 + scenarioSketches.Count > 0` → "testable plan with sketches but zero codePaths enumerated." |
+| 9 | **I8** | OpenAI strict-mode requires every property in `required`, but Phase 1 wanted optional `testingGuidance` for safe rollout. | Schema lists `testingGuidance` in `required` (strict-mode compatible). `ValidateArchitectPlan` treats `TestingGuidance == null` on a testable plan as an ADVISORY (not hard error) during Phase 1. Promoted to hard-fail in Phase 2. |
+| 10 | **M10** | Architect prompt cache key still pointed at v2 — old prefix cache would poison new-schema decoding. | `PromptCacheKeyArchitect = "edog-qa-architect-v11"` (constant identifier unchanged; value bumped). |
+| 11 | **S1** | No place for the model to record observations that didn't fit any of the six structured sections. | `testingGuidance.diagnosticNotes` added (string, required, empty allowed). Documented in §3 worked example, §4.1 schema, §4.3 DTO, §5.1 prompt block. |
 
 ---
 

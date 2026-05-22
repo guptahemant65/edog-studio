@@ -691,7 +691,36 @@ namespace Microsoft.LiveTable.Service.DevMode
                 }
 
                 var single = EdogQaScenarioProjector.Project(w.Plan, new[] { w.Accepted });
-                foreach (var p in single.Projected) mergedScenarios.Add(p);
+                foreach (var p in single.Projected)
+                {
+                    // F27 P11: copy sketch coverage IDs onto the projected
+                    // Scenario by OriginalIndex (sketches live on the Plan;
+                    // we keep this surgical so we don't have to modify the
+                    // Projector itself).
+                    if (EdogQaFeatureFlags.P11ElicitationEnabled
+                        && p != null
+                        && w.Accepted?.Scenario != null
+                        && w.Plan?.ScenarioSketches != null)
+                    {
+                        var idx = w.Accepted.Scenario.OriginalIndex;
+                        if (idx.HasValue && idx.Value >= 0 && idx.Value < w.Plan.ScenarioSketches.Count)
+                        {
+                            var sketch = w.Plan.ScenarioSketches[idx.Value];
+                            if (sketch != null)
+                            {
+                                if (sketch.AddressesCodePathIds != null)
+                                {
+                                    p.AddressesCodePathIds = new List<string>(sketch.AddressesCodePathIds);
+                                }
+                                if (sketch.AddressesErrorModeIds != null)
+                                {
+                                    p.AddressesErrorModeIds = new List<string>(sketch.AddressesErrorModeIds);
+                                }
+                            }
+                        }
+                    }
+                    mergedScenarios.Add(p);
+                }
                 foreach (var r in single.Rejected) projectionRejected.Add(r);
             }
 
@@ -1278,6 +1307,46 @@ namespace Microsoft.LiveTable.Service.DevMode
                     AcceptedCount = zr.Accepted.Count,
                     QuarantinedCount = zr.Quarantined.Count,
                 });
+
+                // F27 P11: surface Architect advisories (e.g. P11_GUIDANCE_MISSING,
+                // P11_COVERAGE_GAP, P11_COVERAGE_REPORT) as informational ZoneValidated
+                // events. These do not flip the zone outcome.
+                if (architectResult?.Advisories != null && architectResult.Advisories.Count > 0)
+                {
+                    foreach (var advisory in architectResult.Advisories)
+                    {
+                        if (string.IsNullOrWhiteSpace(advisory)) continue;
+                        var dashIdx = advisory.IndexOf(" — ", StringComparison.Ordinal);
+                        var code = dashIdx > 0 ? advisory.Substring(0, dashIdx) : "P11_ADVISORY";
+                        var msg = dashIdx > 0 ? advisory.Substring(dashIdx + 3) : advisory;
+                        SafeReport(progress, new OrchestratorEvent
+                        {
+                            Kind = OrchestratorEventKind.ZoneValidated,
+                            ZoneId = zr.ZoneId,
+                            ZoneInputIndex = zoneInputIndex,
+                            ErrorCode = code,
+                            Message = msg,
+                        });
+                    }
+                }
+
+                // F27 P11: surface validator BatchInformationalReasons (P11_COVERAGE_GAP,
+                // P11_COVERAGE_REPORT) as informational ZoneValidated events.
+                if (validation.BatchInformationalReasons != null && validation.BatchInformationalReasons.Count > 0)
+                {
+                    foreach (var info in validation.BatchInformationalReasons)
+                    {
+                        if (info == null) continue;
+                        SafeReport(progress, new OrchestratorEvent
+                        {
+                            Kind = OrchestratorEventKind.ZoneValidated,
+                            ZoneId = zr.ZoneId,
+                            ZoneInputIndex = zoneInputIndex,
+                            ErrorCode = info.Code ?? "P11_ADVISORY",
+                            Message = info.Message ?? string.Empty,
+                        });
+                    }
+                }
 
                 // ── T1e Branch B: validator-quarantine repair pass ───
                 //

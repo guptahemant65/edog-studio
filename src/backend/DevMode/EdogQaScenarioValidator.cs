@@ -212,6 +212,12 @@ namespace Microsoft.LiveTable.Service.DevMode
             /// scenario (e.g. the Architect plan itself was null). Empty in
             /// the typical case.</summary>
             public List<QuarantineReason> BatchErrors { get; set; } = new();
+
+            /// <summary>F27 P11: batch-scoped informational reasons that are NOT errors
+            /// (e.g. <c>P11_COVERAGE_GAP</c> when a codePath has no addressing sketch,
+            /// or <c>P11_COVERAGE_REPORT</c> summary lines). The orchestrator surfaces
+            /// these as <c>OrchestratorEvent</c>s with kind <c>ZoneValidated</c>.</summary>
+            public List<QuarantineReason> BatchInformationalReasons { get; set; } = new();
         }
 
         // ──────────────────────────────────────────────────────────────
@@ -459,6 +465,92 @@ namespace Microsoft.LiveTable.Service.DevMode
                         InformationalReasons = informational,
                     });
                 }
+            }
+
+            // ── F27 P11: batch-scoped coverage gate ─────────────────────
+            // When the feature flag is enabled and the Architect emitted a
+            // testingGuidance block, surface coverage gaps (Added codePaths
+            // and errorModes not addressed by any accepted scenario) as
+            // BatchInformationalReasons. These are advisory in Phase 1; the
+            // orchestrator surfaces them via OrchestratorEvent { Kind=ZoneValidated }.
+            //
+            // GeneratedScenario doesn't yet carry the sketch's
+            // addressesCodePathIds / addressesErrorModeIds (the orchestrator
+            // copies them onto the projected Scenario after Validate). So we
+            // resolve via OriginalIndex → plan.ScenarioSketches[idx].
+            if (EdogQaFeatureFlags.P11ElicitationEnabled
+                && plan?.TestingGuidance != null
+                && plan.PlanOutcome == EdogQaLlmClient.PlanOutcomeTestable
+                && result.Accepted.Count > 0)
+            {
+                var sketches = plan.ScenarioSketches ?? new List<EdogQaLlmClient.ScenarioSketch>();
+                var acceptedCodePathIds = new HashSet<string>(StringComparer.Ordinal);
+                var acceptedErrorModeIds = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var a in result.Accepted)
+                {
+                    if (a?.Scenario == null) continue;
+                    var idx = a.Scenario.OriginalIndex;
+                    if (!idx.HasValue || idx.Value < 0 || idx.Value >= sketches.Count) continue;
+                    var sketch = sketches[idx.Value];
+                    if (sketch == null) continue;
+                    if (sketch.AddressesCodePathIds != null)
+                    {
+                        foreach (var id in sketch.AddressesCodePathIds)
+                        {
+                            if (!string.IsNullOrWhiteSpace(id)) acceptedCodePathIds.Add(id);
+                        }
+                    }
+                    if (sketch.AddressesErrorModeIds != null)
+                    {
+                        foreach (var id in sketch.AddressesErrorModeIds)
+                        {
+                            if (!string.IsNullOrWhiteSpace(id)) acceptedErrorModeIds.Add(id);
+                        }
+                    }
+                }
+
+                var codePaths = plan.TestingGuidance.CodePaths ?? new List<EdogQaLlmClient.CodePathItem>();
+                var gapCount = 0;
+                foreach (var cp in codePaths)
+                {
+                    if (cp == null || string.IsNullOrWhiteSpace(cp.Id)) continue;
+                    if (string.Equals(cp.ChangeKind, "Added", StringComparison.Ordinal)
+                        && !acceptedCodePathIds.Contains(cp.Id))
+                    {
+                        result.BatchInformationalReasons.Add(new QuarantineReason
+                        {
+                            Code = "P11_COVERAGE_GAP",
+                            Message = $"codePath '{cp.Id}' (Added) is not covered by any accepted scenario.",
+                        });
+                        gapCount++;
+                    }
+                }
+
+                var errorModes = plan.TestingGuidance.ErrorModesToTest ?? new List<EdogQaLlmClient.ErrorModeItem>();
+                foreach (var em in errorModes)
+                {
+                    if (em == null || string.IsNullOrWhiteSpace(em.Id)) continue;
+                    if (!acceptedErrorModeIds.Contains(em.Id))
+                    {
+                        result.BatchInformationalReasons.Add(new QuarantineReason
+                        {
+                            Code = "P11_COVERAGE_GAP",
+                            Message = $"errorMode '{em.Id}' is not covered by any accepted scenario.",
+                        });
+                        gapCount++;
+                    }
+                }
+
+                var totalAdded = 0;
+                foreach (var cp in codePaths)
+                {
+                    if (cp != null && string.Equals(cp.ChangeKind, "Added", StringComparison.Ordinal)) totalAdded++;
+                }
+                result.BatchInformationalReasons.Add(new QuarantineReason
+                {
+                    Code = "P11_COVERAGE_REPORT",
+                    Message = $"accepted={result.Accepted.Count}, addedCodePaths={totalAdded}, errorModes={errorModes.Count}, gaps={gapCount}.",
+                });
             }
 
             return result;
