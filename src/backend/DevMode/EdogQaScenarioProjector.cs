@@ -969,10 +969,20 @@ namespace Microsoft.LiveTable.Service.DevMode
             {
                 return JsonDocument.Parse(text);
             }
-            catch (JsonException ex)
+            catch (JsonException)
             {
-                error = $"Spec is not valid JSON: {ex.Message}";
-                return JsonDocument.Parse("{}");
+                // LLM sometimes emits Python-style single-quoted dicts
+                // instead of valid JSON. Normalize before failing.
+                var normalized = text.Replace('\'', '"');
+                try
+                {
+                    return JsonDocument.Parse(normalized);
+                }
+                catch (JsonException ex2)
+                {
+                    error = $"Spec is not valid JSON: {ex2.Message}";
+                    return JsonDocument.Parse("{}");
+                }
             }
         }
 
