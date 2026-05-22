@@ -1596,7 +1596,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             var inputs = zones.Take(10).Select((z, i) => new EdogQaScenarioOrchestrator.ZoneInput
             {
                 ZoneId = string.IsNullOrEmpty(z.ZoneId) ? $"zone-{i:00}" : z.ZoneId,
-                ZoneSummary = BuildZoneSummary(z),
+                ZoneSummary = BuildZoneSummary(z, catalogRefJson),
                 RedactedDiff = implDiff,
                 UnifiedDiff = diff,
                 TestDiff = testDiff,
@@ -1805,7 +1805,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// interfaces. Replaces the previous "community-id or method-name"
         /// summary that gave the Architect no orientation cue.
         /// </summary>
-        internal static string BuildZoneSummary(ImpactZone z)
+        internal static string BuildZoneSummary(ImpactZone z, string catalogRefJson = null)
         {
             if (z == null) return string.Empty;
 
@@ -1815,6 +1815,10 @@ namespace Microsoft.LiveTable.Service.DevMode
             sb.Append("primary_change: ").Append(primary);
             if (!string.IsNullOrWhiteSpace(primaryFile)) sb.Append(" (").Append(primaryFile).Append(")");
             sb.AppendLine();
+
+            var onlyDiInvocation = z.EntryPoints != null
+                && z.EntryPoints.Count > 0
+                && z.EntryPoints.All(ep => ep.StimulusType == StimulusType.DiInvocation);
 
             if (z.EntryPoints != null && z.EntryPoints.Count > 0)
             {
@@ -1828,6 +1832,40 @@ namespace Microsoft.LiveTable.Service.DevMode
                       .Append(", directness=").Append(ep.DirectnessScore.ToString("F2", System.Globalization.CultureInfo.InvariantCulture))
                       .AppendLine(")");
                 }
+            }
+
+            // When graph-based BFS only found DiInvocation, inject HTTP routes
+            // from the catalog so the Architect knows HttpRequest is available.
+            if (onlyDiInvocation && !string.IsNullOrWhiteSpace(catalogRefJson))
+            {
+                try
+                {
+                    using var doc = System.Text.Json.JsonDocument.Parse(catalogRefJson);
+                    if (doc.RootElement.TryGetProperty("slots", out var slots)
+                        && slots.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        var httpSlots = new List<string>();
+                        foreach (var slot in slots.EnumerateArray())
+                        {
+                            if (slot.TryGetProperty("kind", out var kind)
+                                && kind.ValueKind == System.Text.Json.JsonValueKind.String
+                                && string.Equals(kind.GetString(), "Http", StringComparison.OrdinalIgnoreCase))
+                            {
+                                var slotId = slot.TryGetProperty("slotId", out var sid)
+                                    ? sid.GetString() : null;
+                                if (!string.IsNullOrEmpty(slotId))
+                                    httpSlots.Add(slotId);
+                            }
+                        }
+                        if (httpSlots.Count > 0)
+                        {
+                            sb.AppendLine("http_routes_from_catalog (prefer HttpRequest stimulus when applicable):");
+                            foreach (var route in httpSlots.Take(10))
+                                sb.Append("  - ").AppendLine(route);
+                        }
+                    }
+                }
+                catch { /* catalog parse failure is non-fatal */ }
             }
 
             if (z.AffectedInterfaces != null && z.AffectedInterfaces.Count > 0)
