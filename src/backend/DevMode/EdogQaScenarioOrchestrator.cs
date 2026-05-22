@@ -694,28 +694,40 @@ namespace Microsoft.LiveTable.Service.DevMode
                 foreach (var p in single.Projected)
                 {
                     // F27 P11: copy sketch coverage IDs onto the projected
-                    // Scenario by OriginalIndex (sketches live on the Plan;
-                    // we keep this surgical so we don't have to modify the
-                    // Projector itself).
+                    // Scenario by sketchId (sketches live on the Plan;
+                    // the Editor preserves sketchId verbatim on the emitted
+                    // scenario, so we resolve via that join rather than
+                    // positional index — the Editor may drop or reorder
+                    // scenarios, which would corrupt an index-based join.
                     if (EdogQaFeatureFlags.P11ElicitationEnabled
                         && p != null
                         && w.Accepted?.Scenario != null
                         && w.Plan?.ScenarioSketches != null)
                     {
-                        var idx = w.Accepted.Scenario.OriginalIndex;
-                        if (idx.HasValue && idx.Value >= 0 && idx.Value < w.Plan.ScenarioSketches.Count)
+                        EdogQaLlmClient.ScenarioSketch sketch = null;
+                        var sid = w.Accepted.Scenario.SketchId;
+                        if (!string.IsNullOrEmpty(sid))
                         {
-                            var sketch = w.Plan.ScenarioSketches[idx.Value];
-                            if (sketch != null)
+                            for (var si = 0; si < w.Plan.ScenarioSketches.Count; si++)
                             {
-                                if (sketch.AddressesCodePathIds != null)
+                                var candidate = w.Plan.ScenarioSketches[si];
+                                if (candidate != null
+                                    && string.Equals(candidate.SketchId, sid, StringComparison.Ordinal))
                                 {
-                                    p.AddressesCodePathIds = new List<string>(sketch.AddressesCodePathIds);
+                                    sketch = candidate;
+                                    break;
                                 }
-                                if (sketch.AddressesErrorModeIds != null)
-                                {
-                                    p.AddressesErrorModeIds = new List<string>(sketch.AddressesErrorModeIds);
-                                }
+                            }
+                        }
+                        if (sketch != null)
+                        {
+                            if (sketch.AddressesCodePathIds != null)
+                            {
+                                p.AddressesCodePathIds = new List<string>(sketch.AddressesCodePathIds);
+                            }
+                            if (sketch.AddressesErrorModeIds != null)
+                            {
+                                p.AddressesErrorModeIds = new List<string>(sketch.AddressesErrorModeIds);
                             }
                         }
                     }

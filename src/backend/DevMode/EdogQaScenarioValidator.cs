@@ -477,22 +477,28 @@ namespace Microsoft.LiveTable.Service.DevMode
             // GeneratedScenario doesn't yet carry the sketch's
             // addressesCodePathIds / addressesErrorModeIds (the orchestrator
             // copies them onto the projected Scenario after Validate). So we
-            // resolve via OriginalIndex → plan.ScenarioSketches[idx].
+            // resolve via SketchId → matching plan.ScenarioSketches entry.
+            // (Older builds joined by OriginalIndex, but the Editor may
+            // drop or reorder scenarios so the index isn't trustworthy.)
             if (EdogQaFeatureFlags.P11ElicitationEnabled
                 && plan?.TestingGuidance != null
                 && plan.PlanOutcome == EdogQaLlmClient.PlanOutcomeTestable
                 && result.Accepted.Count > 0)
             {
                 var sketches = plan.ScenarioSketches ?? new List<EdogQaLlmClient.ScenarioSketch>();
+                var sketchById = new Dictionary<string, EdogQaLlmClient.ScenarioSketch>(StringComparer.Ordinal);
+                foreach (var s in sketches)
+                {
+                    if (s != null && !string.IsNullOrEmpty(s.SketchId)) sketchById[s.SketchId] = s;
+                }
                 var acceptedCodePathIds = new HashSet<string>(StringComparer.Ordinal);
                 var acceptedErrorModeIds = new HashSet<string>(StringComparer.Ordinal);
                 foreach (var a in result.Accepted)
                 {
                     if (a?.Scenario == null) continue;
-                    var idx = a.Scenario.OriginalIndex;
-                    if (!idx.HasValue || idx.Value < 0 || idx.Value >= sketches.Count) continue;
-                    var sketch = sketches[idx.Value];
-                    if (sketch == null) continue;
+                    var sid = a.Scenario.SketchId;
+                    if (string.IsNullOrEmpty(sid)) continue;
+                    if (!sketchById.TryGetValue(sid, out var sketch) || sketch == null) continue;
                     if (sketch.AddressesCodePathIds != null)
                     {
                         foreach (var id in sketch.AddressesCodePathIds)

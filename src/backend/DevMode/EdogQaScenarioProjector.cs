@@ -25,6 +25,7 @@ namespace Microsoft.LiveTable.Service.DevMode
     using System;
     using System.Collections.Generic;
     using System.Linq;
+    using System.Text;
     using System.Text.Json;
 
     /// <summary>
@@ -972,8 +973,10 @@ namespace Microsoft.LiveTable.Service.DevMode
             catch (JsonException)
             {
                 // LLM sometimes emits Python-style single-quoted dicts
-                // instead of valid JSON. Normalize before failing.
-                var normalized = text.Replace('\'', '"');
+                // instead of valid JSON. Normalize before failing, taking
+                // care not to corrupt apostrophes inside string values
+                // (e.g. {'error':'can\'t connect'}).
+                var normalized = NormalizeSingleQuotedJson(text);
                 try
                 {
                     return JsonDocument.Parse(normalized);
@@ -984,6 +987,65 @@ namespace Microsoft.LiveTable.Service.DevMode
                     return JsonDocument.Parse("{}");
                 }
             }
+        }
+
+        /// <summary>
+        /// Convert a Python-style single-quoted JSON-ish string into valid
+        /// JSON. Walks the input char by char and only flips a quote when
+        /// it is acting as a string delimiter, leaving apostrophes inside
+        /// the body of a single-quoted string intact. Escaped pairs
+        /// (e.g. <c>\'</c>) are passed through unchanged. If the original
+        /// delimiter was a single quote, embedded raw double quotes are
+        /// escaped so the result remains parseable.
+        /// </summary>
+        private static string NormalizeSingleQuotedJson(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return text;
+            var sb = new StringBuilder(text.Length);
+            bool inString = false;
+            char stringDelim = '\0';
+            for (int i = 0; i < text.Length; i++)
+            {
+                char c = text[i];
+                if (inString)
+                {
+                    if (c == '\\' && i + 1 < text.Length)
+                    {
+                        // Escaped character — pass through both.
+                        sb.Append(c);
+                        sb.Append(text[++i]);
+                        continue;
+                    }
+                    if (c == stringDelim)
+                    {
+                        // Closing delimiter — always emit as double-quote.
+                        sb.Append('"');
+                        inString = false;
+                        continue;
+                    }
+                    // Inside a single-quoted string a raw double-quote
+                    // would terminate the resulting JSON string prematurely,
+                    // so escape it.
+                    if (stringDelim == '\'' && c == '"')
+                    {
+                        sb.Append('\\').Append('"');
+                        continue;
+                    }
+                    sb.Append(c);
+                }
+                else
+                {
+                    if (c == '\'' || c == '"')
+                    {
+                        sb.Append('"');
+                        inString = true;
+                        stringDelim = c;
+                        continue;
+                    }
+                    sb.Append(c);
+                }
+            }
+            return sb.ToString();
         }
 
         private static bool TryGetString(JsonElement obj, string name, out string value)
