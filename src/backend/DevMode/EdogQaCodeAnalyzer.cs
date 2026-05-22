@@ -1834,8 +1834,9 @@ namespace Microsoft.LiveTable.Service.DevMode
                 }
             }
 
-            // When graph-based BFS only found DiInvocation, inject HTTP routes
-            // from the catalog so the Architect knows HttpRequest is available.
+            // When graph-based BFS only found DiInvocation, inject ALL
+            // available stimulus types from the catalog so the Architect
+            // knows which entry points exist beyond what the graph traced.
             if (onlyDiInvocation && !string.IsNullOrWhiteSpace(catalogRefJson))
             {
                 try
@@ -1844,24 +1845,33 @@ namespace Microsoft.LiveTable.Service.DevMode
                     if (doc.RootElement.TryGetProperty("slots", out var slots)
                         && slots.ValueKind == System.Text.Json.JsonValueKind.Array)
                     {
-                        var httpSlots = new List<string>();
+                        var slotsByKind = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
                         foreach (var slot in slots.EnumerateArray())
                         {
-                            if (slot.TryGetProperty("kind", out var kind)
-                                && kind.ValueKind == System.Text.Json.JsonValueKind.String
-                                && string.Equals(kind.GetString(), "Http", StringComparison.OrdinalIgnoreCase))
+                            var kind = slot.TryGetProperty("kind", out var k) && k.ValueKind == System.Text.Json.JsonValueKind.String
+                                ? k.GetString() : null;
+                            var slotId = slot.TryGetProperty("slotId", out var sid) && sid.ValueKind == System.Text.Json.JsonValueKind.String
+                                ? sid.GetString() : null;
+                            if (string.IsNullOrEmpty(kind) || string.IsNullOrEmpty(slotId)) continue;
+                            if (!slotsByKind.TryGetValue(kind, out var list))
                             {
-                                var slotId = slot.TryGetProperty("slotId", out var sid)
-                                    ? sid.GetString() : null;
-                                if (!string.IsNullOrEmpty(slotId))
-                                    httpSlots.Add(slotId);
+                                list = new List<string>();
+                                slotsByKind[kind] = list;
                             }
+                            list.Add(slotId);
                         }
-                        if (httpSlots.Count > 0)
+
+                        if (slotsByKind.Count > 0)
                         {
-                            sb.AppendLine("http_routes_from_catalog (prefer HttpRequest stimulus when applicable):");
-                            foreach (var route in httpSlots.Take(10))
-                                sb.Append("  - ").AppendLine(route);
+                            sb.AppendLine("available_stimulus_types_from_catalog (prefer these over DiInvocation when the changed code is reachable through them):");
+                            foreach (var kvp in slotsByKind)
+                            {
+                                sb.Append("  ").Append(kvp.Key).Append(" (").Append(kvp.Value.Count).AppendLine(" slots):");
+                                foreach (var route in kvp.Value.Take(8))
+                                    sb.Append("    - ").AppendLine(route);
+                                if (kvp.Value.Count > 8)
+                                    sb.Append("    ... and ").Append(kvp.Value.Count - 8).AppendLine(" more");
+                            }
                         }
                     }
                 }
