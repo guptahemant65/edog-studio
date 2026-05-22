@@ -260,6 +260,17 @@ namespace Microsoft.LiveTable.Service.DevMode
             PublishEvent("WriteFile", path, sw.Elapsed.TotalMilliseconds, contentSizeBytes: contentSize, hasContent: bytes != null, contentPreview: null, ttlSeconds: 0);
         }
 
+        /// <inheritdoc/>
+        public async Task<(List<(string Path, DateTimeOffset LastModified, long Size)> Files, string ContinuationToken)> ListFilesWithMetadataAsync(string path, int maxCount = default, string continuationToken = null, CancellationToken cancellationToken = default)
+        {
+            var sw = Stopwatch.StartNew();
+            var result = await _inner.ListFilesWithMetadataAsync(path, maxCount, continuationToken, cancellationToken).ConfigureAwait(false);
+            sw.Stop();
+
+            PublishEvent("ListFilesWithMetadata", path, sw.Elapsed.TotalMilliseconds, contentSizeBytes: 0, hasContent: result.Files?.Count > 0, contentPreview: null, ttlSeconds: 0);
+            return result;
+        }
+
         /// <summary>
         /// Truncates a string preview to 4KB. Returns null if input is null.
         /// </summary>
