@@ -208,19 +208,6 @@ namespace Microsoft.LiveTable.Service.DevMode
         }
 
         /// <inheritdoc/>
-        public async Task<(List<(string Path, DateTimeOffset LastModified, long Size)> Files, string ContinuationToken)> ListFilesWithMetadataAsync(string path, int maxCount = default, string continuationToken = null, CancellationToken cancellationToken = default)
-        {
-            var sw = Stopwatch.StartNew();
-            var result = await _inner.ListFilesWithMetadataAsync(path, maxCount, continuationToken, cancellationToken).ConfigureAwait(false);
-            sw.Stop();
-
-            var count = result.Files?.Count ?? 0;
-
-            PublishEvent("List", path, sw.Elapsed.TotalMilliseconds, contentSizeBytes: count, hasContent: false, contentPreview: null, ttlSeconds: 0);
-            return result;
-        }
-
-        /// <inheritdoc/>
         public async Task<IDictionary<string, string>> GetDirMetadataAsync(string dirPath, CancellationToken cancellationToken = default)
         {
             var sw = Stopwatch.StartNew();
