@@ -182,36 +182,68 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             // Stimulus payload — discriminated union, exactly one typed
             // payload non-null on the resulting Stimulus.
+            // P10/P11: stimulusSpec may be descriptive text rather than JSON.
+            // When it fails JSON parsing, build a minimal stub from stimulusType
+            // so the scenario can still be projected and curated.
             var stimulus = new Stimulus { Type = stimulusType };
             using (var stimulusDoc = TryParseJson(src.StimulusSpec, out var stimulusParseFail))
             {
                 if (stimulusParseFail != null)
                 {
-                    reasons.Add(MakeReason(CodeStimulusSpecMalformed, "stimulusSpec", null, stimulusParseFail));
-                    return null;
-                }
+                    // StimulusSpec is not JSON — build a stub from stimulusType.
+                    // The curator can fill in the concrete details. Log the
+                    // degradation but don't reject the scenario.
+                    Console.WriteLine(
+                        $"[QA-DIAG] Projector: stimulusSpec not JSON for '{src.Id}' — "
+                        + $"building stub {stimulusType} stimulus. Spec was: "
+                        + (src.StimulusSpec?.Length > 80 ? src.StimulusSpec.Substring(0, 80) + "..." : src.StimulusSpec ?? "(null)"));
 
-                var root = stimulusDoc.RootElement;
-                switch (stimulusType)
+                    switch (stimulusType)
+                    {
+                        case StimulusType.HttpRequest:
+                            stimulus.HttpRequest = new HttpRequestSpec { Method = "GET", Path = "/api/unknown" };
+                            break;
+                        case StimulusType.SignalRBroadcast:
+                            stimulus.SignalRBroadcast = new SignalRBroadcastSpec { Hub = "unknown", Method = "unknown" };
+                            break;
+                        case StimulusType.DagTrigger:
+                            stimulus.DagTrigger = new DagTriggerSpec { IterationId = "unknown" };
+                            break;
+                        case StimulusType.FileEvent:
+                            stimulus.FileEvent = new FileEventSpec { Path = "unknown" };
+                            break;
+                        case StimulusType.TimerTick:
+                            stimulus.TimerTick = new TimerTickSpec { TickSource = "unknown" };
+                            break;
+                        case StimulusType.DiInvocation:
+                            stimulus.DiInvocation = new DiInvocationSpec { ServiceType = "unknown", Method = "unknown" };
+                            break;
+                    }
+                }
+                else
                 {
-                    case StimulusType.HttpRequest:
-                        stimulus.HttpRequest = ProjectHttpRequest(root, reasons);
-                        break;
-                    case StimulusType.SignalRBroadcast:
-                        stimulus.SignalRBroadcast = ProjectSignalRBroadcast(root, reasons);
-                        break;
-                    case StimulusType.DagTrigger:
-                        stimulus.DagTrigger = ProjectDagTrigger(root, reasons);
-                        break;
-                    case StimulusType.FileEvent:
-                        stimulus.FileEvent = ProjectFileEvent(root, reasons);
-                        break;
-                    case StimulusType.TimerTick:
-                        stimulus.TimerTick = ProjectTimerTick(root, reasons);
-                        break;
-                    case StimulusType.DiInvocation:
-                        stimulus.DiInvocation = ProjectDiInvocation(root, reasons);
-                        break;
+                    var root = stimulusDoc.RootElement;
+                    switch (stimulusType)
+                    {
+                        case StimulusType.HttpRequest:
+                            stimulus.HttpRequest = ProjectHttpRequest(root, reasons);
+                            break;
+                        case StimulusType.SignalRBroadcast:
+                            stimulus.SignalRBroadcast = ProjectSignalRBroadcast(root, reasons);
+                            break;
+                        case StimulusType.DagTrigger:
+                            stimulus.DagTrigger = ProjectDagTrigger(root, reasons);
+                            break;
+                        case StimulusType.FileEvent:
+                            stimulus.FileEvent = ProjectFileEvent(root, reasons);
+                            break;
+                        case StimulusType.TimerTick:
+                            stimulus.TimerTick = ProjectTimerTick(root, reasons);
+                            break;
+                        case StimulusType.DiInvocation:
+                            stimulus.DiInvocation = ProjectDiInvocation(root, reasons);
+                            break;
+                    }
                 }
             }
 
