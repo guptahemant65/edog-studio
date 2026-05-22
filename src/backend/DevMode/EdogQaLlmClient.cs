@@ -112,7 +112,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         internal const string PromptCacheKeyArchitect = "edog-qa-architect-v11";
 
         /// <summary>Stable cache key for the Editor's system+schema prefix.</summary>
-        internal const string PromptCacheKeyEditor = "edog-qa-editor-v2";
+        internal const string PromptCacheKeyEditor = "edog-qa-editor-v11";
 
         /// <summary>Stable cache key for the Analyst's system+schema prefix. The Analyst is the
         /// first pass of the 2-step Analyst→Architect pipeline; its prompt is intentionally
@@ -1395,7 +1395,11 @@ namespace Microsoft.LiveTable.Service.DevMode
                             "FileEvent", "TimerTick", "DiInvocation",
                         },
                     },
-                    ["stimulusSpec"] = new Dictionary<string, object> { ["type"] = "string" },
+                    ["stimulusSpec"] = new Dictionary<string, object>
+                    {
+                        ["type"] = "string",
+                        ["description"] = "Valid double-quoted JSON string representing the stimulus payload. Must parse as JSON.",
+                    },
                     // Stimulus payload is an opaque typed JSON object that
                     // varies by stimulusType. Strict mode forbids open objects
                     // (no additionalProperties schema allowed). Emit as a JSON
@@ -1418,7 +1422,11 @@ namespace Microsoft.LiveTable.Service.DevMode
                                     ["enum"] = new[] { "EventPresent", "EventAbsent", "EventCount", "EventOrder", "Timing", "FieldMatch" },
                                 },
                                 ["topic"] = new Dictionary<string, object> { ["type"] = "string" },
-                                ["matcherSpec"] = new Dictionary<string, object> { ["type"] = "string" },
+                                ["matcherSpec"] = new Dictionary<string, object>
+                                {
+                                    ["type"] = "string",
+                                    ["description"] = "Valid double-quoted JSON string representing the matcher payload. Must parse as JSON.",
+                                },
                                 ["rationale"] = new Dictionary<string, object> { ["type"] = "string" },
                             },
                         },
@@ -2186,18 +2194,19 @@ namespace Microsoft.LiveTable.Service.DevMode
             + "lowercase, no other values accepted; downstream validator quarantines unknown topics): "
             + "http, token, flag, perf, spark, log, telemetry, retry, cache, fileop, catalog, dag, "
             + "flt-ops, nexus, di, capacity. "
-            + "STIMULUS CONTRACT: emit the typed 'stimulus' object as the authoritative contract payload. Keep 'stimulusType' + 'stimulusSpec' as compatibility mirrors for the current projector, but reason from the typed object first. "
+            + "STIMULUS CONTRACT: stimulusSpec MUST be valid double-quoted JSON that the projector can parse. It is NOT a description — it is the serialized stimulus payload. "
             + "Supported stimulus types are HttpRequest, SignalRBroadcast, DagTrigger, FileEvent, TimerTick, DiInvocation. "
-            + "HttpRequest = {'method':'GET|POST|PUT|DELETE','path':'/api/...','contentType':'application/json' (optional),'body':<json> (optional),'headers':{<string-keyed strings>} (optional)}; "
-            + "SignalRBroadcast = {'hub':'<HubName>','method':'<MethodName>','args':[<json values>] (optional)}; "
-            + "DagTrigger = {'iterationId':'<id>','nodeFilter':'<filter>' (optional)}; "
-            + "FileEvent = {'path':'<onelake path>','content':'<text>' (optional),'encoding':'utf-8' (optional)}; "
-            + "TimerTick = {'tickSource':'<source>','topic':'<topic>' (optional),'maxWaitMs':<int> (optional)}; "
-            + "DiInvocation = {'serviceType':'<FQN>','method':'<MethodName>','args':[<json values>] (optional)}. "
-            + "MATCHERS CONTRACT: emit the typed 'matchers' array as the authoritative matcher vocabulary. Keep legacy expectations[*].matcherSpec mirrors for compatibility, but reason from typed matchers first. "
-            + "Each matcher = {'topicField':'<topic>.<field>','assertion':'Equals|NotEquals|Exists|InRange|ContainsAll|OneOf|Length','value':<typed value object>}. "
+            + "HttpRequest = {\"method\":\"GET\",\"path\":\"/api/...\",\"contentType\":\"application/json\",\"body\":{},\"headers\":{}}; "
+            + "SignalRBroadcast = {\"hub\":\"HubName\",\"method\":\"MethodName\",\"args\":[]}; "
+            + "DagTrigger = {\"iterationId\":\"id\",\"nodeFilter\":\"filter\"}; "
+            + "FileEvent = {\"path\":\"onelake/path\",\"content\":\"text\",\"encoding\":\"utf-8\"}; "
+            + "TimerTick = {\"tickSource\":\"source\",\"topic\":\"topic\",\"maxWaitMs\":5000}; "
+            + "DiInvocation = {\"serviceType\":\"Namespace.Service\",\"method\":\"MethodName\",\"args\":[]}. "
+            + "If testingGuidance.stimuliRequired provides concrete stimulus shapes, use those values directly in stimulusSpec as valid JSON. "
+            + "MATCHERS CONTRACT: matcherSpec MUST also be valid double-quoted JSON, not descriptive text. When typed matchers[] are present, emit matcherSpec as the JSON-serialized equivalent. "
+            + "Each matcher = {\"topicField\":\"topic.field\",\"assertion\":\"Equals|NotEquals|Exists|InRange|ContainsAll|OneOf|Length\",\"value\":{typed value object}}. "
             + "Typed values use one of Value_string, Value_integer, Value_datetime, Value_range, Value_array (plus boolean/length helpers when needed by Exists or Length assertions). "
-            + "EXAMPLE: a complete compatibility mirror for an HttpRequest scenario may still render stimulusSpec as the JSON string {'method':'GET','path':'/api/v1/insights/summary'}. "
+            + "CRITICAL: stimulusSpec and matcherSpec use DOUBLE QUOTES for JSON. Single quotes are invalid JSON and will be rejected by the projector. "
             + "VERB SELECTION GUIDE (the validator's match key is (category, verb, line-overlap); a wrong verb produces a false-negative match against curator-graded gold-corpus expectations). "
             + "Choose the MOST SPECIFIC verb for the assertion's intent: "
             + "EventPresent = assert a new field/property/header/column MUST appear on the wire (a new response property, a new SQL projection column, a new HTTP header). "
