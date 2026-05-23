@@ -1536,6 +1536,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             string slotPurposesText = string.Empty;
             string fewShotText = string.Empty;
             string catalogRefJson = string.Empty;
+            CatalogSnapshot catalogSnapshot = null;
             var catalog = EdogQaServiceLocator.ContractCatalog;
             if (catalog != null)
             {
@@ -1639,6 +1640,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     }
 
                     var snapshot = catalog.Assemble(zoneId, fltRepoRoot, swaggerObj, frameworkEndpointsJson);
+                    catalogSnapshot = snapshot;
 
                     if (snapshot != null && snapshot.Slots != null && snapshot.Slots.Count > 0)
                     {
@@ -1724,6 +1726,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 SlotPurposesText = slotPurposesText,
                 FewShotExemplarsText = fewShotText,
                 CatalogReferenceJson = catalogRefJson,
+                Catalog = catalogSnapshot,
             }).ToArray();
 
             var result = await orchestrator.RunAsync(inputs, config, progress: null, cancellationToken).ConfigureAwait(false);

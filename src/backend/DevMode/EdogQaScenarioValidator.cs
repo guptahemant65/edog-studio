@@ -96,6 +96,18 @@ namespace Microsoft.LiveTable.Service.DevMode
         internal const int MinPriority          = 1;
         internal const int MaxPriority          = 5;
 
+        /// <summary>
+        /// Gate 1 line-proximity tolerance. The Architect cites the
+        /// approximate region of a change; the validator confirms the
+        /// citation is within this many lines of a real changed line on
+        /// the same (file, side). The LLM cannot count lines reliably in
+        /// a 100K+ unified diff — exact-match here produces false-positive
+        /// <c>GROUNDING_LINE_NOT_IN_DIFF</c> quarantines that the
+        /// orchestrator immediately retries, burning tokens for no
+        /// reason. Spec: §3.2 gate 1 (LNT-line-tolerance fix).
+        /// </summary>
+        internal const int LineProximityTolerance = 10;
+
         // Engine enum vocabularies — frozen here so the validator does not
         // take a runtime dependency on Enum.TryParse against the engine
         // type (would couple Architect-Editor JSON to engine member renames).
@@ -280,6 +292,22 @@ namespace Microsoft.LiveTable.Service.DevMode
             // Pre-compute the changed-line set once (O(diff bytes)).
             var changedLines = ParseChangedLines(unifiedDiff);
 
+            // Per-(path,side) index of changed line numbers so the
+            // proximity check (Gate 1) is O(k) per evidence ref against
+            // only the changed lines for that file+side, instead of a
+            // full scan of every changed line in the diff.
+            var changedLineIndex = new Dictionary<(string Path, string Side), HashSet<int>>();
+            foreach (var entry in changedLines)
+            {
+                var key = (entry.Path, entry.Side);
+                if (!changedLineIndex.TryGetValue(key, out var lineSet))
+                {
+                    lineSet = new HashSet<int>();
+                    changedLineIndex[key] = lineSet;
+                }
+                lineSet.Add(entry.Line);
+            }
+
             // Topic-vocabulary lookup (case-insensitive).
             var validTopics = context.ValidTopics ?? Array.Empty<string>();
             var topicSet = new HashSet<string>(validTopics, StringComparer.OrdinalIgnoreCase);
@@ -343,15 +371,33 @@ namespace Microsoft.LiveTable.Service.DevMode
 
                         // Spec §4: newLine is the line "in the side's view".
                         // For side=left it is the pre-change line; for side
-                        // =right it is the post-change line. ChangedLines
-                        // exposes both projections.
-                        var lineKey = (evidence.RepoRelativePath ?? string.Empty, evidence.Side?.ToLowerInvariant() ?? "right", evidence.NewLine);
-                        if (!changedLines.Contains(lineKey))
+                        // =right it is the post-change line. The proximity
+                        // check tolerates a small window around real changed
+                        // lines because the LLM cannot count lines reliably
+                        // in a large diff — exact-match would quarantine
+                        // genuinely-grounded evidence whose citation is off
+                        // by a handful of lines. See LineProximityTolerance.
+                        var path = evidence.RepoRelativePath ?? string.Empty;
+                        var side = evidence.Side?.ToLowerInvariant() ?? "right";
+                        var citedLine = evidence.NewLine;
+                        var withinTolerance = false;
+                        if (changedLineIndex.TryGetValue((path, side), out var sideLines))
+                        {
+                            foreach (var dl in sideLines)
+                            {
+                                if (Math.Abs(dl - citedLine) <= LineProximityTolerance)
+                                {
+                                    withinTolerance = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (!withinTolerance)
                         {
                             reasons.Add(new QuarantineReason
                             {
                                 Code = CodeGroundingLineNotInDiff,
-                                Message = $"Architect evidence '{evidenceId}' cites {evidence.RepoRelativePath}:{evidence.NewLine} (side={evidence.Side}) but the diff has no changed line there.",
+                                Message = $"Architect evidence '{evidenceId}' cites {evidence.RepoRelativePath}:{evidence.NewLine} (side={evidence.Side}) but the diff has no changed line within {LineProximityTolerance} lines on that side.",
                                 EvidenceId = evidenceId,
                                 FieldPath = $"groundingEvidence.newLine",
                             });

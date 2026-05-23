@@ -88,7 +88,8 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// empty; must not be null.</param>
         public static ProjectionResult Project(
             EdogQaLlmClient.ArchitectPlan plan,
-            IReadOnlyList<EdogQaScenarioValidator.AcceptedScenario> accepted)
+            IReadOnlyList<EdogQaScenarioValidator.AcceptedScenario> accepted,
+            CatalogSnapshot catalogSnapshot = null)
         {
             if (plan == null) throw new ArgumentNullException(nameof(plan));
             if (accepted == null) throw new ArgumentNullException(nameof(accepted));
@@ -133,11 +134,157 @@ namespace Microsoft.LiveTable.Service.DevMode
                 }
                 else
                 {
+                    // Fill catalogHashes deterministically from the runtime
+                    // catalog snapshot AFTER the Editor produces scenarios.
+                    // The Editor cannot compute SHA hashes; asking it to
+                    // copy them out of the prompt produces matcherTopicHashes
+                    // = [] and immediate GROUNDING_SLOT_MISMATCH quarantines.
+                    // Doing it here is deterministic and unconditional —
+                    // same plan + same accepted scenarios + same snapshot
+                    // ⇒ same hashes on the output.
+                    FillCatalogHashes(projected, catalogSnapshot);
                     result.Projected.Add(projected);
                 }
             }
 
             return result;
+        }
+
+        // ──────────────────────────────────────────────────────────────
+        // Catalog-hash filling. The Editor is no longer asked to produce
+        // these; the projector fills them from the same CatalogSnapshot
+        // the Architect/Editor saw in the CATALOG REFERENCES prompt block.
+        // Same inputs ⇒ same hashes. No catalog ⇒ no fill (leave whatever
+        // the Editor emitted, which is the empty shape per the prompt).
+        // ──────────────────────────────────────────────────────────────
+
+        private static void FillCatalogHashes(Scenario scenario, CatalogSnapshot snapshot)
+        {
+            if (scenario == null || snapshot == null)
+            {
+                return;
+            }
+
+            var hashes = scenario.CatalogHashes ?? new CatalogHashes();
+            hashes.CatalogSnapshotId = snapshot.SnapshotId ?? string.Empty;
+            hashes.StimulusSlotHash = hashes.StimulusSlotHash ?? string.Empty;
+            hashes.MatcherTopicHashes = hashes.MatcherTopicHashes != null
+                ? new Dictionary<string, string>(hashes.MatcherTopicHashes, StringComparer.Ordinal)
+                : new Dictionary<string, string>(StringComparer.Ordinal);
+
+            // Stimulus slot hash: match the scenario's typed stimulus
+            // against catalog slots by kind + path/method. The catalog's
+            // Purpose / SlotId carry the route info for HTTP slots;
+            // non-HTTP stimuli match purely by kind when only one slot
+            // of that kind exists. When no unique match is possible the
+            // hash is left empty — validators handle empty as "ungrounded
+            // for this dimension" rather than as a contradiction.
+            if (scenario.Stimulus != null && snapshot.Slots != null && snapshot.Slots.Count > 0)
+            {
+                var stimKind = scenario.Stimulus.Type;
+                var probe = ExtractStimulusProbe(scenario.Stimulus);
+
+                QaContractSlot match = null;
+                if (!string.IsNullOrEmpty(probe))
+                {
+                    foreach (var slot in snapshot.Slots)
+                    {
+                        if (slot == null) continue;
+                        if (slot.Kind != stimKind) continue;
+                        var purpose = slot.Purpose ?? string.Empty;
+                        var slotId = slot.SlotId ?? string.Empty;
+                        if (purpose.IndexOf(probe, StringComparison.OrdinalIgnoreCase) >= 0
+                            || slotId.IndexOf(probe, StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            match = slot;
+                            break;
+                        }
+                    }
+                }
+
+                if (match == null)
+                {
+                    QaContractSlot solo = null;
+                    int kindCount = 0;
+                    foreach (var slot in snapshot.Slots)
+                    {
+                        if (slot == null || slot.Kind != stimKind) continue;
+                        kindCount++;
+                        solo = slot;
+                        if (kindCount > 1) { solo = null; break; }
+                    }
+                    if (solo != null) match = solo;
+                }
+
+                if (match != null && !string.IsNullOrEmpty(match.SlotHash))
+                {
+                    hashes.StimulusSlotHash = match.SlotHash;
+                }
+            }
+
+            // Matcher topic hashes: every expectation's topic that appears
+            // in the catalog's TopicFieldHashes is added. Missing topics
+            // are silently skipped (validator's gate decides if missing
+            // entries fail the scenario).
+            if (snapshot.TopicFieldHashes != null
+                && snapshot.TopicFieldHashes.Count > 0
+                && scenario.Expectations != null)
+            {
+                foreach (var exp in scenario.Expectations)
+                {
+                    if (exp == null) continue;
+                    var topic = exp.Topic;
+                    if (string.IsNullOrEmpty(topic)) continue;
+                    if (hashes.MatcherTopicHashes.ContainsKey(topic)) continue;
+                    if (snapshot.TopicFieldHashes.TryGetValue(topic, out var hash)
+                        && !string.IsNullOrEmpty(hash))
+                    {
+                        hashes.MatcherTopicHashes[topic] = hash;
+                    }
+                }
+            }
+
+            scenario.CatalogHashes = hashes;
+        }
+
+        private static string ExtractStimulusProbe(Stimulus stimulus)
+        {
+            if (stimulus == null) return null;
+            if (stimulus.HttpRequest != null && !string.IsNullOrEmpty(stimulus.HttpRequest.Path))
+            {
+                return stimulus.HttpRequest.Path;
+            }
+            if (stimulus.SignalRBroadcast != null)
+            {
+                var hub = stimulus.SignalRBroadcast.Hub ?? string.Empty;
+                var method = stimulus.SignalRBroadcast.Method ?? string.Empty;
+                var combined = (hub + "/" + method).Trim('/');
+                return combined.Length > 0 ? combined : null;
+            }
+            if (stimulus.DagTrigger != null)
+            {
+                if (stimulus.DagTrigger.NodeFilter != null && stimulus.DagTrigger.NodeFilter.Count > 0)
+                {
+                    return stimulus.DagTrigger.NodeFilter[0];
+                }
+                if (!string.IsNullOrEmpty(stimulus.DagTrigger.IterationId))
+                {
+                    return stimulus.DagTrigger.IterationId;
+                }
+            }
+            if (stimulus.FileEvent != null && !string.IsNullOrEmpty(stimulus.FileEvent.Path))
+            {
+                return stimulus.FileEvent.Path;
+            }
+            if (stimulus.TimerTick != null && !string.IsNullOrEmpty(stimulus.TimerTick.TickSource))
+            {
+                return stimulus.TimerTick.TickSource;
+            }
+            if (stimulus.DiInvocation != null && !string.IsNullOrEmpty(stimulus.DiInvocation.ServiceType))
+            {
+                return stimulus.DiInvocation.ServiceType;
+            }
+            return null;
         }
 
 

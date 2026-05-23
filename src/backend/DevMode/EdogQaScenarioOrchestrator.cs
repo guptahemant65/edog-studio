@@ -247,6 +247,17 @@ namespace Microsoft.LiveTable.Service.DevMode
             public string CatalogReferenceJson { get; set; }
 
             /// <summary>
+            /// Runtime catalog snapshot for this zone. Carried through to
+            /// the projector so it can deterministically fill
+            /// <c>scenario.catalogHashes</c> after the Editor produces
+            /// scenarios — the Editor cannot compute SHA hashes. May be
+            /// null when catalog assembly was skipped or failed (the
+            /// projector treats null as "leave hashes as the Editor
+            /// emitted them"). Spec §3.2 catalog-hash-projection fix.
+            /// </summary>
+            public CatalogSnapshot Catalog { get; set; }
+
+            /// <summary>
             /// PA-1: test-file hunks split out of <see cref="RedactedDiff"/> so the Architect
             /// prompt can present them as secondary evidence. May be empty when the PR
             /// touches no test files (or when the splitter degraded). The Validator still
@@ -294,6 +305,9 @@ namespace Microsoft.LiveTable.Service.DevMode
             public string OutcomeReason { get; set; } = string.Empty;
 
             public EdogQaLlmClient.ArchitectPlan Plan { get; set; }
+
+            /// <summary>Runtime catalog snapshot carried from the matching <see cref="ZoneInput.Catalog"/> so cross-zone dedup + projection can find the right hashes per winner.</summary>
+            public CatalogSnapshot Catalog { get; set; }
 
             /// <summary>F27 P11: testingGuidance projected out of the Analyst's observations
             /// (codePaths, featureFlagMatrix, stimuliRequired, observableSignals,
@@ -643,6 +657,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                         ZoneId = zr.ZoneId,
                         Accepted = acc,
                         Plan = zr.Plan,
+                        Catalog = zr.Catalog,
                     });
                 }
             }
@@ -728,7 +743,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     continue;
                 }
 
-                var single = EdogQaScenarioProjector.Project(w.Plan, new[] { w.Accepted });
+                var single = EdogQaScenarioProjector.Project(w.Plan, new[] { w.Accepted }, w.Catalog);
                 if (single.Diagnostics != null)
                 {
                     // The projector already wrote each line to stdout; we
@@ -876,6 +891,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 ZoneInputIndex = zoneInputIndex,
                 ZoneId = zoneInput?.ZoneId ?? string.Empty,
                 OptionsRevision = optionsRevision,
+                Catalog = zoneInput?.Catalog,
             };
             var zoneStopwatch = Stopwatch.StartNew();
             // T1e: per-zone running tally of how much we've BOOKED into
@@ -2087,6 +2103,8 @@ namespace Microsoft.LiveTable.Service.DevMode
             public EdogQaScenarioValidator.AcceptedScenario Accepted;
 
             public EdogQaLlmClient.ArchitectPlan Plan;
+
+            public CatalogSnapshot Catalog;
         }
     }
 }
