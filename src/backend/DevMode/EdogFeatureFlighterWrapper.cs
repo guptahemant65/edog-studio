@@ -10,6 +10,7 @@ namespace Microsoft.LiveTable.Service.DevMode
     using System;
     using System.Diagnostics;
     using Microsoft.LiveTable.Service.FeatureFlightProvider;
+    using Microsoft.ServicePlatform.Telemetry;
 
     /// <summary>
     /// Decorator that wraps <see cref="IFeatureFlighter"/> with two behaviors:
