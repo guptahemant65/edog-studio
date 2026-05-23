@@ -1678,10 +1678,31 @@ namespace Microsoft.LiveTable.Service.DevMode
                 }
                 else if (totalQuarantined > 0 && totalAccepted == 0)
                 {
+                    // Surface the first quarantine reason for diagnosis
+                    var firstQuarantine = result.Zones
+                        .Where(z => z.Quarantined != null && z.Quarantined.Count > 0)
+                        .SelectMany(z => z.Quarantined)
+                        .FirstOrDefault();
+                    var firstReason = firstQuarantine?.Reasons?.FirstOrDefault();
+                    var reasonDetail = firstReason != null
+                        ? $" First quarantine: {firstReason.Code} — {firstReason.Message}"
+                        : string.Empty;
+
+                    // Log all unique quarantine codes
+                    var allCodes = result.Zones
+                        .Where(z => z.Quarantined != null)
+                        .SelectMany(z => z.Quarantined)
+                        .SelectMany(q => q.Reasons ?? new List<EdogQaScenarioValidator.QuarantineReason>())
+                        .Select(r => r.Code)
+                        .Where(c => !string.IsNullOrEmpty(c))
+                        .Distinct()
+                        .ToList();
+                    Console.WriteLine($"[QA-DIAG] Quarantine codes: [{string.Join(", ", allCodes)}]");
+
                     degradationFlags.Add("llm_v2_all_quarantined");
                     PublishWarning(
                         $"LLM_V2_ALL_QUARANTINED: Editor produced {totalQuarantined} scenario(s) but all "
-                        + "were quarantined by the validator. Check validator gate diagnostics.");
+                        + $"were quarantined by the validator.{reasonDetail}");
                 }
                 else if (skippedZones.Count == result.Zones.Count)
                 {
