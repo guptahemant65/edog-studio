@@ -882,10 +882,14 @@ class FeatureFlagsMatrix {
     const wireKey = data.featureName || data.wireKey || data.flagName;
     if (!wireKey) return;
     const now = Date.now();
-    const obs = this._observations.get(wireKey) || { lastEvalAt: 0, lastResult: null };
+    const obs = this._observations.get(wireKey) || { lastEvalAt: 0, lastResult: null, history: [] };
     obs.lastEvalAt = now;
     obs.lastResult = !!data.result;
     obs.overridden = !!data.overridden;
+    // Keep last 50 evaluations per flag
+    obs.history.push({ time: now, result: !!data.result, overridden: !!data.overridden, durationMs: data.durationMs });
+    if (obs.history.length > 50) obs.history.shift();
+    obs.evalCount = (obs.evalCount || 0) + 1;
     this._observations.set(wireKey, obs);
     // Re-paint the obs cell incrementally without a full table redraw.
     const cell = this._mount.querySelector(`tr[data-flag="${CSS.escape(wireKey)}"] .ff-obs`);
@@ -893,8 +897,10 @@ class FeatureFlagsMatrix {
       const cls = this._observationClassFor(wireKey);
       cell.classList.remove('live', 'cached', 'unobserved');
       cell.classList.add(cls);
-      cell.textContent = cls;
-      cell.title = this._obsTooltip(cls);
+      cell.textContent = cls.toUpperCase() + (obs.evalCount > 1 ? ` (${obs.evalCount})` : '');
+      cell.title = this._obsTooltip(cls) + (obs.evalCount ? `\nEvaluated ${obs.evalCount} time(s)` : '');
+      cell.style.cursor = obs.history.length > 0 ? 'pointer' : '';
+      cell.onclick = obs.history.length > 0 ? () => this._showEvalHistory(wireKey) : null;
     }
   }
 
@@ -909,6 +915,65 @@ class FeatureFlagsMatrix {
     if (cls === 'live') return 'Latest evaluation observed AFTER the most recent override change.';
     if (cls === 'cached') return 'Latest evaluation predates the most recent override — consumer captured an old value.';
     return 'No evaluations observed yet (does NOT imply wrapper is bypassed).';
+  }
+
+  _showEvalHistory(wireKey) {
+    const obs = this._observations.get(wireKey);
+    if (!obs || !obs.history || obs.history.length === 0) return;
+
+    // Remove any existing popover
+    var existing = this._mount.querySelector('.ff-eval-history');
+    if (existing) existing.remove();
+
+    var cell = this._mount.querySelector(`tr[data-flag="${CSS.escape(wireKey)}"] .ff-obs`);
+    if (!cell) return;
+
+    var panel = document.createElement('div');
+    panel.className = 'ff-eval-history';
+
+    var header = `<div class="ff-eh-header"><span class="ff-eh-title">${this._esc(wireKey)}</span><span class="ff-eh-count">${obs.evalCount} evaluation(s)</span><button class="ff-eh-close">\u2715</button></div>`;
+
+    var rows = obs.history.slice().reverse().map(function(h) {
+      var t = new Date(h.time);
+      var timeStr = t.toLocaleTimeString();
+      var resultCls = h.result ? 'ff-eh-true' : 'ff-eh-false';
+      var resultText = h.result ? 'TRUE' : 'FALSE';
+      var overrideTag = h.overridden ? ' <span class="ff-eh-override">OVERRIDE</span>' : '';
+      var durText = h.durationMs != null ? h.durationMs.toFixed(2) + 'ms' : '\u2014';
+      return `<tr><td class="ff-eh-time">${timeStr}</td><td class="${resultCls}">${resultText}${overrideTag}</td><td class="ff-eh-dur">${durText}</td></tr>`;
+    }).join('');
+
+    var table = `<table class="ff-eh-table"><thead><tr><th>Time</th><th>Result</th><th>Duration</th></tr></thead><tbody>${rows}</tbody></table>`;
+
+    panel.innerHTML = header + table;
+
+    // Position near the cell
+    var rect = cell.getBoundingClientRect();
+    var mountRect = this._mount.getBoundingClientRect();
+    panel.style.position = 'absolute';
+    panel.style.top = (rect.bottom - mountRect.top + 4) + 'px';
+    panel.style.right = '8px';
+    panel.style.zIndex = '200';
+
+    this._mount.style.position = 'relative';
+    this._mount.appendChild(panel);
+
+    // Close handlers
+    var close = function() { if (panel.parentNode) panel.remove(); };
+    panel.querySelector('.ff-eh-close').addEventListener('click', close);
+    setTimeout(function() {
+      document.addEventListener('click', function handler(e) {
+        if (!panel.contains(e.target) && e.target !== cell) {
+          close();
+          document.removeEventListener('click', handler);
+        }
+      });
+    }, 0);
+  }
+
+  _esc(s) {
+    if (s == null) return '';
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
   /* ── UI feedback ──────────────────────────────────────────────────── */

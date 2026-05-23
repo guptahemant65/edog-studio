@@ -1053,3 +1053,41 @@ table.ff-table tbody tr.overridden:hover { background: rgba(229, 148, 12, 0.10);
 [data-theme="dark"] .override-strip { background: rgba(240, 180, 41, 0.08); border-bottom-color: rgba(240, 180, 41, 0.25); }
 [data-theme="dark"] table.ff-table tbody tr.overridden { background: rgba(240, 180, 41, 0.08); }
 [data-theme="dark"] table.ff-table tbody tr.overridden:hover { background: rgba(240, 180, 41, 0.14); }
+
+/* Feature Flag Evaluation History Popover */
+.ff-eval-history {
+  background: var(--surface);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-lg, 8px);
+  box-shadow: var(--shadow-xl, 0 12px 40px rgba(0,0,0,0.10), 0 4px 12px rgba(0,0,0,0.06));
+  max-height: 320px;
+  width: 340px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: ffEhIn 150ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes ffEhIn { from { opacity: 0; transform: translateY(-4px) scale(0.97); } to { opacity: 1; transform: none; } }
+.ff-eh-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.ff-eh-title { font-weight: 600; font-size: 12px; font-family: var(--font-mono); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ff-eh-count { font-size: 10px; color: var(--text-dim); white-space: nowrap; }
+.ff-eh-close { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 13px; padding: 2px 4px; border-radius: 4px; }
+.ff-eh-close:hover { background: var(--surface-2); color: var(--text); }
+.ff-eh-table { width: 100%; border-collapse: collapse; font-size: 11px; overflow-y: auto; }
+.ff-eval-history tbody { display: block; max-height: 240px; overflow-y: auto; }
+.ff-eval-history thead, .ff-eval-history tbody tr { display: table; width: 100%; table-layout: fixed; }
+.ff-eh-table th { text-align: left; padding: 6px 10px; font-weight: 500; color: var(--text-dim); font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); }
+.ff-eh-table td { padding: 5px 10px; border-bottom: 1px solid var(--border); font-family: var(--font-mono); }
+.ff-eh-table tr:hover { background: var(--surface-2); }
+.ff-eh-time { color: var(--text-dim); }
+.ff-eh-true { color: var(--status-succeeded); font-weight: 600; }
+.ff-eh-false { color: var(--status-failed); font-weight: 600; }
+.ff-eh-override { background: var(--accent); color: white; font-size: 9px; padding: 1px 5px; border-radius: 3px; font-weight: 600; margin-left: 4px; }
+.ff-eh-dur { color: var(--text-muted); text-align: right; }
