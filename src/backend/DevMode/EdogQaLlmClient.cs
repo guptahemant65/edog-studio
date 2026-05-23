@@ -109,15 +109,15 @@ namespace Microsoft.LiveTable.Service.DevMode
         // ── Wire constants ─────────────────────────────────────────────
 
         /// <summary>Stable cache key for the Architect's system+schema prefix. Spec §3.4: the prefix is identical across every zone + every analysis for a given client version. F27 P11: bumped from v2 to v11 — invalidates the prefix cache on the gpt-5 deployment so old plans don't leak into new-schema decoding.</summary>
-        internal const string PromptCacheKeyArchitect = "edog-qa-architect-v11";
+        internal const string PromptCacheKeyArchitect = "edog-qa-architect-v12";
 
         /// <summary>Stable cache key for the Editor's system+schema prefix.</summary>
-        internal const string PromptCacheKeyEditor = "edog-qa-editor-v12";
+        internal const string PromptCacheKeyEditor = "edog-qa-editor-v13";
 
         /// <summary>Stable cache key for the Analyst's system+schema prefix. The Analyst is the
         /// first pass of the 2-step Analyst→Architect pipeline; its prompt is intentionally
         /// short and observation-only so the prefix caches cleanly across every zone.</summary>
-        internal const string PromptCacheKeyAnalyst = "edog-qa-analyst-v1";
+        internal const string PromptCacheKeyAnalyst = "edog-qa-analyst-v2";
 
         /// <summary>Architect budget. Reasoning tokens are charged against this. 192K is the
         /// T4-D-followup bump — 128K returned status=incomplete on PR-879735 (326KB diff
@@ -2535,10 +2535,11 @@ namespace Microsoft.LiveTable.Service.DevMode
             + "(4) errorModesToTest: exception/error conditions the new code introduces or modifies — thrown exceptions, 4xx/5xx returns, error propagation, retry-exhaust paths. "
             + "Each gets an id ('em-1', 'em-2', ...), a description, a trigger (the input shape that fires it), an expectedHandling (what the system should do), and evidenceRefs (surfaceIds). "
             + "(5) featureFlagMatrix: every feature-flag combination that exercises a distinct branch in the diff. "
-            + "Each row gets an id ('fc-1', 'fc-2', ...), a flags array of {name, value} PAIRS (NEVER a map), a rationale, and mustCover (true when the combo is required to prove the diff). "
+            + "Each row gets an id ('fc-1', 'fc-2', ...), a flags array of {name, value} PAIRS (NEVER a map), a rationale, mustCover (true when the combo is required to prove the diff), and an overrideMechanism describing HOW the test should set the flag — one of 'HttpHeader' (an 'X-Feature-Flag-Override: Name=value' header on the request, REQUIRED when the stimulus is HttpRequest), 'EnvironmentVariable', or 'EdogFeatureOverrideStore'. "
             + "Empty array when the diff has no feature flag. "
             + "(6) stimuliRequired: the inputs/triggers needed to exercise each codePath. "
             + "Each gets an id ('st-1', 'st-2', ...), a kind (e.g. 'HttpRequest', 'SignalRBroadcast', 'DagTrigger', 'FileEvent', 'TimerTick', 'DiInvocation'), a description, and a toolingHint (concrete shape suggestion the Editor can adapt). "
+            + "STIMULUS KIND PREFERENCE: prefer HttpRequest over DiInvocation when the changed code implements an interface that is called by HTTP controllers. Consult available_stimulus_types_from_catalog in ZONE_SUMMARY — if HttpRequest routes exist that exercise the changed service (matching the service name, interface name, or related query/insights endpoints), pick HttpRequest with the concrete API path from the catalog as the toolingHint. DiInvocation is the stimulus of LAST RESORT, used only when no HTTP, SignalR, DAG, or other entry point reaches the changed code. "
             + "(7) observableSignals: the response fields, log lines, telemetry events, SignalR broadcasts, or column projections that prove a behaviour fired. "
             + "Each gets an id ('os-1', 'os-2', ...), a kind (e.g. 'response.field', 'log.entry', 'telemetry.event', 'signalr.broadcast', 'sql.projection'), a description, and a source (the topic/field/event name a matcher would target). "
             + "(8) externalDependencyFailures: I/O dependency failure modes the diff cares about — bad-network, throttled, timeout, partial-response, missing-permission, dependency-down. "
@@ -2616,7 +2617,9 @@ namespace Microsoft.LiveTable.Service.DevMode
             + "Empty arrays are allowed only when planOutcome='no_testable_changes'. "
             + "(R4) scenarioSketches.Count >= behavioralChanges.Count. "
             + "Use stimuliRequired entries to inform the stimulus shape your sketch implies — the Editor will materialize the literal stimulusSpec JSON from those toolingHints. "
-            + "Use observableSignals entries to inform the matcher topic/field the sketch asserts on — the Editor will wire matchers to those sources.";
+            + "Use observableSignals entries to inform the matcher topic/field the sketch asserts on — the Editor will wire matchers to those sources. "
+            + "STIMULUS SELECTION: when the zone summary lists available_stimulus_types_from_catalog with HttpRequest routes, prefer HttpRequest stimuli for scenarios that test user-facing behaviour. DiInvocation is appropriate only for unit-level tests of internal helpers that are not reachable through any listed HTTP/SignalR/DAG entry point. "
+            + "FEATURE FLAG TESTING: when a scenario tests a specific flag state, the stimulus MUST include the flag override — not just the title. For HttpRequest stimuli, add a header 'X-Feature-Flag-Override: FlagName=value'. For DiInvocation stimuli, add a setup step carrying a FlagOverrideSpec. Never describe the flag state in the title only — it must be mechanically enforceable in the stimulus.";
 
         private const string EditorSystemPromptLegacy =
             "You are the Editor. The Architect has produced a structured plan with grounding evidence and "
@@ -2647,6 +2650,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             + "Phrases like \"verify that the OBO token is acquired\" are ILLEGAL in matcherSpec and will be rejected — convert them into typed matchers + JSON. "
             + "Each matcher = {\"topicField\":\"topic.field\",\"assertion\":\"Equals|NotEquals|Exists|InRange|ContainsAll|OneOf|Length\",\"value\":{typed value object}}. "
             + "Typed values use one of Value_string, Value_integer, Value_datetime, Value_range, Value_array (plus boolean/length helpers when needed by Exists or Length assertions). "
+            + "MATCHER VALUE PRECISION: the value field in each matcher MUST contain the CONCRETE expected value, not the type discriminator name. Wrong: {\"string\":\"string\"}. Right: {\"string\":\"DirectAAD\"}. The type discriminator (string/integer/datetime/etc.) tells the schema what KIND of value it is; the inner payload tells the assertion engine WHAT to compare against. Never emit the literal word 'string', 'integer', 'datetime', etc. as the value payload — that is the type name leaking into the value slot. "
             + "WORKED MATCHER EXAMPLE — for an OBO-token acquisition assertion, emit: expectations=[{\"type\":\"EventPresent\",\"topic\":\"token\",\"matcherSpec\":\"{\\\"topicField\\\":\\\"token.oboAcquired\\\",\\\"assertion\\\":\\\"Exists\\\",\\\"value\\\":{\\\"boolean\\\":true}}\",\"rationale\":\"OBO token acquired on the new flag-on branch\"}] AND matchers=[{\"topicField\":\"token.oboAcquired\",\"assertion\":\"Exists\",\"value\":{\"boolean\":true}}]. Note: matchers[] is populated, matcherSpec parses as JSON, and the two are byte-equivalent. "
             + "CRITICAL: stimulusSpec and matcherSpec use DOUBLE QUOTES for JSON. Single quotes are invalid JSON and will be rejected by the projector. "
             + "VERB SELECTION GUIDE (the validator's match key is (category, verb, line-overlap); a wrong verb produces a false-negative match against curator-graded gold-corpus expectations). "
