@@ -493,9 +493,12 @@ namespace Microsoft.LiveTable.Service.DevMode
 
                 if (mods.Body != null)
                 {
-                    var existingCt = req.Content?.Headers.ContentType;
+                    // BE-005: Dispose old content to avoid stream/buffer leak on each modify.
+                    var oldContent = req.Content;
+                    var existingCt = oldContent?.Headers.ContentType;
                     req.Content = new System.Net.Http.StringContent(mods.Body);
                     if (existingCt != null) req.Content.Headers.ContentType = existingCt;
+                    oldContent?.Dispose();
                 }
             }
             catch (Exception ex)
@@ -536,9 +539,12 @@ namespace Microsoft.LiveTable.Service.DevMode
 
                 if (mods.Body != null)
                 {
-                    var existingCt = rsp.Content?.Headers.ContentType;
+                    // BE-005: Dispose old content to avoid stream/buffer leak on each modify.
+                    var oldContent = rsp.Content;
+                    var existingCt = oldContent?.Headers.ContentType;
                     rsp.Content = new System.Net.Http.StringContent(mods.Body);
                     if (existingCt != null) rsp.Content.Headers.ContentType = existingCt;
+                    oldContent?.Dispose();
                 }
             }
             catch (Exception ex)

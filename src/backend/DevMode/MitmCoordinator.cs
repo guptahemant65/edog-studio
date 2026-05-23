@@ -229,6 +229,16 @@ namespace Microsoft.LiveTable.Service.DevMode
                     DeadlineUtc = deadlineUtc,
                 };
 
+                // BE-001: Add to _pending BEFORE registering the cancellation callback.
+                // If the token is already cancelled, Register fires the callback synchronously
+                // — and the callback calls TryResolve, which requires the entry to be present.
+                if (!_pending.TryAdd(interceptId, pending))
+                {
+                    // ULID collision — exceedingly unlikely. Tear down and forward.
+                    SafeDisposePending(pending);
+                    return Task.FromResult(MitmDecision.ForwardUnchanged("intercept-id-collision"));
+                }
+
                 pending.LinkedReg = linkedCts.Token.Register(static state =>
                 {
                     var p = (PendingIntercept)state;
@@ -257,11 +267,28 @@ namespace Microsoft.LiveTable.Service.DevMode
                     }
                 }, pending);
 
-                if (!_pending.TryAdd(interceptId, pending))
+                // BE-001: Guard against a token that was already cancelled before Register.
+                // In that case Register schedules (or has already run) the callback, but if the
+                // CT was cancelled before the linked CTS was constructed the callback may have
+                // raced with TryAdd above and missed the entry. Re-check and resolve inline.
+                if (linkedCts.IsCancellationRequested)
                 {
-                    // ULID collision — exceedingly unlikely. Tear down and forward.
-                    SafeDisposePending(pending);
-                    return Task.FromResult(MitmDecision.ForwardUnchanged("intercept-id-collision"));
+                    bool timedOut = timeoutCts.IsCancellationRequested;
+                    string reason = timedOut ? "timeout" : "cancelled";
+                    var decision = MitmDecision.ForwardUnchanged(reason);
+                    if (TryResolve(interceptId, decision))
+                    {
+                        SafePublish(new
+                        {
+                            type = timedOut ? "breakpointTimedOut" : "breakpointCancelled",
+                            interceptId,
+                            ruleId = matchedRule.Id,
+                            phase = snap.Phase.ToString().ToLowerInvariant(),
+                            ownerConnectionId = pending.OwnerConnectionId,
+                            reason,
+                        });
+                    }
+                    return tcs.Task;
                 }
 
                 _byOwner.AddOrUpdate(
@@ -519,6 +546,7 @@ namespace Microsoft.LiveTable.Service.DevMode
 
                 return new MitmCapabilityReport
                 {
+                    Available = true,
                     Enabled = envEnabled,
                     SessionId = _sessionId,
                     Reason = reason,
@@ -544,6 +572,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 System.Diagnostics.Debug.WriteLine($"[EDOG] MitmCoordinator.GetCapabilities error: {ex.Message}");
                 return new MitmCapabilityReport
                 {
+                    Available = false,
                     Enabled = false,
                     SessionId = _sessionId,
                     Reason = "internal error",
@@ -638,6 +667,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                         return MitmResumeResult.Invalid("use modify on response phase");
                     if (decision.Block == null)
                         return MitmResumeResult.Invalid("block payload required");
+                    if (decision.Block.StatusCode < 100 || decision.Block.StatusCode > 599)
+                        return MitmResumeResult.Invalid("statusCode must be 100-599");
                     return MitmResumeResult.Ok;
 
                 case "forge":
@@ -645,6 +676,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                         return MitmResumeResult.Invalid("use modify on response phase");
                     if (decision.Forge == null)
                         return MitmResumeResult.Invalid("forge payload required");
+                    if (decision.Forge.StatusCode < 100 || decision.Forge.StatusCode > 599)
+                        return MitmResumeResult.Invalid("statusCode must be 100-599");
                     return MitmResumeResult.Ok;
 
                 default:

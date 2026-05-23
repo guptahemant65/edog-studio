@@ -105,6 +105,19 @@ namespace Microsoft.LiveTable.Service.DevMode
             {
                 foreach (var (k, v) in Headers)
                 {
+                    // BE-006: Null guard — TryAddWithoutValidation throws on null value.
+                    if (v == null) continue;
+
+                    // BE-006: StringContent defaults Content-Type to text/plain; charset=utf-8.
+                    // TryAddWithoutValidation silently fails when the header is already set,
+                    // so explicitly clear the default before adding the caller-supplied value.
+                    if (string.Equals(k, "Content-Type", System.StringComparison.OrdinalIgnoreCase))
+                    {
+                        msg.Content.Headers.ContentType = null;
+                        msg.Content.Headers.TryAddWithoutValidation(k, v);
+                        continue;
+                    }
+
                     if (!msg.Headers.TryAddWithoutValidation(k, v))
                         msg.Content.Headers.TryAddWithoutValidation(k, v);
                 }

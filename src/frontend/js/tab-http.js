@@ -1383,9 +1383,13 @@ class HttpPipelineTab {
   // ═══════════════════════════════════════════════════════════════════
 
   _esc(str) {
-    var div = document.createElement('div');
-    div.textContent = String(str || '');
-    return div.innerHTML;
+    if (str == null) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   _fmtBytes(bytes) {
@@ -1677,8 +1681,8 @@ class HttpPipelineTab {
 
   /** Render the Intercept tab for a paused snapshot. */
   _renderInterceptTab(snap) {
+    var req = snap.request || {};
     if (!this._editBuffer || this._editBuffer.interceptId !== snap.interceptId) {
-      var req = snap.request || {};
       this._editBuffer = {
         interceptId: snap.interceptId,
         phase: snap.phase,
@@ -1699,7 +1703,7 @@ class HttpPipelineTab {
 
     var methodOptions = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']
       .map(function(m) {
-        return '<option value="' + m + '"' + (m === snap.request.method ? ' selected' : '') + '>' + m + '</option>';
+        return '<option value="' + m + '"' + (m === req.method ? ' selected' : '') + '>' + m + '</option>';
       }).join('');
 
     var html =
@@ -1719,7 +1723,7 @@ class HttpPipelineTab {
         '<div class="http-mitm-edit-row">' +
           '<select class="http-mitm-edit-method" data-mitm-field="method" aria-label="HTTP method">' + methodOptions + '</select>' +
           '<input class="http-mitm-edit-url" data-mitm-field="url" type="text" value="' +
-            this._esc(snap.request.url || '') + '" spellcheck="false" aria-label="Request URL">' +
+            this._esc(req.url || '') + '" spellcheck="false" aria-label="Request URL">' +
         '</div>' +
       '</div>' +
 
