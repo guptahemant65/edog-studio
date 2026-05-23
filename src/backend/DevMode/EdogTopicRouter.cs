@@ -42,6 +42,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             RegisterTopic("flt-ops", 300);  // FLT operations: refresh triggers, MLV defs, DQ reports, maintenance
             RegisterTopic("nexus", 100);  // Nexus aggregated snapshots (low volume, high value)
             RegisterTopic("qa", 2000);  // QA testing: analysis progress, scenario events, execution results
+            RegisterTopic("mitm", 500);  // F28 MITM: breakpoint hits, resumes, timeouts, rule lifecycle
         }
 
         /// <summary>

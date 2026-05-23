@@ -138,6 +138,10 @@ DEVMODE_FILES = {
     "EdogQaFileTimerScanner": SERVICE_PATH / "DevMode/EdogQaFileTimerScanner.cs",
     "EdogQaTelemetryRedactor": SERVICE_PATH / "DevMode/EdogQaTelemetryRedactor.cs",
     "IQaContractOptionsProvider": SERVICE_PATH / "DevMode/IQaContractOptionsProvider.cs",
+    "MitmRule": SERVICE_PATH / "DevMode/MitmRule.cs",
+    "MitmRuleStore": SERVICE_PATH / "DevMode/MitmRuleStore.cs",
+    "MitmCoordinator": SERVICE_PATH / "DevMode/MitmCoordinator.cs",
+    "MitmDecision": SERVICE_PATH / "DevMode/MitmDecision.cs",
     "EdogLogsHtml": SERVICE_PATH / "DevMode/edog-logs.html",
     "EditorConfig": SERVICE_PATH / "DevMode/.editorconfig",
 }
@@ -2969,18 +2973,14 @@ def _parse_dotenv_file(env_path):
         if not line or line.startswith("#"):
             continue
         if line.startswith("export "):
-            line = line[len("export "):].lstrip()
+            line = line[len("export ") :].lstrip()
         eq = line.find("=")
         if eq <= 0:
             continue
         key = line[:eq].strip()
-        value = line[eq + 1:]
+        value = line[eq + 1 :]
         # Strip surrounding quotes if matched (single or double); else trim whitespace.
-        value = (
-            value[1:-1]
-            if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"')
-            else value.strip()
-        )
+        value = value[1:-1] if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"') else value.strip()
         if key:
             result[key] = value
     return result

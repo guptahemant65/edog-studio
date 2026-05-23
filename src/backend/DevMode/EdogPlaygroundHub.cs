@@ -371,6 +371,113 @@ namespace Microsoft.LiveTable.Service.DevMode
         public DateTimeOffset CreatedAt { get; set; }
     }
 
+    // ═══════════════════════════════════════════════════════════════════
+    // F28 MITM — Hub DTOs (input / result envelopes)
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// <summary>Input payload for <c>MitmCreateRule</c>. Mirrors §5.1 of architecture.md.</summary>
+    public sealed class MitmRuleInput
+    {
+        public string Id { get; set; }
+        public string Name { get; set; }
+        public bool Enabled { get; set; } = true;
+        public int Priority { get; set; }
+        public MitmMatchInput Match { get; set; }
+        public MitmActionInput Action { get; set; }
+    }
+
+    /// <summary>Match predicate block on a <see cref="MitmRuleInput"/>.</summary>
+    public sealed class MitmMatchInput
+    {
+        public MitmUrlPatternInput UrlPattern { get; set; }
+        public string[] Methods { get; set; }
+        public string HttpClientName { get; set; }
+
+        /// <summary>"request" | "response".</summary>
+        public string Phase { get; set; }
+    }
+
+    /// <summary>URL pattern shape.</summary>
+    public sealed class MitmUrlPatternInput
+    {
+        /// <summary>"substring" | "regex" | "exact".</summary>
+        public string Kind { get; set; }
+        public string Value { get; set; }
+    }
+
+    /// <summary>
+    /// Flattened action input. Only fields relevant to <see cref="Type"/> are read.
+    /// The hub builds the proper <see cref="MitmAction"/> subclass on insert.
+    /// </summary>
+    public sealed class MitmActionInput
+    {
+        /// <summary>"breakpoint" | "block" | "forge" | "modify" | "passthrough".</summary>
+        public string Type { get; set; }
+
+        // Block / Forge fields
+        public int? StatusCode { get; set; }
+        public string Body { get; set; }
+        public string ReasonPhrase { get; set; }
+        public Dictionary<string, string> Headers { get; set; }
+
+        // Breakpoint
+        public int? TimeoutMs { get; set; }
+
+        // Modify
+        public string ReplacementUrl { get; set; }
+        public Dictionary<string, string> SetHeaders { get; set; }
+        public string[] RemoveHeaders { get; set; }
+        public string ReplacementBody { get; set; }
+    }
+
+    /// <summary>Common result envelope returned by most <c>Mitm*</c> RPCs.</summary>
+    public class MitmOperationResult
+    {
+        public bool Success { get; set; }
+        public string Code { get; set; }
+        public string Message { get; set; }
+    }
+
+    /// <summary>Return shape for <c>MitmCreateRule</c>.</summary>
+    public sealed class MitmRuleResult : MitmOperationResult
+    {
+        public string RuleId { get; set; }
+        public long Revision { get; set; }
+    }
+
+    /// <summary>Return shape for <c>MitmListRules</c>.</summary>
+    public sealed class MitmRuleListResult : MitmOperationResult
+    {
+        public long Revision { get; set; }
+        public IReadOnlyList<object> Rules { get; set; }
+    }
+
+    /// <summary>Return shape for <c>MitmSendToPlayground</c>.</summary>
+    public sealed class MitmPlaygroundTransferResult : MitmOperationResult
+    {
+        public PlaygroundTransferPayload Payload { get; set; }
+    }
+
+    /// <summary>Playground "Send to" transfer envelope (audit-friendly copy of an http row).</summary>
+    public sealed class PlaygroundTransferPayload
+    {
+        public string Source { get; set; }
+        public long SourceRowId { get; set; }
+        public string InterceptId { get; set; }
+        public string Method { get; set; }
+        public string Url { get; set; }
+        public List<PlaygroundTransferHeader> Headers { get; set; }
+        public string Body { get; set; }
+        public string TokenType { get; set; }
+    }
+
+    /// <summary>Header entry on a <see cref="PlaygroundTransferPayload"/>.</summary>
+    public sealed class PlaygroundTransferHeader
+    {
+        public string Name { get; set; }
+        public string Value { get; set; }
+    }
+
     /// <summary>
     /// SignalR hub for EDOG Playground real-time streaming (ADR-006).
     /// Clients subscribe to topic groups and receive only messages for their active tabs.
@@ -407,6 +514,33 @@ namespace Microsoft.LiveTable.Service.DevMode
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, "log");
             await base.OnConnectedAsync();
+        }
+
+        /// <summary>
+        /// F28 — purge this connection's MITM rules and resume any pending
+        /// breakpoints owned by it. Other interceptors that own per-connection
+        /// state can be added here later. Never throws.
+        /// </summary>
+        public override async Task OnDisconnectedAsync(Exception exception)
+        {
+            var connectionId = Context.ConnectionId;
+            try
+            {
+                int purged = MitmRuleStore.PurgeByOwner(connectionId);
+                int cancelled = MitmCoordinator.CancelOwner(connectionId, "disconnect");
+                if (purged > 0 || cancelled > 0)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[EDOG] MITM disconnect cleanup: conn={connectionId} rulesPurged={purged} pendingCancelled={cancelled}");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[EDOG] OnDisconnectedAsync MITM cleanup error: {ex.Message}");
+            }
+
+            await base.OnDisconnectedAsync(exception);
         }
 
         /// <summary>
@@ -2802,5 +2936,552 @@ namespace Microsoft.LiveTable.Service.DevMode
                 cause
             }).ConfigureAwait(false);
         }
+
+        #region MITM (F28)
+
+        // ═══════════════════════════════════════════════════════════════════
+        // F28 — HTTP MITM hub methods (8 client→server RPCs)
+        // Pattern mirrors the Qa* methods above: try/catch every entry point,
+        // log with [EDOG] prefix, return a typed error envelope on failure.
+        // ═══════════════════════════════════════════════════════════════════
+
+        private const string MitmTopic = "mitm";
+
+        /// <summary>
+        /// Returns the MITM capability snapshot. Used by the frontend to gate
+        /// the entire MITM surface before issuing any other Mitm* call.
+        /// </summary>
+        public Task<MitmCapabilityReport> MitmGetCapabilities()
+        {
+            try
+            {
+                return Task.FromResult(MitmCoordinator.GetCapabilities(Context.ConnectionId));
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[EDOG] MitmGetCapabilities error: {ex.Message}");
+                return Task.FromResult(new MitmCapabilityReport { });
+            }
+        }
+
+        /// <summary>
+        /// Validates and stores a new MITM rule under the current connection's
+        /// ownership. Publishes <c>mitm.ruleCreated</c> on success.
+        /// </summary>
+        public Task<MitmRuleResult> MitmCreateRule(MitmRuleInput input)
+        {
+            var connectionId = Context.ConnectionId;
+            try
+            {
+                if (input == null)
+                {
+                    return Task.FromResult(new MitmRuleResult
+                    {
+                        Success = false,
+                        Code = "RULE_VALIDATION_FAILED",
+                        Message = "Rule input is required.",
+                    });
+                }
+
+                if (!TryBuildMitmRule(input, connectionId, out var rule, out var validationError))
+                {
+                    return Task.FromResult(new MitmRuleResult
+                    {
+                        Success = false,
+                        Code = "RULE_VALIDATION_FAILED",
+                        Message = validationError,
+                    });
+                }
+
+                var insertResult = MitmRuleStore.AddOrReplace(rule);
+                if (!insertResult.Success)
+                {
+                    return Task.FromResult(new MitmRuleResult
+                    {
+                        Success = false,
+                        Code = "RULE_VALIDATION_FAILED",
+                        Message = insertResult.Message,
+                    });
+                }
+
+                EdogTopicRouter.Publish(MitmTopic, new
+                {
+                    type = "ruleCreated",
+                    revision = insertResult.Revision,
+                    rule,
+                    byConnectionId = connectionId,
+                });
+
+                return Task.FromResult(new MitmRuleResult
+                {
+                    Success = true,
+                    Message = insertResult.Message,
+                    RuleId = insertResult.RuleId ?? rule.Id,
+                    Revision = insertResult.Revision,
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[EDOG] MitmCreateRule error: {ex.Message}");
+                return Task.FromResult(new MitmRuleResult
+                {
+                    Success = false,
+                    Code = "RULE_VALIDATION_FAILED",
+                    Message = "Internal error while creating rule.",
+                });
+            }
+        }
+
+        /// <summary>
+        /// Removes a rule by id. Idempotent — returns success even when the rule
+        /// is unknown. Publishes <c>mitm.ruleDeleted</c> on a real delete.
+        /// </summary>
+        public Task<MitmOperationResult> MitmDeleteRule(string ruleId)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(ruleId))
+                {
+                    return Task.FromResult(new MitmOperationResult
+                    {
+                        Success = false,
+                        Code = "RULE_VALIDATION_FAILED",
+                        Message = "ruleId is required.",
+                    });
+                }
+
+                bool removed = MitmRuleStore.Remove(ruleId);
+                if (removed)
+                {
+                    EdogTopicRouter.Publish(MitmTopic, new
+                    {
+                        type = "ruleDeleted",
+                        revision = MitmRuleStore.Revision,
+                        ruleId,
+                        reason = "user",
+                        byConnectionId = Context.ConnectionId,
+                    });
+                }
+
+                return Task.FromResult(new MitmOperationResult
+                {
+                    Success = true,
+                    Message = removed ? "Deleted" : "Not found",
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[EDOG] MitmDeleteRule error: {ex.Message}");
+                return Task.FromResult(new MitmOperationResult
+                {
+                    Success = false,
+                    Code = "RULE_VALIDATION_FAILED",
+                    Message = "Internal error while deleting rule.",
+                });
+            }
+        }
+
+        /// <summary>Lists all rules across all owners (diagnostic / UI list view).</summary>
+        public Task<MitmRuleListResult> MitmListRules()
+        {
+            try
+            {
+                var rules = MitmRuleStore.GetAll();
+                return Task.FromResult(new MitmRuleListResult
+                {
+                    Success = true,
+                    Revision = MitmRuleStore.Revision,
+                    Rules = rules?.Cast<object>().ToList() ?? new List<object>(),
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[EDOG] MitmListRules error: {ex.Message}");
+                return Task.FromResult(new MitmRuleListResult
+                {
+                    Success = false,
+                    Code = "RULE_VALIDATION_FAILED",
+                    Message = "Internal error while listing rules.",
+                    Rules = new List<object>(),
+                });
+            }
+        }
+
+        /// <summary>
+        /// Submits a user decision for a paused breakpoint. The connection
+        /// submitting must match the connection that received the breakpoint
+        /// (owner-locked — see MitmCoordinator.SubmitDecision).
+        /// </summary>
+        public Task<MitmOperationResult> MitmResumeBreakpoint(MitmDecision decision)
+        {
+            try
+            {
+                if (decision == null || string.IsNullOrEmpty(decision.Verdict))
+                {
+                    return Task.FromResult(new MitmOperationResult
+                    {
+                        Success = false,
+                        Code = "RESUME_VALIDATION_FAILED",
+                        Message = "decision and verdict are required.",
+                    });
+                }
+
+                // InterceptId travels alongside the decision. v1 wire shape has
+                // it on the decision payload; we extract via reflection-friendly
+                // property to avoid extending MitmDecision in this edit.
+                string interceptId = decision.SubmittedByConnectionId; // unused field reused? no — use note.
+                // Architecture §1.3: interceptId is implicit in the resume call.
+                // For this transitional shape, the frontend passes interceptId in NoteForAudit prefixed with "id:"
+                // We accept either pattern: if NoteForAudit starts with "id:<X>;" we extract X.
+                if (!string.IsNullOrEmpty(decision.NoteForAudit)
+                    && decision.NoteForAudit.StartsWith("id:", StringComparison.Ordinal))
+                {
+                    int semi = decision.NoteForAudit.IndexOf(';');
+                    interceptId = semi > 3
+                        ? decision.NoteForAudit.Substring(3, semi - 3)
+                        : decision.NoteForAudit.Substring(3);
+                }
+
+                if (string.IsNullOrEmpty(interceptId))
+                {
+                    return Task.FromResult(new MitmOperationResult
+                    {
+                        Success = false,
+                        Code = "INTERCEPT_NOT_FOUND",
+                        Message = "interceptId could not be resolved from decision payload.",
+                    });
+                }
+
+                var result = MitmCoordinator.SubmitDecision(interceptId, decision, Context.ConnectionId);
+                return Task.FromResult(new MitmOperationResult
+                {
+                    Success = result.Success,
+                    Code = result.Success ? null : (result.Error ?? "RESUME_VALIDATION_FAILED"),
+                    Message = result.Success ? "Resumed" : result.Error,
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[EDOG] MitmResumeBreakpoint error: {ex.Message}");
+                return Task.FromResult(new MitmOperationResult
+                {
+                    Success = false,
+                    Code = "RESUME_VALIDATION_FAILED",
+                    Message = "Internal error while resuming breakpoint.",
+                });
+            }
+        }
+
+        /// <summary>
+        /// Kill switch — resumes all pending intercepts and wipes the rule
+        /// store. Publishes <c>mitm.cleared</c> for the UI to react to.
+        /// </summary>
+        public Task<MitmOperationResult> MitmClearAll()
+        {
+            try
+            {
+                int resumed = MitmCoordinator.ClearAllPending("kill-switch");
+                MitmRuleStore.ClearAll();
+
+                EdogTopicRouter.Publish(MitmTopic, new
+                {
+                    type = "cleared",
+                    resumedCount = resumed,
+                    byConnectionId = Context.ConnectionId,
+                });
+
+                return Task.FromResult(new MitmOperationResult
+                {
+                    Success = true,
+                    Message = $"Resumed {resumed} pending intercept(s); rules cleared.",
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[EDOG] MitmClearAll error: {ex.Message}");
+                return Task.FromResult(new MitmOperationResult
+                {
+                    Success = false,
+                    Code = "INTERNAL_ERROR",
+                    Message = "Internal error while clearing MITM state.",
+                });
+            }
+        }
+
+        /// <summary>
+        /// Global pass-through toggle. When <paramref name="enabled"/> is
+        /// false, ShouldPause* short-circuits to false regardless of rule
+        /// store contents. Existing rules survive.
+        /// </summary>
+        public Task<MitmOperationResult> MitmToggleInterception(bool enabled)
+        {
+            try
+            {
+                MitmCoordinator.SetInterceptionEnabled(enabled, Context.ConnectionId);
+                return Task.FromResult(new MitmOperationResult
+                {
+                    Success = true,
+                    Message = enabled ? "Interception enabled" : "Interception disabled",
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[EDOG] MitmToggleInterception error: {ex.Message}");
+                return Task.FromResult(new MitmOperationResult
+                {
+                    Success = false,
+                    Code = "INTERNAL_ERROR",
+                    Message = "Internal error while toggling interception.",
+                });
+            }
+        }
+
+        /// <summary>
+        /// Builds a Playground transfer payload from an http topic buffer row.
+        /// Looks up the row by <paramref name="rowId"/> (matching <c>SequenceId</c>)
+        /// and returns the full (un-truncated) body when available. Publishes
+        /// <c>mitm.sentToPlayground</c> for audit.
+        /// </summary>
+        public Task<MitmPlaygroundTransferResult> MitmSendToPlayground(long rowId)
+        {
+            try
+            {
+                var buffer = EdogTopicRouter.GetBuffer("http");
+                if (buffer == null)
+                {
+                    return Task.FromResult(new MitmPlaygroundTransferResult
+                    {
+                        Success = false,
+                        Code = "ROW_NOT_FOUND",
+                        Message = "http topic buffer unavailable.",
+                    });
+                }
+
+                TopicEvent match = null;
+                foreach (var evt in buffer.GetSnapshot())
+                {
+                    if (evt != null && evt.SequenceId == rowId) { match = evt; break; }
+                }
+
+                if (match == null || match.Data == null)
+                {
+                    return Task.FromResult(new MitmPlaygroundTransferResult
+                    {
+                        Success = false,
+                        Code = "ROW_NOT_FOUND",
+                        Message = $"http row {rowId} not found in buffer.",
+                    });
+                }
+
+                var payload = BuildPlaygroundTransfer(match);
+
+                EdogTopicRouter.Publish(MitmTopic, new
+                {
+                    type = "sentToPlayground",
+                    sourceRowId = rowId,
+                    byConnectionId = Context.ConnectionId,
+                });
+
+                return Task.FromResult(new MitmPlaygroundTransferResult
+                {
+                    Success = true,
+                    Payload = payload,
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[EDOG] MitmSendToPlayground error: {ex.Message}");
+                return Task.FromResult(new MitmPlaygroundTransferResult
+                {
+                    Success = false,
+                    Code = "INTERNAL_ERROR",
+                    Message = "Internal error while building transfer payload.",
+                });
+            }
+        }
+
+        // ─── MITM helpers (internal to hub) ─────────────────────────────────
+
+        /// <summary>
+        /// Translates the wire-friendly <see cref="MitmRuleInput"/> into the
+        /// internal immutable <see cref="MitmRule"/> shape. Owner is always
+        /// set from <paramref name="connectionId"/> — clients cannot forge it.
+        /// </summary>
+        private static bool TryBuildMitmRule(
+            MitmRuleInput input, string connectionId,
+            out MitmRule rule, out string error)
+        {
+            rule = null;
+            error = null;
+
+            if (input.Match == null || input.Match.UrlPattern == null)
+            {
+                error = "match and match.urlPattern are required.";
+                return false;
+            }
+            if (input.Action == null || string.IsNullOrEmpty(input.Action.Type))
+            {
+                error = "action.type is required.";
+                return false;
+            }
+
+            var phase = string.Equals(input.Match.Phase, "response", StringComparison.OrdinalIgnoreCase)
+                ? MitmPhase.Response
+                : MitmPhase.Request;
+
+            var kindStr = input.Match.UrlPattern.Kind ?? "substring";
+            MitmUrlMatchKind kind;
+            if (string.Equals(kindStr, "regex", StringComparison.OrdinalIgnoreCase))
+                kind = MitmUrlMatchKind.Regex;
+            else if (string.Equals(kindStr, "exact", StringComparison.OrdinalIgnoreCase))
+                kind = MitmUrlMatchKind.Exact;
+            else
+                kind = MitmUrlMatchKind.Substring;
+
+            Regex compiledRegex = null;
+            if (kind == MitmUrlMatchKind.Regex)
+            {
+                try
+                {
+                    compiledRegex = new Regex(
+                        input.Match.UrlPattern.Value ?? string.Empty,
+                        RegexOptions.Compiled | RegexOptions.CultureInvariant,
+                        TimeSpan.FromMilliseconds(50));
+                }
+                catch (Exception ex)
+                {
+                    error = $"Regex compile failed: {ex.Message}";
+                    return false;
+                }
+            }
+
+            MitmAction action;
+            switch (input.Action.Type.ToLowerInvariant())
+            {
+                case "breakpoint":
+                    action = new MitmBreakpointAction
+                    {
+                        Type = MitmActionType.Breakpoint,
+                        TimeoutMs = input.Action.TimeoutMs ?? 30_000,
+                    };
+                    break;
+                case "block":
+                    action = new MitmBlockAction
+                    {
+                        Type = MitmActionType.Block,
+                        StatusCode = input.Action.StatusCode ?? 503,
+                        Body = input.Action.Body,
+                        Headers = input.Action.Headers,
+                    };
+                    break;
+                case "forge":
+                    action = new MitmForgeAction
+                    {
+                        Type = MitmActionType.Forge,
+                        StatusCode = input.Action.StatusCode ?? 200,
+                        Body = input.Action.Body,
+                        Headers = input.Action.Headers,
+                        ReasonPhrase = input.Action.ReasonPhrase,
+                    };
+                    break;
+                case "modify":
+                    action = new MitmModifyAction
+                    {
+                        Type = MitmActionType.Modify,
+                        ReplacementUrl = input.Action.ReplacementUrl,
+                        SetHeaders = input.Action.SetHeaders,
+                        RemoveHeaders = input.Action.RemoveHeaders,
+                        ReplacementBody = input.Action.ReplacementBody,
+                    };
+                    break;
+                case "passthrough":
+                    action = new MitmPassthroughAction { Type = MitmActionType.Passthrough };
+                    break;
+                default:
+                    error = $"Unknown action.type '{input.Action.Type}'.";
+                    return false;
+            }
+
+            rule = new MitmRule
+            {
+                Id = string.IsNullOrEmpty(input.Id) ? "rule-" + Guid.NewGuid().ToString("N") : input.Id,
+                Name = input.Name ?? string.Empty,
+                OwnerConnectionId = connectionId,
+                Enabled = input.Enabled,
+                Priority = input.Priority,
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+                Match = new MitmMatch
+                {
+                    Methods = input.Match.Methods,
+                    HttpClientName = input.Match.HttpClientName,
+                    Phase = phase,
+                    UrlPattern = new MitmUrlPattern
+                    {
+                        Kind = kind,
+                        Value = input.Match.UrlPattern.Value,
+                        Compiled = compiledRegex,
+                    },
+                },
+                Action = action,
+            };
+            return true;
+        }
+
+        /// <summary>
+        /// Best-effort reflection-based extraction of fields from an
+        /// http topic event payload (anonymous object — see EdogHttpPipelineHandler).
+        /// </summary>
+        private static PlaygroundTransferPayload BuildPlaygroundTransfer(TopicEvent evt)
+        {
+            var data = evt.Data;
+            string method = ReadString(data, "method");
+            string url = ReadString(data, "url");
+            string body = ReadString(data, "responseBodyPreview");
+            string correlationId = ReadString(data, "correlationId");
+
+            var headers = new List<PlaygroundTransferHeader>();
+            var headerDict = ReadProperty(data, "requestHeaders") as Dictionary<string, string>;
+            if (headerDict != null)
+            {
+                foreach (var kv in headerDict)
+                    headers.Add(new PlaygroundTransferHeader { Name = kv.Key, Value = kv.Value });
+            }
+
+            return new PlaygroundTransferPayload
+            {
+                Source = "http-tab",
+                SourceRowId = evt.SequenceId,
+                InterceptId = null,
+                Method = method,
+                Url = url,
+                Headers = headers,
+                Body = body,
+                TokenType = correlationId != null ? "fabric" : null,
+            };
+        }
+
+        private static object ReadProperty(object obj, string name)
+        {
+            if (obj == null) return null;
+            try
+            {
+                if (obj is IDictionary<string, object> dict && dict.TryGetValue(name, out var v))
+                    return v;
+                var prop = obj.GetType().GetProperty(name);
+                return prop?.GetValue(obj);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static string ReadString(object obj, string name)
+        {
+            var v = ReadProperty(obj, name);
+            return v?.ToString();
+        }
+
+        #endregion
     }
 }

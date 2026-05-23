@@ -102,12 +102,99 @@ namespace Microsoft.LiveTable.Service.DevMode
                     $"(scenario {chaosFault.ScenarioId}).");
             }
 
+            // F28 — MITM request-phase. Runs AFTER the chaos store (F27 P5 takes
+            // precedence). On a breakpoint match we park here until the user
+            // responds via MitmResumeBreakpoint, or the timeout fires.
+            // Non-breakpoint actions (block/forge/modify/passthrough) execute
+            // inline with no UI pause. All wrapped in try/catch — MITM must
+            // never crash the handler.
+            MitmRule mitmRequestRule = null;
+            string mitmRequestInterceptId = null;
+            MitmDecision mitmRequestDecision = null;
+            HttpResponseMessage mitmForgedResponse = null;
+            string mitmAction = null;
+            MitmPhase mitmPhase = MitmPhase.Request;
+            double mitmDurationMsPaused = 0;
+
+            try
+            {
+                if (chaosFault == null
+                    && MitmCoordinator.ShouldPauseRequest(request, _httpClientName, out mitmRequestRule)
+                    && mitmRequestRule != null)
+                {
+                    mitmRequestInterceptId = "int-" + Guid.NewGuid().ToString("N");
+                    var pauseStartTicks = Stopwatch.GetTimestamp();
+                    var reqSnap = new MitmInterceptSnapshot
+                    {
+                        InterceptId = mitmRequestInterceptId,
+                        RuleId = mitmRequestRule.Id,
+                        RuleName = mitmRequestRule.Name,
+                        Phase = MitmPhase.Request,
+                        OwnerConnectionId = mitmRequestRule.OwnerConnectionId,
+                        CreatedAtUtc = DateTimeOffset.UtcNow,
+                        Request = new MitmRequestSnapshot
+                        {
+                            Method = method,
+                            Url = url,
+                            Headers = requestHeaders,
+                            Body = requestBodyPreview,
+                            BodyBytes = requestSizeBytes,
+                            BodyTruncated = requestBodyPreview != null
+                                && requestBodyPreview.Length >= MaxBodyPreviewBytes,
+                            HttpClientName = _httpClientName,
+                            CorrelationId = correlationId,
+                        },
+                    };
+                    mitmRequestDecision = await MitmCoordinator.AwaitDecisionAsync(
+                        mitmRequestInterceptId, reqSnap, mitmRequestRule, cancellationToken)
+                        .ConfigureAwait(false);
+                    mitmDurationMsPaused =
+                        (Stopwatch.GetTimestamp() - pauseStartTicks) * 1000.0 / Stopwatch.Frequency;
+
+                    switch (mitmRequestDecision?.Verdict)
+                    {
+                        case "modify":
+                            ApplyRequestModifications(request, mitmRequestDecision.Modifications);
+                            mitmAction = "modified";
+                            break;
+                        case "block":
+                            if (mitmRequestDecision.Block != null)
+                                mitmForgedResponse = mitmRequestDecision.Block.Materialize(request);
+                            mitmAction = "blocked";
+                            break;
+                        case "forge":
+                            if (mitmRequestDecision.Forge != null)
+                                mitmForgedResponse = mitmRequestDecision.Forge.Materialize(request);
+                            mitmAction = "forged";
+                            break;
+                        case "forward":
+                        default:
+                            mitmAction = "passthrough-tagged";
+                            break;
+                    }
+                }
+                else if (chaosFault == null && mitmRequestRule != null)
+                {
+                    // Non-breakpoint rule matched — execute inline without pausing.
+                    mitmForgedResponse = ApplyNonBreakpointAction(request, mitmRequestRule, out mitmAction);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[EDOG] MITM request-phase error: {ex.Message}");
+            }
+
             // STEP 2: Call original with timing — or synthesize / delay
             var sw = Stopwatch.StartNew();
             HttpResponseMessage response;
             var synthesized = false;
 
-            if (chaosFault != null
+            if (mitmForgedResponse != null)
+            {
+                response = mitmForgedResponse;
+                synthesized = true;
+            }
+            else if (chaosFault != null
                 && string.Equals(chaosFault.Fault, "http_error", StringComparison.OrdinalIgnoreCase))
             {
                 response = SynthesizeErrorResponse(request, chaosFault);
@@ -136,12 +223,95 @@ namespace Microsoft.LiveTable.Service.DevMode
                 var bodyPreview = await CaptureBodyPreview(response.Content).ConfigureAwait(false);
                 var responseSizeBytes = response.Content?.Headers.ContentLength ?? 0;
 
+                // F28 — MITM response-phase. Skipped when the request was already
+                // short-circuited (block/forge at request-phase). v1 only supports
+                // "forward" and "modify" verdicts here; forge/block on the response
+                // phase are validated out at rule-insert time by MitmRuleStore.
+                MitmRule mitmResponseRule = null;
+                string mitmResponseInterceptId = null;
+                try
+                {
+                    if (mitmForgedResponse == null
+                        && MitmCoordinator.ShouldPauseResponse(
+                            response, mitmRequestRule, request, _httpClientName, out mitmResponseRule)
+                        && mitmResponseRule != null)
+                    {
+                        mitmResponseInterceptId = "int-" + Guid.NewGuid().ToString("N");
+                        var pauseStartTicks = Stopwatch.GetTimestamp();
+                        var rspSnap = new MitmInterceptSnapshot
+                        {
+                            InterceptId = mitmResponseInterceptId,
+                            RuleId = mitmResponseRule.Id,
+                            RuleName = mitmResponseRule.Name,
+                            Phase = MitmPhase.Response,
+                            OwnerConnectionId = mitmResponseRule.OwnerConnectionId,
+                            CreatedAtUtc = DateTimeOffset.UtcNow,
+                            Request = new MitmRequestSnapshot
+                            {
+                                Method = method,
+                                Url = url,
+                                Headers = requestHeaders,
+                                Body = requestBodyPreview,
+                                BodyBytes = requestSizeBytes,
+                                HttpClientName = _httpClientName,
+                                CorrelationId = correlationId,
+                            },
+                            Response = new MitmResponseSnapshot
+                            {
+                                StatusCode = statusCode,
+                                Headers = responseHeaders,
+                                Body = bodyPreview,
+                                BodyBytes = responseSizeBytes,
+                                BodyTruncated = bodyPreview != null
+                                    && bodyPreview.Length >= MaxBodyPreviewBytes,
+                                DurationMs = Math.Round(sw.Elapsed.TotalMilliseconds, 2),
+                            },
+                        };
+                        var rspDecision = await MitmCoordinator.AwaitDecisionAsync(
+                            mitmResponseInterceptId, rspSnap, mitmResponseRule, cancellationToken)
+                            .ConfigureAwait(false);
+                        mitmDurationMsPaused +=
+                            (Stopwatch.GetTimestamp() - pauseStartTicks) * 1000.0 / Stopwatch.Frequency;
+
+                        if (rspDecision?.Verdict == "modify")
+                        {
+                            ApplyResponseModifications(response, rspDecision.Modifications);
+                            mitmAction = "response-modified";
+                            mitmPhase = MitmPhase.Response;
+                            // Refresh captured fields so the published event reflects the edit
+                            responseHeaders = CaptureHeaders(response.Headers, response.Content?.Headers);
+                            bodyPreview = await CaptureBodyPreview(response.Content).ConfigureAwait(false);
+                            responseSizeBytes = response.Content?.Headers.ContentLength ?? 0;
+                        }
+                        else if (mitmAction == null)
+                        {
+                            mitmAction = "passthrough-tagged";
+                            mitmPhase = MitmPhase.Response;
+                        }
+                    }
+                }
+                catch (Exception mex)
+                {
+                    Debug.WriteLine($"[EDOG] MITM response-phase error: {mex.Message}");
+                }
+
+                // Pick the most recent MITM context for annotation on the http event.
+                var mitmRuleForEvent = mitmResponseRule ?? mitmRequestRule;
+                var mitmInterceptIdForEvent = mitmResponseInterceptId ?? mitmRequestInterceptId;
+                var mitmVerdictForEvent = mitmRequestDecision?.Verdict;
+
                 PublishHttpEvent(
                     method, url, statusCode,
                     Math.Round(sw.Elapsed.TotalMilliseconds, 2),
                     requestHeaders, responseHeaders, bodyPreview, correlationId,
                     requestBodyPreview, requestSizeBytes, responseSizeBytes,
-                    chaosFault: chaosFault, synthesized: synthesized);
+                    chaosFault: chaosFault, synthesized: synthesized,
+                    mitmAction: mitmAction,
+                    mitmRule: mitmRuleForEvent,
+                    mitmInterceptId: mitmInterceptIdForEvent,
+                    mitmVerdict: mitmVerdictForEvent,
+                    mitmPhase: mitmPhase,
+                    mitmDurationMsPaused: mitmDurationMsPaused);
             }
             catch (Exception ex)
             {
@@ -193,58 +363,245 @@ namespace Microsoft.LiveTable.Service.DevMode
             long requestSizeBytes,
             long responseSizeBytes,
             HttpFaultEntry chaosFault,
-            bool synthesized)
+            bool synthesized,
+            string mitmAction = null,
+            MitmRule mitmRule = null,
+            string mitmInterceptId = null,
+            string mitmVerdict = null,
+            MitmPhase mitmPhase = MitmPhase.Request,
+            double mitmDurationMsPaused = 0)
         {
             try
             {
+                // Fast path: no chaos, no mitm → pre-F27/F28 wire shape (identical to baseline).
+                if (chaosFault == null && mitmAction == null)
+                {
+                    EdogTopicRouter.Publish("http", new
+                    {
+                        method,
+                        url,
+                        statusCode,
+                        durationMs,
+                        requestHeaders,
+                        responseHeaders,
+                        responseBodyPreview,
+                        requestBodyPreview,
+                        requestSizeBytes,
+                        responseSizeBytes,
+                        httpClientName = _httpClientName,
+                        correlationId,
+                    });
+                    return;
+                }
+
+                // Either chaos or mitm (or both). Build a dictionary so we can
+                // conditionally include `chaos` and `mitm` without emitting nulls.
+                var payload = new Dictionary<string, object>(StringComparer.Ordinal)
+                {
+                    ["method"] = method,
+                    ["url"] = url,
+                    ["statusCode"] = statusCode,
+                    ["durationMs"] = durationMs,
+                    ["requestHeaders"] = requestHeaders,
+                    ["responseHeaders"] = responseHeaders,
+                    ["responseBodyPreview"] = responseBodyPreview,
+                    ["requestBodyPreview"] = requestBodyPreview,
+                    ["requestSizeBytes"] = requestSizeBytes,
+                    ["responseSizeBytes"] = responseSizeBytes,
+                    ["httpClientName"] = _httpClientName,
+                    ["correlationId"] = correlationId,
+                };
+
                 if (chaosFault != null)
                 {
-                    EdogTopicRouter.Publish("http", new
+                    payload["chaos"] = new
                     {
-                        method,
-                        url,
-                        statusCode,
-                        durationMs,
-                        requestHeaders,
-                        responseHeaders,
-                        responseBodyPreview,
-                        requestBodyPreview,
-                        requestSizeBytes,
-                        responseSizeBytes,
-                        httpClientName = _httpClientName,
-                        correlationId,
-                        chaos = new
-                        {
-                            fault = chaosFault.Fault,
-                            scenarioId = chaosFault.ScenarioId,
-                            target = chaosFault.TargetSubstring,
-                            synthesized,
-                        },
-                    });
+                        fault = chaosFault.Fault,
+                        scenarioId = chaosFault.ScenarioId,
+                        target = chaosFault.TargetSubstring,
+                        synthesized,
+                    };
                 }
-                else
+
+                if (mitmAction != null)
                 {
-                    EdogTopicRouter.Publish("http", new
+                    payload["mitm"] = new
                     {
-                        method,
-                        url,
-                        statusCode,
-                        durationMs,
-                        requestHeaders,
-                        responseHeaders,
-                        responseBodyPreview,
-                        requestBodyPreview,
-                        requestSizeBytes,
-                        responseSizeBytes,
-                        httpClientName = _httpClientName,
-                        correlationId,
-                    });
+                        ruleId = mitmRule?.Id,
+                        ruleName = mitmRule?.Name,
+                        interceptId = mitmInterceptId,
+                        action = mitmAction,
+                        phase = mitmPhase.ToString().ToLowerInvariant(),
+                        verdict = mitmVerdict,
+                        durationMsPaused = Math.Round(mitmDurationMsPaused, 2),
+                    };
                 }
+
+                EdogTopicRouter.Publish("http", payload);
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"[EDOG] HttpPipelineHandler publish error: {ex.Message}");
             }
+        }
+
+        // ──────────────────────────────────────────────────────────────
+        // F28 MITM helpers — request/response mutation + non-breakpoint actions.
+        // All wrapped in try/catch; failures degrade to "no mutation applied".
+        // ──────────────────────────────────────────────────────────────
+
+        /// <summary>Mutates the live <see cref="HttpRequestMessage"/> in place per the supplied modifications.</summary>
+        private static void ApplyRequestModifications(HttpRequestMessage req, MitmModifications mods)
+        {
+            if (req == null || mods == null) return;
+            try
+            {
+                if (!string.IsNullOrEmpty(mods.Method))
+                {
+                    req.Method = new HttpMethod(mods.Method);
+                }
+
+                if (!string.IsNullOrEmpty(mods.Url))
+                {
+                    if (Uri.TryCreate(mods.Url, UriKind.RelativeOrAbsolute, out var newUri))
+                        req.RequestUri = newUri;
+                }
+
+                if (mods.RemoveHeaders != null)
+                {
+                    foreach (var h in mods.RemoveHeaders)
+                    {
+                        if (string.IsNullOrEmpty(h)) continue;
+                        req.Headers.Remove(h);
+                        req.Content?.Headers.Remove(h);
+                    }
+                }
+
+                if (mods.SetHeaders != null)
+                {
+                    foreach (var kv in mods.SetHeaders)
+                    {
+                        if (string.IsNullOrEmpty(kv.Key)) continue;
+                        req.Headers.Remove(kv.Key);
+                        if (!req.Headers.TryAddWithoutValidation(kv.Key, kv.Value))
+                        {
+                            req.Content?.Headers.Remove(kv.Key);
+                            req.Content?.Headers.TryAddWithoutValidation(kv.Key, kv.Value);
+                        }
+                    }
+                }
+
+                if (mods.Body != null)
+                {
+                    var existingCt = req.Content?.Headers.ContentType;
+                    req.Content = new System.Net.Http.StringContent(mods.Body);
+                    if (existingCt != null) req.Content.Headers.ContentType = existingCt;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[EDOG] MITM ApplyRequestModifications error: {ex.Message}");
+            }
+        }
+
+        /// <summary>Mutates the live <see cref="HttpResponseMessage"/> in place per the supplied modifications.</summary>
+        private static void ApplyResponseModifications(HttpResponseMessage rsp, MitmModifications mods)
+        {
+            if (rsp == null || mods == null) return;
+            try
+            {
+                if (mods.RemoveHeaders != null)
+                {
+                    foreach (var h in mods.RemoveHeaders)
+                    {
+                        if (string.IsNullOrEmpty(h)) continue;
+                        rsp.Headers.Remove(h);
+                        rsp.Content?.Headers.Remove(h);
+                    }
+                }
+
+                if (mods.SetHeaders != null)
+                {
+                    foreach (var kv in mods.SetHeaders)
+                    {
+                        if (string.IsNullOrEmpty(kv.Key)) continue;
+                        rsp.Headers.Remove(kv.Key);
+                        if (!rsp.Headers.TryAddWithoutValidation(kv.Key, kv.Value))
+                        {
+                            rsp.Content?.Headers.Remove(kv.Key);
+                            rsp.Content?.Headers.TryAddWithoutValidation(kv.Key, kv.Value);
+                        }
+                    }
+                }
+
+                if (mods.Body != null)
+                {
+                    var existingCt = rsp.Content?.Headers.ContentType;
+                    rsp.Content = new System.Net.Http.StringContent(mods.Body);
+                    if (existingCt != null) rsp.Content.Headers.ContentType = existingCt;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[EDOG] MITM ApplyResponseModifications error: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Executes a non-breakpoint MITM action (block/forge/modify/passthrough) inline.
+        /// Returns a materialized response for block/forge or null when the request should
+        /// proceed (possibly mutated for modify). Sets <paramref name="action"/> to the
+        /// mitm.action label that will appear on the published http event.
+        /// </summary>
+        private static HttpResponseMessage ApplyNonBreakpointAction(
+            HttpRequestMessage req, MitmRule rule, out string action)
+        {
+            action = "passthrough-tagged";
+            try
+            {
+                switch (rule?.Action)
+                {
+                    case MitmBlockAction blk:
+                        action = "blocked";
+                        return new MitmForgePayload
+                        {
+                            StatusCode = blk.StatusCode,
+                            Body = blk.Body,
+                            Headers = blk.Headers,
+                        }.Materialize(req);
+
+                    case MitmForgeAction fg:
+                        action = "forged";
+                        return new MitmForgePayload
+                        {
+                            StatusCode = fg.StatusCode,
+                            Body = fg.Body,
+                            Headers = fg.Headers,
+                            ReasonPhrase = fg.ReasonPhrase,
+                        }.Materialize(req);
+
+                    case MitmModifyAction mod:
+                        ApplyRequestModifications(req, new MitmModifications
+                        {
+                            Url = mod.ReplacementUrl,
+                            SetHeaders = mod.SetHeaders,
+                            RemoveHeaders = mod.RemoveHeaders,
+                            Body = mod.ReplacementBody,
+                        });
+                        action = "modified";
+                        return null;
+
+                    case MitmPassthroughAction _:
+                        action = "passthrough-tagged";
+                        return null;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[EDOG] MITM ApplyNonBreakpointAction error: {ex.Message}");
+            }
+
+            return null;
         }
 
         /// <summary>
