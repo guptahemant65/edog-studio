@@ -352,6 +352,31 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// validation. Empty when P11 is disabled or no error modes apply.
         /// </summary>
         public List<string> AddressesErrorModeIds { get; set; } = new();
+
+        /// <summary>
+        /// First-class feature-flag overrides this scenario depends on. The
+        /// projector translates each entry into either an
+        /// <c>X-Feature-Flag-Override</c> header on the HTTP stimulus or a
+        /// <see cref="SetupStepType.FlagOverride"/> setup step on a
+        /// DiInvocation stimulus, so the flag state is mechanically enforced
+        /// in the run — not just described in the scenario title. Empty when
+        /// the scenario does not depend on a specific flag value.
+        /// </summary>
+        public List<FlagOverride> FeatureFlagOverrides { get; set; } = new();
+    }
+
+    /// <summary>
+    /// Declarative feature-flag override carried on a <see cref="Scenario"/>.
+    /// The projector consumes these and renders them into the concrete
+    /// override mechanism for the stimulus type (HTTP header or setup step).
+    /// </summary>
+    public sealed class FlagOverride
+    {
+        /// <summary>Name of the feature flag to override.</summary>
+        public string FlagName { get; set; }
+
+        /// <summary>Override value, encoded as a string so the LLM can emit "true"/"false" or richer literals without committing to a primitive type at the schema layer.</summary>
+        public string Value { get; set; }
     }
 
     /// <summary>

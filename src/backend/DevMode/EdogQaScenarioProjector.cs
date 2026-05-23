@@ -352,6 +352,65 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             if (reasons.Count > 0) return null;
 
+            // Structural-fix #2: translate Editor-emitted featureFlagOverrides
+            // into the run-time enforcement surface. For HttpRequest stimuli we
+            // add `X-Feature-Flag-Override: <FlagName>=<Value>` headers (one
+            // per override) so the gateway interceptor can apply them
+            // mechanically. For DiInvocation stimuli we synthesize
+            // FlagOverride setup steps so EdogQaExecutionEngine's
+            // FlagOverrideStore takes effect before the call. The declarative
+            // list is also carried verbatim on the projected Scenario so the
+            // curator UI and audit trail can render the intent independently
+            // of the rendered mechanism.
+            var flagOverridesSource = src.FeatureFlagOverrides ?? new List<EdogQaLlmClient.FlagOverride>();
+            var flagOverridesProjected = new List<FlagOverride>();
+            var setupSteps = new List<SetupStep>();
+            foreach (var fo in flagOverridesSource)
+            {
+                if (fo == null || string.IsNullOrWhiteSpace(fo.FlagName)) continue;
+                var rawValue = fo.Value ?? string.Empty;
+                flagOverridesProjected.Add(new FlagOverride { FlagName = fo.FlagName, Value = rawValue });
+
+                if (stimulusType == StimulusType.HttpRequest && stimulus.HttpRequest != null)
+                {
+                    stimulus.HttpRequest.Headers ??= new Dictionary<string, string>();
+                    var headerKey = "X-Feature-Flag-Override";
+                    var headerValue = $"{fo.FlagName}={rawValue}";
+                    if (stimulus.HttpRequest.Headers.TryGetValue(headerKey, out var existing) && !string.IsNullOrEmpty(existing))
+                    {
+                        // Multiple overrides — append comma-separated so a
+                        // single header carries the full set without clobbering.
+                        stimulus.HttpRequest.Headers[headerKey] = existing + ", " + headerValue;
+                    }
+                    else
+                    {
+                        stimulus.HttpRequest.Headers[headerKey] = headerValue;
+                    }
+                }
+                else if (stimulusType == StimulusType.DiInvocation)
+                {
+                    // FlagOverrideSpec.Value is a bool — coerce the string
+                    // payload defensively. "true"/"1"/"on"/"yes" → true;
+                    // anything else → false. The capability registry only
+                    // supports force-ON today, so an explicit false falls
+                    // back to the no-op path and the unavailable telemetry
+                    // counter increments — which is the documented behaviour.
+                    var boolValue = string.Equals(rawValue, "true", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(rawValue, "1", StringComparison.Ordinal)
+                        || string.Equals(rawValue, "on", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(rawValue, "yes", StringComparison.OrdinalIgnoreCase);
+                    setupSteps.Add(new SetupStep
+                    {
+                        Type = SetupStepType.FlagOverride,
+                        FlagOverride = new FlagOverrideSpec
+                        {
+                            FlagName = fo.FlagName,
+                            Value = boolValue,
+                        },
+                    });
+                }
+            }
+
             return new Scenario
             {
                 Id = src.Id,
@@ -363,6 +422,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 Lifecycle = ScenarioLifecycle.Generated,
                 Technique = technique,
                 Stimulus = stimulus,
+                Setup = setupSteps,
                 Expectations = expectations,
                 Matchers = typedMatchers,
                 TimeoutMs = src.TimeoutMs > 0 ? src.TimeoutMs : 30_000,
@@ -375,6 +435,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 },
                 GroundingEvidence = grounding,
                 InvariantsAddressed = new List<string>(),
+                FeatureFlagOverrides = flagOverridesProjected,
             };
         }
 
@@ -606,6 +667,20 @@ namespace Microsoft.LiveTable.Service.DevMode
         private static object ExtractTypedMatcherValue(JsonElement value)
         {
             if (value.ValueKind != JsonValueKind.Object) return null;
+            // Structural-fix #3: prefer the new `literal` field, fall back to
+            // the legacy `value`. Both encode the concrete payload; only the
+            // discriminator name differs.
+            if (value.TryGetProperty("literal", out var lit))
+            {
+                return lit.ValueKind switch
+                {
+                    JsonValueKind.String => lit.GetString(),
+                    JsonValueKind.Number => lit.TryGetInt64(out var l) ? (object)l : lit.GetDouble(),
+                    JsonValueKind.True => true,
+                    JsonValueKind.False => false,
+                    _ => lit.GetRawText(),
+                };
+            }
             if (value.TryGetProperty("value", out var v))
             {
                 return v.ValueKind switch
@@ -781,15 +856,22 @@ namespace Microsoft.LiveTable.Service.DevMode
                 return null;
             }
 
-            var type = TryGetString(root, "type", out var typeName) ? typeName : null;
+            // Structural-fix #3: NormalizeMatcherValue resolves both the new
+            // {kind, literal} shape and the legacy {type, value} shape down
+            // to a single discriminator string we use to populate the
+            // internal MatcherValue.Type slot. The projector continues to
+            // accept both during the rollover so a transient mixed-shape
+            // payload never quarantines an otherwise-valid scenario.
+            var type = NormalizeMatcherValueDiscriminator(root);
+
             switch (assertion)
             {
                 case MatcherAssertion.Equals:
                 case MatcherAssertion.NotEquals:
-                    if (!root.TryGetProperty("value", out var scalarValue))
+                    if (!TryGetMatcherScalarPayload(root, out var scalarValue))
                     {
-                        reasons.Add(MakeReason(CodeMatcherSpecEmpty, $"matchers[{index}].value.value", null,
-                            "Scalar matcher values require a 'value' field."));
+                        reasons.Add(MakeReason(CodeMatcherSpecEmpty, $"matchers[{index}].value.literal", null,
+                            "Scalar matcher values require a 'literal' (new shape) or 'value' (legacy) field."));
                         return null;
                     }
 
@@ -847,6 +929,37 @@ namespace Microsoft.LiveTable.Service.DevMode
                 default:
                     return null;
             }
+        }
+
+        /// <summary>
+        /// Structural-fix #3: dual-shape discriminator extraction. New typed
+        /// values carry a <c>kind</c> field (e.g. <c>"string_literal"</c>);
+        /// legacy values carry a <c>type</c> field (e.g. <c>"string"</c>).
+        /// We project whichever is present onto the internal
+        /// <see cref="MatcherValue.Type"/> slot so downstream code (assertion
+        /// engine, serializer, fixtures) stays oblivious to the schema flip.
+        /// </summary>
+        private static string NormalizeMatcherValueDiscriminator(JsonElement root)
+        {
+            if (root.ValueKind != JsonValueKind.Object) return null;
+            if (root.TryGetProperty("kind", out var kindElement) && kindElement.ValueKind == JsonValueKind.String)
+            {
+                return kindElement.GetString();
+            }
+            if (root.TryGetProperty("type", out var typeElement) && typeElement.ValueKind == JsonValueKind.String)
+            {
+                return typeElement.GetString();
+            }
+            return null;
+        }
+
+        private static bool TryGetMatcherScalarPayload(JsonElement root, out JsonElement payload)
+        {
+            // New shape uses `literal`; legacy used `value`. Either is acceptable.
+            if (root.TryGetProperty("literal", out payload)) return true;
+            if (root.TryGetProperty("value", out payload)) return true;
+            payload = default;
+            return false;
         }
 
         private static List<Matcher> CloneMatchers(IReadOnlyList<Matcher> source)

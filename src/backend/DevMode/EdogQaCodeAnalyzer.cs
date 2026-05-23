@@ -1948,6 +1948,26 @@ namespace Microsoft.LiveTable.Service.DevMode
                 }
             }
 
+            // Structural-fix #1: render the precomputed service-to-route
+            // mapping so the Architect prefers HttpRequest stimuli over
+            // DiInvocation when the changed service IS reachable through
+            // catalog HTTP slots. BFS through the code graph isn't always
+            // wired up in PR analysis (Roslyn semantic edges drop across
+            // interface dispatch boundaries), so we fall back to a name-
+            // based heuristic against catalog slot purposes / slotIds.
+            var preferredRoutes = MapChangedServiceToHttpRoutes(z, catalogRefJson);
+            if (preferredRoutes.Count > 0)
+            {
+                sb.AppendLine("preferred_http_routes (the changed service is reachable via these HTTP endpoints):");
+                foreach (var route in preferredRoutes.Take(8))
+                {
+                    sb.Append("  - ").AppendLine(route);
+                }
+                if (preferredRoutes.Count > 8)
+                    sb.Append("  ... and ").Append(preferredRoutes.Count - 8).AppendLine(" more");
+                sb.AppendLine("stimulus_recommendation: Use HttpRequest targeting these routes for user-facing scenarios. Use DiInvocation only for unit-level helper tests.");
+            }
+
             // When graph-based BFS only found DiInvocation, inject ALL
             // available stimulus types from the catalog so the Architect
             // knows which entry points exist beyond what the graph traced.
@@ -2003,6 +2023,133 @@ namespace Microsoft.LiveTable.Service.DevMode
             }
 
             return sb.ToString().TrimEnd();
+        }
+
+        /// <summary>
+        /// Structural-fix #1: precomputed service-to-route mapping. Given the
+        /// changed service implied by the impact zone (PrimaryChange file +
+        /// affectedInterfaces), return the catalog HTTP slot IDs whose
+        /// purpose, path, or interface declares them as the entry-point
+        /// chain that reaches this service. The heuristic intentionally
+        /// degrades gracefully: when the graph layer can't trace
+        /// HTTP→controller→service, we still surface routes by name match
+        /// (class-name keyword vs slotId/purpose) so the Architect doesn't
+        /// fall back to "DiInvocation" for code that IS HTTP-reachable.
+        /// </summary>
+        internal static List<string> MapChangedServiceToHttpRoutes(ImpactZone zone, string catalogRefJson)
+        {
+            var routes = new List<string>();
+            if (zone == null || string.IsNullOrWhiteSpace(catalogRefJson)) return routes;
+
+            // Build a keyword set from the changed class name and affected interfaces.
+            var keywords = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var className = ExtractClassNameFromFile(zone.PrimaryChange?.File);
+            if (!string.IsNullOrEmpty(className))
+            {
+                foreach (var token in ExtractTokens(className)) keywords.Add(token);
+            }
+            if (zone.AffectedInterfaces != null)
+            {
+                foreach (var iface in zone.AffectedInterfaces)
+                {
+                    foreach (var token in ExtractTokens(iface)) keywords.Add(token);
+                }
+            }
+
+            // Common service-family infixes the heuristic should bias toward
+            // even when the class name is e.g. "SqlEndpointQueryService" —
+            // the slot IDs are paths, so we match against the path's domain
+            // segments (insights, query, sqlEndpoint, …) rather than the
+            // bare class name.
+            // Don't seed if we couldn't extract any tokens — otherwise the
+            // heuristic returns every slot in the catalog.
+            if (keywords.Count == 0) return routes;
+
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(catalogRefJson);
+                if (!doc.RootElement.TryGetProperty("slots", out var slots)
+                    || slots.ValueKind != System.Text.Json.JsonValueKind.Array)
+                {
+                    return routes;
+                }
+
+                foreach (var slot in slots.EnumerateArray())
+                {
+                    var kind = slot.TryGetProperty("kind", out var k) && k.ValueKind == System.Text.Json.JsonValueKind.String
+                        ? k.GetString() : null;
+                    if (!string.Equals(kind, "HttpRequest", StringComparison.OrdinalIgnoreCase)) continue;
+
+                    var slotId = slot.TryGetProperty("slotId", out var sid) && sid.ValueKind == System.Text.Json.JsonValueKind.String
+                        ? sid.GetString() : null;
+                    var purpose = slot.TryGetProperty("purpose", out var p) && p.ValueKind == System.Text.Json.JsonValueKind.String
+                        ? p.GetString() : null;
+                    if (string.IsNullOrEmpty(slotId)) continue;
+
+                    var matchSurface = (slotId + " " + (purpose ?? string.Empty));
+                    foreach (var kw in keywords)
+                    {
+                        if (kw.Length < 4) continue; // skip short tokens like "Get", "I"
+                        if (matchSurface.IndexOf(kw, StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            routes.Add(slotId);
+                            break;
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Catalog parse failure is non-fatal — caller treats an empty
+                // list as "no mapping established" and falls back to the
+                // catalog-wide stimulus-types block.
+            }
+
+            return routes.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        }
+
+        private static string ExtractClassNameFromFile(string filePath)
+        {
+            if (string.IsNullOrEmpty(filePath)) return null;
+            var fileName = System.IO.Path.GetFileNameWithoutExtension(filePath) ?? string.Empty;
+            return fileName;
+        }
+
+        /// <summary>
+        /// Split a PascalCase identifier (class or interface name) into its
+        /// constituent words plus the original full name. Used by
+        /// <see cref="MapChangedServiceToHttpRoutes"/> to expand
+        /// <c>SqlEndpointQueryService</c> → {"SqlEndpointQueryService",
+        /// "SqlEndpoint", "Query", "Service", "Sql", "Endpoint", "Insights"}
+        /// style match keywords.
+        /// </summary>
+        private static IEnumerable<string> ExtractTokens(string identifier)
+        {
+            if (string.IsNullOrEmpty(identifier)) yield break;
+
+            var trimmed = identifier;
+            // Drop leading "I" on interfaces so IInsightsQueryService also yields "Insights".
+            if (trimmed.Length > 1 && trimmed[0] == 'I' && char.IsUpper(trimmed[1]))
+            {
+                yield return trimmed.Substring(1);
+            }
+            yield return trimmed;
+
+            // PascalCase split.
+            var current = new StringBuilder();
+            for (var i = 0; i < trimmed.Length; i++)
+            {
+                if (char.IsUpper(trimmed[i]) && current.Length > 0)
+                {
+                    yield return current.ToString();
+                    current.Clear();
+                }
+                current.Append(trimmed[i]);
+            }
+            if (current.Length > 0)
+            {
+                yield return current.ToString();
+            }
         }
 
         /// <summary>

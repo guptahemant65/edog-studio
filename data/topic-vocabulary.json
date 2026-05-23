@@ -1,0 +1,53 @@
+{
+  "_meta": {
+    "schemaVersion": 1,
+    "description": "Trusted harness vocabulary catalog mapping topic fields to their known value sets. Injected into the Editor prompt so matchers reference concrete literals (e.g. \"DirectAAD\") instead of placeholder strings like \"string\". Extend additively — never remove entries, since older scenarios may reference them by hash.",
+    "owner": "edog-qa"
+  },
+  "topics": {
+    "http.statusCode": {
+      "type": "integer",
+      "knownValues": [200, 201, 202, 204, 301, 302, 304, 400, 401, 403, 404, 409, 422, 429, 500, 502, 503, 504]
+    },
+    "http.method": {
+      "type": "string",
+      "knownValues": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
+    },
+    "telemetry.auth.scheme": {
+      "type": "string",
+      "knownValues": ["obo", "legacy", "DirectAAD", "WSPL"]
+    },
+    "telemetry.auth.failureReason": {
+      "type": "string",
+      "knownValues": ["OboTokenExpired", "OboClaimsMissing", "OboProviderError", "TokenExtractionFailed", "WSPLUnavailable", "DirectAADRejected"]
+    },
+    "log.authMode": {
+      "type": "string",
+      "knownValues": ["OBO", "DirectAAD", "WSPL"]
+    },
+    "telemetry.obo.tokenAcquired": {
+      "type": "boolean",
+      "knownValues": [true, false]
+    },
+    "telemetry.obo.cacheHit": {
+      "type": "boolean",
+      "knownValues": [true, false]
+    },
+    "telemetry.sqlEndpoint.connectionEstablished": {
+      "type": "boolean",
+      "knownValues": [true, false]
+    },
+    "telemetry.insights.queryKind": {
+      "type": "string",
+      "knownValues": ["summary", "table", "dataQualityReport"]
+    },
+    "telemetry.flag.evaluated": {
+      "type": "boolean",
+      "knownValues": [true, false]
+    },
+    "telemetry.flag.value": {
+      "type": "string",
+      "knownValues": ["true", "false", "on", "off"]
+    }
+  }
+}

@@ -853,34 +853,72 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         private static bool IsMatcherValueCompatible(string assertion, JsonElement value)
         {
-            if (value.ValueKind != JsonValueKind.Object || !value.TryGetProperty("type", out var typeElement))
+            if (value.ValueKind != JsonValueKind.Object)
             {
                 return false;
             }
 
-            var valueType = typeElement.GetString() ?? string.Empty;
+            // Structural-fix #3 (transitional): accept both old `type` discriminator
+            // (legacy {type:"string", value:...}) and new `kind` discriminator
+            // (current {kind:"string_literal", literal:...}). The projector
+            // normalises both shapes into the same internal MatcherValue, so
+            // the validator stays permissive across the rollover window.
+            string discriminator = null;
+            if (value.TryGetProperty("kind", out var kindElement) && kindElement.ValueKind == JsonValueKind.String)
+            {
+                discriminator = kindElement.GetString();
+            }
+            else if (value.TryGetProperty("type", out var typeElement) && typeElement.ValueKind == JsonValueKind.String)
+            {
+                discriminator = typeElement.GetString();
+            }
+
+            if (string.IsNullOrEmpty(discriminator))
+            {
+                return false;
+            }
+
+            bool IsKindOrType(params string[] allowed)
+            {
+                foreach (var a in allowed)
+                {
+                    if (string.Equals(discriminator, a, StringComparison.OrdinalIgnoreCase)) return true;
+                }
+                return false;
+            }
+
+            bool HasPayloadField(params string[] fields)
+            {
+                foreach (var f in fields)
+                {
+                    if (value.TryGetProperty(f, out _)) return true;
+                }
+                return false;
+            }
+
             switch (assertion ?? string.Empty)
             {
                 case "Exists":
-                    return string.Equals(valueType, "boolean", StringComparison.OrdinalIgnoreCase)
-                        && value.TryGetProperty("expected", out _);
+                    // New shape: kind="exists"; legacy: type="boolean".
+                    return IsKindOrType("exists", "boolean") && value.TryGetProperty("expected", out _);
                 case "InRange":
-                    return string.Equals(valueType, "range", StringComparison.OrdinalIgnoreCase)
+                    return IsKindOrType("range")
                         && value.TryGetProperty("min", out _)
                         && value.TryGetProperty("max", out _);
                 case "ContainsAll":
                 case "OneOf":
-                    return string.Equals(valueType, "array", StringComparison.OrdinalIgnoreCase)
+                    return IsKindOrType("array_literal", "array")
                         && value.TryGetProperty("items", out _);
                 case "Length":
-                    return string.Equals(valueType, "length", StringComparison.OrdinalIgnoreCase)
+                    return IsKindOrType("length_bound", "length")
                         && (value.TryGetProperty("min", out _) || value.TryGetProperty("max", out _));
                 case "Equals":
                 case "NotEquals":
-                    return string.Equals(valueType, "string", StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(valueType, "integer", StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(valueType, "datetime", StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(valueType, "boolean", StringComparison.OrdinalIgnoreCase);
+                    // New shape: string_literal/integer_literal/boolean_literal with `literal`.
+                    // Legacy: string/integer/datetime/boolean with `value`.
+                    return IsKindOrType("string_literal", "integer_literal", "boolean_literal",
+                                        "string", "integer", "datetime", "boolean")
+                        && HasPayloadField("literal", "value", "expected");
                 default:
                     return true;
             }
