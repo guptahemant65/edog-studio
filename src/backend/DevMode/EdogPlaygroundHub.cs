@@ -540,7 +540,56 @@ namespace Microsoft.LiveTable.Service.DevMode
                     $"[EDOG] OnDisconnectedAsync MITM cleanup error: {ex.Message}");
             }
 
+            // Session Guard — drop this connection from the registry so other
+            // engineers probing /api/edog/sessions don't see a ghost.
+            try
+            {
+                EdogSessionRegistry.Unregister(connectionId);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[EDOG] OnDisconnectedAsync session unregister error: {ex.Message}");
+            }
+
             await base.OnDisconnectedAsync(exception);
+        }
+
+        /// <summary>
+        /// Session Guard — client identifies itself shortly after connecting
+        /// so other engineers probing this capacity before deploying see who
+        /// is actively connected. Identity is OS user + machine name because
+        /// the whole team authenticates as the same Fabric service principal.
+        /// Calling this RPC more than once on the same connection overwrites
+        /// the previous entry (e.g. user switched workspaces in the UI).
+        /// Never throws.
+        /// </summary>
+        public Task EdogIdentify(
+            string machine,
+            string osUser,
+            string lakehouseId,
+            string lakehouseName,
+            string workspaceId,
+            string workspaceName)
+        {
+            try
+            {
+                EdogSessionRegistry.Register(
+                    Context.ConnectionId,
+                    machine,
+                    osUser,
+                    lakehouseId,
+                    lakehouseName,
+                    workspaceId,
+                    workspaceName);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[EDOG] EdogIdentify error: {ex.Message}");
+            }
+
+            return Task.CompletedTask;
         }
 
         /// <summary>

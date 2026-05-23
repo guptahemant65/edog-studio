@@ -2048,6 +2048,7 @@ class WorkspaceExplorer {
     this._showEmptyContent();
     this._clearInspector();
     await this.loadWorkspaces();
+    this._initSessionGuard();
   }
 
   // ────────────────────────────────────────────
@@ -2897,6 +2898,11 @@ class WorkspaceExplorer {
             actions: true,
           });
 
+          // Tag lakehouse rows so Session Guard can decorate them.
+          if (isLH) {
+            itemEl.dataset.lhId = item.id;
+          }
+
           itemEl.addEventListener('click', (e) => {
             e.stopPropagation();
             this._selectItem(item, ws);
@@ -2931,6 +2937,8 @@ class WorkspaceExplorer {
         }
       }
     }
+    // Re-apply session badges after the tree re-renders.
+    this._updateLakehouseBadges();
   }
 
   /**
@@ -6191,5 +6199,266 @@ class WorkspaceExplorer {
     const d = document.createElement('div');
     d.textContent = text || '';
     return d.innerHTML;
+  }
+
+  // ────────────────────────────────────────────
+  // Session Guard — capacity-aware presence
+  // ────────────────────────────────────────────
+
+  /**
+   * Initialise Session Guard: fetch identity, probe sessions, hook SignalR
+   * lifecycle for EdogIdentify + disconnect toast. Best-effort — any failure
+   * is silently ignored so deploy/connect flows are never blocked by probe.
+   */
+  async _initSessionGuard() {
+    this._capacitySessions = [];
+    this._edogIdentity = null;
+    this._sgProbeInflight = null;
+    this._sgProbeTimer = null;
+    this._sgWasConnected = false;
+
+    // Fetch identity (machine + osUser) once. Endpoint may not exist yet — ignore failures.
+    try {
+      const resp = await fetch('/api/identity');
+      if (resp.ok) {
+        this._edogIdentity = await resp.json();
+      }
+    } catch (_e) { /* identity is optional */ }
+
+    // First probe — populates banner + badges if backend supports it.
+    this._refreshSessionProbe();
+
+    // Periodic re-probe so other users joining/leaving show up.
+    this._sgProbeTimer = setInterval(() => this._refreshSessionProbe(), 15000);
+
+    // Wire SignalR lifecycle: send EdogIdentify on connect, toast on unexpected disconnect.
+    this._hookSignalRLifecycle();
+  }
+
+  /**
+   * Debounced probe. Multiple callers in quick succession share one in-flight request.
+   */
+  _refreshSessionProbe() {
+    if (this._sgProbeInflight) return this._sgProbeInflight;
+    const p = (async () => {
+      try {
+        const resp = await fetch('/api/edog/session-probe', { method: 'GET' });
+        if (!resp.ok) return;
+        const data = await resp.json();
+        this._capacitySessions = (data && (data.sessions || data.value)) || [];
+        this._sgCapacity = (data && data.capacity) || null;
+        this._renderCapacityBanner();
+        this._updateLakehouseBadges();
+      } catch (_e) { /* probe failures are non-fatal */ }
+      finally {
+        this._sgProbeInflight = null;
+      }
+    })();
+    this._sgProbeInflight = p;
+    return p;
+  }
+
+  /**
+   * Render / update the capacity session banner above the workspace tree.
+   * Banner is a sibling inserted before this._treeEl.
+   */
+  _renderCapacityBanner() {
+    if (!this._treeEl || !this._treeEl.parentNode) return;
+    let banner = document.getElementById('sg-cap-banner');
+    const sessions = this._capacitySessions || [];
+
+    if (sessions.length === 0) {
+      // No active sessions — hide banner entirely (clean state).
+      if (banner) banner.remove();
+      return;
+    }
+
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'sg-cap-banner';
+      banner.className = 'sg-capacity-banner';
+      this._treeEl.parentNode.insertBefore(banner, this._treeEl);
+    }
+    banner.classList.add('active');
+
+    const cap = this._sgCapacity || {};
+    const capName = cap.displayName || cap.name || 'capacity';
+    const capSku = cap.sku || '';
+    const count = sessions.length;
+    const chipList = sessions.map((s) => {
+      const osUser = this._esc(s.osUser || s.user || 'user');
+      const machine = this._esc(s.machine || '');
+      const lhName = this._esc(s.lakehouseName || s.lakehouseId || '');
+      const since = this._esc(this._sgFormatTime(s.connectedSince || s.connectedAt));
+      const lastSeen = this._esc(this._sgFormatRelative(s.lastActivity));
+      return (
+        '<div class="sg-session-chip">' +
+          '<span class="sg-session-dot"></span>' +
+          '<span class="sg-session-who">' + osUser + (machine ? '@' + machine : '') + '</span>' +
+          (lhName ? '<span class="sg-session-lh">' + lhName + '</span>' : '') +
+          '<div class="sg-session-tooltip">' +
+            '<b>' + osUser + (machine ? '@' + machine : '') + '</b>' +
+            (since ? '<span class="sg-tt-row">connected ' + since + '</span>' : '') +
+            (lastSeen ? '<span class="sg-tt-row">last activity ' + lastSeen + '</span>' : '') +
+          '</div>' +
+        '</div>'
+      );
+    }).join('');
+
+    banner.innerHTML =
+      '<div class="sg-cap-row">' +
+        '<span class="sg-cap-dot"></span>' +
+        '<span class="sg-cap-title">EDOG Active on ' + this._esc(capName) + '</span>' +
+        (capSku ? '<span class="sg-cap-sku">' + this._esc(capSku) + '</span>' : '') +
+      '</div>' +
+      '<div class="sg-cap-sub"><b>' + count + (count === 1 ? ' session' : ' sessions') + '</b> connected to DevMode runtime</div>' +
+      '<div class="sg-cap-sessions">' + chipList + '</div>';
+  }
+
+  /**
+   * Decorate every visible lakehouse tree row with an occupancy badge.
+   * Called after _renderTree() and after probe refresh.
+   */
+  _updateLakehouseBadges() {
+    if (!this._treeEl) return;
+    const sessions = this._capacitySessions || [];
+    const byLh = {};
+    for (const s of sessions) {
+      const id = s.lakehouseId || s.artifactId;
+      if (!id) continue;
+      if (!byLh[id]) byLh[id] = [];
+      byLh[id].push(s);
+    }
+
+    const rows = this._treeEl.querySelectorAll('.ws-tree-item[data-lh-id]');
+    rows.forEach((row) => {
+      const lhId = row.dataset.lhId;
+      const old = row.querySelector('.sg-session-badge');
+      if (old) old.remove();
+      const occupants = byLh[lhId];
+      if (!occupants || occupants.length === 0) return;
+      const first = occupants[0];
+      const who = (first.osUser || first.user || 'user');
+      const isMe = this._edogIdentity &&
+        (first.osUser === this._edogIdentity.osUser) &&
+        (first.machine === this._edogIdentity.machine);
+      const badge = document.createElement('span');
+      badge.className = 'sg-session-badge' + (isMe ? ' you' : '');
+      badge.title = (first.osUser || '') + '@' + (first.machine || '') +
+        (occupants.length > 1 ? ' (+' + (occupants.length - 1) + ' more)' : '');
+      badge.innerHTML =
+        '<span class="sg-session-badge-dot"></span>' +
+        '<span class="sg-session-badge-who">' + this._esc(isMe ? 'you' : who) + '</span>';
+      // Insert before the hover-actions block if present, else append.
+      const actionsEl = row.querySelector('.ws-tree-actions');
+      if (actionsEl) row.insertBefore(badge, actionsEl);
+      else row.appendChild(badge);
+    });
+  }
+
+  /**
+   * Wrap window.edogWs.onStatusChange so we can:
+   *   - send EdogIdentify when SignalR transitions to 'connected'
+   *   - show a disconnect toast on unexpected drop
+   */
+  _hookSignalRLifecycle() {
+    const ws = window.edogWs;
+    if (!ws) {
+      // SignalR manager not initialised yet — try again shortly.
+      setTimeout(() => this._hookSignalRLifecycle(), 500);
+      return;
+    }
+    if (ws.__sgHooked) return;
+    ws.__sgHooked = true;
+    const existing = ws.onStatusChange;
+    const self = this;
+    ws.onStatusChange = function(status) {
+      try {
+        if (existing) existing(status);
+      } finally {
+        self._onSignalRStatus(status);
+      }
+    };
+  }
+
+  _onSignalRStatus(status) {
+    if (status === 'connected') {
+      this._sendEdogIdentify();
+      // If we just reconnected after a drop, surface a probe refresh.
+      if (this._sgWasConnected === false && this._capacitySessions !== undefined) {
+        this._refreshSessionProbe();
+      }
+      this._sgWasConnected = true;
+    } else if (status === 'disconnected' || status === 'reconnecting') {
+      if (this._sgWasConnected) {
+        // We had a real connection and now it dropped — surface the toast.
+        this._showDisconnectToast(status);
+      }
+      this._sgWasConnected = false;
+    }
+  }
+
+  /**
+   * Invoke the EdogIdentify hub RPC so the server registers this session
+   * (osUser, machine, lakehouseId, etc.) for collision detection.
+   */
+  _sendEdogIdentify() {
+    const ws = window.edogWs;
+    if (!ws || !ws.connection) return;
+    const ident = this._edogIdentity || {};
+    const target = (window.edogStudioStatus && window.edogStudioStatus.deployTarget) || {};
+    const payload = {
+      machine: ident.machine || '',
+      osUser: ident.osUser || '',
+      lakehouseId: target.artifactId || '',
+      lakehouseName: target.lakehouseName || '',
+      workspaceId: target.workspaceId || '',
+      workspaceName: target.workspaceName || '',
+    };
+    try {
+      ws.connection.invoke('EdogIdentify', payload).catch(() => { /* server may not implement yet */ });
+    } catch (_e) { /* hub method optional */ }
+  }
+
+  _showDisconnectToast(_reason) {
+    if (typeof window.edogToast !== 'function') return;
+    window.edogToast(
+      'Session disconnected \u2014 FLT runtime stopped or restarted.',
+      'warning',
+      {
+        id: 'sg-disconnect',
+        duration: 0,
+        action: {
+          label: 'Reconnect',
+          onClick: function() {
+            if (window.edogWs && typeof window.edogWs.connect === 'function') {
+              window.edogWs.connect();
+            }
+          },
+        },
+      }
+    );
+  }
+
+  _sgFormatTime(iso) {
+    if (!iso) return '';
+    try {
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return '';
+      return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    } catch (_e) { return ''; }
+  }
+
+  _sgFormatRelative(iso) {
+    if (!iso) return '';
+    try {
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return '';
+      const sec = Math.max(0, Math.floor((Date.now() - d.getTime()) / 1000));
+      if (sec < 60) return 'just now';
+      if (sec < 3600) return Math.floor(sec / 60) + 'm ago';
+      if (sec < 86400) return Math.floor(sec / 3600) + 'h ago';
+      return Math.floor(sec / 86400) + 'd ago';
+    } catch (_e) { return ''; }
   }
 }

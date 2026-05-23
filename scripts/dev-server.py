@@ -2619,6 +2619,10 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_certs()
         elif self.path == "/api/edog/health":
             self._serve_health()
+        elif self.path == "/api/identity":
+            self._serve_identity()
+        elif self.path.startswith("/api/edog/session-probe"):
+            self._probe_capacity_sessions()
         elif self.path == "/api/edog/patch-warnings":
             self._serve_patch_warnings()
         elif self.path == "/api/edog/interceptors-status":
@@ -3004,6 +3008,107 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self.wfile.write(resp_body)
         except Exception as e:
             self._send_json(502, {"error": "proxy_error", "message": str(e)})
+
+    def _serve_identity(self):
+        """GET /api/identity — local OS identity for Session Guard.
+
+        Everyone on the team authenticates as the same Fabric service principal,
+        so AAD identity is useless for disambiguation. Machine + OS user is
+        what tells two engineers apart when they share a capacity.
+        """
+        try:
+            import platform
+            machine = platform.node() or ""
+            try:
+                os_user = os.getlogin()
+            except OSError:
+                # getlogin() fails when there's no controlling terminal
+                # (e.g. service / detached process). Fall back to env vars.
+                os_user = os.environ.get("USERNAME") or os.environ.get("USER") or ""
+            self._json_response(200, {"machine": machine, "osUser": os_user})
+        except Exception as e:
+            sys.stderr.write(f"[EDOG] _serve_identity error: {e}\n")
+            self._json_response(200, {"machine": "", "osUser": "", "error": str(e)})
+
+    def _probe_capacity_sessions(self):
+        """GET /api/edog/session-probe — Session Guard pre-deploy collision check.
+
+        Calls /api/edog/sessions on the capacity host. Three outcomes:
+          - 200 with sessions → return them so the UI can warn the engineer.
+          - 404 / timeout / connection error → capacity has no DevMode (i.e.
+            no one is connected): return available=true with empty list.
+          - Any other error → also degrade to available=true so a probe
+            failure never blocks a deploy.
+        """
+        try:
+            cfg = {}
+            with contextlib.suppress(Exception):
+                if CONFIG_PATH.exists():
+                    cfg = json.loads(CONFIG_PATH.read_text())
+
+            ws_id = cfg.get("workspace_id", "")
+            art_id = cfg.get("artifact_id", "")
+            cap_id = cfg.get("capacity_id", "")
+            if not ws_id or not art_id or not cap_id:
+                self._json_response(200, {"available": True, "sessions": [], "reason": "no_config"})
+                return
+
+            bearer, _ = _read_cache(BEARER_CACHE)
+            if not bearer:
+                self._json_response(200, {"available": True, "sessions": [], "reason": "no_bearer"})
+                return
+
+            try:
+                mwc_token, host = _get_mwc_token(bearer, ws_id, art_id, cap_id, workload_type="LiveTable")
+            except Exception as e:
+                sys.stderr.write(f"[EDOG] session-probe mwc error: {e}\n")
+                self._json_response(200, {"available": True, "sessions": [], "reason": "mwc_failed"})
+                return
+
+            target_url = (
+                f"{host}/webapi/capacities/{cap_id}/workloads/LiveTable"
+                f"/LiveTableService/automatic/v1/workspaces/{ws_id}/lakehouses/{art_id}"
+                f"/api/edog/sessions"
+            )
+            req = urllib.request.Request(target_url, method="GET")
+            req.add_header("Authorization", f"MwcToken {mwc_token}")
+            req.add_header("Accept", "application/json")
+
+            ctx = ssl.create_default_context()
+            try:
+                with urllib.request.urlopen(req, timeout=3.0, context=ctx) as resp:
+                    body = resp.read(65536)
+                    try:
+                        payload = json.loads(body.decode("utf-8", errors="replace"))
+                    except Exception:
+                        payload = {"sessions": []}
+                    sessions = payload.get("sessions") or []
+                    self._json_response(
+                        200,
+                        {
+                            "available": len(sessions) == 0,
+                            "sessions": sessions,
+                            "capacityId": payload.get("capacityId"),
+                            "capacityName": payload.get("capacityName"),
+                            "capacitySku": payload.get("capacitySku"),
+                        },
+                    )
+                    return
+            except urllib.error.HTTPError as e:
+                # 404 → capacity isn't running DevMode (no one connected).
+                if e.code == 404:
+                    self._json_response(200, {"available": True, "sessions": [], "reason": "no_devmode"})
+                    return
+                sys.stderr.write(f"[EDOG] session-probe HTTP {e.code}: {e.reason}\n")
+                self._json_response(200, {"available": True, "sessions": [], "reason": f"http_{e.code}"})
+                return
+            except (urllib.error.URLError, TimeoutError) as e:
+                sys.stderr.write(f"[EDOG] session-probe network: {e}\n")
+                self._json_response(200, {"available": True, "sessions": [], "reason": "timeout"})
+                return
+        except Exception as e:
+            sys.stderr.write(f"[EDOG] _probe_capacity_sessions error: {e}\n")
+            self._json_response(200, {"available": True, "sessions": [], "reason": "probe_failed"})
 
     def _json_response(self, code, data):
         body = json.dumps(data).encode()
@@ -6216,9 +6321,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         lh_id = params.get("lhId", [None])[0]
 
         if not ws_id:
-            self._json_response(
-                400, {"error": "missing_params", "message": "wsId is required"}
-            )
+            self._json_response(400, {"error": "missing_params", "message": "wsId is required"})
             return
 
         try:
@@ -6256,9 +6359,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 continue
             try:
                 # HTTP-date is always GMT; strptime treats trailing "GMT" as a literal.
-                dt = datetime.strptime(lm, "%a, %d %b %Y %H:%M:%S GMT").replace(
-                    tzinfo=timezone.utc
-                )
+                dt = datetime.strptime(lm, "%a, %d %b %Y %H:%M:%S GMT").replace(tzinfo=timezone.utc)
             except ValueError:
                 continue
             if earliest is None or dt < earliest:
@@ -6283,9 +6384,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                     }
                 )
                 lh_url = f"{ONELAKE_HOST}/{ws_id}?{qs}"
-                req2 = urllib.request.Request(
-                    lh_url, headers={"Authorization": f"Bearer {token}"}
-                )
+                req2 = urllib.request.Request(lh_url, headers={"Authorization": f"Bearer {token}"})
                 with urllib.request.urlopen(req2, timeout=15, context=ctx) as resp2:
                     lh_payload = json.loads(resp2.read())
             except urllib.error.HTTPError as e:
