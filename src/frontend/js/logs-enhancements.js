@@ -73,6 +73,18 @@ class LogsEnhancements {
     this._buildClusterSummaryDOM();
     this._bindKeyboard();
     this._injectGutterColumn();
+
+    // Wire the toolbar "＋ Breakpoint" button
+    var addBpBtn = document.getElementById('add-breakpoint-btn');
+    if (addBpBtn) {
+      addBpBtn.addEventListener('click', () => {
+        if (this._bpInputVisible) {
+          this._hideBreakpointInput();
+        } else {
+          this._showBreakpointInput();
+        }
+      });
+    }
   }
 
   // ───────────────────────────────────────────────────────────────

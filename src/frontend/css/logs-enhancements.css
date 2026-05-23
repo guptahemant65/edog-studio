@@ -531,3 +531,14 @@
 #rt-tab-logs .le-cluster-summary {
   /* Scoped — no further rules needed, selectors above handle it */
 }
+
+/* Breakpoint toolbar button */
+.action-btn.bp-action {
+  color: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.action-btn.bp-action:hover {
+  background: rgba(109,92,255,0.08);
+  border-color: var(--accent);
+}
