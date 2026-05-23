@@ -919,50 +919,156 @@ class FeatureFlagsMatrix {
 
   _showEvalHistory(wireKey) {
     const obs = this._observations.get(wireKey);
-    if (!obs || !obs.history || obs.history.length === 0) return;
+    if (!obs || !obs.history) return;
 
-    // Remove any existing popover
     var existing = this._mount.querySelector('.ff-eval-history');
     if (existing) existing.remove();
 
     var cell = this._mount.querySelector(`tr[data-flag="${CSS.escape(wireKey)}"] .ff-obs`);
     if (!cell) return;
 
+    var self = this;
     var panel = document.createElement('div');
     panel.className = 'ff-eval-history';
 
-    var header = `<div class="ff-eh-header"><span class="ff-eh-title">${this._esc(wireKey)}</span><span class="ff-eh-count">${obs.evalCount} evaluation(s)</span><button class="ff-eh-close">\u2715</button></div>`;
+    // Newest-first history.
+    var hist = obs.history.slice().reverse();
+    var total = hist.length;
+    var trueCount = hist.filter(function(h) { return h.result; }).length;
+    var falseCount = total - trueCount;
+    var truePct = total ? Math.round((trueCount / total) * 100) : 0;
+    var falsePct = total ? 100 - truePct : 0;
+    var durs = hist.map(function(h) { return h.durationMs; }).filter(function(d) { return d != null; });
+    var avgDur = durs.length ? (durs.reduce(function(a, b) { return a + b; }, 0) / durs.length) : null;
+    var maxDur = durs.length ? Math.max.apply(null, durs) : 0;
+    var lastAgo = total ? this._formatAgo(Date.now() - hist[0].time) : '\u2014';
 
-    var self = this;
-    var rows = obs.history.slice().reverse().map(function(h) {
-      var t = new Date(h.time);
-      var timeStr = t.toLocaleTimeString();
-      var resultCls = h.result ? 'ff-eh-true' : 'ff-eh-false';
-      var resultText = h.result ? 'TRUE' : 'FALSE';
-      var overrideTag = h.overridden ? ' <span class="ff-eh-override">OVERRIDE</span>' : '';
-      var durText = h.durationMs != null ? h.durationMs.toFixed(2) + 'ms' : '\u2014';
-      var callerText = h.caller ? '<span class="ff-eh-caller" title="' + self._esc(h.caller) + '">' + self._esc(h.caller.split('.').pop()) + '</span>' : '<span class="ff-eh-nocaller">\u2014</span>';
-      return `<tr><td class="ff-eh-time">${timeStr}</td><td class="${resultCls}">${resultText}${overrideTag}</td><td class="ff-eh-dur">${durText}</td><td>${callerText}</td></tr>`;
+    // Sparkline: oldest -> newest, last 20.
+    var sparkData = hist.slice(0, 20).reverse();
+    var sparkline = sparkData.map(function(h) {
+      return '<span class="ff-eh-spark-dot ' + (h.result ? 'true' : 'false') + '" title="' +
+        (h.result ? 'TRUE' : 'FALSE') + ' \u00b7 ' + new Date(h.time).toLocaleTimeString() + '"></span>';
     }).join('');
 
-    var table = `<table class="ff-eh-table"><thead><tr><th>Time</th><th>Result</th><th>Duration</th><th>Caller</th></tr></thead><tbody>${rows}</tbody></table>`;
+    var headerHtml =
+      '<div class="ff-eh-accent"></div>' +
+      '<div class="ff-eh-header">' +
+        '<div class="ff-eh-headtop">' +
+          '<span class="ff-eh-title" title="' + this._esc(wireKey) + '">' + this._esc(wireKey) + '</span>' +
+          '<span class="ff-eh-count">' + obs.evalCount + ' ' + (obs.evalCount === 1 ? 'eval' : 'evals') + '</span>' +
+          '<button class="ff-eh-close" aria-label="Close">\u2715</button>' +
+        '</div>' +
+        (sparkData.length ? '<div class="ff-eh-spark" title="Last ' + sparkData.length + ' evaluations (oldest \u2192 newest)">' + sparkline + '</div>' : '') +
+      '</div>';
 
-    panel.innerHTML = header + table;
+    var statsHtml = total
+      ? '<div class="ff-eh-stats">' +
+          '<span class="ff-eh-stat"><span class="ff-eh-stat-dot true"></span>TRUE <b>' + trueCount + '</b> <span class="ff-eh-stat-pct">(' + truePct + '%)</span></span>' +
+          '<span class="ff-eh-stat-sep">\u00b7</span>' +
+          '<span class="ff-eh-stat"><span class="ff-eh-stat-dot false"></span>FALSE <b>' + falseCount + '</b> <span class="ff-eh-stat-pct">(' + falsePct + '%)</span></span>' +
+          '<span class="ff-eh-stat-sep">\u00b7</span>' +
+          '<span class="ff-eh-stat">Avg <b>' + (avgDur != null ? avgDur.toFixed(2) + 'ms' : '\u2014') + '</b></span>' +
+          '<span class="ff-eh-stat-sep">\u00b7</span>' +
+          '<span class="ff-eh-stat">Last <b>' + lastAgo + '</b></span>' +
+        '</div>'
+      : '';
 
-    // Position near the cell
+    // Group consecutive identical (caller + result + overridden) entries.
+    var grouped = [];
+    hist.forEach(function(h) {
+      var last = grouped[grouped.length - 1];
+      if (last && last.caller === h.caller && last.result === h.result && last.overridden === h.overridden) {
+        last.count++;
+      } else {
+        grouped.push({
+          time: h.time,
+          result: h.result,
+          overridden: h.overridden,
+          durationMs: h.durationMs,
+          caller: h.caller,
+          count: 1,
+        });
+      }
+    });
+
+    var rowsHtml = grouped.map(function(g, idx) {
+      var timeStr = new Date(g.time).toLocaleTimeString();
+      var resultClass = g.result ? 'true' : 'false';
+      var resultText = g.result ? 'TRUE' : 'FALSE';
+      var durText = g.durationMs != null ? g.durationMs.toFixed(2) : '\u2014';
+      var durPct = (g.durationMs != null && maxDur > 0) ? Math.max(4, (g.durationMs / maxDur) * 100) : 0;
+      var callerFull = g.caller || '';
+      var callerShort = g.caller ? g.caller.split('.').pop() : null;
+      var callerHtml = callerShort
+        ? '<button type="button" class="ff-eh-caller" data-full="' + self._esc(callerFull) +
+          '" title="' + self._esc(callerFull) + ' \u00b7 click to copy">' + self._esc(callerShort) + '</button>'
+        : '<span class="ff-eh-nocaller">no caller</span>';
+      var multi = g.count > 1 ? '<span class="ff-eh-multi" title="' + g.count + ' consecutive identical evaluations">\u00d7' + g.count + '</span>' : '';
+      var overrideTag = g.overridden ? '<span class="ff-eh-override-tag">OVERRIDE</span>' : '';
+      var delay = Math.min(idx * 30, 600);
+
+      return '<li class="ff-eh-entry' + (g.overridden ? ' is-override' : '') + '" style="animation-delay:' + delay + 'ms">' +
+        '<span class="ff-eh-dot ' + resultClass + '"></span>' +
+        '<div class="ff-eh-body">' +
+          '<div class="ff-eh-row1">' +
+            '<span class="ff-eh-result ' + resultClass + '">' + resultText + '</span>' +
+            overrideTag +
+            multi +
+            '<span class="ff-eh-time">' + timeStr + '</span>' +
+          '</div>' +
+          '<div class="ff-eh-row2">' +
+            callerHtml +
+            '<span class="ff-eh-dur">' +
+              '<span class="ff-eh-dur-bar"><span class="ff-eh-dur-fill ' + resultClass + '" style="width:' + durPct + '%"></span></span>' +
+              '<span class="ff-eh-dur-num">' + durText + '<em>ms</em></span>' +
+            '</span>' +
+          '</div>' +
+        '</div>' +
+      '</li>';
+    }).join('');
+
+    var listHtml = grouped.length
+      ? '<ul class="ff-eh-list">' + rowsHtml + '</ul>'
+      : '<div class="ff-eh-empty">' +
+          '<span class="ff-eh-empty-icon">\u25CC</span>' +
+          '<div class="ff-eh-empty-text">No evaluations captured yet</div>' +
+          '<div class="ff-eh-empty-sub">Trigger the flag from your code to populate history</div>' +
+        '</div>';
+
+    panel.innerHTML = headerHtml + statsHtml + listHtml;
+
+    // Position relative to mount.
     var rect = cell.getBoundingClientRect();
     var mountRect = this._mount.getBoundingClientRect();
     panel.style.position = 'absolute';
-    panel.style.top = (rect.bottom - mountRect.top + 4) + 'px';
+    panel.style.top = (rect.bottom - mountRect.top + 6) + 'px';
     panel.style.right = '8px';
     panel.style.zIndex = '200';
 
     this._mount.style.position = 'relative';
     this._mount.appendChild(panel);
 
-    // Close handlers
     var close = function() { if (panel.parentNode) panel.remove(); };
     panel.querySelector('.ff-eh-close').addEventListener('click', close);
+
+    panel.querySelectorAll('.ff-eh-caller').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var full = btn.getAttribute('data-full');
+        if (!full) return;
+        var done = function(ok) {
+          btn.classList.add(ok ? 'copied' : 'failed');
+          setTimeout(function() { btn.classList.remove('copied', 'failed'); }, 900);
+          self._toast(ok ? 'ok' : 'failed', ok ? ('Copied ' + full) : 'Copy failed');
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(full).then(function() { done(true); }, function() { done(false); });
+        } else {
+          done(false);
+        }
+      });
+    });
+
     setTimeout(function() {
       document.addEventListener('click', function handler(e) {
         if (!panel.contains(e.target) && e.target !== cell) {
@@ -971,6 +1077,14 @@ class FeatureFlagsMatrix {
         }
       });
     }, 0);
+  }
+
+  _formatAgo(ms) {
+    if (ms == null || ms < 0) return '\u2014';
+    if (ms < 1500) return 'just now';
+    if (ms < 60000) return Math.floor(ms / 1000) + 's ago';
+    if (ms < 3600000) return Math.floor(ms / 60000) + 'm ago';
+    return Math.floor(ms / 3600000) + 'h ago';
   }
 
   _esc(s) {
