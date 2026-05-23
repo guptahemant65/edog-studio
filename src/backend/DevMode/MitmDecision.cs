@@ -38,7 +38,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         public string NoteForAudit { get; init; }
 
         /// <summary>Connection ID of the user who submitted this decision. Set server-side.</summary>
-        public string SubmittedByConnectionId { get; init; }
+        public string SubmittedByConnectionId { get; set; }
 
         /// <summary>Creates a forward-unchanged decision for timeout/disconnect auto-resolution.</summary>
         internal static MitmDecision ForwardUnchanged(string reason)
@@ -170,6 +170,12 @@ namespace Microsoft.LiveTable.Service.DevMode
         public string Error { get; init; }
         public string InterceptId { get; init; }
         public string Verdict { get; init; }
+
+        public static MitmResumeResult Ok => new() { Success = true };
+        public static MitmResumeResult NotFound => new() { Success = false, Error = "intercept not found" };
+        public static MitmResumeResult NotOwned => new() { Success = false, Error = "not owned by caller" };
+        public static MitmResumeResult AlreadyResolved => new() { Success = false, Error = "already resolved" };
+        public static MitmResumeResult Invalid(string reason) => new() { Success = false, Error = reason };
     }
 
     // ──────────────────────────────────────────────
@@ -180,8 +186,14 @@ namespace Microsoft.LiveTable.Service.DevMode
     public sealed class MitmCapabilityReport
     {
         public bool Available { get; init; }
+        public bool Enabled { get; init; }
         public bool InterceptionEnabled { get; init; }
+        public string SessionId { get; init; }
         public string Reason { get; init; }
+        public string[] SupportedActions { get; init; }
+        public string[] SupportedPhases { get; init; }
+        public string[] SupportedUrlMatchers { get; init; }
+        public string ServerVersion { get; init; }
         public MitmCapabilityLimits Limits { get; init; }
     }
 
@@ -194,6 +206,10 @@ namespace Microsoft.LiveTable.Service.DevMode
         public int DefaultTimeoutMs { get; init; }
         public int MaxTimeoutMs { get; init; }
         public int MaxBodyBytes { get; init; }
+        public int MaxBodyEditorBytes { get; init; }
+        public int MaxRuleBodyBytes { get; init; }
+        public int BreakpointTimeoutMsDefault { get; init; }
+        public int BreakpointTimeoutMsMax { get; init; }
     }
 
 }
