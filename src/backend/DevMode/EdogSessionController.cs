@@ -44,17 +44,28 @@ namespace Microsoft.LiveTable.Service.DevMode
             try
             {
                 var snapshot = EdogSessionRegistry.GetSnapshot();
-                return this.Ok(snapshot);
+                var json = System.Text.Json.JsonSerializer.Serialize(snapshot,
+                    new System.Text.Json.JsonSerializerOptions
+                    {
+                        PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+                        WriteIndented = false,
+                    });
+                return new ContentResult
+                {
+                    Content = json,
+                    ContentType = "application/json",
+                    StatusCode = 200,
+                };
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[EDOG] EdogSessionController.GetSessions error: {ex.Message}");
-                return this.Ok(new
+                System.Diagnostics.Debug.WriteLine($"[EDOG] EdogSessionController.GetSessions error: {ex}");
+                return new ContentResult
                 {
-                    capacityId = (string)null,
-                    sessions = Array.Empty<object>(),
-                    error = "internal_error",
-                });
+                    Content = "{\"sessions\":[],\"error\":\"" + ex.Message.Replace("\"", "'") + "\"}",
+                    ContentType = "application/json",
+                    StatusCode = 200,
+                };
             }
         }
     }
