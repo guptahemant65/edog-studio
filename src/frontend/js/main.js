@@ -220,8 +220,7 @@ class EdogLogViewer {
     };
     this.ws.on('log', this._onStreamLog);
     this.ws.on('telemetry', this._onStreamTelemetry);
-    // 'log' is auto-subscribed by SignalRManager on connect — no explicit subscribe needed.
-    // Subscribing again would create a duplicate ChannelReader stream and double every log entry.
+    this.ws.subscribeTopic('log');
     this.ws.subscribeTopic('telemetry');
   }
   
