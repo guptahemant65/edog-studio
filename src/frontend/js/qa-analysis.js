@@ -12,6 +12,7 @@ class QaAnalysis {
     this._phases = [];        // phase DOM elements
     this._scenarios = [];     // received scenarios
     this._lintFindings = [];  // F27 item 5 — deterministic lint findings batch
+    this._testingGuidance = null; // F27 P11 — Architect testing guidance block
     this._scenarioListEl = null;
     this._cancelBtn = null;
     this._metricsEl = null;
@@ -449,6 +450,20 @@ class QaAnalysis {
     }
   }
 
+  /**
+   * F27 P11 wiring fix — receive the Architect testing-guidance block.
+   * Stored on the analysis stage and handed off to qa-curation as the 4th
+   * loadScenarios() argument so the curation UI can render the guidance
+   * panel next to scenarios and lint findings.
+   */
+  onTestingGuidance(data) {
+    if (!data) return;
+    this._testingGuidance = data.testingGuidance || data.TestingGuidance || null;
+    console.log('[QA-DIAG] onTestingGuidance: stored guidance with',
+      this._testingGuidance && Array.isArray(this._testingGuidance.codePaths) ? this._testingGuidance.codePaths.length : 0,
+      'code paths');
+  }
+
   _showProceedButton() {
     if (!this._container) return;
     // Idempotent — silently bail if a proceed row is already in the DOM.
@@ -466,7 +481,7 @@ class QaAnalysis {
     btn.addEventListener('click', () => {
       // Pass scenarios to curation stage
       if (this._panel._curation) {
-        this._panel._curation.loadScenarios(this._scenarios, this._panel.getAnalysisId(), this._lintFindings);
+        this._panel._curation.loadScenarios(this._scenarios, this._panel.getAnalysisId(), this._lintFindings, this._testingGuidance);
       }
       this._panel.goToStage('curation');
     });
@@ -481,6 +496,7 @@ class QaAnalysis {
   reset() {
     this._scenarios = [];
     this._lintFindings = [];
+    this._testingGuidance = null;
     this._isComplete = false;
     this._isCancelled = false;
     this._render();

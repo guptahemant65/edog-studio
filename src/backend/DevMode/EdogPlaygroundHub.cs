@@ -1336,6 +1336,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             List<Scenario> scenarios = null;
             List<LintFinding> lintFindings = null;
             List<string> analysisDegradationFlags = null;
+            EdogQaLlmClient.TestingGuidance testingGuidance = null;
 
             // Local helper — mirror a [QA-DIAG] stdout line to the browser
             // console via the QaAnalysisWarning channel. Fire-and-forget on
@@ -1517,6 +1518,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     scenarios = result?.Scenarios;
                     lintFindings = result?.LintFindings;
                     analysisDegradationFlags = result?.DegradationFlags;
+                    testingGuidance = result?.TestingGuidance;
                     Console.WriteLine($"[QA-DIAG] AnalyzeAsync returned: scenarios={scenarios?.Count ?? 0}, lint={lintFindings?.Count ?? 0}, degradation=[{string.Join(", ", result?.DegradationFlags ?? new List<string>())}]");
                     await BroadcastQaDiagAsync($"AnalyzeAsync returned: scenarios={scenarios?.Count ?? 0}, lint={lintFindings?.Count ?? 0}, degradation=[{string.Join(", ", result?.DegradationFlags ?? new List<string>())}]").ConfigureAwait(false);
 
@@ -1769,7 +1771,15 @@ namespace Microsoft.LiveTable.Service.DevMode
                             matcherTopicHashes = (scn.CatalogHashes.MatcherTopicHashes ?? new Dictionary<string, string>())
                                 .Select(kvp => new { topic = kvp.Key, hash = kvp.Value })
                                 .ToList(),
-                        }
+                        },
+                        // F27 wiring fix: surface FeatureFlagOverrides on the
+                        // wire so the curation UI can render flag-state badges
+                        // and the runner can mechanically enforce overrides
+                        // (otherwise the projector's FlagOverride setup step
+                        // ships with no UI surface).
+                        featureFlagOverrides = (scn.FeatureFlagOverrides ?? new List<FlagOverride>())
+                            .Select(f => new { flagName = f.FlagName, value = f.Value })
+                            .ToArray(),
                     }
                 }).ConfigureAwait(false);
 
@@ -1802,6 +1812,76 @@ namespace Microsoft.LiveTable.Service.DevMode
                         scenarioId = f.ScenarioId,
                         invariantId = f.InvariantId,
                     }).ToList(),
+                }).ConfigureAwait(false);
+            }
+
+            // F27 P11 wiring fix: surface the Architect-emitted testing
+            // guidance so the curation UI can render the panel. Emitted
+            // alongside lint findings (immediately before the "complete"
+            // phase) so the UI can render guidance, scenarios, and findings
+            // in the same pass.
+            if (testingGuidance != null)
+            {
+                await BroadcastQaEventAsync("QaTestingGuidance", new
+                {
+                    eventType = "QaTestingGuidance",
+                    correlationId,
+                    analysisId,
+                    timestamp = DateTimeOffset.UtcNow,
+                    testingGuidance = new
+                    {
+                        codePaths = (testingGuidance.CodePaths ?? new List<EdogQaLlmClient.CodePathItem>())
+                            .Select(c => new
+                            {
+                                id = c.Id,
+                                description = c.Description,
+                                changeKind = c.ChangeKind,
+                                evidenceRefs = c.EvidenceRefs ?? new List<string>(),
+                            }).ToList(),
+                        featureFlagMatrix = (testingGuidance.FeatureFlagMatrix ?? new List<EdogQaLlmClient.FeatureFlagCombination>())
+                            .Select(m => new
+                            {
+                                id = m.Id,
+                                flags = (m.Flags ?? new List<EdogQaLlmClient.FlagAssignment>())
+                                    .Select(fa => new { name = fa.Name, value = fa.Value }).ToList(),
+                                rationale = m.Rationale,
+                                mustCover = m.MustCover,
+                            }).ToList(),
+                        stimuliRequired = (testingGuidance.StimuliRequired ?? new List<EdogQaLlmClient.StimulusRequirement>())
+                            .Select(s => new
+                            {
+                                id = s.Id,
+                                kind = s.Kind,
+                                description = s.Description,
+                                toolingHint = s.ToolingHint,
+                            }).ToList(),
+                        observableSignals = (testingGuidance.ObservableSignals ?? new List<EdogQaLlmClient.ObservableSignal>())
+                            .Select(o => new
+                            {
+                                id = o.Id,
+                                kind = o.Kind,
+                                description = o.Description,
+                                source = o.Source,
+                            }).ToList(),
+                        errorModesToTest = (testingGuidance.ErrorModesToTest ?? new List<EdogQaLlmClient.ErrorModeItem>())
+                            .Select(e => new
+                            {
+                                id = e.Id,
+                                description = e.Description,
+                                trigger = e.Trigger,
+                                expectedHandling = e.ExpectedHandling,
+                                evidenceRefs = e.EvidenceRefs ?? new List<string>(),
+                            }).ToList(),
+                        externalDependencyFailures = (testingGuidance.ExternalDependencyFailures ?? new List<EdogQaLlmClient.ExternalDependencyFailure>())
+                            .Select(x => new
+                            {
+                                id = x.Id,
+                                dependency = x.Dependency,
+                                failureMode = x.FailureMode,
+                                expectedSystemResponse = x.ExpectedSystemResponse,
+                            }).ToList(),
+                        diagnosticNotes = testingGuidance.DiagnosticNotes,
+                    },
                 }).ConfigureAwait(false);
             }
 

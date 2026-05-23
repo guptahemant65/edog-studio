@@ -426,8 +426,18 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// findings indicate scenarios the curator must fix or discard.
         /// </summary>
         public List<LintFinding> LintFindings { get; set; } = new();
-    }
 
+        /// <summary>
+        /// F27 P11 wiring fix: aggregated testing-guidance from the V2
+        /// Architect, surfaced to the curation UI. Null when the V2
+        /// orchestrator did not run, when no zone produced guidance, or
+        /// when P11 is disabled. Multiple zones are merged by concatenating
+        /// list sections; diagnostic notes are joined with blank lines.
+        /// Internal because <see cref="EdogQaLlmClient.TestingGuidance"/> is
+        /// an internal nested type — the hub reads it from the same assembly.
+        /// </summary>
+        internal EdogQaLlmClient.TestingGuidance TestingGuidance { get; set; }
+    }
     // ──────────────────────────────────────────────
     // Code Understanding Orchestrator
     // ──────────────────────────────────────────────
@@ -618,9 +628,33 @@ namespace Microsoft.LiveTable.Service.DevMode
             // Phase 7: L4 — LLM scenario generation (parallel per zone)
             DiagLog($"Phase 7: LLM generation for {result.ImpactZones.Count} zones");
             ReportProgress("llm_generation", 75, $"Generating scenarios for {result.ImpactZones.Count} impact zones...");
+            // F27 P11 wiring fix: collect TestingGuidance emitted by V2 zones
+            // and aggregate onto the analysis result. The Architect surfaces
+            // it per-zone; the curation UI consumes a single merged block.
+            Action<EdogQaLlmClient.TestingGuidance> testingGuidanceSink = tg =>
+            {
+                if (tg == null) return;
+                if (result.TestingGuidance == null)
+                {
+                    result.TestingGuidance = new EdogQaLlmClient.TestingGuidance();
+                }
+                if (tg.CodePaths != null) result.TestingGuidance.CodePaths.AddRange(tg.CodePaths);
+                if (tg.FeatureFlagMatrix != null) result.TestingGuidance.FeatureFlagMatrix.AddRange(tg.FeatureFlagMatrix);
+                if (tg.StimuliRequired != null) result.TestingGuidance.StimuliRequired.AddRange(tg.StimuliRequired);
+                if (tg.ObservableSignals != null) result.TestingGuidance.ObservableSignals.AddRange(tg.ObservableSignals);
+                if (tg.ErrorModesToTest != null) result.TestingGuidance.ErrorModesToTest.AddRange(tg.ErrorModesToTest);
+                if (tg.ExternalDependencyFailures != null) result.TestingGuidance.ExternalDependencyFailures.AddRange(tg.ExternalDependencyFailures);
+                if (!string.IsNullOrEmpty(tg.DiagnosticNotes))
+                {
+                    result.TestingGuidance.DiagnosticNotes = string.IsNullOrEmpty(result.TestingGuidance.DiagnosticNotes)
+                        ? tg.DiagnosticNotes
+                        : result.TestingGuidance.DiagnosticNotes + "\n\n" + tg.DiagnosticNotes;
+                }
+            };
             result.Scenarios = await GenerateScenariosSafe(
                 result.ImpactZones, result.Graph, result.InterfaceResolutions,
-                unifiedDiff, prContext, result.DegradationFlags, cancellationToken);
+                unifiedDiff, prContext, result.DegradationFlags, cancellationToken,
+                testingGuidanceSink);
             DiagLog($"Phase 7 done: {result.Scenarios.Count} scenarios generated");
 
             // Phase 8: Deterministic post-LLM lint (F27 item 5). Runs even if
@@ -1269,7 +1303,8 @@ namespace Microsoft.LiveTable.Service.DevMode
             string diff,
             PrContext prContext,
             List<string> degradationFlags,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            Action<EdogQaLlmClient.TestingGuidance> testingGuidanceSink = null)
         {
             var requestedMode = EdogQaFeatureFlags.LlmV2;
             DiagLog($"GenerateScenariosSafe: LlmV2Mode={requestedMode}, zones={zones.Count}");
@@ -1324,7 +1359,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                         retryable: false);
                 }
                 var v2 = await RunV2OrchestratorAsync(
-                    zones, diff, prContext, degradationFlags, allowLegacyFallback: false, cancellationToken)
+                    zones, diff, prContext, degradationFlags, allowLegacyFallback: false, cancellationToken,
+                    testingGuidanceSink)
                     .ConfigureAwait(false);
                 return v2; // allowLegacyFallback=false guarantees non-null
             }
@@ -1340,7 +1376,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                 {
                     DiagLog("Running V2 orchestrator (Auto+probeReady)");
                     var v2 = await RunV2OrchestratorAsync(
-                        zones, diff, prContext, degradationFlags, allowLegacyFallback: true, cancellationToken)
+                        zones, diff, prContext, degradationFlags, allowLegacyFallback: true, cancellationToken,
+                        testingGuidanceSink)
                         .ConfigureAwait(false);
                     if (v2 != null) return v2;
                     DiagLog("V2 returned null → falling to legacy");
@@ -1450,7 +1487,8 @@ namespace Microsoft.LiveTable.Service.DevMode
             PrContext prContext,
             List<string> degradationFlags,
             bool allowLegacyFallback,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            Action<EdogQaLlmClient.TestingGuidance> testingGuidanceSink = null)
         {
             DiagLog($"RunV2OrchestratorAsync: zones={zones.Count}, allowLegacyFallback={allowLegacyFallback}");
             var architectCfg = EdogQaLlmClient.ReadArchitectConfigFromEnv();
@@ -1713,6 +1751,14 @@ namespace Microsoft.LiveTable.Service.DevMode
                     + $"errors=[{string.Join(", ", zr.Errors ?? new List<string>())}], "
                     + $"elapsed={zr.ElapsedMs}ms, cost=${zr.CostUsd:F6}, "
                     + $"repair={zr.RepairAttempts}x branch={zr.RepairBranch}");
+
+                // F27 P11 wiring fix: forward Architect-emitted testing
+                // guidance so the curation UI can render the panel. Without
+                // this drain the per-zone guidance died inside the orchestrator.
+                if (testingGuidanceSink != null && zr.TestingGuidance != null)
+                {
+                    testingGuidanceSink(zr.TestingGuidance);
+                }
             }
             DiagLog(
                 $"Orchestrator totals: merged={result.MergedScenarios.Count}, "

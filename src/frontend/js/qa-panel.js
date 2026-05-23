@@ -399,6 +399,13 @@ class QaPanel {
         console.log('[QA-DIAG] LintFindings:', (d.findings || d.Findings || []).length, 'findings');
         if (this._analysis) this._analysis.onLintFindings(d);
         break;
+      case 'QaTestingGuidance':
+        // F27 P11 wiring fix — Architect testing guidance arrives as its
+        // own event so it can be forwarded into qa-analysis state and then
+        // into qa-curation when the user clicks "Review Scenarios".
+        console.log('[QA-DIAG] TestingGuidance received');
+        if (this._analysis) this._analysis.onTestingGuidance(d);
+        break;
 
       // Execution events -> qa-execution.js
       case 'QaRunStarted':
