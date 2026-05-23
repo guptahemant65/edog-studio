@@ -123,6 +123,7 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                     Controllers = new List<string> { "LiveTableInsightsController" },
                     Endpoints = new List<Dictionary<string, object>> { endpoint },
                 },
+                DiffFiles = new List<string> { "src/FeatureOnlyInDiff.cs" },
             };
 
             // A scenario whose path is NOT in the catalog → LNT001 should fire.
@@ -130,6 +131,7 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
             {
                 Id = "scn-bad",
                 Title = "Path not in catalog",
+                Technique = ScenarioTechnique.EquivalencePartition,
                 Stimulus = new Stimulus
                 {
                     Type = StimulusType.HttpRequest,
@@ -147,6 +149,7 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
             {
                 Id = "scn-good",
                 Title = "Path matches catalog",
+                Technique = ScenarioTechnique.EquivalencePartition,
                 Stimulus = new Stimulus
                 {
                     Type = StimulusType.HttpRequest,
@@ -159,13 +162,136 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                 Expectations = new List<Expectation>(),
             };
 
-            var findings = EdogQaScenarioLinter.Lint(new List<Scenario> { bad, good }, ctx);
+            // LNT005: evidence file exists only in DiffFiles.
+            var diffFileGrounded = new Scenario
+            {
+                Id = "scn-diff-file",
+                Title = "Grounding file appears only in diff headers",
+                Technique = ScenarioTechnique.EquivalencePartition,
+                GroundingEvidence = new List<GroundingEvidence>
+                {
+                    new GroundingEvidence
+                    {
+                        File = "src/FeatureOnlyInDiff.cs",
+                        StartLine = 10,
+                        EndLine = 12,
+                        Reason = "Grounded to a file that is only present in the unified diff.",
+                    },
+                },
+                Expectations = new List<Expectation>(),
+            };
+
+            // LNT009 exact duplicate should still fire.
+            var dupA = new Scenario
+            {
+                Id = "scn-dup-a",
+                Title = "Duplicate stimulus A",
+                Technique = ScenarioTechnique.EquivalencePartition,
+                Stimulus = new Stimulus
+                {
+                    Type = StimulusType.DiInvocation,
+                    DiInvocation = new DiInvocationSpec
+                    {
+                        ServiceType = "Namespace.Service",
+                        Method = "Run",
+                        Args = new List<object> { 7 },
+                    },
+                },
+                FeatureFlagOverrides = new List<FlagOverride>(),
+                Expectations = new List<Expectation>(),
+            };
+            var dupB = new Scenario
+            {
+                Id = "scn-dup-b",
+                Title = "Duplicate stimulus B",
+                Technique = ScenarioTechnique.EquivalencePartition,
+                Stimulus = new Stimulus
+                {
+                    Type = StimulusType.DiInvocation,
+                    DiInvocation = new DiInvocationSpec
+                    {
+                        ServiceType = "Namespace.Service",
+                        Method = "Run",
+                        Args = new List<object> { 7 },
+                    },
+                },
+                FeatureFlagOverrides = new List<FlagOverride>(),
+                Expectations = new List<Expectation>(),
+            };
+
+            // LNT009 flag-distinct pair should NOT collide.
+            var flagOn = new Scenario
+            {
+                Id = "scn-flag-on",
+                Title = "Feature flag ON",
+                Technique = ScenarioTechnique.EquivalencePartition,
+                Stimulus = new Stimulus
+                {
+                    Type = StimulusType.DiInvocation,
+                    DiInvocation = new DiInvocationSpec
+                    {
+                        ServiceType = "Namespace.Service",
+                        Method = "RunWithFlags",
+                        Args = new List<object> { 42 },
+                    },
+                },
+                FeatureFlagOverrides = new List<FlagOverride>
+                {
+                    new FlagOverride { FlagName = "EnableQA", Value = "true" },
+                },
+                Expectations = new List<Expectation>(),
+            };
+            var flagOff = new Scenario
+            {
+                Id = "scn-flag-off",
+                Title = "Feature flag OFF",
+                Technique = ScenarioTechnique.EquivalencePartition,
+                Stimulus = new Stimulus
+                {
+                    Type = StimulusType.DiInvocation,
+                    DiInvocation = new DiInvocationSpec
+                    {
+                        ServiceType = "Namespace.Service",
+                        Method = "RunWithFlags",
+                        Args = new List<object> { 42 },
+                    },
+                },
+                FeatureFlagOverrides = new List<FlagOverride>
+                {
+                    new FlagOverride { FlagName = "EnableQA", Value = "false" },
+                },
+                Expectations = new List<Expectation>(),
+            };
+
+            var findings = EdogQaScenarioLinter.Lint(
+                new List<Scenario> { bad, good, diffFileGrounded, dupA, dupB, flagOn, flagOff },
+                ctx);
             var lnt001 = new List<Dictionary<string, object>>();
+            var lnt005 = new List<Dictionary<string, object>>();
+            var lnt009 = new List<Dictionary<string, object>>();
             foreach (var f in findings)
             {
                 if (f.Code == "LNT001_PathInCatalog")
                 {
                     lnt001.Add(new Dictionary<string, object>
+                    {
+                        ["scenarioId"] = f.ScenarioId,
+                        ["severity"] = f.Severity.ToString(),
+                        ["message"] = f.Message,
+                    });
+                }
+                else if (f.Code == "LNT005_GroundingFileInDiff")
+                {
+                    lnt005.Add(new Dictionary<string, object>
+                    {
+                        ["scenarioId"] = f.ScenarioId,
+                        ["severity"] = f.Severity.ToString(),
+                        ["message"] = f.Message,
+                    });
+                }
+                else if (f.Code == "LNT009_NoDuplicateStimulus")
+                {
+                    lnt009.Add(new Dictionary<string, object>
                     {
                         ["scenarioId"] = f.ScenarioId,
                         ["severity"] = f.Severity.ToString(),
@@ -180,6 +306,11 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                 ["lnt001_findings"] = lnt001,
                 ["lnt001_fires_on_bad"] = lnt001.Exists(f => (string)f["scenarioId"] == "scn-bad"),
                 ["lnt001_fires_on_good"] = lnt001.Exists(f => (string)f["scenarioId"] == "scn-good"),
+                ["lnt005_diff_file_findings"] = lnt005,
+                ["lnt005_allows_diff_file"] = !lnt005.Exists(f => (string)f["scenarioId"] == "scn-diff-file"),
+                ["lnt009_findings"] = lnt009,
+                ["lnt009_fires_on_exact_duplicate"] = lnt009.Exists(f => (string)f["scenarioId"] == "scn-dup-b"),
+                ["lnt009_fires_on_flag_distinct"] = lnt009.Exists(f => (string)f["scenarioId"] == "scn-flag-off"),
             };
         }
     }

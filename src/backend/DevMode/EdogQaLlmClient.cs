@@ -109,15 +109,15 @@ namespace Microsoft.LiveTable.Service.DevMode
         // ── Wire constants ─────────────────────────────────────────────
 
         /// <summary>Stable cache key for the Architect's system+schema prefix. Spec §3.4: the prefix is identical across every zone + every analysis for a given client version. F27 P11: bumped from v2 to v11 — invalidates the prefix cache on the gpt-5 deployment so old plans don't leak into new-schema decoding. Structural-fixes bump (service-to-route + FF override + matcher kind/literal redesign + topic-vocabulary injection): v13.</summary>
-        internal const string PromptCacheKeyArchitect = "edog-qa-architect-v14";
+        internal const string PromptCacheKeyArchitect = "edog-qa-architect-v15";
 
         /// <summary>Stable cache key for the Editor's system+schema prefix. Bumped to v14 alongside the structural-fixes drop (kind/literal matcher schema, featureFlagOverrides field, topic-vocabulary injection). v16: adds required stimulusId field + STIMULUS ASSIGNMENT prompt block so scenarios mechanically pick distinct stimuli from testingGuidance.stimuliRequired (LNT009 fix).</summary>
-        internal const string PromptCacheKeyEditor = "edog-qa-editor-v18";
+        internal const string PromptCacheKeyEditor = "edog-qa-editor-v19";
 
         /// <summary>Stable cache key for the Analyst's system+schema prefix. The Analyst is the
         /// first pass of the 2-step Analyst→Architect pipeline; its prompt is intentionally
         /// short and observation-only so the prefix caches cleanly across every zone.</summary>
-        internal const string PromptCacheKeyAnalyst = "edog-qa-analyst-v4";
+        internal const string PromptCacheKeyAnalyst = "edog-qa-analyst-v5";
 
         /// <summary>Architect budget. Reasoning tokens are charged against this. 192K is the
         /// T4-D-followup bump — 128K returned status=incomplete on PR-879735 (326KB diff
@@ -330,6 +330,12 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             /// <summary>F27 P11: errorMode IDs (em-*) this sketch addresses. Required when P11 enabled; absent otherwise.</summary>
             public List<string> AddressesErrorModeIds { get; set; } = new();
+
+            /// <summary>The st-N stimulusRequired entry this sketch exercises.</summary>
+            public string StimulusId { get; set; }
+
+            /// <summary>The fc-N featureFlagMatrix rows this sketch requires active.</summary>
+            public List<string> FeatureFlagMatrixIds { get; set; } = new();
         }
 
         // ── F27 P11: testingGuidance DTOs ──────────────────────────────────
@@ -965,6 +971,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                                 "sketchId", "title", "category", "technique",
                                 "rationale", "evidenceRefs",
                                 "addressesCodePathIds", "addressesErrorModeIds",
+                                "stimulusId", "featureFlagMatrixIds",
                             },
                             properties = new
                             {
@@ -1001,6 +1008,12 @@ namespace Microsoft.LiveTable.Service.DevMode
                                     items = new { type = "string" },
                                 },
                                 addressesErrorModeIds = new
+                                {
+                                    type = "array",
+                                    items = new { type = "string" },
+                                },
+                                stimulusId = new { type = "string" },
+                                featureFlagMatrixIds = new
                                 {
                                     type = "array",
                                     items = new { type = "string" },
@@ -2350,6 +2363,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             + "Each gets a stable id ('cp-1', 'cp-2', ...), a one-line description, a changeKind ∈ {Added, Modified, Removed, Reordered}, and evidenceRefs (the surfaceIds it derives from). "
             + "Examples: a new feature-flagged branch, a new external-service call, a new authentication flow, a new response field, a new SQL projection. "
             + "(3) boundaryConditions: input edge cases the new code handles — nulls, empty inputs, zero denominators, missing config, type mismatches, fallback defaults, IsDBNullAsync, COALESCE, default-on-missing. Each references a surfaceId. "
+            + "BOUNDARY DETAIL — for each boundary, name the concrete threshold: numeric constants with validation guards (e.g. DefaultMaxRetryAttempts=2, MaxAllowedRows=1000), comparison predicates that branch behavior (e.g. seconds <= 0, diff.TotalMinutes > 50), and temporal thresholds (e.g. TimeSpan.FromSeconds(5), UtcNow.AddHours(1)). The downstream linter (LNT002) checks that each of these is addressed by a scenario; vague boundary descriptions like 'handles edge cases' are invisible to the linter. "
             + "(4) errorModesToTest: exception/error conditions the new code introduces or modifies — thrown exceptions, 4xx/5xx returns, error propagation, retry-exhaust paths. "
             + "Each gets an id ('em-1', 'em-2', ...), a description, a trigger (the input shape that fires it), an expectedHandling (what the system should do), and evidenceRefs (surfaceIds). "
             + "(5) featureFlagMatrix: every feature-flag combination that exercises a distinct branch in the diff. "
@@ -2409,6 +2423,8 @@ namespace Microsoft.LiveTable.Service.DevMode
             + "Surface signatureOnly changes in groundingEvidence only when they help anchor a sibling behavioural sketch. "
             + "EVIDENCE LINE PRECISION: anchor each groundingEvidence to the line(s) where the new behaviour LIVES — the branch body, the new field declaration, the new return statement, the COALESCE call, the new SQL projection — NOT the function signature, NOT the hunk header. "
             + "If a behaviour spans multiple lines, include EVERY line in the lines[] array. "
+            + "GROUNDING FILE CONSTRAINT: the DIFF_FILES line in the user message lists every file path in the diff. Your groundingEvidence[].repoRelativePath MUST be one of those files — do not cite files that are not in the diff. "
+            + "STIMULUS & FLAG REFERENCES (required on each sketch): set stimulusId to the st-N entry from stimuliRequired that exercises this sketch's code path. Set featureFlagMatrixIds to the fc-N entries whose flag state this sketch requires (empty array when flag-agnostic). The Editor uses these to materialize the concrete stimulus and featureFlagOverrides. "
             + "WORKED EXAMPLE 1 — feature-flag PR. Analyst gives: changedSurfaces=[{sf-1, EnableLineageV2, flagConstant, added}, {sf-2, GetLineageAsync, method, modified}]; "
             + "codePaths=[{cp-1, sf-2, 'flag-on branch emits lineageVersion=2 on response'}, {cp-2, sf-2, 'flag-off branch preserves v1 response shape'}]; boundaryConditions=[]; errorModesToTest=[]. "
             + "Architect emits 2 sketches: (a) HappyPath 'GetLineage with EnableLineageV2=on returns lineageVersion=2 on response' anchored to the flag-on branch body lines; "
@@ -2501,6 +2517,13 @@ namespace Microsoft.LiveTable.Service.DevMode
             + "guard returns ('if (x is null) return ...'). Also covers belt-and-suspenders parallel guards (an enum-arm allowlist add + the parallel int-cast allowlist branch on the next line is the int-cast EdgeCase contract). Also covers xmldoc `<warning>` / `<remarks>` paragraphs that SCOPE a function's domain (forbidden callers, narrowed contracts). THIS IS THE MOST COMMON QA TARGET FOR NEW DEFENSIVE CODE. "
             + "Regression = ONLY when one of these specific triggers is present: (1) the PR title/description explicitly says 'fix' or references a bug ID, (2) a test row/DataRow/Assert assertion is FLIPPED from expected:OldValue to expected:NewValue to lock in a behaviour change (the test-flip itself is the regression contract — its category is Regression even when its sibling implementation sketch is HappyPath/EdgeCase), or (3) the diff restores a prior invariant that was demonstrably broken. Do NOT default to Regression simply because the code path existed before the diff. "
             + "Performance = latency/throughput/memory bound assertion. "
+            + "CATEGORY SEMANTIC CONTRACTS (the linter enforces these; violations become warnings): "
+            + "Counterfactual technique → MUST include ≥1 EventAbsent expectation. A counterfactual proves something does NOT happen; without EventAbsent it is meaningless (LNT007). "
+            + "BoundaryTriplet technique → the batch should contain ≥3 scenarios sharing a boundary invariant: at-boundary, below-boundary, above-boundary (LNT006). "
+            + "TruthTable technique → cover all flag/parameter combinations from the Architect's featureFlagMatrix rows (LNT010). "
+            + "STIMULUS UNIQUENESS RULE (LNT009 — the linter hashes method+path+body+featureFlagOverrides to detect duplicates): "
+            + "when multiple scenarios target the same HTTP endpoint, differentiate their stimulusSpec JSON through at least one of: (a) different featureFlagOverrides entries, (b) different request body fields, (c) different query parameters appended to the path. "
+            + "Identical (method, path, body, featureFlagOverrides) across scenarios is a lint violation. The test intent must be mechanically distinguishable in the stimulus, not just in the title. "
             + "ARCHITECT-LABEL PRESERVATION (critical — the scorer treats (category, verb) as primary key): when the Architect sketch carries an explicit category and/or technique, preserve it verbatim in the emitted scenario unless it is missing, blank, or not one of the schema-allowed enum values. The Editor's job is materialization, not taxonomy correction; reclassifying a sketch is forbidden. The only schema-driven correction allowed is the matcher-tied verb rule above when the Architect's implied verb conflicts with the matcher assertions you must emit. If the Architect sketch's category is missing or invalid, fall back to the CATEGORY SELECTION GUIDE above. "
             + "If the user message includes ROLE SETTINGS, TEMPERATURE SETTINGS, SLOT PURPOSES, or FEW-SHOT EXEMPLARS blocks, treat them as trusted harness configuration. SLOT PURPOSES describe why each slot exists; FEW-SHOT EXEMPLARS are optional and gated by the harness flag. "
             + "STRICT 1:1 SKETCH-TO-SCENARIO MAPPING: emit exactly one scenario for each Architect sketch. Never merge two sketches into one scenario, even when their grounding evidence overlaps or their titles look similar. Never split a single sketch into multiple scenarios. The scenario count in your output MUST equal the number of accepted sketches in the plan (minus any you omit because they reference evidence you cannot anchor). "
@@ -2563,6 +2586,12 @@ namespace Microsoft.LiveTable.Service.DevMode
             sb.Append("HEAD_SHA: ").AppendLine(zone.HeadSha ?? string.Empty);
             sb.Append("ZONE_SUMMARY: ").AppendLine(zone.ZoneSummary ?? string.Empty);
 
+            var diffFiles = ExtractDiffFilePaths(zone.UntrustedRedactedDiff);
+            if (diffFiles.Count > 0)
+            {
+                sb.AppendLine("DIFF_FILES: " + string.Join(", ", diffFiles));
+            }
+
             // PE-1: trusted-harness PR_INTENT block. Sits ABOVE the untrusted diff
             // so the model orients on the central behavioural change before
             // enumerating peripheral edge cases. Empty intent => block omitted.
@@ -2601,6 +2630,34 @@ namespace Microsoft.LiveTable.Service.DevMode
             }
             AppendOptionalPromptHooks(sb, zone, includeCatalogReferences: false);
             return sb.ToString();
+        }
+
+        /// <summary>Extracts file paths from unified diff headers (--- a/path and +++ b/path lines).</summary>
+        internal static List<string> ExtractDiffFilePaths(string diff)
+        {
+            var files = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (string.IsNullOrWhiteSpace(diff)) return new List<string>();
+            foreach (var line in diff.Split('\n'))
+            {
+                var trimmed = line.TrimStart();
+                if (trimmed.StartsWith("+++ b/", StringComparison.Ordinal))
+                {
+                    var path = trimmed.Substring(6).Trim();
+                    if (!string.IsNullOrEmpty(path) && path != "/dev/null")
+                    {
+                        files.Add(path);
+                    }
+                }
+                else if (trimmed.StartsWith("--- a/", StringComparison.Ordinal))
+                {
+                    var path = trimmed.Substring(6).Trim();
+                    if (!string.IsNullOrEmpty(path) && path != "/dev/null")
+                    {
+                        files.Add(path);
+                    }
+                }
+            }
+            return files.OrderBy(f => f, StringComparer.OrdinalIgnoreCase).ToList();
         }
 
         private static string BuildEditorUserMessage(ArchitectPlan plan, ZoneContext zone, EditorRepairContext repair = null)

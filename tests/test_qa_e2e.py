@@ -713,12 +713,52 @@ def test_qa_llm_client_architect_editor_split_present() -> None:
         "Architect and Editor must declare distinct prompt_cache_key constants "
         "so cache hits are reported per-role (spec §3.4)."
     )
+    assert 'PromptCacheKeyAnalyst = "edog-qa-analyst-v5"' in src, (
+        "Analyst cache key must bump for the boundary-detail prompt change"
+    )
+    assert 'PromptCacheKeyArchitect = "edog-qa-architect-v15"' in src, (
+        "Architect cache key must bump for DIFF_FILES + sketch-ref contract changes"
+    )
+    assert 'PromptCacheKeyEditor = "edog-qa-editor-v19"' in src, (
+        "Editor cache key must bump for the semantic-contract + stimulus-uniqueness guidance"
+    )
     assert 'ArchitectReasoningEffort = "high"' in src, "Architect must default to reasoning.effort=high (spec §3.1)."
     assert 'EditorReasoningEffort = "low"' in src, "Editor must default to reasoning.effort=low (spec §3.1)."
     assert "ArchitectMaxOutputTokens = 192000" in src, (
         "Architect must allow ≥192000 max_output_tokens (T4-D followup; 128K returned "
         "status=incomplete on PR-879735's 80KB-truncated diff — densest in corpus)."
     )
+
+
+def test_qa_llm_client_prompt_contracts_cover_lint_feedback_loop() -> None:
+    """The Analyst/Architect/Editor prompts must carry the exact guidance
+    needed to address the real lint warnings from the 25-scenario replay:
+    boundary constants, diff-file grounding, sketch stimulus references,
+    semantic category contracts, and stimulus uniqueness.
+    """
+    src = (REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaLlmClient.cs").read_text(encoding="utf-8")
+    assert "BOUNDARY DETAIL" in src, "Analyst prompt must enumerate numeric/comparison/temporal thresholds for LNT002"
+    assert "GROUNDING FILE CONSTRAINT" in src, "Architect prompt must constrain grounding files to DIFF_FILES"
+    assert "STIMULUS & FLAG REFERENCES (required on each sketch)" in src, (
+        "Architect prompt must require stimulusId + featureFlagMatrixIds on each sketch"
+    )
+    assert "CATEGORY SEMANTIC CONTRACTS" in src, "Editor prompt must publish the linter-backed semantic contracts"
+    assert "STIMULUS UNIQUENESS RULE" in src, "Editor prompt must explain the LNT009 dedupe key"
+
+
+def test_qa_llm_client_architect_schema_and_message_surface_diff_file_refs() -> None:
+    """Architect sketches now carry the Analyst's stimulus/flag refs, and
+    the user message must emit a DIFF_FILES line derived from the unified
+    diff so grounding references stay inside the observed file set.
+    """
+    src = (REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaLlmClient.cs").read_text(encoding="utf-8")
+    assert '"stimulusId", "featureFlagMatrixIds"' in src, (
+        "BuildArchitectPlanSchema must require sketch-level stimulusId + featureFlagMatrixIds"
+    )
+    assert 'stimulusId = new { type = "string" }' in src, "Architect schema must type stimulusId as string"
+    assert "featureFlagMatrixIds = new" in src, "Architect schema must declare featureFlagMatrixIds"
+    assert "DIFF_FILES: " in src, "BuildArchitectUserMessage must emit a DIFF_FILES block"
+    assert "ExtractDiffFilePaths" in src, "Architect user message must use the unified-diff file extractor helper"
 
 
 def test_qa_llm_client_diff_marked_untrusted() -> None:
@@ -2164,6 +2204,27 @@ def test_qa_orchestrator_exposes_repair_seam_and_zoneresult_fields() -> None:
         )
 
 
+def test_qa_orchestrator_declares_lint_repair_branch() -> None:
+    """After validator success, the orchestrator must still run a targeted
+    lint-repair pass for scenario-local warnings so duplicate stimuli and
+    meaningless counterfactuals can be repaired before the final lint pass.
+    """
+    src = (REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaScenarioOrchestrator.cs").read_text(encoding="utf-8")
+    assert '"lint_findings"' in src and "zr.RepairBranch" in src, (
+        "ProcessZoneAsync must stamp Branch C as lint_findings (or append it to an earlier repair branch)"
+    )
+    assert "QuickLintAccepted" in src, (
+        "Orchestrator must quick-lint accepted GeneratedScenarios before completing the zone"
+    )
+    assert "ReplaceFlaggedScenarios" in src, (
+        "Lint repair must replace flagged scenarios instead of appending duplicates"
+    )
+    assert "LNT007_CounterfactualHasAbsent" in src, (
+        "Quick lint must feed counterfactual-without-absence back into repair"
+    )
+    assert "LNT009_NoDuplicateStimulus" in src, "Quick lint must feed duplicate stimuli back into repair"
+
+
 def test_qa_orchestrator_accumulator_uses_delta_helper() -> None:
     """T1e: the per-zone accumulator must book DELTA cost via
     AccumulateDeltaAndMaybeTrip, not the cumulative AccumulateAndMaybeTrip.
@@ -2288,6 +2349,23 @@ def test_orchestrator_repair_throws_fallback_to_initial(harness_environment, bui
     assert c["initialQuarantined"] == 1, c
     assert c["finalAccepted"] == 1, c
     assert c["mergedScenarioCount"] == 1, c
+
+
+def test_orchestrator_lint_repair_replaces_flagged_scenario(harness_environment, built_harness) -> None:
+    """Branch C happy path: validator accepts the initial batch, quick lint
+    flags one scenario for duplicate stimulus, and the repair pass swaps
+    just that scenario with a corrected replacement instead of appending a
+    third scenario.
+    """
+    data = _run_harness(harness_environment["dotnet"], built_harness, "orchestrator")
+    c = {x["caseId"]: x for x in data["cases"]}["lint_repair_replaces_flagged"]
+    assert c["outcome"] == "Completed", c
+    assert c["repairAttempts"] == 1, c
+    assert c["repairBranch"] == "lint_findings", c
+    assert c["finalAccepted"] == 2, c
+    assert c["mergedScenarioCount"] == 2, c
+    assert c["mergedIdsSorted"] == ["sk-fixed", "sk-good"], c
+    assert c["repairReasonCodes"] == ["LNT009_NoDuplicateStimulus"], c
 
 
 # ──────────────────────────────────────────────────────────────────────

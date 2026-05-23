@@ -308,6 +308,13 @@ namespace Microsoft.LiveTable.Service.DevMode
                     if (!string.IsNullOrEmpty(pt?.File)) knownFiles.Add(pt.File);
                 }
             }
+            if (ctx?.DiffFiles != null)
+            {
+                foreach (var f in ctx.DiffFiles)
+                {
+                    if (!string.IsNullOrEmpty(f)) knownFiles.Add(f);
+                }
+            }
             // If we have no diff-side files at all, skip the rule entirely
             // rather than emit false positives. The contract data was
             // unavailable; this is a degradation, not a scenario defect.
@@ -445,7 +452,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             var seen = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var s in scenarios)
             {
-                var key = StimulusKey(s?.Stimulus);
+                var key = StimulusKey(s);
                 if (key == null) continue;
                 if (seen.TryGetValue(key, out var firstId))
                 {
@@ -562,36 +569,54 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <summary>
         /// Build a stable string key for stimulus deduplication. Keys are
         /// shape-aware: HTTP uses method+path+body-hash, SignalR uses hub+method+args-hash,
-        /// etc. Returns null when the stimulus does not carry enough data to
-        /// hash safely (a missing path on an HttpRequest stimulus, say).
+        /// etc. Feature-flag overrides are included so the same endpoint under
+        /// different flag states does not collapse to a false duplicate.
+        /// Returns null when the stimulus does not carry enough data to hash
+        /// safely (a missing path on an HttpRequest stimulus, say).
         /// </summary>
-        private static string StimulusKey(Stimulus stim)
+        private static string StimulusKey(Scenario scenario)
         {
+            var stim = scenario?.Stimulus;
             if (stim == null) return null;
+
+            var flagSuffix = string.Empty;
+            if (scenario.FeatureFlagOverrides != null && scenario.FeatureFlagOverrides.Count > 0)
+            {
+                var sorted = scenario.FeatureFlagOverrides
+                    .Where(f => f != null)
+                    .OrderBy(f => f.FlagName ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                    .Select(f => $"{f.FlagName}={f.Value}")
+                    .ToList();
+                if (sorted.Count > 0)
+                {
+                    flagSuffix = "|ff:" + ShortHash(string.Join(",", sorted));
+                }
+            }
+
             switch (stim.Type)
             {
                 case StimulusType.HttpRequest:
                     var http = stim.HttpRequest;
                     if (http?.Path == null) return null;
-                    return $"http|{(http.Method ?? "GET").ToUpperInvariant()}|{http.Path}|{ShortHash(JsonSerialize(http.Body))}";
+                    return $"http|{(http.Method ?? "GET").ToUpperInvariant()}|{http.Path}|{ShortHash(JsonSerialize(http.Body))}{flagSuffix}";
                 case StimulusType.SignalRBroadcast:
                     var sr = stim.SignalRBroadcast;
                     if (sr?.Method == null) return null;
-                    return $"signalr|{sr.Hub}|{sr.Method}|{ShortHash(JsonSerialize(sr.Args))}";
+                    return $"signalr|{sr.Hub}|{sr.Method}|{ShortHash(JsonSerialize(sr.Args))}{flagSuffix}";
                 case StimulusType.DagTrigger:
                     var dag = stim.DagTrigger;
                     if (dag == null) return null;
-                    return $"dag|{dag.IterationId}|{string.Join(",", dag.NodeFilter ?? new List<string>())}";
+                    return $"dag|{dag.IterationId}|{string.Join(",", dag.NodeFilter ?? new List<string>())}{flagSuffix}";
                 case StimulusType.FileEvent:
                     var fe = stim.FileEvent;
-                    return fe?.Path == null ? null : $"file|{fe.Path}";
+                    return fe?.Path == null ? null : $"file|{fe.Path}{flagSuffix}";
                 case StimulusType.TimerTick:
                     var tt = stim.TimerTick;
-                    return tt == null ? null : $"timer|{tt.TickSource}|{tt.Topic}";
+                    return tt == null ? null : $"timer|{tt.TickSource}|{tt.Topic}{flagSuffix}";
                 case StimulusType.DiInvocation:
                     var di = stim.DiInvocation;
                     if (di?.Method == null) return null;
-                    return $"direct|{di.ServiceType}|{di.Method}|{ShortHash(JsonSerialize(di.Args))}";
+                    return $"direct|{di.ServiceType}|{di.Method}|{ShortHash(JsonSerialize(di.Args))}{flagSuffix}";
                 default:
                     return null;
             }

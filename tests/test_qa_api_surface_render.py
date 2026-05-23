@@ -189,3 +189,41 @@ def test_linter_lnt001_path_in_catalog_uses_dev_server_key_names(
     assert L["lnt001_fires_on_good"] is False, (
         "LNT001_PathInCatalog over-fired on a scenario whose path matches the catalog. The templates set may be empty."
     )
+
+
+def test_linter_lnt005_accepts_grounding_files_listed_in_diff_files(
+    harness_environment,
+    built_harness,
+) -> None:
+    """LNT005 must treat PrContext.DiffFiles as authoritative evidence that
+    a file really is in the diff; otherwise Architect grounding on a file
+    absent from invariant extraction still looks hallucinated.
+    """
+    data = _run(harness_environment["dotnet"], built_harness)
+    assert data["ok"] is True, data
+
+    L = data["linter"]
+    assert L["lnt005_allows_diff_file"] is True, (
+        "LNT005 still fired on a grounding file that was present in PrContext.DiffFiles. "
+        f"Findings: {L['lnt005_diff_file_findings']}"
+    )
+
+
+def test_linter_lnt009_uses_feature_flag_overrides_in_dedupe_key(
+    harness_environment,
+    built_harness,
+) -> None:
+    """LNT009 should still fire on exact duplicate stimuli, but must stay
+    silent when the only difference is featureFlagOverrides — those are
+    mechanically distinct executions.
+    """
+    data = _run(harness_environment["dotnet"], built_harness)
+    assert data["ok"] is True, data
+
+    L = data["linter"]
+    assert L["lnt009_fires_on_exact_duplicate"] is True, (
+        f"Exact duplicate stimuli no longer fire LNT009. Findings: {L['lnt009_findings']}"
+    )
+    assert L["lnt009_fires_on_flag_distinct"] is False, (
+        f"Scenarios that differ only by featureFlagOverrides still collide in LNT009. Findings: {L['lnt009_findings']}"
+    )

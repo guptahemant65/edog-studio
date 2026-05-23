@@ -270,6 +270,10 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// degradation flag rather than blocking generation.
         /// </summary>
         public List<string> Warnings { get; set; } = new();
+
+        /// <summary>File paths present in the unified diff. Used by the linter (LNT005)
+        /// to validate grounding evidence file references.</summary>
+        public List<string> DiffFiles { get; set; } = new();
     }
 
     /// <summary>Work item summary for the LLM contract section.</summary>
@@ -590,6 +594,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             // need not null-check it again.
             ReportProgress("invariant_extraction", 10, "Extracting code invariants from diff...");
             prContext ??= new PrContext();
+            prContext.DiffFiles = EdogQaLlmClient.ExtractDiffFilePaths(unifiedDiff);
             var invariants = EdogQaInvariantExtractor.Extract(unifiedDiff, out var invariantWarnings);
             prContext.Invariants = invariants;
             if (invariantWarnings.Count > 0)

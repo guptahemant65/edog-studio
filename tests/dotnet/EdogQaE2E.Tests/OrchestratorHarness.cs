@@ -22,6 +22,7 @@
 //   17. repair_parse_fail_then_also_fails — Branch A repair fails → zone Failed
 //   18. repair_skipped_when_budget_tripped — sibling tripped budget → no repair
 //   19. repair_throws_fallback_to_initial — Branch B repair throws → initial preserved
+//   20. lint_repair_replaces_flagged     — Branch C fixes lint-local warnings after validator success
 //
 // Determinism: every case uses a fixed configuration; outputs are
 // JSON-serialised under HARNESS-JSON-BEGIN/END so pytest can assert
@@ -87,6 +88,7 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                 await RunRepairParseFailThenAlsoFails(ct).ConfigureAwait(false),
                 await RunRepairSkippedWhenBudgetTripped(ct).ConfigureAwait(false),
                 await RunRepairThrowsFallbackToInitial(ct).ConfigureAwait(false),
+                await RunLintRepairReplacesFlagged(ct).ConfigureAwait(false),
             };
 
             EmitJson(new
@@ -916,6 +918,86 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
             };
         }
 
+        private static async Task<object> RunLintRepairReplacesFlagged(CancellationToken ct)
+        {
+            var zone = ZoneInput("z-0");
+            EdogQaScenarioOrchestrator.ArchitectStageDelegate architect = (zctx, c) =>
+                Task.FromResult(BuildPlanResult(zctx, new[] { "ev-1" }));
+
+            EdogQaScenarioOrchestrator.EditorStageDelegate editor = (plan, zctx, c) =>
+            {
+                var good = BuildValidScenario(refs: new List<string> { "ev-1" }, sketchId: "sk-good", methodName: "Baz");
+                good.OriginalIndex = 0;
+
+                var flagged = BuildValidScenario(refs: new List<string> { "ev-1" }, sketchId: "sk-bad", methodName: "Baz");
+                flagged.Id = "sk-bad";
+                flagged.SketchId = "sk-bad";
+                flagged.Technique = "EquivalencePartition";
+                flagged.Title = "Baz emits a distinct assertion over the same stimulus";
+                flagged.Expectations[0].MatcherSpec = "{\"exact\":{\"returnValue\":4}}";
+                flagged.Expectations[0].Rationale = "Same stimulus, different asserted contract.";
+                flagged.OriginalIndex = 1;
+
+                return Task.FromResult(new EdogQaLlmClient.LlmClientResult
+                {
+                    Status = EdogQaLlmClient.LlmClientStatus.Ok,
+                    Plan = plan,
+                    Scenarios = new List<EdogQaLlmClient.GeneratedScenario> { good, flagged },
+                    EditorElapsedMs = 5,
+                    EditorInputTokens = 100,
+                    EditorOutputTokens = 80,
+                });
+            };
+
+            var repairReasonCodes = new List<string>();
+            EdogQaScenarioOrchestrator.EditorRepairStageDelegate repair = (plan, zctx, fb, c) =>
+            {
+                repairReasonCodes = (fb?.QuarantinedScenarios ?? new List<EdogQaLlmClient.RepairFeedbackItem>())
+                    .SelectMany(item => item.Reasons ?? new List<EdogQaLlmClient.RepairFeedbackReason>())
+                    .Select(r => r.Code)
+                    .Where(code => !string.IsNullOrEmpty(code))
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(code => code, StringComparer.Ordinal)
+                    .ToList();
+
+                var fixedScenario = BuildValidScenario(refs: new List<string> { "ev-1" }, sketchId: "sk-bad", methodName: "BazFixed");
+                fixedScenario.Id = "sk-fixed";
+                fixedScenario.SketchId = "sk-bad";
+                fixedScenario.Technique = "EquivalencePartition";
+                fixedScenario.OriginalIndex = 1;
+
+                return Task.FromResult(new EdogQaLlmClient.LlmClientResult
+                {
+                    Status = EdogQaLlmClient.LlmClientStatus.Ok,
+                    Plan = plan,
+                    Scenarios = new List<EdogQaLlmClient.GeneratedScenario> { fixedScenario },
+                    EditorElapsedMs = 5,
+                    EditorInputTokens = 100,
+                    EditorOutputTokens = 80,
+                });
+            };
+
+            var result = await RunOrchestratorAsync(
+                zones: new[] { zone },
+                architectOverride: architect,
+                editorOverride: editor,
+                editorRepairOverride: repair,
+                ct: ct).ConfigureAwait(false);
+
+            var z = result.Zones[0];
+            return new
+            {
+                caseId = "lint_repair_replaces_flagged",
+                outcome = z.Outcome.ToString(),
+                repairAttempts = z.RepairAttempts,
+                repairBranch = z.RepairBranch,
+                finalAccepted = z.Accepted.Count,
+                mergedScenarioCount = result.MergedScenarios.Count,
+                mergedIdsSorted = result.MergedScenarios.Select(s => s.Id).OrderBy(id => id, StringComparer.Ordinal).ToList(),
+                repairReasonCodes,
+            };
+        }
+
         // ─── Runner ───────────────────────────────────────────────────
 
         private static async Task<EdogQaScenarioOrchestrator.OrchestratorResult> RunOrchestratorAsync(
@@ -1062,6 +1144,8 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                 Technique = "EquivalencePartition",
                 StimulusType = "DiInvocation",
                 StimulusSpec = "{\"serviceType\":\"IFoo\",\"method\":\"" + methodName + "\",\"args\":[]}",
+                StimulusId = "st-1",
+                SketchId = sketchId,
                 Expectations = new List<EdogQaLlmClient.GeneratedExpectation>
                 {
                     new EdogQaLlmClient.GeneratedExpectation

@@ -51,6 +51,8 @@ namespace Microsoft.LiveTable.Service.DevMode
     using System.Diagnostics;
     using System.Linq;
     using System.Net.Http;
+    using System.Security.Cryptography;
+    using System.Text;
     using System.Text.Json;
     using System.Threading;
     using System.Threading.Tasks;
@@ -1677,6 +1679,100 @@ namespace Microsoft.LiveTable.Service.DevMode
                     }
                 }
 
+                if (config.EnableRepairLoop
+                    && zr.Accepted.Count > 0
+                    && zr.RepairAttempts < ComputeMaxRepairPasses(config.ReachableSlotCount)
+                    && !isBudgetTripped()
+                    && (config.EditorRepairOverride != null || config.Editor != null))
+                {
+                    var lintRepairItems = QuickLintAccepted(zr.Accepted);
+                    if (lintRepairItems.Count > 0)
+                    {
+                        EmitDiagnostic(progress,
+                            $"Lint repair: {lintRepairItems.Count} scenario(s) with repairable findings");
+
+                        SafeReport(progress, new OrchestratorEvent
+                        {
+                            Kind = OrchestratorEventKind.ZoneRepairAttempted,
+                            ZoneId = zr.ZoneId,
+                            ZoneInputIndex = zoneInputIndex,
+                            ErrorCode = "lint_findings",
+                        });
+
+                        var lintFeedback = new EdogQaLlmClient.EditorRepairContext
+                        {
+                            QuarantinedScenarios = lintRepairItems,
+                        };
+
+                        EdogQaLlmClient.LlmClientResult lintRepairResult = null;
+                        bool lintRepairDispatched = false;
+                        try
+                        {
+                            (lintRepairResult, lintRepairDispatched) = await TryCallEditorRepairAsync(
+                                config, architectResult.Plan, zoneCtx, lintFeedback, ct).ConfigureAwait(false);
+                        }
+                        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                        catch (Exception ex)
+                        {
+                            lintRepairDispatched = true;
+                            zr.RepairFailureCode = CodeUnexpectedException;
+                            zr.Errors.Add("LINT_REPAIR_EXCEPTION — " + ex.GetType().Name);
+                        }
+
+                        if (lintRepairDispatched)
+                        {
+                            zr.RepairAttempts++;
+                            zr.RepairBranch = string.IsNullOrEmpty(zr.RepairBranch)
+                                ? "lint_findings"
+                                : zr.RepairBranch + ";lint_findings";
+                        }
+
+                        if (lintRepairResult != null)
+                        {
+                            zr.RepairInputTokens += lintRepairResult.EditorInputTokens;
+                            zr.RepairOutputTokens += lintRepairResult.EditorOutputTokens;
+                            zr.InputTokens += lintRepairResult.EditorInputTokens;
+                            zr.OutputTokens += lintRepairResult.EditorOutputTokens;
+
+                            if (lintRepairResult.Status == EdogQaLlmClient.LlmClientStatus.Failed)
+                            {
+                                var firstLintError = lintRepairResult.Errors != null && lintRepairResult.Errors.Count > 0
+                                    ? StableCodePrefix(lintRepairResult.Errors[0])
+                                    : "EDITOR_REPAIR_LINT_FAILED";
+                                zr.RepairFailureCode = firstLintError;
+                                zr.Errors.AddRange(lintRepairResult.Errors ?? new());
+                            }
+                            else
+                            {
+                                var lintRepairValidation = EdogQaScenarioValidator.Validate(
+                                    architectResult.Plan,
+                                    lintRepairResult.Scenarios ?? new List<EdogQaLlmClient.GeneratedScenario>(),
+                                    zoneInput.UnifiedDiff ?? zoneInput.RedactedDiff ?? string.Empty,
+                                    config.Validation,
+                                    zr.TestingGuidance);
+
+                                zr.RepairAcceptedCount += lintRepairValidation.Accepted?.Count ?? 0;
+                                zr.RepairQuarantinedCount += lintRepairValidation.Quarantined?.Count ?? 0;
+
+                                if (lintRepairValidation.BatchErrors != null && lintRepairValidation.BatchErrors.Count > 0)
+                                {
+                                    foreach (var be in lintRepairValidation.BatchErrors)
+                                    {
+                                        zr.Errors.Add(be.Code ?? "VALIDATOR_BATCH_ERROR");
+                                    }
+                                }
+
+                                ReplaceFlaggedScenarios(zr.Accepted, lintRepairItems, lintRepairValidation.Accepted);
+                                ReorderAcceptedByOriginalIndex(zr.Accepted);
+
+                                EmitDiagnostic(progress,
+                                    $"Lint repair done: {lintRepairValidation.Accepted?.Count ?? 0} replacements accepted, "
+                                    + $"{lintRepairValidation.Quarantined?.Count ?? 0} quarantined");
+                            }
+                        }
+                    }
+                }
+
                 zr.Outcome = ZoneOutcome.Completed;
                 zr.CostUsd = ComputeCost(zr, config.Pricing);
                 AccumulateDeltaAndMaybeTrip(zr, ref bookedCostUsd, addAccumulate, refAccumulate, maxBudgetMicroUsd, tripBudget);
@@ -1856,6 +1952,273 @@ namespace Microsoft.LiveTable.Service.DevMode
             catch
             {
                 return null;
+            }
+        }
+
+        private static List<EdogQaLlmClient.RepairFeedbackItem> QuickLintAccepted(
+            List<EdogQaScenarioValidator.AcceptedScenario> accepted)
+        {
+            var itemsById = new Dictionary<string, EdogQaLlmClient.RepairFeedbackItem>(StringComparer.Ordinal);
+            if (accepted == null || accepted.Count == 0)
+            {
+                return itemsById.Values.ToList();
+            }
+
+            EdogQaLlmClient.RepairFeedbackItem GetOrAdd(EdogQaLlmClient.GeneratedScenario scenario)
+            {
+                var key = scenario?.Id ?? scenario?.SketchId ?? string.Empty;
+                if (!itemsById.TryGetValue(key, out var item))
+                {
+                    item = new EdogQaLlmClient.RepairFeedbackItem
+                    {
+                        ScenarioId = scenario?.Id ?? string.Empty,
+                        Title = scenario?.Title ?? string.Empty,
+                        OriginalIndex = scenario?.OriginalIndex,
+                        ScenarioJson = scenario == null ? null : SafeSerializeScenario(scenario),
+                    };
+                    itemsById[key] = item;
+                }
+                return item;
+            }
+
+            foreach (var acceptedScenario in accepted)
+            {
+                var scenario = acceptedScenario?.Scenario;
+                if (scenario == null) continue;
+                if (!string.Equals(scenario.Technique, "Counterfactual", StringComparison.OrdinalIgnoreCase)) continue;
+
+                var hasAbsent = scenario.Expectations != null
+                    && scenario.Expectations.Any(e => string.Equals(e?.Type, "EventAbsent", StringComparison.OrdinalIgnoreCase));
+                if (hasAbsent) continue;
+
+                GetOrAdd(scenario).Reasons.Add(new EdogQaLlmClient.RepairFeedbackReason
+                {
+                    Code = "LNT007_CounterfactualHasAbsent",
+                    Message = "Counterfactual scenario must include at least one EventAbsent expectation. Add an expectation asserting that something does NOT happen.",
+                });
+            }
+
+            var seen = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var acceptedScenario in accepted)
+            {
+                var scenario = acceptedScenario?.Scenario;
+                if (scenario == null) continue;
+                var key = GeneratedScenarioStimulusKey(scenario);
+                if (key == null) continue;
+
+                var scenarioId = scenario.Id ?? scenario.SketchId ?? string.Empty;
+                if (seen.TryGetValue(key, out var firstId))
+                {
+                    // Flag only the later duplicate: the first occurrence stays as the
+                    // canonical baseline stimulus and the repair pass differentiates the
+                    // colliding follower. Repair attempts are capped, so repeated lint
+                    // findings surface as diagnostics rather than looping indefinitely.
+                    GetOrAdd(scenario).Reasons.Add(new EdogQaLlmClient.RepairFeedbackReason
+                    {
+                        Code = "LNT009_NoDuplicateStimulus",
+                        Message = $"Stimulus is identical to scenario '{firstId}'. Differentiate through featureFlagOverrides, request body, or query parameters.",
+                    });
+                }
+                else
+                {
+                    seen[key] = scenarioId;
+                }
+            }
+
+            return itemsById.Values
+                .OrderBy(item => item.OriginalIndex ?? int.MaxValue)
+                .ThenBy(item => item.ScenarioId ?? string.Empty, StringComparer.Ordinal)
+                .ToList();
+        }
+
+        private static string GeneratedScenarioStimulusKey(EdogQaLlmClient.GeneratedScenario scenario)
+        {
+            if (scenario == null || string.IsNullOrWhiteSpace(scenario.StimulusSpec))
+            {
+                return null;
+            }
+
+            var flagSuffix = string.Empty;
+            if (scenario.FeatureFlagOverrides != null && scenario.FeatureFlagOverrides.Count > 0)
+            {
+                var sorted = scenario.FeatureFlagOverrides
+                    .Where(f => f != null)
+                    .OrderBy(f => f.FlagName ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                    .Select(f => $"{f.FlagName}={f.Value}")
+                    .ToList();
+                if (sorted.Count > 0)
+                {
+                    flagSuffix = "|ff:" + ShortHash(string.Join(",", sorted));
+                }
+            }
+
+            try
+            {
+                using var doc = JsonDocument.Parse(scenario.StimulusSpec);
+                var root = doc.RootElement;
+                var stimulusType = scenario.StimulusType ?? string.Empty;
+                switch (stimulusType)
+                {
+                    case "HttpRequest":
+                        var path = GetJsonString(root, "path");
+                        if (string.IsNullOrEmpty(path)) return null;
+                        var method = GetJsonString(root, "method") ?? "GET";
+                        var bodyHash = root.TryGetProperty("body", out var body)
+                            ? ShortHash(CanonicalJson(body))
+                            : ShortHash(string.Empty);
+                        return $"http|{method.ToUpperInvariant()}|{path}|{bodyHash}{flagSuffix}";
+                    case "SignalRBroadcast":
+                        var signalMethod = GetJsonString(root, "method");
+                        if (string.IsNullOrEmpty(signalMethod)) return null;
+                        var hub = GetJsonString(root, "hub");
+                        var argsHash = root.TryGetProperty("args", out var args)
+                            ? ShortHash(CanonicalJson(args))
+                            : ShortHash(string.Empty);
+                        return $"signalr|{hub}|{signalMethod}|{argsHash}{flagSuffix}";
+                    case "DagTrigger":
+                        var iterationId = GetJsonString(root, "iterationId");
+                        var nodeFilter = GetNodeFilterKey(root);
+                        return $"dag|{iterationId}|{nodeFilter}{flagSuffix}";
+                    case "FileEvent":
+                        var filePath = GetJsonString(root, "path");
+                        return string.IsNullOrEmpty(filePath) ? null : $"file|{filePath}{flagSuffix}";
+                    case "TimerTick":
+                        var tickSource = GetJsonString(root, "tickSource");
+                        var topic = GetJsonString(root, "topic");
+                        return $"timer|{tickSource}|{topic}{flagSuffix}";
+                    case "DiInvocation":
+                        var diMethod = GetJsonString(root, "method");
+                        if (string.IsNullOrEmpty(diMethod)) return null;
+                        var serviceType = GetJsonString(root, "serviceType");
+                        var diArgsHash = root.TryGetProperty("args", out var diArgs)
+                            ? ShortHash(CanonicalJson(diArgs))
+                            : ShortHash(string.Empty);
+                        return $"direct|{serviceType}|{diMethod}|{diArgsHash}{flagSuffix}";
+                    default:
+                        return null;
+                }
+            }
+            catch (JsonException)
+            {
+                return $"{scenario.StimulusType}|{scenario.StimulusSpec}{flagSuffix}";
+            }
+        }
+
+        private static string GetJsonString(JsonElement element, string propertyName)
+        {
+            if (!element.TryGetProperty(propertyName, out var property))
+            {
+                return null;
+            }
+            return property.ValueKind == JsonValueKind.String ? property.GetString() : property.ToString();
+        }
+
+        private static string GetNodeFilterKey(JsonElement element)
+        {
+            if (!element.TryGetProperty("nodeFilter", out var nodeFilter))
+            {
+                return string.Empty;
+            }
+
+            if (nodeFilter.ValueKind == JsonValueKind.Array)
+            {
+                return string.Join(",", nodeFilter.EnumerateArray().Select(item => item.ToString()));
+            }
+
+            return nodeFilter.ToString();
+        }
+
+        private static string CanonicalJson(JsonElement element)
+        {
+            switch (element.ValueKind)
+            {
+                case JsonValueKind.Object:
+                    var properties = element.EnumerateObject()
+                        .OrderBy(property => property.Name, StringComparer.Ordinal)
+                        .Select(property => $"\"{property.Name}\":{CanonicalJson(property.Value)}");
+                    return "{" + string.Join(",", properties) + "}";
+                case JsonValueKind.Array:
+                    var items = element.EnumerateArray().Select(CanonicalJson);
+                    return "[" + string.Join(",", items) + "]";
+                default:
+                    return element.GetRawText();
+            }
+        }
+
+        private static string ShortHash(string raw)
+        {
+            using var sha = SHA256.Create();
+            var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(raw ?? string.Empty));
+            var sb = new StringBuilder(8);
+            for (var i = 0; i < 4; i++)
+            {
+                sb.Append(bytes[i].ToString("x2", System.Globalization.CultureInfo.InvariantCulture));
+            }
+            return sb.ToString();
+        }
+
+        private static void ReplaceFlaggedScenarios(
+            List<EdogQaScenarioValidator.AcceptedScenario> accepted,
+            List<EdogQaLlmClient.RepairFeedbackItem> flaggedItems,
+            List<EdogQaScenarioValidator.AcceptedScenario> replacements)
+        {
+            if (accepted == null || accepted.Count == 0 || flaggedItems == null || flaggedItems.Count == 0)
+            {
+                return;
+            }
+
+            var flaggedIds = new HashSet<string>(
+                flaggedItems.Select(item => item?.ScenarioId).Where(id => !string.IsNullOrEmpty(id)),
+                StringComparer.Ordinal);
+            var flaggedSketchIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var existing in accepted)
+            {
+                var scenario = existing?.Scenario;
+                if (scenario == null || !flaggedIds.Contains(scenario.Id ?? string.Empty)) continue;
+                if (!string.IsNullOrEmpty(scenario.SketchId))
+                {
+                    flaggedSketchIds.Add(scenario.SketchId);
+                }
+            }
+
+            var replacementById = new Dictionary<string, EdogQaScenarioValidator.AcceptedScenario>(StringComparer.Ordinal);
+            var replacementBySketchId = new Dictionary<string, EdogQaScenarioValidator.AcceptedScenario>(StringComparer.Ordinal);
+            foreach (var replacement in replacements ?? new List<EdogQaScenarioValidator.AcceptedScenario>())
+            {
+                var scenario = replacement?.Scenario;
+                if (scenario == null) continue;
+                if (!string.IsNullOrEmpty(scenario.Id) && !replacementById.ContainsKey(scenario.Id))
+                {
+                    replacementById[scenario.Id] = replacement;
+                }
+                if (!string.IsNullOrEmpty(scenario.SketchId) && !replacementBySketchId.ContainsKey(scenario.SketchId))
+                {
+                    replacementBySketchId[scenario.SketchId] = replacement;
+                }
+            }
+
+            for (var i = 0; i < accepted.Count; i++)
+            {
+                var existing = accepted[i];
+                var scenario = existing?.Scenario;
+                if (scenario == null) continue;
+
+                var isFlagged = flaggedIds.Contains(scenario.Id ?? string.Empty)
+                    || (!string.IsNullOrEmpty(scenario.SketchId) && flaggedSketchIds.Contains(scenario.SketchId));
+                if (!isFlagged) continue;
+
+                if (!string.IsNullOrEmpty(scenario.SketchId)
+                    && replacementBySketchId.TryGetValue(scenario.SketchId, out var replacementBySketch))
+                {
+                    accepted[i] = replacementBySketch;
+                    continue;
+                }
+
+                if (!string.IsNullOrEmpty(scenario.Id)
+                    && replacementById.TryGetValue(scenario.Id, out var replacementByScenarioId))
+                {
+                    accepted[i] = replacementByScenarioId;
+                }
             }
         }
 

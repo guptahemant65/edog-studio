@@ -298,3 +298,38 @@ def test_schema_version_bumped():
     assert re.search(r"SchemaVersion\s*\{\s*get;\s*set;\s*\}\s*=\s*2\b", src), (
         "ScenarioMetadata.SchemaVersion must default to 2"
     )
+
+
+def test_pr_context_exposes_diff_files_for_lnt005() -> None:
+    """PrContext must carry the raw diff file list so LNT005 can validate
+    Architect grounding references against the actual unified diff headers,
+    not just invariant-derived filenames.
+    """
+    src = _read(ANALYZER)
+    assert "public List<string> DiffFiles { get; set; } = new();" in src, (
+        "PrContext must expose DiffFiles for grounding-file lint validation"
+    )
+
+
+def test_lnt005_known_files_include_diff_files() -> None:
+    """The grounding-file rule must union PrContext.DiffFiles into the
+    known-files set; otherwise Architect evidence against a file that only
+    appears in the unified diff still looks hallucinated.
+    """
+    src = _read(LINTER)
+    assert "ctx?.DiffFiles != null" in src, "LNT005 must read PrContext.DiffFiles"
+    assert "knownFiles.Add(f)" in src, "LNT005 must union DiffFiles into knownFiles"
+
+
+def test_lnt009_stimulus_key_includes_feature_flag_overrides() -> None:
+    """Duplicate-stimulus linting must key on the full Scenario so feature
+    flag overrides differentiate otherwise-identical endpoint calls.
+    """
+    src = _read(LINTER)
+    assert "private static string StimulusKey(Scenario scenario)" in src, (
+        "StimulusKey must accept Scenario so it can read FeatureFlagOverrides"
+    )
+    assert "var key = StimulusKey(s);" in src, "Duplicate-stimulus rule must pass the full scenario"
+    assert "scenario.FeatureFlagOverrides" in src, "StimulusKey must hash featureFlagOverrides"
+    assert "FlagName ?? string.Empty" in src, "StimulusKey must null-guard FlagName ordering"
+    assert 'flagSuffix = "|ff:"' in src, "StimulusKey must append a feature-flag hash suffix"
