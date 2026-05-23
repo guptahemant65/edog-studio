@@ -32,6 +32,23 @@ class TopBar {
     this._createDeployTooltip();
     this._bindTokenClick();
     this._startConfigPolling();
+    this._fetchUserIdentity();
+  }
+
+  /** Fetch OS identity from dev-server and populate the topbar chip. */
+  async _fetchUserIdentity() {
+    try {
+      var resp = await fetch('/api/identity');
+      if (!resp.ok) return;
+      var data = await resp.json();
+      var label = (data.osUser || '?') + '@' + (data.machine || '?');
+      var el = document.getElementById('user-identity-label');
+      if (el) el.textContent = label;
+      var chip = document.getElementById('user-identity-chip');
+      if (chip) chip.title = 'Logged in as ' + label;
+      // Store globally for session guard and other consumers
+      window.edogIdentity = data;
+    } catch (_e) { /* silent — identity is best-effort */ }
   }
 
   /**
