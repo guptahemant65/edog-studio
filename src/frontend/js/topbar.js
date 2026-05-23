@@ -566,6 +566,20 @@ class TopBar {
           '<span class="ti-jwt-sig-seg">' + this._escHtml(parts[2]) + '</span>' +
         '</div>' +
       '</div>';
+    } else if (tok.rawToken && tok.rawToken !== 'proxy-managed') {
+      html += '<div class="ti-section">' +
+        '<div class="ti-section-title">Raw Token</div>' +
+        '<div class="ti-jwt-raw" style="word-break:break-all">' + this._escHtml(tok.rawToken.substring(0, 200)) + (tok.rawToken.length > 200 ? '\u2026' : '') + '</div>' +
+        '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">Token could not be decoded as JWT</div>' +
+      '</div>';
+    } else if (!tok.decoded) {
+      html += '<div class="ti-section">' +
+        '<div class="ti-section-title">Token Details</div>' +
+        '<div style="color:var(--text-muted);font-size:12px;padding:12px 0">' +
+          (tok.type === 'mwc' ? 'MWC token is proxy-managed \u2014 raw JWT not available for decode. Claims below are from the runtime interceptor.' :
+           'Raw token not available for decode. Claims shown are from runtime capture.') +
+        '</div>' +
+      '</div>';
     }
 
     if (tok.decoded && tok.decoded.header) {
