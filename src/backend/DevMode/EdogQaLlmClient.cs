@@ -109,15 +109,15 @@ namespace Microsoft.LiveTable.Service.DevMode
         // ── Wire constants ─────────────────────────────────────────────
 
         /// <summary>Stable cache key for the Architect's system+schema prefix. Spec §3.4: the prefix is identical across every zone + every analysis for a given client version. F27 P11: bumped from v2 to v11 — invalidates the prefix cache on the gpt-5 deployment so old plans don't leak into new-schema decoding. Structural-fixes bump (service-to-route + FF override + matcher kind/literal redesign + topic-vocabulary injection): v13.</summary>
-        internal const string PromptCacheKeyArchitect = "edog-qa-architect-v13";
+        internal const string PromptCacheKeyArchitect = "edog-qa-architect-v14";
 
         /// <summary>Stable cache key for the Editor's system+schema prefix. Bumped to v14 alongside the structural-fixes drop (kind/literal matcher schema, featureFlagOverrides field, topic-vocabulary injection).</summary>
-        internal const string PromptCacheKeyEditor = "edog-qa-editor-v14";
+        internal const string PromptCacheKeyEditor = "edog-qa-editor-v15";
 
         /// <summary>Stable cache key for the Analyst's system+schema prefix. The Analyst is the
         /// first pass of the 2-step Analyst→Architect pipeline; its prompt is intentionally
         /// short and observation-only so the prefix caches cleanly across every zone.</summary>
-        internal const string PromptCacheKeyAnalyst = "edog-qa-analyst-v3";
+        internal const string PromptCacheKeyAnalyst = "edog-qa-analyst-v4";
 
         /// <summary>Architect budget. Reasoning tokens are charged against this. 192K is the
         /// T4-D-followup bump — 128K returned status=incomplete on PR-879735 (326KB diff
@@ -836,7 +836,11 @@ namespace Microsoft.LiveTable.Service.DevMode
                                 ["id"] = new Dictionary<string, object> { ["type"] = "string" },
                                 ["kind"] = new Dictionary<string, object> { ["type"] = "string" },
                                 ["description"] = new Dictionary<string, object> { ["type"] = "string" },
-                                ["source"] = new Dictionary<string, object> { ["type"] = "string" },
+                                ["source"] = new Dictionary<string, object>
+                                {
+                                    ["type"] = "string",
+                                    ["enum"] = new[] { "http", "token", "flag", "perf", "spark", "log", "telemetry", "retry", "cache", "fileop", "catalog", "dag", "flt-ops", "nexus", "di", "capacity" },
+                                },
                             },
                         },
                     },
@@ -1443,7 +1447,11 @@ namespace Microsoft.LiveTable.Service.DevMode
                                     ["type"] = "string",
                                     ["enum"] = new[] { "EventPresent", "EventAbsent", "EventCount", "EventOrder", "Timing", "FieldMatch" },
                                 },
-                                ["topic"] = new Dictionary<string, object> { ["type"] = "string" },
+                                ["topic"] = new Dictionary<string, object>
+                                {
+                                    ["type"] = "string",
+                                    ["enum"] = new[] { "http", "token", "flag", "perf", "spark", "log", "telemetry", "retry", "cache", "fileop", "catalog", "dag", "flt-ops", "nexus", "di", "capacity" },
+                                },
                                 ["matcherSpec"] = new Dictionary<string, object>
                                 {
                                     ["type"] = "string",
