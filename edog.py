@@ -78,6 +78,7 @@ DEVMODE_FILES = {
     "EdogPlaygroundHub": SERVICE_PATH / "DevMode/EdogPlaygroundHub.cs",
     "EdogApiProxy": SERVICE_PATH / "DevMode/EdogApiProxy.cs",
     "EdogSessionRegistry": SERVICE_PATH / "DevMode/EdogSessionRegistry.cs",
+    "EdogSessionController": SERVICE_PATH / "DevMode/EdogSessionController.cs",
     "EdogLogModels": SERVICE_PATH / "DevMode/EdogLogModels.cs",
     "EdogLogInterceptor": SERVICE_PATH / "DevMode/EdogLogInterceptor.cs",
     "EdogTelemetryInterceptor": SERVICE_PATH / "DevMode/EdogTelemetryInterceptor.cs",
