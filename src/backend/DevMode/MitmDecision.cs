@@ -25,6 +25,12 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <summary>The verdict: forward | modify | block | forge.</summary>
         public string Verdict { get; init; }
 
+        /// <summary>
+        /// Identifier of the parked intercept this decision resolves.
+        /// BE-003: explicit carrier — previously smuggled through SubmittedByConnectionId.
+        /// </summary>
+        public string InterceptId { get; init; }
+
         /// <summary>Request modifications. Populated when Verdict == "modify".</summary>
         public MitmModifications Modifications { get; init; }
 

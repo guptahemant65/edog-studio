@@ -96,6 +96,23 @@ namespace Microsoft.LiveTable.Service.DevMode
         private static readonly ConcurrentDictionary<string, HashSet<string>> _byOwner
             = new(StringComparer.Ordinal);
 
+        /// <summary>
+        /// BE-007: Owners whose intercepts have been cancelled. Set by
+        /// <see cref="CancelOwner"/> so that an <see cref="AwaitDecisionAsync"/>
+        /// call which races past CancelOwner's snapshot can detect it and
+        /// self-resolve instead of leaking a parked intercept.
+        /// </summary>
+        private static readonly ConcurrentDictionary<string, byte> _cancelledOwners
+            = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// BE-008: Active-intercept counter for the capacity guard. Reading
+        /// <c>_pending.Count</c> twice across threads can let N callers each
+        /// observe <c>Count == cap - 1</c> and overshoot. Increment/decrement
+        /// atomically alongside _pending mutations.
+        /// </summary>
+        private static int _activeCount;
+
         private static long _revision;
         private static volatile bool _interceptionEnabled = true;
 
@@ -239,6 +256,17 @@ namespace Microsoft.LiveTable.Service.DevMode
                     return Task.FromResult(MitmDecision.ForwardUnchanged("intercept-id-collision"));
                 }
 
+                // BE-008: Atomic capacity guard. Reading _pending.Count in
+                // ShouldPauseRequest is best-effort; the authoritative check
+                // happens here after TryAdd so concurrent callers can't overshoot.
+                if (Interlocked.Increment(ref _activeCount) > MaxConcurrentBreakpoints)
+                {
+                    Interlocked.Decrement(ref _activeCount);
+                    _pending.TryRemove(interceptId, out _);
+                    SafeDisposePending(pending);
+                    return Task.FromResult(MitmDecision.ForwardUnchanged("capacity"));
+                }
+
                 pending.LinkedReg = linkedCts.Token.Register(static state =>
                 {
                     var p = (PendingIntercept)state;
@@ -299,6 +327,30 @@ namespace Microsoft.LiveTable.Service.DevMode
                         lock (set) { set.Add(interceptId); }
                         return set;
                     });
+
+                // BE-007: Disconnect-race re-check. CancelOwner takes a snapshot
+                // of _byOwner and then iterates; a registration that lands between
+                // TryRemove and snapshot iteration would be orphaned. After
+                // publishing ourselves to _byOwner, re-check the cancelled-owners
+                // marker and self-resolve if our owner was cancelled.
+                if (!string.IsNullOrEmpty(pending.OwnerConnectionId)
+                    && _cancelledOwners.ContainsKey(pending.OwnerConnectionId))
+                {
+                    var decision = MitmDecision.ForwardUnchanged("disconnect");
+                    if (TryResolve(interceptId, decision))
+                    {
+                        SafePublish(new
+                        {
+                            type = "breakpointCancelled",
+                            interceptId,
+                            ruleId = matchedRule.Id,
+                            phase = snap.Phase.ToString().ToLowerInvariant(),
+                            ownerConnectionId = pending.OwnerConnectionId,
+                            reason = "disconnect",
+                        });
+                    }
+                    return tcs.Task;
+                }
 
                 Interlocked.Increment(ref _revision);
 
@@ -402,7 +454,20 @@ namespace Microsoft.LiveTable.Service.DevMode
             if (string.IsNullOrEmpty(connectionId)) return 0;
             try
             {
-                if (!_byOwner.TryRemove(connectionId, out var set) || set == null) return 0;
+                // BE-007: Mark owner as cancelled BEFORE snapshotting _byOwner.
+                // A concurrent AwaitDecisionAsync that publishes to _byOwner
+                // after our TryRemove will observe this marker on its post-add
+                // re-check and self-resolve.
+                _cancelledOwners[connectionId] = 1;
+
+                if (!_byOwner.TryRemove(connectionId, out var set) || set == null)
+                {
+                    // No parked intercepts; the marker only needs to live long
+                    // enough for an in-flight AwaitDecisionAsync to observe it.
+                    // Clear it on the next disconnect cycle for this id.
+                    _cancelledOwners.TryRemove(connectionId, out _);
+                    return 0;
+                }
 
                 List<string> ids;
                 lock (set) { ids = new List<string>(set); }
@@ -621,6 +686,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                 }
                 _pending.Clear();
                 _byOwner.Clear();
+                _cancelledOwners.Clear();
+                Interlocked.Exchange(ref _activeCount, 0);
                 _interceptionEnabled = true;
                 Interlocked.Exchange(ref _revision, 0);
             }
@@ -688,6 +755,10 @@ namespace Microsoft.LiveTable.Service.DevMode
         private static bool TryResolve(string interceptId, MitmDecision decision)
         {
             if (!_pending.TryRemove(interceptId, out var p) || p == null) return false;
+
+            // BE-008: Pair every successful TryRemove with a decrement so the
+            // active-count stays consistent with _pending under contention.
+            Interlocked.Decrement(ref _activeCount);
 
             // Detach from owner index first so a concurrent CancelOwner
             // doesn't double-resolve.

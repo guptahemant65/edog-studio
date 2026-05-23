@@ -3276,14 +3276,14 @@ namespace Microsoft.LiveTable.Service.DevMode
                     });
                 }
 
-                // InterceptId travels alongside the decision. v1 wire shape has
-                // it on the decision payload; we extract via reflection-friendly
-                // property to avoid extending MitmDecision in this edit.
-                string interceptId = decision.SubmittedByConnectionId; // unused field reused? no — use note.
-                // Architecture §1.3: interceptId is implicit in the resume call.
-                // For this transitional shape, the frontend passes interceptId in NoteForAudit prefixed with "id:"
-                // We accept either pattern: if NoteForAudit starts with "id:<X>;" we extract X.
-                if (!string.IsNullOrEmpty(decision.NoteForAudit)
+                // BE-003: InterceptId is now an explicit field on MitmDecision.
+                // The SubmittedByConnectionId field is reserved for server-side
+                // attribution and is always stamped with the caller's connection id.
+                // For backward compatibility we still accept a legacy "id:<X>;"
+                // prefix in NoteForAudit when InterceptId is absent.
+                string interceptId = decision.InterceptId;
+                if (string.IsNullOrEmpty(interceptId)
+                    && !string.IsNullOrEmpty(decision.NoteForAudit)
                     && decision.NoteForAudit.StartsWith("id:", StringComparison.Ordinal))
                 {
                     int semi = decision.NoteForAudit.IndexOf(';');
@@ -3291,6 +3291,9 @@ namespace Microsoft.LiveTable.Service.DevMode
                         ? decision.NoteForAudit.Substring(3, semi - 3)
                         : decision.NoteForAudit.Substring(3);
                 }
+
+                // BE-003: Stamp caller's connection id server-side as intended.
+                decision.SubmittedByConnectionId = Context.ConnectionId;
 
                 if (string.IsNullOrEmpty(interceptId))
                 {

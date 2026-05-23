@@ -51,8 +51,11 @@ class HttpPipelineTab {
     this._mitmRowMenu = null;                           // HttpRowMenu instance
     this._mitmModalEl = null;                           // detached modal node (if any)
     this._editSummary = { method: false, url: false, headers: false, body: false };
-    this._editBuffer = null;                            // working copy of paused snapshot
+    this._editBuffer = null;                            // working copy of paused snapshot (current view)
+    this._editBuffers = new Map();                      // FE-005: interceptId → buffer (per-row)
     this._mitmSubscribed = false;
+    this._mitmReconnectBound = false;                   // FE-003: onreconnected hook installed?
+    this._pendingResume = new Set();                    // FE-009: interceptIds with in-flight resume RPC
 
     // Bound handler for SignalR
     this._onEvent = this._onEvent.bind(this);
@@ -686,6 +689,8 @@ class HttpPipelineTab {
     // Global keyboard shortcuts — registered in activate(), removed in deactivate()
     this._globalKeyHandler = function(e) {
       if (!self._active) return;
+      // FE-006: ignore auto-repeat — held key should not fire repeatedly
+      if (e.repeat) return;
       // Only handle if we're in the runtime view and this tab is active
       var rtContent = self._container.closest('.rt-tab-content');
       if (rtContent && !rtContent.classList.contains('active')) return;
@@ -725,9 +730,16 @@ class HttpPipelineTab {
       } else if ((e.key === 'd' || e.key === 'D') && pausedId) {
         e.preventDefault();
         self._onBlock(pausedId);
-      } else if ((e.key === 'p' || e.key === 'P')) {
-        e.preventDefault();
-        self._onSendToPlayground(sel);
+      } else if (e.key === 'P' && e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        // FE-006: require Shift+P, and only when a paused-row's MITM detail
+        // is in focus (footer present) OR explicit modifier — prevents firing
+        // from random focused buttons or on any selected row.
+        var inMitmFooter = e.target && e.target.closest && e.target.closest('.http-mitm-footer');
+        var detailOpen = self._els.detail && !self._els.detail.classList.contains('closed');
+        if (pausedId && (inMitmFooter || detailOpen)) {
+          e.preventDefault();
+          self._onSendToPlayground(sel);
+        }
       }
     };
 
@@ -1460,12 +1472,51 @@ class HttpPipelineTab {
 
   /** Subscribe to the `mitm` SignalR topic. Idempotent. */
   _subscribeMitmTopic() {
-    if (!this._signalr || this._mitmSubscribed) return;
-    this._signalr.on('mitm', this._onMitmEvent);
-    this._signalr.subscribeTopic('mitm');
-    this._mitmSubscribed = true;
-    // Best-effort fetch of capability + existing rules. Silently ignore failures.
-    this._invokeMitm('MitmGetCapabilities').then(function() {}).catch(function() {});
+    if (!this._signalr) return;
+    if (!this._mitmSubscribed) {
+      this._signalr.on('mitm', this._onMitmEvent);
+      this._signalr.subscribeTopic('mitm');
+      this._mitmSubscribed = true;
+    }
+    // FE-003: re-fetch capabilities + rules on every (re)connect so badges
+    // and paused-row state don't go stale after a transport drop.
+    this._bindMitmReconnect();
+    this._resyncMitmState();
+  }
+
+  /** FE-003: install onreconnected hook exactly once. */
+  _bindMitmReconnect() {
+    if (this._mitmReconnectBound) return;
+    var conn = this._signalr && this._signalr.connection;
+    if (!conn || typeof conn.onreconnected !== 'function') return;
+    var self = this;
+    conn.onreconnected(function() {
+      // Clear any stale paused state — server-side breakpoints won't be
+      // replayed, and phantom paused rows are worse than missing ones.
+      self._mitmPaused.clear();
+      self._editBuffers.clear();
+      self._editBuffer = null;
+      self._resetEditSummary();
+      for (var i = 0; i < self._events.length; i++) {
+        if (self._events[i]._paused) {
+          self._events[i]._paused = false;
+        }
+      }
+      self._resyncMitmState();
+      self._scheduleRender();
+    });
+    this._mitmReconnectBound = true;
+  }
+
+  /** FE-003: Re-fetch MITM capabilities + rules. Safe to call repeatedly. */
+  _resyncMitmState() {
+    var self = this;
+    this._invokeMitm('MitmGetCapabilities').then(function(res) {
+      if (res && typeof res.enabled === 'boolean') {
+        self._mitmEnabled = !!res.enabled;
+        self._renderMitmToggle();
+      }
+    }).catch(function() {});
     this._refreshMitmRules();
   }
 
@@ -1525,7 +1576,9 @@ class HttpPipelineTab {
         break;
       case 'cleared':
         this._mitmPaused.clear();
+        this._editBuffers.clear();
         this._editBuffer = null;
+        this._resetEditSummary();
         this._scheduleRender();
         if (window.edogToast) window.edogToast('All breakpoints cleared', 'success');
         break;
@@ -1592,10 +1645,14 @@ class HttpPipelineTab {
         break;
       }
     }
+    if (this._editBuffers.has(d.interceptId)) {
+      this._editBuffers.delete(d.interceptId);
+    }
     if (this._editBuffer && this._editBuffer.interceptId === d.interceptId) {
       this._editBuffer = null;
       this._resetEditSummary();
     }
+    this._pendingResume.delete(d.interceptId);
     this._scheduleRender();
     if (!this._els.detail.classList.contains('closed')) {
       this._renderDetail();
@@ -1648,7 +1705,10 @@ class HttpPipelineTab {
     var self = this;
     this._invokeMitm('MitmClearAll').then(function() {
       self._mitmPaused.clear();
+      self._editBuffers.clear();
       self._editBuffer = null;
+      self._pendingResume.clear();
+      self._resetEditSummary();
       self._scheduleRender();
       if (window.edogToast) window.edogToast('Kill switch — all intercepts resumed', 'warning');
     }).catch(function() {});
@@ -1682,8 +1742,11 @@ class HttpPipelineTab {
   /** Render the Intercept tab for a paused snapshot. */
   _renderInterceptTab(snap) {
     var req = snap.request || {};
-    if (!this._editBuffer || this._editBuffer.interceptId !== snap.interceptId) {
-      this._editBuffer = {
+    // FE-005: maintain a per-interceptId buffer so editing row B doesn't
+    // clobber unsaved edits on row A.
+    var buf = this._editBuffers.get(snap.interceptId);
+    if (!buf) {
+      buf = {
         interceptId: snap.interceptId,
         phase: snap.phase,
         method: req.method || 'GET',
@@ -1696,10 +1759,14 @@ class HttpPipelineTab {
           reasonPhrase: 'OK',
           headers: { 'Content-Type': 'application/json' },
           body: '{\n  "edog": "forged response"\n}'
-        }
+        },
+        summary: { method: false, url: false, headers: false, body: false }
       };
-      this._resetEditSummary();
+      this._editBuffers.set(snap.interceptId, buf);
     }
+    this._editBuffer = buf;
+    this._editSummary = buf.summary;
+    this._renderEditSummary();
 
     var methodOptions = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']
       .map(function(m) {
@@ -1968,7 +2035,38 @@ class HttpPipelineTab {
 
   // ── Decision RPCs ─────────────────────────────────────────────────
 
+  /** FE-009: Guard against double-click firing the same resume RPC twice. */
+  _claimResume(interceptId) {
+    if (interceptId == null) return false;
+    if (this._pendingResume.has(interceptId)) return false;
+    this._pendingResume.add(interceptId);
+    this._setResumeButtonsDisabled(interceptId, true);
+    return true;
+  }
+
+  _releaseResume(interceptId) {
+    if (interceptId == null) return;
+    this._pendingResume.delete(interceptId);
+    this._setResumeButtonsDisabled(interceptId, false);
+  }
+
+  /** Disable/enable the per-row action buttons in the footer while RPC pends. */
+  _setResumeButtonsDisabled(interceptId, disabled) {
+    if (!this._els.detail) return;
+    // Buttons live inside the detail panel's MITM footer. They are not tagged
+    // with the interceptId, but the footer only ever shows the currently
+    // selected paused row — gate on selection match for safety.
+    var sel = this._getSelectedRow();
+    if (!sel || sel._interceptId !== interceptId) return;
+    var btns = this._els.detail.querySelectorAll('.http-mitm-footer [data-mitm-act]');
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].disabled = !!disabled;
+      btns[i].classList.toggle('is-pending', !!disabled);
+    }
+  }
+
   _onForward(interceptId) {
+    if (!this._claimResume(interceptId)) return;
     var self = this;
     this._invokeMitm('MitmResumeBreakpoint', {
       interceptId: interceptId,
@@ -1977,24 +2075,30 @@ class HttpPipelineTab {
       self._flashRow(interceptId, 'forward');
       if (res && res.success === false && window.edogToast) {
         window.edogToast(res.message || 'Resume failed', 'error');
+        self._releaseResume(interceptId);
       }
+      // On success the breakpointResumed event will clear _pendingResume.
+    }, function() {
+      self._releaseResume(interceptId);
     });
   }
 
   _onModifyForward(interceptId) {
+    if (!this._claimResume(interceptId)) return;
     var self = this;
-    var buf = this._editBuffer || {};
+    var buf = this._editBuffers.get(interceptId) || this._editBuffer || {};
     var snap = this._mitmPaused.get(interceptId);
     var orig = snap && snap.request ? snap.request : {};
+    var summary = buf.summary || this._editSummary || {};
 
     var modifications = {};
-    if (this._editSummary.method && buf.method && buf.method !== orig.method) {
+    if (summary.method && buf.method && buf.method !== orig.method) {
       modifications.method = buf.method;
     }
-    if (this._editSummary.url && buf.url && buf.url !== orig.url) {
+    if (summary.url && buf.url && buf.url !== orig.url) {
       modifications.url = buf.url;
     }
-    if (this._editSummary.headers) {
+    if (summary.headers) {
       modifications.setHeaders = {};
       modifications.removeHeaders = [];
       var ok = Object.keys(orig.headers || {});
@@ -2010,7 +2114,7 @@ class HttpPipelineTab {
         }
       }
     }
-    if (this._editSummary.body && (buf.body || '') !== (orig.body || '')) {
+    if (summary.body && (buf.body || '') !== (orig.body || '')) {
       modifications.body = buf.body;
     }
 
@@ -2022,11 +2126,15 @@ class HttpPipelineTab {
       self._flashRow(interceptId, 'forward');
       if (res && res.success === false && window.edogToast) {
         window.edogToast(res.message || 'Modify failed', 'error');
+        self._releaseResume(interceptId);
       }
+    }, function() {
+      self._releaseResume(interceptId);
     });
   }
 
   _onBlock(interceptId) {
+    if (!this._claimResume(interceptId)) return;
     var self = this;
     this._invokeMitm('MitmResumeBreakpoint', {
       interceptId: interceptId,
@@ -2041,13 +2149,18 @@ class HttpPipelineTab {
       self._flashRow(interceptId, 'drop');
       if (res && res.success === false && window.edogToast) {
         window.edogToast(res.message || 'Block failed', 'error');
+        self._releaseResume(interceptId);
       }
+    }, function() {
+      self._releaseResume(interceptId);
     });
   }
 
   _onForge(interceptId) {
+    if (!this._claimResume(interceptId)) return;
     var self = this;
-    var f = (this._editBuffer && this._editBuffer.forge) || {};
+    var buf = this._editBuffers.get(interceptId) || this._editBuffer || {};
+    var f = buf.forge || {};
     this._invokeMitm('MitmResumeBreakpoint', {
       interceptId: interceptId,
       verdict: 'forge',
@@ -2061,7 +2174,10 @@ class HttpPipelineTab {
       self._flashRow(interceptId, 'forward');
       if (res && res.success === false && window.edogToast) {
         window.edogToast(res.message || 'Forge failed', 'error');
+        self._releaseResume(interceptId);
       }
+    }, function() {
+      self._releaseResume(interceptId);
     });
   }
 
@@ -2100,43 +2216,58 @@ class HttpPipelineTab {
   _onSendToPlayground(rowData) {
     if (!rowData) return;
     var self = this;
-    var truncated = rowData.responseBodyPreview &&
-      rowData.responseBodyPreview.length >= 4096;
+    // FE-007: Playground needs the REQUEST body, not the response. Treat the
+    // request as truncated if either the explicit flag is set or the preview
+    // hit the 4 KB cap.
+    var reqBody = rowData.requestBodyPreview || '';
+    var truncated = !!rowData.requestBodyTruncated || reqBody.length >= 4096;
+
+    // FE-008: Authorization is captured as "[redacted]" — sending it to
+    // Playground produces guaranteed 401s. Strip it and let Playground's
+    // own auth handling inject a live token.
+    var buildHeaders = function(src) {
+      var out = [];
+      var keys = Object.keys(src || {});
+      for (var i = 0; i < keys.length; i++) {
+        if (keys[i].toLowerCase() === 'authorization') continue;
+        out.push({ name: keys[i], value: String(src[keys[i]]) });
+      }
+      return out;
+    };
 
     var dispatch = function(body) {
-      var headers = [];
-      var src = rowData.requestHeaders || {};
-      var keys = Object.keys(src);
-      for (var i = 0; i < keys.length; i++) {
-        headers.push({ name: keys[i], value: String(src[keys[i]]) });
-      }
       var transfer = {
         source: rowData._paused ? 'mitm-paused' : 'http-tab',
         sourceRowId: rowData._seq || rowData._id,
         interceptId: rowData._interceptId || null,
         method: rowData.method,
         url: rowData.url,
-        headers: headers,
+        headers: buildHeaders(rowData.requestHeaders),
         body: body != null ? body : (rowData.requestBodyPreview || null),
         tokenType: self._detectTokenType(rowData.url)
       };
       self._activatePlaygroundWith(transfer);
     };
 
-    // If response body might be truncated, ask server for full payload.
+    // FE-007: If request body might be truncated, ask server for full payload.
     if (truncated && this._signalr) {
       this._invokeMitm('MitmSendToPlayground', {
         sourceRowId: rowData._seq || rowData._id,
         interceptId: rowData._interceptId || null
       }).then(function(res) {
         if (res && res.success && res.payload) {
-          // Server-built transfer — but Playground expects `headers: [{key,value}]`
+          // Server-built transfer — strip Authorization here too (FE-008).
           var p = res.payload;
-          var hdrs = (p.headers || []).map(function(h) {
-            return { name: h.name || h.key, value: h.value };
-          });
+          var hdrs = (p.headers || [])
+            .filter(function(h) {
+              var k = (h.name || h.key || '').toLowerCase();
+              return k !== 'authorization';
+            })
+            .map(function(h) {
+              return { name: h.name || h.key, value: h.value };
+            });
           self._activatePlaygroundWith({
-            source: p.source || transfer.source,
+            source: p.source || (rowData._paused ? 'mitm-paused' : 'http-tab'),
             sourceRowId: p.sourceRowId,
             interceptId: p.interceptId,
             method: p.method,
