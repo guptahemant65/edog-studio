@@ -1631,6 +1631,23 @@ namespace Microsoft.LiveTable.Service.DevMode
                         + $"snapshotId={snapshot?.SnapshotId ?? "null"}, "
                         + $"slotPurposes={slotPurposesText?.Length ?? 0} chars, "
                         + $"catalogRef={catalogRefJson?.Length ?? 0} chars");
+
+                    // Surface catalog status to the browser via degradation flags
+                    // so the developer can see what slots were discovered.
+                    if (snapshot?.ProviderStatus != null)
+                    {
+                        var statusParts = snapshot.ProviderStatus
+                            .Select(kvp => $"{kvp.Key}={kvp.Value}")
+                            .ToList();
+                        var slotsByKind = (snapshot.Slots ?? new List<QaContractSlot>())
+                            .GroupBy(s => s.Kind)
+                            .Select(g => $"{g.Key}:{g.Count()}")
+                            .ToList();
+                        PublishWarning(
+                            $"CATALOG_STATUS: providers=[{string.Join(", ", statusParts)}], "
+                            + $"slots=[{string.Join(", ", slotsByKind)}], "
+                            + $"total={snapshot.Slots?.Count ?? 0}");
+                    }
                 }
                 catch (Exception ex)
                 {
