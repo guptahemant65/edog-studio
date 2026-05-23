@@ -208,13 +208,26 @@ class EdogLogViewer {
     // The Phase 3 topic stream (SubscribeToTopic) delivers:
     //   Phase 1: Snapshot (ring buffer history)
     //   Phase 2: Live events as they arrive
-    // This replaces BOTH the legacy SendAsync("LogEntry") broadcast AND
-    // the REST /api/logs fetch. One path. No dedup needed.
+    // On reconnect the snapshot replays events already seen. Track the
+    // highest sequenceId per topic so we skip duplicates.
+    this._topicHighWater = {};  // topic → highest sequenceId seen
     this._onStreamLog = (envelope) => {
+      var seq = envelope && envelope.sequenceId;
+      if (seq != null) {
+        var hw = this._topicHighWater['log'] || 0;
+        if (seq <= hw) return;  // already seen — snapshot replay
+        this._topicHighWater['log'] = seq;
+      }
       const data = envelope && envelope.data ? envelope.data : envelope;
       if (data) this.handleWebSocketMessage('log', data);
     };
     this._onStreamTelemetry = (envelope) => {
+      var seq = envelope && envelope.sequenceId;
+      if (seq != null) {
+        var hw = this._topicHighWater['telemetry'] || 0;
+        if (seq <= hw) return;
+        this._topicHighWater['telemetry'] = seq;
+      }
       const data = envelope && envelope.data ? envelope.data : envelope;
       if (data) this.handleWebSocketMessage('telemetry', data);
     };
