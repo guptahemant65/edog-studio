@@ -3041,42 +3041,20 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             failure never blocks a deploy.
         """
         try:
-            cfg = {}
-            with contextlib.suppress(Exception):
-                if CONFIG_PATH.exists():
-                    cfg = json.loads(CONFIG_PATH.read_text())
-
-            ws_id = cfg.get("workspace_id", "")
-            art_id = cfg.get("artifact_id", "")
-            cap_id = cfg.get("capacity_id", "")
-            if not ws_id or not art_id or not cap_id:
-                self._json_response(200, {"available": True, "sessions": [], "reason": "no_config"})
+            # Probe the EDOG log server running inside the FLT process.
+            # The sessions endpoint is served on the log server port (localhost),
+            # NOT on the capacity host workload URL path.
+            flt_port = _studio_state.get("fltPort")
+            if not flt_port:
+                self._json_response(200, {"available": True, "sessions": [], "reason": "no_flt_port"})
                 return
 
-            bearer, _ = _read_cache(BEARER_CACHE)
-            if not bearer:
-                self._json_response(200, {"available": True, "sessions": [], "reason": "no_bearer"})
-                return
-
-            try:
-                mwc_token, host = _get_mwc_token(bearer, ws_id, art_id, cap_id, workload_type="LiveTable")
-            except Exception as e:
-                sys.stderr.write(f"[EDOG] session-probe mwc error: {e}\n")
-                self._json_response(200, {"available": True, "sessions": [], "reason": "mwc_failed"})
-                return
-
-            target_url = (
-                f"{host}/webapi/capacities/{cap_id}/workloads/LiveTable"
-                f"/LiveTableService/automatic/v1/workspaces/{ws_id}/lakehouses/{art_id}"
-                f"/api/edog/sessions"
-            )
+            target_url = f"http://localhost:{flt_port}/api/edog/sessions"
             req = urllib.request.Request(target_url, method="GET")
-            req.add_header("Authorization", f"MwcToken {mwc_token}")
             req.add_header("Accept", "application/json")
 
-            ctx = ssl.create_default_context()
             try:
-                with urllib.request.urlopen(req, timeout=3.0, context=ctx) as resp:
+                with urllib.request.urlopen(req, timeout=3.0) as resp:
                     body = resp.read(65536)
                     try:
                         payload = json.loads(body.decode("utf-8", errors="replace"))
