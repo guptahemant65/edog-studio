@@ -879,7 +879,7 @@ class FeatureFlagsMatrix {
   _onFlagEvent(envelope) {
     const data = envelope && envelope.data;
     if (!data) return;
-    const wireKey = data.featureName || data.wireKey;
+    const wireKey = data.featureName || data.wireKey || data.flagName;
     if (!wireKey) return;
     const now = Date.now();
     const obs = this._observations.get(wireKey) || { lastEvalAt: 0, lastResult: null };
