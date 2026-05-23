@@ -259,15 +259,13 @@ namespace Microsoft.LiveTable.Service.DevMode
             if (reasons.Count > 0) return null;
 
             // Expectations — each carries its own MatcherSpec.
-            // P10 typed contract: when the scenario has typed matchers[],
-            // the Editor emits descriptive text (not JSON) in the legacy
-            // expectations[*].matcherSpec field. Skip the JSON parse in
-            // that case — the typed matchers path below handles matching.
-            // P10 kill switch (P2-1): when EDOG_QA_CONTRACT_ENABLED=off, ignore
-            // the typed matchers array entirely so we fall back to the legacy
-            // matcherSpec parse path. Same upstream LLM output, pre-P10 shape.
-            var contractEnabled = EdogQaFeatureFlags.QaContractEnabled;
-            var hasTypedMatchers = contractEnabled && src.Matchers != null && src.Matchers.Count > 0;
+            // When the scenario has typed matchers[], the Editor emits
+            // descriptive text (not JSON) in the legacy expectations[*].matcherSpec
+            // field. Skip the JSON parse in that case — the typed matchers path
+            // below handles matching. When typed matchers are absent (transition
+            // period), parse matcherSpec as the legacy {exact, contains, regex,
+            // range, exists} JSON object.
+            var hasTypedMatchers = src.Matchers != null && src.Matchers.Count > 0;
             var expectations = new List<Expectation>();
             for (var i = 0; i < src.Expectations.Count; i++)
             {
@@ -282,9 +280,9 @@ namespace Microsoft.LiveTable.Service.DevMode
 
                 if (hasTypedMatchers)
                 {
-                    // P10: skip legacy matcherSpec parsing. Build a legacy
-                    // matcher from the typed matchers array by topic if
-                    // possible, so the assertion engine can evaluate them.
+                    // Skip matcherSpec parsing. Build an internal LegacyMatcher
+                    // from the typed matchers array by topic so the assertion
+                    // engine can evaluate them.
                     var legacyMatcher = BuildLegacyMatcherFromTyped(src.Matchers, expSrc.Topic);
                     expectations.Add(new Expectation
                     {
@@ -318,12 +316,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 });
             }
 
-            // P10 kill switch (P2-1): emit empty Matchers list when the
-            // contract flag is off so downstream stations stay on the legacy
-            // expectation-only path.
-            var typedMatchers = contractEnabled
-                ? ProjectTypedMatchers(src.Matchers, reasons)
-                : new List<Matcher>();
+            var typedMatchers = ProjectTypedMatchers(src.Matchers, reasons);
 
             if (reasons.Count > 0) return null;
 
@@ -667,9 +660,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         private static object ExtractTypedMatcherValue(JsonElement value)
         {
             if (value.ValueKind != JsonValueKind.Object) return null;
-            // Structural-fix #3: prefer the new `literal` field, fall back to
-            // the legacy `value`. Both encode the concrete payload; only the
-            // discriminator name differs.
+            // New schema only: `literal` carries the concrete payload.
             if (value.TryGetProperty("literal", out var lit))
             {
                 return lit.ValueKind switch
@@ -679,17 +670,6 @@ namespace Microsoft.LiveTable.Service.DevMode
                     JsonValueKind.True => true,
                     JsonValueKind.False => false,
                     _ => lit.GetRawText(),
-                };
-            }
-            if (value.TryGetProperty("value", out var v))
-            {
-                return v.ValueKind switch
-                {
-                    JsonValueKind.String => v.GetString(),
-                    JsonValueKind.Number => v.TryGetInt64(out var l) ? (object)l : v.GetDouble(),
-                    JsonValueKind.True => true,
-                    JsonValueKind.False => false,
-                    _ => v.GetRawText(),
                 };
             }
             if (value.TryGetProperty("expected", out var exp))
@@ -856,26 +836,29 @@ namespace Microsoft.LiveTable.Service.DevMode
                 return null;
             }
 
-            // Structural-fix #3: NormalizeMatcherValue resolves both the new
-            // {kind, literal} shape and the legacy {type, value} shape down
-            // to a single discriminator string we use to populate the
-            // internal MatcherValue.Type slot. The projector continues to
-            // accept both during the rollover so a transient mixed-shape
-            // payload never quarantines an otherwise-valid scenario.
-            var type = NormalizeMatcherValueDiscriminator(root);
+            // Single-shape matcher value: requires a `kind` discriminator.
+            // The legacy {type, value} payload is no longer accepted — the
+            // projector emits MATCHER_SPEC_MALFORMED when it sees one.
+            var kind = ReadMatcherValueKind(root);
+            if (string.IsNullOrEmpty(kind))
+            {
+                reasons.Add(MakeReason(CodeMatcherSpecMalformed, $"matchers[{index}].value.kind", null,
+                    "Typed matcher value payload must declare a 'kind' discriminator."));
+                return null;
+            }
 
             switch (assertion)
             {
                 case MatcherAssertion.Equals:
                 case MatcherAssertion.NotEquals:
-                    if (!TryGetMatcherScalarPayload(root, out var scalarValue))
+                    if (!root.TryGetProperty("literal", out var scalarValue))
                     {
                         reasons.Add(MakeReason(CodeMatcherSpecEmpty, $"matchers[{index}].value.literal", null,
-                            "Scalar matcher values require a 'literal' (new shape) or 'value' (legacy) field."));
+                            "Scalar matcher values require a 'literal' field."));
                         return null;
                     }
 
-                    return new ScalarMatcherValue { Type = type, Value = ExtractValue(scalarValue) };
+                    return new ScalarMatcherValue { Type = kind, Value = ExtractValue(scalarValue) };
 
                 case MatcherAssertion.Exists:
                     // P10 fix (P1-6): the spec says Exists is value-agnostic —
@@ -884,7 +867,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     // field is missing rather than quarantining the scenario.
                     if (!root.TryGetProperty("expected", out var expected))
                     {
-                        return new BooleanMatcherValue { Type = type, Expected = true };
+                        return new BooleanMatcherValue { Type = kind, Expected = true };
                     }
                     if (expected.ValueKind != JsonValueKind.True && expected.ValueKind != JsonValueKind.False)
                     {
@@ -893,12 +876,12 @@ namespace Microsoft.LiveTable.Service.DevMode
                         return null;
                     }
 
-                    return new BooleanMatcherValue { Type = type, Expected = expected.GetBoolean() };
+                    return new BooleanMatcherValue { Type = kind, Expected = expected.GetBoolean() };
 
                 case MatcherAssertion.InRange:
                     return new RangeMatcherValue
                     {
-                        Type = type,
+                        Type = kind,
                         Min = root.TryGetProperty("min", out var min) && min.ValueKind == JsonValueKind.Number ? min.GetDouble() : null,
                         Max = root.TryGetProperty("max", out var max) && max.ValueKind == JsonValueKind.Number ? max.GetDouble() : null,
                         MinInclusive = !root.TryGetProperty("minInclusive", out var minInc) || minInc.ValueKind != JsonValueKind.False,
@@ -916,12 +899,12 @@ namespace Microsoft.LiveTable.Service.DevMode
                         }
                     }
 
-                    return new ArrayMatcherValue { Type = type, Items = items };
+                    return new ArrayMatcherValue { Type = kind, Items = items };
 
                 case MatcherAssertion.Length:
                     return new LengthMatcherValue
                     {
-                        Type = type,
+                        Type = kind,
                         Min = root.TryGetProperty("min", out var lenMin) && lenMin.ValueKind == JsonValueKind.Number ? lenMin.GetInt32() : null,
                         Max = root.TryGetProperty("max", out var lenMax) && lenMax.ValueKind == JsonValueKind.Number ? lenMax.GetInt32() : null,
                     };
@@ -932,34 +915,18 @@ namespace Microsoft.LiveTable.Service.DevMode
         }
 
         /// <summary>
-        /// Structural-fix #3: dual-shape discriminator extraction. New typed
-        /// values carry a <c>kind</c> field (e.g. <c>"string_literal"</c>);
-        /// legacy values carry a <c>type</c> field (e.g. <c>"string"</c>).
-        /// We project whichever is present onto the internal
-        /// <see cref="MatcherValue.Type"/> slot so downstream code (assertion
-        /// engine, serializer, fixtures) stays oblivious to the schema flip.
+        /// Reads the <c>kind</c> discriminator (e.g. <c>"string_literal"</c>)
+        /// from a typed matcher value payload. Returns null when the field is
+        /// absent — the projector rejects such payloads outright.
         /// </summary>
-        private static string NormalizeMatcherValueDiscriminator(JsonElement root)
+        private static string ReadMatcherValueKind(JsonElement root)
         {
             if (root.ValueKind != JsonValueKind.Object) return null;
             if (root.TryGetProperty("kind", out var kindElement) && kindElement.ValueKind == JsonValueKind.String)
             {
                 return kindElement.GetString();
             }
-            if (root.TryGetProperty("type", out var typeElement) && typeElement.ValueKind == JsonValueKind.String)
-            {
-                return typeElement.GetString();
-            }
             return null;
-        }
-
-        private static bool TryGetMatcherScalarPayload(JsonElement root, out JsonElement payload)
-        {
-            // New shape uses `literal`; legacy used `value`. Either is acceptable.
-            if (root.TryGetProperty("literal", out payload)) return true;
-            if (root.TryGetProperty("value", out payload)) return true;
-            payload = default;
-            return false;
         }
 
         private static List<Matcher> CloneMatchers(IReadOnlyList<Matcher> source)

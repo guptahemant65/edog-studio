@@ -483,20 +483,17 @@ namespace Microsoft.LiveTable.Service.DevMode
             }
 
             // ── F27 P11: batch-scoped coverage gate ─────────────────────
-            // When the feature flag is enabled and the Architect emitted a
-            // testingGuidance block, surface coverage gaps (Added codePaths
-            // and errorModes not addressed by any accepted scenario) as
-            // BatchInformationalReasons. These are advisory in Phase 1; the
-            // orchestrator surfaces them via OrchestratorEvent { Kind=ZoneValidated }.
+            // When the Architect emitted a testingGuidance block, surface
+            // coverage gaps (Added codePaths and errorModes not addressed by
+            // any accepted scenario) as BatchInformationalReasons. These are
+            // advisory in Phase 1; the orchestrator surfaces them via
+            // OrchestratorEvent { Kind=ZoneValidated }.
             //
             // GeneratedScenario doesn't yet carry the sketch's
             // addressesCodePathIds / addressesErrorModeIds (the orchestrator
             // copies them onto the projected Scenario after Validate). So we
             // resolve via SketchId → matching plan.ScenarioSketches entry.
-            // (Older builds joined by OriginalIndex, but the Editor may
-            // drop or reorder scenarios so the index isn't trustworthy.)
-            if (EdogQaFeatureFlags.P11ElicitationEnabled
-                && testingGuidance != null
+            if (testingGuidance != null
                 && plan.PlanOutcome == EdogQaLlmClient.PlanOutcomeTestable
                 && result.Accepted.Count > 0)
             {
@@ -759,18 +756,13 @@ namespace Microsoft.LiveTable.Service.DevMode
             }
 
             var matcherTopicHashes = scenario.CatalogHashes?.MatcherTopicHashes;
-            // P10 kill switch (P2-1): only enforce the catalog-grounding gate
-            // when the contract flag is enabled. When off, typed matchers run
-            // ungated against the legacy code path.
-            var contractEnabled = EdogQaFeatureFlags.QaContractEnabled;
             // P10 fix (P0-1): only enforce the catalog-grounding gate when the
             // scenario claims grounding (CatalogSnapshotId set). When the
             // snapshot is unavailable (LLM emitted empty hashes), degrade
             // gracefully — the scenario still runs but loses staleness
             // protection. The execution-engine preflight handles the
             // "snapshot available but hashes empty" mismatch.
-            var hasGroundingClaim = contractEnabled
-                && !string.IsNullOrWhiteSpace(scenario.CatalogHashes?.CatalogSnapshotId);
+            var hasGroundingClaim = !string.IsNullOrWhiteSpace(scenario.CatalogHashes?.CatalogSnapshotId);
             for (int i = 0; i < scenario.Matchers.Count; i++)
             {
                 var matcher = scenario.Matchers[i];
@@ -858,19 +850,13 @@ namespace Microsoft.LiveTable.Service.DevMode
                 return false;
             }
 
-            // Structural-fix #3 (transitional): accept both old `type` discriminator
-            // (legacy {type:"string", value:...}) and new `kind` discriminator
-            // (current {kind:"string_literal", literal:...}). The projector
-            // normalises both shapes into the same internal MatcherValue, so
-            // the validator stays permissive across the rollover window.
+            // Single-shape matcher value: requires a `kind` discriminator
+            // (e.g. `string_literal`, `range`, `exists`). The legacy
+            // {type, value} payload is no longer accepted.
             string discriminator = null;
             if (value.TryGetProperty("kind", out var kindElement) && kindElement.ValueKind == JsonValueKind.String)
             {
                 discriminator = kindElement.GetString();
-            }
-            else if (value.TryGetProperty("type", out var typeElement) && typeElement.ValueKind == JsonValueKind.String)
-            {
-                discriminator = typeElement.GetString();
             }
 
             if (string.IsNullOrEmpty(discriminator))
@@ -878,7 +864,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 return false;
             }
 
-            bool IsKindOrType(params string[] allowed)
+            bool IsKind(params string[] allowed)
             {
                 foreach (var a in allowed)
                 {
@@ -887,38 +873,25 @@ namespace Microsoft.LiveTable.Service.DevMode
                 return false;
             }
 
-            bool HasPayloadField(params string[] fields)
-            {
-                foreach (var f in fields)
-                {
-                    if (value.TryGetProperty(f, out _)) return true;
-                }
-                return false;
-            }
-
             switch (assertion ?? string.Empty)
             {
                 case "Exists":
-                    // New shape: kind="exists"; legacy: type="boolean".
-                    return IsKindOrType("exists", "boolean") && value.TryGetProperty("expected", out _);
+                    return IsKind("exists") && value.TryGetProperty("expected", out _);
                 case "InRange":
-                    return IsKindOrType("range")
+                    return IsKind("range")
                         && value.TryGetProperty("min", out _)
                         && value.TryGetProperty("max", out _);
                 case "ContainsAll":
                 case "OneOf":
-                    return IsKindOrType("array_literal", "array")
+                    return IsKind("array_literal")
                         && value.TryGetProperty("items", out _);
                 case "Length":
-                    return IsKindOrType("length_bound", "length")
+                    return IsKind("length_bound")
                         && (value.TryGetProperty("min", out _) || value.TryGetProperty("max", out _));
                 case "Equals":
                 case "NotEquals":
-                    // New shape: string_literal/integer_literal/boolean_literal with `literal`.
-                    // Legacy: string/integer/datetime/boolean with `value`.
-                    return IsKindOrType("string_literal", "integer_literal", "boolean_literal",
-                                        "string", "integer", "datetime", "boolean")
-                        && HasPayloadField("literal", "value", "expected");
+                    return IsKind("string_literal", "integer_literal", "boolean_literal")
+                        && value.TryGetProperty("literal", out _);
                 default:
                     return true;
             }

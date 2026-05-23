@@ -52,30 +52,6 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// </summary>
         internal const string EnvVarLlmV2 = "EDOG_QA_LLM_V2";
 
-        /// <summary>
-        /// P10 typed-matcher contract kill switch. Accepts the usual truthy /
-        /// falsy spellings (on/1/true/enabled vs off/0/false/disabled). When
-        /// the env var is unset, the default is <c>true</c> (typed matchers
-        /// active). Set <c>EDOG_QA_CONTRACT_ENABLED=off</c> to fall back to
-        /// the pre-P10 legacy-only behaviour: projector ignores typed
-        /// matchers, validator skips the matcherTopicHashes grounding gate,
-        /// execution engine skips catalog-hash staleness checks.
-        /// </summary>
-        internal const string EnvVarQaContractEnabled = "EDOG_QA_CONTRACT_ENABLED";
-
-        /// <summary>
-        /// F27 P11 structured-elicitation rollout switch. Accepts the usual
-        /// truthy / falsy spellings (on/1/true/enabled/yes vs
-        /// off/0/false/disabled/no). When unset the default is <c>true</c>
-        /// (P11 active: testingGuidance schema, Architect prompt extension,
-        /// validator coverage checks, frontend rendering). Set
-        /// <c>EDOG_QA_P11_ELICITATION=off</c> to fall back to the pre-P11
-        /// pipeline: BuildArchitectPlanSchema returns the pre-P11 shape,
-        /// ArchitectSystemPrompt / EditorSystemPrompt omit their P11 blocks,
-        /// and the validator skips every P11 coverage check.
-        /// </summary>
-        internal const string EnvVarP11Elicitation = "EDOG_QA_P11_ELICITATION";
-
         // ── Public surface ─────────────────────────────────────────────
 
         /// <summary>
@@ -86,56 +62,10 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// </summary>
         internal static LlmV2Mode LlmV2 => _llmV2.Value;
 
-        /// <summary>
-        /// P10 typed-matcher contract enable flag. <c>true</c> (default) means
-        /// the projector emits typed Matchers, the validator enforces the
-        /// matcherTopicHashes grounding gate, and the execution engine
-        /// validates catalog hashes. <c>false</c> falls back to legacy
-        /// expectation-only behaviour.
-        /// </summary>
-        internal static bool QaContractEnabled => _qaContractEnabled.Value;
-
-        /// <summary>
-        /// F27 P11 structured-elicitation enable flag. <c>true</c> (default)
-        /// activates the testingGuidance schema, Architect/Editor prompt
-        /// extensions, validator coverage checks, and frontend rendering.
-        /// <c>false</c> restores the pre-P11 pipeline bit-for-bit.
-        /// </summary>
-        internal static bool P11ElicitationEnabled => _p11Elicitation.Value;
-
         // ── Implementation ─────────────────────────────────────────────
 
         private static readonly Lazy<LlmV2Mode> _llmV2 = new(() =>
             ParseLlmV2(Environment.GetEnvironmentVariable(EnvVarLlmV2)));
-
-        private static readonly Lazy<bool> _qaContractEnabled = new(() =>
-            ParseQaContractEnabled(Environment.GetEnvironmentVariable(EnvVarQaContractEnabled)));
-
-        private static readonly Lazy<bool> _p11Elicitation = new(() =>
-            ParseP11Elicitation(Environment.GetEnvironmentVariable(EnvVarP11Elicitation)));
-
-        internal static bool ParseQaContractEnabled(string raw)
-        {
-            if (string.IsNullOrWhiteSpace(raw)) return true;
-            var v = raw.Trim().ToLowerInvariant();
-            return v switch
-            {
-                "off" or "0" or "false" or "disabled" or "no" => false,
-                _ => true,
-            };
-        }
-
-        internal static bool ParseP11Elicitation(string raw)
-        {
-            if (string.IsNullOrWhiteSpace(raw)) return true;
-            var v = raw.Trim().ToLowerInvariant();
-            return v switch
-            {
-                "off" or "0" or "false" or "disabled" or "no" => false,
-                "on" or "1" or "true" or "enabled" or "yes" => true,
-                _ => true,
-            };
-        }
 
         internal static LlmV2Mode ParseLlmV2(string raw)
         {
@@ -171,8 +101,7 @@ namespace Microsoft.LiveTable.Service.DevMode
     /// <summary>
     /// Implementation of <see cref="IQaContractOptionsProvider"/> backed by
     /// <c>IOptionsMonitor&lt;QaContractOptions&gt;</c> with monotonic revision
-    /// tracking. Replaces the legacy <see cref="EdogQaFeatureFlags"/> Lazy
-    /// pattern for config reads.
+    /// tracking.
     /// </summary>
     internal sealed class EdogQaContractOptionsProvider : IQaContractOptionsProvider
     {

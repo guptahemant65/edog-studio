@@ -691,13 +691,6 @@ namespace Microsoft.LiveTable.Service.DevMode
                 return string.Empty;
             }
 
-            // P10 kill switch (P2-1): skip catalog-hash staleness checks when
-            // the contract flag is disabled — staleness is a P10-only signal.
-            if (!EdogQaFeatureFlags.QaContractEnabled)
-            {
-                return string.Empty;
-            }
-
             // P10 fix (P1-4): when the snapshot is available (has slots /
             // topic hashes) but the scenario carries empty hash fields, that
             // is itself a staleness signal — the scenario was either

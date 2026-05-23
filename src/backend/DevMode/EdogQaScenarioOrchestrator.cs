@@ -747,14 +747,13 @@ namespace Microsoft.LiveTable.Service.DevMode
                 }
                 foreach (var p in single.Projected)
                 {
-                    // F27 P11: copy sketch coverage IDs onto the projected
-                    // Scenario by sketchId (sketches live on the Plan;
-                    // the Editor preserves sketchId verbatim on the emitted
-                    // scenario, so we resolve via that join rather than
-                    // positional index — the Editor may drop or reorder
-                    // scenarios, which would corrupt an index-based join.
-                    if (EdogQaFeatureFlags.P11ElicitationEnabled
-                        && p != null
+                    // Copy sketch coverage IDs onto the projected Scenario
+                    // by sketchId (sketches live on the Plan; the Editor
+                    // preserves sketchId verbatim on the emitted scenario,
+                    // so we resolve via that join rather than positional
+                    // index — the Editor may drop or reorder scenarios,
+                    // which would corrupt an index-based join).
+                    if (p != null
                         && w.Accepted?.Scenario != null
                         && w.Plan?.ScenarioSketches != null)
                     {
@@ -1149,10 +1148,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     {
                         var analystDoc = System.Text.Json.JsonDocument.Parse(zoneCtx.AnalystObservations);
                         var expectedIds = new HashSet<string>(StringComparer.Ordinal);
-                        // F27 P11: when the Analyst schema is the elicitation variant the
-                        // observation lists are renamed to codePaths/errorModesToTest. Read
-                        // BOTH so the gate works on legacy + P11 payloads without branching.
-                        foreach (var listName in new[] { "behavioralPaths", "errorPaths", "codePaths", "errorModesToTest" })
+                        foreach (var listName in new[] { "codePaths", "errorModesToTest" })
                         {
                             if (analystDoc.RootElement.TryGetProperty(listName, out var arr)
                                 && arr.ValueKind == System.Text.Json.JsonValueKind.Array)
