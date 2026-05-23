@@ -96,8 +96,67 @@ namespace Microsoft.LiveTable.Service.DevMode
     {
         public static IReadOnlyList<QaContractSlot> FromSwagger(string zoneId, object swagger)
         {
-            // Placeholder — will parse Swagger paths into HTTP slots
-            return Array.Empty<QaContractSlot>();
+            var slots = new List<QaContractSlot>();
+            if (swagger == null) return slots;
+
+            try
+            {
+                // swagger is a deserialized JsonElement or object — re-serialize and parse
+                var json = swagger is System.Text.Json.JsonElement el
+                    ? el.GetRawText()
+                    : System.Text.Json.JsonSerializer.Serialize(swagger);
+
+                using var doc = System.Text.Json.JsonDocument.Parse(json);
+                if (!doc.RootElement.TryGetProperty("paths", out var paths)
+                    || paths.ValueKind != System.Text.Json.JsonValueKind.Object)
+                {
+                    return slots;
+                }
+
+                foreach (var pathEntry in paths.EnumerateObject())
+                {
+                    var path = pathEntry.Name;
+                    if (pathEntry.Value.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
+
+                    foreach (var methodEntry in pathEntry.Value.EnumerateObject())
+                    {
+                        var method = methodEntry.Name.ToUpperInvariant();
+                        if (method == "PARAMETERS" || method == "SERVERS" || method == "$REF") continue;
+
+                        var summary = string.Empty;
+                        if (methodEntry.Value.ValueKind == System.Text.Json.JsonValueKind.Object
+                            && methodEntry.Value.TryGetProperty("summary", out var summaryEl)
+                            && summaryEl.ValueKind == System.Text.Json.JsonValueKind.String)
+                        {
+                            summary = summaryEl.GetString() ?? string.Empty;
+                        }
+
+                        var slotId = $"http:{method.ToLowerInvariant()}:{path}";
+                        slots.Add(new QaContractSlot
+                        {
+                            SlotId = slotId,
+                            Kind = StimulusType.HttpRequest,
+                            Purpose = string.IsNullOrEmpty(summary)
+                                ? $"{method} {path}"
+                                : $"{method} {path} — {summary}",
+                            SlotHash = ComputeSlotHash(slotId),
+                        });
+                    }
+                }
+            }
+            catch
+            {
+                // Malformed swagger — return empty
+            }
+
+            return slots;
+        }
+
+        private static string ComputeSlotHash(string slotId)
+        {
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            var bytes = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(slotId));
+            return BitConverter.ToString(bytes, 0, 6).Replace("-", "").ToLowerInvariant();
         }
     }
 
@@ -108,7 +167,97 @@ namespace Microsoft.LiveTable.Service.DevMode
     {
         public static IReadOnlyList<QaContractSlot> FromFrameworkEndpoints(string registryJson)
         {
-            return Array.Empty<QaContractSlot>();
+            var slots = new List<QaContractSlot>();
+            if (string.IsNullOrWhiteSpace(registryJson)) return slots;
+
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(registryJson);
+                var root = doc.RootElement;
+
+                // framework-endpoints.json can be an array of hub descriptors
+                // or an object with a "hubs" array.
+                System.Text.Json.JsonElement hubs;
+                if (root.ValueKind == System.Text.Json.JsonValueKind.Array)
+                {
+                    hubs = root;
+                }
+                else if (root.ValueKind == System.Text.Json.JsonValueKind.Object
+                    && root.TryGetProperty("hubs", out var hubsEl)
+                    && hubsEl.ValueKind == System.Text.Json.JsonValueKind.Array)
+                {
+                    hubs = hubsEl;
+                }
+                else
+                {
+                    return slots;
+                }
+
+                foreach (var hub in hubs.EnumerateArray())
+                {
+                    if (hub.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
+
+                    var hubName = hub.TryGetProperty("name", out var n) && n.ValueKind == System.Text.Json.JsonValueKind.String
+                        ? n.GetString()
+                        : (hub.TryGetProperty("Name", out var n2) && n2.ValueKind == System.Text.Json.JsonValueKind.String
+                            ? n2.GetString() : null);
+
+                    if (string.IsNullOrEmpty(hubName)) continue;
+
+                    // Look for methods array
+                    System.Text.Json.JsonElement methods = default;
+                    var hasMethods = hub.TryGetProperty("methods", out methods)
+                        || hub.TryGetProperty("Methods", out methods);
+
+                    if (hasMethods && methods.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        foreach (var method in methods.EnumerateArray())
+                        {
+                            var methodName = method.ValueKind == System.Text.Json.JsonValueKind.String
+                                ? method.GetString()
+                                : (method.ValueKind == System.Text.Json.JsonValueKind.Object
+                                    && method.TryGetProperty("name", out var mn) && mn.ValueKind == System.Text.Json.JsonValueKind.String
+                                    ? mn.GetString() : null);
+
+                            if (string.IsNullOrEmpty(methodName)) continue;
+
+                            var slotId = $"signalr:{hubName}:{methodName}";
+                            slots.Add(new QaContractSlot
+                            {
+                                SlotId = slotId,
+                                Kind = StimulusType.SignalRBroadcast,
+                                Purpose = $"SignalR {hubName}.{methodName}",
+                                SlotHash = ComputeSlotHash(slotId),
+                            });
+                        }
+                    }
+                    else
+                    {
+                        // Hub with no method list — add the hub itself
+                        var slotId = $"signalr:{hubName}";
+                        slots.Add(new QaContractSlot
+                        {
+                            SlotId = slotId,
+                            Kind = StimulusType.SignalRBroadcast,
+                            Purpose = $"SignalR hub {hubName}",
+                            SlotHash = ComputeSlotHash(slotId),
+                        });
+                    }
+                }
+            }
+            catch
+            {
+                // Malformed JSON — return empty
+            }
+
+            return slots;
+        }
+
+        private static string ComputeSlotHash(string slotId)
+        {
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            var bytes = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(slotId));
+            return BitConverter.ToString(bytes, 0, 6).Replace("-", "").ToLowerInvariant();
         }
     }
 
