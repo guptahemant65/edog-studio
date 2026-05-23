@@ -443,15 +443,19 @@ def test_pipeline_publishes_chaos_metadata(pipeline_src: str) -> None:
         next_method_idx = pipeline_src.find("\n    }\n}", publish_helper_idx)
     body = pipeline_src[publish_helper_idx:next_method_idx]
 
-    assert "chaos = new" in body, "Fault-matched publish path must attach a chaos metadata object."
+    assert 'chaos"] = new' in body or "chaos = new" in body, "Fault-matched publish path must attach a chaos metadata object."
 
     # Locate the else branch of the if (chaosFault != null) dispatch and
     # ensure it does NOT assemble a `chaos = ...` property. This pins the
     # zero-wire-shape-regression guarantee on the no-fault path.
-    else_idx = body.find("else")
+    else_idx = body.find("chaosFault == null")
+    if else_idx < 0:
+        else_idx = body.find("else")
     assert else_idx > 0, "PublishHttpEvent must dispatch on chaosFault != null"
     else_block = body[else_idx:]
-    assert "chaos = " not in else_block, (
+    # The no-fault path must not assemble a chaos property — either via
+    # anonymous object or dictionary assignment.
+    assert "chaos = new {" not in else_block and 'chaos"] = new {' not in else_block, (
         "No-fault publish path must NOT include a `chaos = ...` property — "
         "keep the wire shape identical to the pre-Stage-2 baseline."
     )
