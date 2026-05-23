@@ -1508,7 +1508,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     try
                     {
                         using var swaggerResponse = await SharedHttpClient.Value.GetAsync(
-                            "http://localhost:5555/api/ado-proxy/swagger", cancellationToken).ConfigureAwait(false);
+                            "http://localhost:5555/api/playground/swagger/spec", cancellationToken).ConfigureAwait(false);
                         if (swaggerResponse.IsSuccessStatusCode)
                         {
                             swaggerJson = await swaggerResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
