@@ -112,7 +112,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         internal const string PromptCacheKeyArchitect = "edog-qa-architect-v14";
 
         /// <summary>Stable cache key for the Editor's system+schema prefix. Bumped to v14 alongside the structural-fixes drop (kind/literal matcher schema, featureFlagOverrides field, topic-vocabulary injection). v16: adds required stimulusId field + STIMULUS ASSIGNMENT prompt block so scenarios mechanically pick distinct stimuli from testingGuidance.stimuliRequired (LNT009 fix).</summary>
-        internal const string PromptCacheKeyEditor = "edog-qa-editor-v16";
+        internal const string PromptCacheKeyEditor = "edog-qa-editor-v17";
 
         /// <summary>Stable cache key for the Analyst's system+schema prefix. The Analyst is the
         /// first pass of the 2-step Analyst→Architect pipeline; its prompt is intentionally
@@ -2523,7 +2523,13 @@ namespace Microsoft.LiveTable.Service.DevMode
             + "Use these as additional context when picking stimuli and matchers: prefer a stimulus whose 'kind' matches an entry in stimuliRequired, "
             + "and prefer a matcher whose 'topicField' aligns with an entry in observableSignals (use the signal's 'source' as the topicField when possible). "
             + "Do NOT introduce scenarios that address codePaths or errorModes the Architect did not sketch — coverage is the Architect's responsibility. "
-            + "TESTING-GUIDANCE TEXT IS DIAGNOSTIC CONTEXT, NOT MATCHER COPY: descriptive sentences inside testingGuidance (codePaths[].description, observableSignals[].description, etc.) are guidance for picking the right typed matcher — they are NEVER copied verbatim into matcherSpec or matchers[]. Always structure them as typed matchers per the MATCHERS CONTRACT above.";
+            + "TESTING-GUIDANCE TEXT IS DIAGNOSTIC CONTEXT, NOT MATCHER COPY: descriptive sentences inside testingGuidance (codePaths[].description, observableSignals[].description, etc.) are guidance for picking the right typed matcher — they are NEVER copied verbatim into matcherSpec or matchers[]. Always structure them as typed matchers per the MATCHERS CONTRACT above. "
+            + "CATALOG HASHES (HARD REQUIREMENT): the user message includes a CATALOG REFERENCES block with catalogSnapshotId, slots (with slotHash), and topicFieldHashes. "
+            + "Every scenario MUST populate catalogHashes: set catalogSnapshotId to the value from the CATALOG REFERENCES block, "
+            + "set stimulusSlotHash to the slotHash of the catalog slot matching the scenario's stimulus (look up by kind + path/method), "
+            + "and set matcherTopicHashes by looking up each expectation's topic in the topicFieldHashes array from CATALOG REFERENCES. "
+            + "If CATALOG REFERENCES is absent or empty, set catalogSnapshotId to empty string and leave matcherTopicHashes as an empty array — the validator will treat this as ungrounded. "
+            + "Do NOT leave matcherTopicHashes empty when CATALOG REFERENCES provides topicFieldHashes — the validator will quarantine the scenario.";
 
         private static string BuildAnalystUserMessage(ZoneContext zone)
         {

@@ -800,21 +800,18 @@ namespace Microsoft.LiveTable.Service.DevMode
                         });
                     }
 
-                    // Grounding slot checks are informational — the Editor doesn't
-                    // have catalog hash data in its context, so it can't produce
-                    // matcherTopicHashes. Don't quarantine for this.
                     if (hasGroundingClaim && (matcherTopicHashes == null || matcherTopicHashes.Count == 0))
                     {
-                        informational.Add(new QuarantineReason
+                        sink.Add(new QuarantineReason
                         {
                             Code = CodeGroundingSlotMismatch,
-                            Message = "Typed matchers have no catalogHashes.matcherTopicHashes — scenario is not grounded to the catalog.",
+                            Message = "Typed matchers require catalogHashes.matcherTopicHashes so the scenario stays grounded to the active catalog.",
                             FieldPath = "catalogHashes.matcherTopicHashes",
                         });
                     }
                     else if (hasGroundingClaim && matcherTopicHashes != null && !string.IsNullOrWhiteSpace(topic) && !matcherTopicHashes.ContainsKey(topic))
                     {
-                        informational.Add(new QuarantineReason
+                        sink.Add(new QuarantineReason
                         {
                             Code = CodeGroundingSlotMismatch,
                             Message = $"Matcher topic '{topic}' is not present in catalogHashes.matcherTopicHashes.",
