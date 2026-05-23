@@ -363,6 +363,12 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// the scenario does not depend on a specific flag value.
         /// </summary>
         public List<FlagOverride> FeatureFlagOverrides { get; set; } = new();
+
+        /// <summary>
+        /// References the Analyst's stimuliRequired entry (st-N) this scenario exercises.
+        /// Used by the frontend to display stimulus diversity and by the linter to check LNT009.
+        /// </summary>
+        public string StimulusId { get; set; }
     }
 
     /// <summary>

@@ -471,6 +471,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 GroundingEvidence = grounding,
                 InvariantsAddressed = new List<string>(),
                 FeatureFlagOverrides = flagOverridesProjected,
+                StimulusId = src.StimulusId,
             };
         }
 

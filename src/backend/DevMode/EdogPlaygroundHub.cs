@@ -1849,6 +1849,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                         featureFlagOverrides = (scn.FeatureFlagOverrides ?? new List<FlagOverride>())
                             .Select(f => new { flagName = f.FlagName, value = f.Value })
                             .ToArray(),
+                        stimulusId = scn.StimulusId ?? string.Empty,
                     }
                 }).ConfigureAwait(false);
 
