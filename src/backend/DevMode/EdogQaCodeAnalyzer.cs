@@ -563,10 +563,10 @@ namespace Microsoft.LiveTable.Service.DevMode
             // Phase 1: Parse diff into changed symbols
             ReportProgress("diff_parsing", 5, "Parsing PR diff...");
             var changedSymbols = ParseDiff(unifiedDiff);
-            Console.WriteLine($"[QA-DIAG] ParseDiff: {changedSymbols.Count} symbols from {unifiedDiff?.Length ?? 0} char diff");
+            DiagLog($"ParseDiff: {changedSymbols.Count} symbols from {unifiedDiff?.Length ?? 0} char diff");
             if (changedSymbols.Count == 0)
             {
-                Console.WriteLine($"[QA-DIAG] *** EARLY EXIT — 0 changed symbols, returning empty result");
+                DiagLog("*** EARLY EXIT — 0 changed symbols, returning empty result");
                 ReportProgress("complete", 100, "No code changes detected in diff.");
                 result.TotalDurationMs = sw.ElapsedMilliseconds;
                 EdogQaTelemetry.IncrementAnalysisCompleted();
@@ -616,12 +616,12 @@ namespace Microsoft.LiveTable.Service.DevMode
             }
 
             // Phase 7: L4 — LLM scenario generation (parallel per zone)
-            Console.WriteLine($"[QA-DIAG] Phase 7: LLM generation for {result.ImpactZones.Count} zones");
+            DiagLog($"Phase 7: LLM generation for {result.ImpactZones.Count} zones");
             ReportProgress("llm_generation", 75, $"Generating scenarios for {result.ImpactZones.Count} impact zones...");
             result.Scenarios = await GenerateScenariosSafe(
                 result.ImpactZones, result.Graph, result.InterfaceResolutions,
                 unifiedDiff, prContext, result.DegradationFlags, cancellationToken);
-            Console.WriteLine($"[QA-DIAG] Phase 7 done: {result.Scenarios.Count} scenarios generated");
+            DiagLog($"Phase 7 done: {result.Scenarios.Count} scenarios generated");
 
             // Phase 8: Deterministic post-LLM lint (F27 item 5). Runs even if
             // upstream phases degraded — useful findings exist whenever at
@@ -1272,13 +1272,13 @@ namespace Microsoft.LiveTable.Service.DevMode
             CancellationToken cancellationToken)
         {
             var requestedMode = EdogQaFeatureFlags.LlmV2;
-            Console.WriteLine($"[QA-DIAG] GenerateScenariosSafe: LlmV2Mode={requestedMode}, zones={zones.Count}");
+            DiagLog($"GenerateScenariosSafe: LlmV2Mode={requestedMode}, zones={zones.Count}");
 
             // Off — user explicitly opted out.Skip the probe (would just
             // burn ~$0.001 for no decision impact) and run legacy quiet.
             if (requestedMode == LlmV2Mode.Off)
             {
-                Console.WriteLine($"[QA-DIAG] LlmV2=Off → running legacy");
+                DiagLog("LlmV2=Off → running legacy");
                 return await RunLegacyScenarioGenerationAsync(
                     zones, graph, resolutions, diff, prContext, degradationFlags, cancellationToken)
                     .ConfigureAwait(false);
@@ -1304,18 +1304,18 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             var probeReady = dual?.IsReady == true;
             var probeReason = dual?.Reason ?? "probe still in flight (10s window exceeded — first analysis after cold start may see this once)";
-            Console.WriteLine($"[QA-DIAG] Probe result: ready={probeReady}, reason={probeReason}");
+            DiagLog($"Probe result: ready={probeReady}, reason={probeReason}");
             if (dual?.Architect != null)
-                Console.WriteLine($"[QA-DIAG]   Architect: ready={dual.Architect.IsReady}, deployment={dual.Architect.Deployment}, errors=[{string.Join(", ", dual.Architect.Errors ?? new List<string>())}]");
+                DiagLog($"  Architect: ready={dual.Architect.IsReady}, deployment={dual.Architect.Deployment}, errors=[{string.Join(", ", dual.Architect.Errors ?? new List<string>())}]");
             if (dual?.Editor != null)
-                Console.WriteLine($"[QA-DIAG]   Editor: ready={dual.Editor.IsReady}, deployment={dual.Editor.Deployment}, errors=[{string.Join(", ", dual.Editor.Errors ?? new List<string>())}]");
+                DiagLog($"  Editor: ready={dual.Editor.IsReady}, deployment={dual.Editor.Deployment}, errors=[{string.Join(", ", dual.Editor.Errors ?? new List<string>())}]");
 
             // On — strict V2 with no legacy fallback. A probe failure here
             // surfaces as a typed LLM_NOT_READY error so the UI can show
             // an actionable diagnostic instead of silent legacy output.
             if (requestedMode == LlmV2Mode.On)
             {
-                Console.WriteLine($"[QA-DIAG] LlmV2=On, probeReady={probeReady}");
+                DiagLog($"LlmV2=On, probeReady={probeReady}");
                 if (!probeReady)
                 {
                     throw new LlmProviderException(
@@ -1335,18 +1335,18 @@ namespace Microsoft.LiveTable.Service.DevMode
             // where every legacy run silently shipped degraded output.
             if (requestedMode == LlmV2Mode.Auto)
             {
-                Console.WriteLine($"[QA-DIAG] LlmV2=Auto, probeReady={probeReady}");
+                DiagLog($"LlmV2=Auto, probeReady={probeReady}");
                 if (probeReady)
                 {
-                    Console.WriteLine($"[QA-DIAG] Running V2 orchestrator (Auto+probeReady)");
+                    DiagLog("Running V2 orchestrator (Auto+probeReady)");
                     var v2 = await RunV2OrchestratorAsync(
                         zones, diff, prContext, degradationFlags, allowLegacyFallback: true, cancellationToken)
                         .ConfigureAwait(false);
                     if (v2 != null) return v2;
-                    Console.WriteLine($"[QA-DIAG] V2 returned null → falling to legacy");
+                    DiagLog("V2 returned null → falling to legacy");
                 }
                 degradationFlags.Add("llm_v2_fallback_to_legacy");
-                Console.WriteLine($"[QA-DIAG] FALLBACK to legacy: {probeReason}");
+                DiagLog($"FALLBACK to legacy: {probeReason}");
                 PublishWarning(
                     "LEGACY_LLM_FALLBACK: V2 (Architect+Editor) unavailable — " + probeReason
                     + " — running legacy single-prompt scenario generation. Set EDOG_QA_LLM_V2=off to silence this warning, or fix the config to unlock V2.");
@@ -1394,7 +1394,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             List<string> degradationFlags,
             CancellationToken cancellationToken)
         {
-            Console.WriteLine($"[QA-DIAG] RunLegacyScenarioGenerationAsync: {zones.Count} zones");
+            DiagLog($"RunLegacyScenarioGenerationAsync: {zones.Count} zones");
             var allScenarios = new List<Scenario>();
 
             var zonesToProcess = zones.Take(10).ToList();
@@ -1420,6 +1420,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             catch (Exception ex)
             {
                 Console.WriteLine($"[QA-DIAG] Legacy generation EXCEPTION: {ex.GetType().Name}: {ex.Message}");
+                PublishWarning($"Legacy generation EXCEPTION: {ex.GetType().Name}: {ex.Message}");
                 degradationFlags.Add("llm_failed");
                 PublishWarning($"Scenario generation failed: {ex.Message}");
             }
@@ -1451,11 +1452,11 @@ namespace Microsoft.LiveTable.Service.DevMode
             bool allowLegacyFallback,
             CancellationToken cancellationToken)
         {
-            Console.WriteLine($"[QA-DIAG] RunV2OrchestratorAsync: zones={zones.Count}, allowLegacyFallback={allowLegacyFallback}");
+            DiagLog($"RunV2OrchestratorAsync: zones={zones.Count}, allowLegacyFallback={allowLegacyFallback}");
             var architectCfg = EdogQaLlmClient.ReadArchitectConfigFromEnv();
             var editorCfg = EdogQaLlmClient.ReadEditorConfigFromEnv();
-            Console.WriteLine($"[QA-DIAG]   Architect: endpoint={(architectCfg.Endpoint != null ? "SET" : "NULL")}, key={(architectCfg.ApiKey != null ? "SET" : "NULL")}, dep={architectCfg.Deployment}");
-            Console.WriteLine($"[QA-DIAG]   Editor: endpoint={(editorCfg.Endpoint != null ? "SET" : "NULL")}, key={(editorCfg.ApiKey != null ? "SET" : "NULL")}, dep={editorCfg.Deployment}");
+            DiagLog($"  Architect: endpoint={(architectCfg.Endpoint != null ? "SET" : "NULL")}, key={(architectCfg.ApiKey != null ? "SET" : "NULL")}, dep={architectCfg.Deployment}");
+            DiagLog($"  Editor: endpoint={(editorCfg.Endpoint != null ? "SET" : "NULL")}, key={(editorCfg.ApiKey != null ? "SET" : "NULL")}, dep={editorCfg.Deployment}");
             if (string.IsNullOrEmpty(architectCfg.Endpoint)
                 || string.IsNullOrEmpty(architectCfg.ApiKey)
                 || string.IsNullOrEmpty(editorCfg.Endpoint)
@@ -1514,16 +1515,16 @@ namespace Microsoft.LiveTable.Service.DevMode
                         if (swaggerResponse.IsSuccessStatusCode)
                         {
                             swaggerJson = await swaggerResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
-                            Console.WriteLine($"[QA-DIAG] Swagger fetched: {swaggerJson?.Length ?? 0} bytes");
+                            DiagLog($"Swagger fetched: {swaggerJson?.Length ?? 0} bytes");
                         }
                         else
                         {
-                            Console.WriteLine($"[QA-DIAG] Swagger fetch failed: HTTP {(int)swaggerResponse.StatusCode}");
+                            DiagLog($"Swagger fetch failed: HTTP {(int)swaggerResponse.StatusCode}");
                         }
                     }
                     catch (Exception swaggerEx)
                     {
-                        Console.WriteLine($"[QA-DIAG] Swagger fetch error: {swaggerEx.GetType().Name}: {swaggerEx.Message}");
+                        DiagLog($"Swagger fetch error: {swaggerEx.GetType().Name}: {swaggerEx.Message}");
                     }
 
                     if (string.IsNullOrEmpty(swaggerJson))
@@ -1553,13 +1554,13 @@ namespace Microsoft.LiveTable.Service.DevMode
                             if (System.IO.File.Exists(candidate))
                             {
                                 frameworkEndpointsJson = System.IO.File.ReadAllText(candidate);
-                                Console.WriteLine($"[QA-DIAG] framework-endpoints.json loaded: {frameworkEndpointsJson.Length} bytes from {candidate}");
+                                DiagLog($"framework-endpoints.json loaded: {frameworkEndpointsJson.Length} bytes from {candidate}");
                                 break;
                             }
                         }
                         if (string.IsNullOrEmpty(frameworkEndpointsJson))
                         {
-                            Console.WriteLine("[QA-DIAG] framework-endpoints.json not found — SignalR slots will be empty");
+                            DiagLog("framework-endpoints.json not found — SignalR slots will be empty");
                         }
                     }
                     catch { /* framework endpoints unavailable */ }
@@ -1577,7 +1578,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                                 && repoPath.ValueKind == System.Text.Json.JsonValueKind.String)
                             {
                                 fltRepoRoot = repoPath.GetString();
-                                Console.WriteLine($"[QA-DIAG] FLT repo root: {fltRepoRoot}");
+                                DiagLog($"FLT repo root: {fltRepoRoot}");
                             }
                         }
                     }
@@ -1626,11 +1627,12 @@ namespace Microsoft.LiveTable.Service.DevMode
                         catalogRefJson = System.Text.Json.JsonSerializer.Serialize(refPayload);
                     }
 
-                    Console.WriteLine(
-                        $"[QA-DIAG] Catalog assembled: {snapshot?.Slots?.Count ?? 0} slots, "
+                    var catalogAssembledMsg =
+                        $"Catalog assembled: {snapshot?.Slots?.Count ?? 0} slots, "
                         + $"snapshotId={snapshot?.SnapshotId ?? "null"}, "
                         + $"slotPurposes={slotPurposesText?.Length ?? 0} chars, "
-                        + $"catalogRef={catalogRefJson?.Length ?? 0} chars");
+                        + $"catalogRef={catalogRefJson?.Length ?? 0} chars";
+                    DiagLog(catalogAssembledMsg);
 
                     // Surface catalog status to the browser via degradation flags
                     // so the developer can see what slots were discovered.
@@ -1651,13 +1653,13 @@ namespace Microsoft.LiveTable.Service.DevMode
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[QA-DIAG] Catalog assembly failed (non-fatal): {ex.GetType().Name}: {ex.Message}");
+                    DiagLog($"Catalog assembly failed (non-fatal): {ex.GetType().Name}: {ex.Message}");
                     degradationFlags.Add("catalog_assembly_failed");
                 }
             }
             else
             {
-                Console.WriteLine("[QA-DIAG] ContractCatalog not available — catalog context will not be injected into LLM prompt");
+                DiagLog("ContractCatalog not available — catalog context will not be injected into LLM prompt");
             }
 
             // PA-1: split diff into impl vs test hunks so the Architect sees
@@ -1688,20 +1690,32 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             var result = await orchestrator.RunAsync(inputs, config, progress: null, cancellationToken).ConfigureAwait(false);
 
+            // Drain orchestrator+projector diagnostics into the browser console.
+            // Each entry was already printed to stdout by the orchestrator/projector;
+            // PublishWarning surfaces it via the SignalR progress callback so the
+            // dev tools console sees the same trace as the FLT log file.
+            if (result.DiagnosticMessages != null)
+            {
+                foreach (var d in result.DiagnosticMessages)
+                {
+                    PublishWarning(d);
+                }
+            }
+
             // ── Zone outcome diagnostics ──────────────────────────────
             // Surface per-zone outcomes so zero-scenario runs are debuggable
             // instead of silently returning an empty list.
             foreach (var zr in result.Zones)
             {
-                Console.WriteLine(
-                    $"[QA-DIAG] Zone '{zr.ZoneId}': outcome={zr.Outcome}, reason={zr.OutcomeReason}, "
+                DiagLog(
+                    $"Zone '{zr.ZoneId}': outcome={zr.Outcome}, reason={zr.OutcomeReason}, "
                     + $"accepted={zr.Accepted?.Count ?? 0}, quarantined={zr.Quarantined?.Count ?? 0}, "
                     + $"errors=[{string.Join(", ", zr.Errors ?? new List<string>())}], "
                     + $"elapsed={zr.ElapsedMs}ms, cost=${zr.CostUsd:F6}, "
                     + $"repair={zr.RepairAttempts}x branch={zr.RepairBranch}");
             }
-            Console.WriteLine(
-                $"[QA-DIAG] Orchestrator totals: merged={result.MergedScenarios.Count}, "
+            DiagLog(
+                $"Orchestrator totals: merged={result.MergedScenarios.Count}, "
                 + $"projectionRejected={result.ProjectionRejected?.Count ?? 0}, "
                 + $"duplicates={result.Duplicates?.Count ?? 0}, "
                 + $"budget={result.BudgetGateTripped} ({result.BudgetGateReason})");
@@ -1715,7 +1729,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     var scnId = rej.Scenario?.Id ?? "(null)";
                     var codes = string.Join(", ", (rej.Reasons ?? new List<EdogQaScenarioValidator.QuarantineReason>())
                         .Select(r => $"{r.Code}: {r.Message}"));
-                    Console.WriteLine($"[QA-DIAG] Projection rejected '{scnId}': {codes}");
+                    DiagLog($"Projection rejected '{scnId}': {codes}");
                 }
             }
 
@@ -1776,6 +1790,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                         .Distinct()
                         .ToList();
                     Console.WriteLine($"[QA-DIAG] Quarantine codes: [{string.Join(", ", allCodes)}]");
+                    PublishWarning($"Quarantine codes: [{string.Join(", ", allCodes)}]");
 
                     degradationFlags.Add("llm_v2_all_quarantined");
                     PublishWarning(
@@ -2226,6 +2241,20 @@ namespace Microsoft.LiveTable.Service.DevMode
             {
                 // Non-fatal — never let diagnostics crash the pipeline
             }
+        }
+
+        /// <summary>
+        /// Mirror a <c>[QA-DIAG]</c> trace line to stdout (for the FLT log
+        /// file) AND surface it to the browser via <see cref="PublishWarning"/>
+        /// so the developer console sees the same trace. The browser
+        /// surface only fires while <see cref="_activeCallback"/> is set
+        /// (i.e. during AnalyzeAsync); outside that window it no-ops
+        /// silently. Never throws.
+        /// </summary>
+        private void DiagLog(string message)
+        {
+            Console.WriteLine($"[QA-DIAG] {message}");
+            PublishWarning(message);
         }
 
         /// <summary>

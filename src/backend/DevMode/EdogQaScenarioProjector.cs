@@ -64,6 +64,13 @@ namespace Microsoft.LiveTable.Service.DevMode
             /// the engine's typed shape. Each carries the original
             /// GeneratedScenario + one or more QuarantineReasons.</summary>
             public List<EdogQaScenarioValidator.QuarantinedScenario> Rejected { get; set; } = new();
+
+            /// <summary>Informational diagnostics emitted during projection
+            /// (e.g. stimulus-spec stub fallbacks). NOT a rejection signal —
+            /// the orchestrator forwards these to the browser console via
+            /// the diagnostic-message channel so developers can see when
+            /// scenarios were silently stubbed.</summary>
+            public List<string> Diagnostics { get; set; } = new();
         }
 
         // ──────────────────────────────────────────────────────────────
@@ -95,7 +102,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             foreach (var acc in accepted)
             {
                 var reasons = new List<EdogQaScenarioValidator.QuarantineReason>();
-                var projected = ProjectOne(acc, evidenceById, reasons);
+                var projected = ProjectOne(acc, evidenceById, reasons, result.Diagnostics);
                 if (reasons.Count > 0)
                 {
                     result.Rejected.Add(new EdogQaScenarioValidator.QuarantinedScenario
@@ -154,7 +161,8 @@ namespace Microsoft.LiveTable.Service.DevMode
         private static Scenario ProjectOne(
             EdogQaScenarioValidator.AcceptedScenario accepted,
             IReadOnlyDictionary<string, EdogQaLlmClient.ArchitectGroundingEvidence> evidenceById,
-            List<EdogQaScenarioValidator.QuarantineReason> reasons)
+            List<EdogQaScenarioValidator.QuarantineReason> reasons,
+            List<string> diagnostics)
         {
             var src = accepted.Scenario;
 
@@ -193,10 +201,11 @@ namespace Microsoft.LiveTable.Service.DevMode
                     // StimulusSpec is not JSON — build a stub from stimulusType.
                     // The curator can fill in the concrete details. Log the
                     // degradation but don't reject the scenario.
-                    Console.WriteLine(
-                        $"[QA-DIAG] Projector: stimulusSpec not JSON for '{src.Id}' — "
-                        + $"building stub {stimulusType} stimulus. Spec was: "
-                        + (src.StimulusSpec?.Length > 80 ? src.StimulusSpec.Substring(0, 80) + "..." : src.StimulusSpec ?? "(null)"));
+                    var specSnippet = (src.StimulusSpec?.Length > 80 ? src.StimulusSpec.Substring(0, 80) + "..." : src.StimulusSpec ?? "(null)");
+                    var diagMsg = $"Projector: stimulusSpec not JSON for '{src.Id}' — "
+                        + $"building stub {stimulusType} stimulus. Spec was: " + specSnippet;
+                    Console.WriteLine($"[QA-DIAG] {diagMsg}");
+                    diagnostics?.Add(diagMsg);
 
                     switch (stimulusType)
                     {

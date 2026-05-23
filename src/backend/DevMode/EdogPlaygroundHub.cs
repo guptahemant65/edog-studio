@@ -727,6 +727,22 @@ namespace Microsoft.LiveTable.Service.DevMode
                     $"approved ({approvalRate:P0}), {approvedUnedited} unedited ({uneditedRate:P0}), " +
                     $"{approvedEdited} edited, {rejected} rejected");
 
+                // Mirror the curator approval diagnostic to the browser
+                // console via QaAnalysisWarning. Fire-and-forget so the
+                // sync submission path isn't gated on broadcast latency.
+                _ = BroadcastQaEventAsync("QaAnalysisWarning", new
+                {
+                    eventType = "QaAnalysisWarning",
+                    correlationId = submission.CorrelationId,
+                    analysisId = submission.AnalysisId,
+                    timestamp = DateTimeOffset.UtcNow,
+                    warning = "qa_diagnostic",
+                    message =
+                        $"Curator approval: {approvedUnedited + approvedEdited}/{totalGenerated} " +
+                        $"approved ({approvalRate:P0}), {approvedUnedited} unedited ({uneditedRate:P0}), " +
+                        $"{approvedEdited} edited, {rejected} rejected",
+                });
+
                 EdogQaTelemetry.EmitContractEvent(
                     "qa_curator_approval",
                     submission.AnalysisId ?? "unknown",
@@ -1187,8 +1203,33 @@ namespace Microsoft.LiveTable.Service.DevMode
             List<LintFinding> lintFindings = null;
             List<string> analysisDegradationFlags = null;
 
+            // Local helper — mirror a [QA-DIAG] stdout line to the browser
+            // console via the QaAnalysisWarning channel. Fire-and-forget on
+            // any broadcast failure so diagnostics never crash the pipeline.
+            async Task BroadcastQaDiagAsync(string message)
+            {
+                try
+                {
+                    await BroadcastQaEventAsync("QaAnalysisWarning", new
+                    {
+                        eventType = "QaAnalysisWarning",
+                        correlationId,
+                        analysisId,
+                        timestamp = DateTimeOffset.UtcNow,
+                        warning = "qa_diagnostic",
+                        message,
+                    }).ConfigureAwait(false);
+                }
+                catch
+                {
+                    // Diagnostics must never crash the pipeline.
+                }
+            }
+
             Console.WriteLine($"[QA-DIAG] ═══ RunRealAnalysisPipelineAsync START ═══");
+            await BroadcastQaDiagAsync("═══ RunRealAnalysisPipelineAsync START ═══").ConfigureAwait(false);
             Console.WriteLine($"[QA-DIAG] PrUrl={request.PrUrl ?? "(null)"}, PrId={request.PrId}");
+            await BroadcastQaDiagAsync($"PrUrl={request.PrUrl ?? "(null)"}, PrId={request.PrId}").ConfigureAwait(false);
 
             // Phase 1: Fetch real PR diff from ADO via dev-server proxy
             await BroadcastAnalysisProgressAsync(correlationId, analysisId, "fetching_diff", 0, 6, 5,
@@ -1237,12 +1278,14 @@ namespace Microsoft.LiveTable.Service.DevMode
 
                         System.Diagnostics.Debug.WriteLine($"[QA] Real PR diff fetched: {realDiff?.Length ?? 0} chars, {filesDiffed} files; contract={(prContext != null ? "present" : "absent")}");
                         Console.WriteLine($"[QA-DIAG] PR diff fetched OK: {realDiff?.Length ?? 0} chars, {filesDiffed}/{filesChanged} files, +{linesAdded}/-{linesRemoved}");
+                        await BroadcastQaDiagAsync($"PR diff fetched OK: {realDiff?.Length ?? 0} chars, {filesDiffed}/{filesChanged} files, +{linesAdded}/-{linesRemoved}").ConfigureAwait(false);
                     }
                     else
                     {
                         diffError = $"ADO proxy returned {(int)resp.StatusCode}: {body}";
                         System.Diagnostics.Debug.WriteLine($"[QA] PR diff fetch failed: {diffError}");
                         Console.WriteLine($"[QA-DIAG] PR diff fetch FAILED: {diffError}");
+                        await BroadcastQaDiagAsync($"PR diff fetch FAILED: {diffError}").ConfigureAwait(false);
                     }
                 }
                 catch (OperationCanceledException) { throw; }
@@ -1283,6 +1326,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             // Try real CodeAnalyzer pipeline
             var analyzer = EdogQaServiceLocator.CodeAnalyzer;
             Console.WriteLine($"[QA-DIAG] CodeAnalyzer={(analyzer != null ? "present" : "NULL")}, diff={diffToAnalyze?.Length ?? 0} chars");
+            await BroadcastQaDiagAsync($"CodeAnalyzer={(analyzer != null ? "present" : "NULL")}, diff={diffToAnalyze?.Length ?? 0} chars").ConfigureAwait(false);
             if (analyzer != null)
             {
                 try
@@ -1340,6 +1384,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     lintFindings = result?.LintFindings;
                     analysisDegradationFlags = result?.DegradationFlags;
                     Console.WriteLine($"[QA-DIAG] AnalyzeAsync returned: scenarios={scenarios?.Count ?? 0}, lint={lintFindings?.Count ?? 0}, degradation=[{string.Join(", ", result?.DegradationFlags ?? new List<string>())}]");
+                    await BroadcastQaDiagAsync($"AnalyzeAsync returned: scenarios={scenarios?.Count ?? 0}, lint={lintFindings?.Count ?? 0}, degradation=[{string.Join(", ", result?.DegradationFlags ?? new List<string>())}]").ConfigureAwait(false);
 
                     // Surface degradation flags as warnings
                     if (result?.DegradationFlags?.Count > 0)
@@ -1362,6 +1407,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 catch (LlmProviderException llmEx)
                 {
                     Console.WriteLine($"[QA-DIAG] LlmProviderException: kind={llmEx.KindCode}, msg={llmEx.Message}, retryable={llmEx.Retryable}");
+                    await BroadcastQaDiagAsync($"LlmProviderException: kind={llmEx.KindCode}, msg={llmEx.Message}, retryable={llmEx.Retryable}").ConfigureAwait(false);
                     // F27 P4: typed LLM provider failure. Emit a QaError
                     // with the wire-stable errorCode so the studio can
                     // render an actionable inline panel + optional Retry
@@ -1388,6 +1434,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 catch (Exception ex)
                 {
                     Console.WriteLine($"[QA-DIAG] Analyzer EXCEPTION: {ex.GetType().Name}: {ex.Message}");
+                    await BroadcastQaDiagAsync($"Analyzer EXCEPTION: {ex.GetType().Name}: {ex.Message}").ConfigureAwait(false);
                     System.Diagnostics.Debug.WriteLine($"[QA] CodeAnalyzer failed: {ex.Message}");
                     await BroadcastQaEventAsync("QaAnalysisWarning", new
                     {
@@ -1425,6 +1472,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             if (scenarios == null || scenarios.Count == 0)
             {
                 Console.WriteLine($"[QA-DIAG] *** NO SCENARIOS — scenarios={(scenarios == null ? "null" : $"empty(count={scenarios.Count})")}");
+                await BroadcastQaDiagAsync($"*** NO SCENARIOS — scenarios={(scenarios == null ? "null" : $"empty(count={scenarios.Count})")}").ConfigureAwait(false);
                 if (QaAnalysisFallbackPolicy.IsDemoFallbackEnabled())
                 {
                     EdogQaTelemetry.IncrementSyntheticScenariosFallback();

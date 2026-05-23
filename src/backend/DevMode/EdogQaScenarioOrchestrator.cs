@@ -46,6 +46,7 @@
 namespace Microsoft.LiveTable.Service.DevMode
 {
     using System;
+    using System.Collections.Concurrent;
     using System.Collections.Generic;
     using System.Diagnostics;
     using System.Linq;
@@ -419,6 +420,16 @@ namespace Microsoft.LiveTable.Service.DevMode
             public string PricingSource { get; set; } = string.Empty;
 
             public long OptionsRevision { get; set; }
+
+            /// <summary>
+            /// Diagnostic messages emitted during the run (per-zone analyst
+            /// failures, coverage gaps, projector stub fallbacks, etc.).
+            /// Surfaced to the browser console by the caller (the hub
+            /// drains these via <see cref="EdogQaCodeAnalyzer"/>'s
+            /// PublishWarning channel). Order reflects emission order,
+            /// modulo cross-zone parallelism.
+            /// </summary>
+            public List<string> DiagnosticMessages { get; set; } = new();
         }
 
         // ── Progress events ────────────────────────────────────────────
@@ -439,6 +450,12 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             /// <summary>F27 P9 T1e: one repair pass fired for this zone. <see cref="OrchestratorEvent.ErrorCode"/> carries the branch tag.</summary>
             ZoneRepairAttempted = 11,
+
+            /// <summary>Informational diagnostic from inside the orchestrator
+            /// (or its projector). Mirrors a <c>[QA-DIAG]</c> stdout line so
+            /// the browser console sees the same trace as the FLT log file.
+            /// <see cref="OrchestratorEvent.Message"/> carries the body.</summary>
+            DiagnosticMessage = 12,
         }
 
         public sealed class OrchestratorEvent
@@ -487,6 +504,12 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         private readonly HttpClient _httpClient;
 
+        // Diagnostic sink active for the duration of one RunAsync call.
+        // Per-zone tasks push [QA-DIAG]-equivalent messages here; the final
+        // contents are copied to OrchestratorResult.DiagnosticMessages so
+        // the analyzer can surface them to the browser via PublishWarning.
+        private ConcurrentQueue<string> _runDiagnostics;
+
         public EdogQaScenarioOrchestrator(HttpClient httpClient)
         {
             _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
@@ -514,6 +537,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             if (config.EditorOverride == null && config.Editor == null) throw new ArgumentException("Editor config required when no EditorOverride is supplied", nameof(config));
 
             var result = new OrchestratorResult { PricingSource = config.Pricing.Source ?? string.Empty };
+            _runDiagnostics = new ConcurrentQueue<string>();
             var optionsSnapshot = config.OptionsProvider?.CaptureSnapshot();
             result.OptionsRevision = optionsSnapshot?.Revision ?? 0;
             if (optionsSnapshot != null)
@@ -705,6 +729,22 @@ namespace Microsoft.LiveTable.Service.DevMode
                 }
 
                 var single = EdogQaScenarioProjector.Project(w.Plan, new[] { w.Accepted });
+                if (single.Diagnostics != null)
+                {
+                    // The projector already wrote each line to stdout; we
+                    // just need to surface them to the browser via the
+                    // run-diagnostics queue + a progress event. No second
+                    // Console.WriteLine — that would double-log.
+                    foreach (var d in single.Diagnostics)
+                    {
+                        _runDiagnostics?.Enqueue(d);
+                        SafeReport(progress, new OrchestratorEvent
+                        {
+                            Kind = OrchestratorEventKind.DiagnosticMessage,
+                            Message = d,
+                        });
+                    }
+                }
                 foreach (var p in single.Projected)
                 {
                     // F27 P11: copy sketch coverage IDs onto the projected
@@ -784,6 +824,14 @@ namespace Microsoft.LiveTable.Service.DevMode
             result.TotalCostUsd = totalCost;
             result.BudgetGateTripped = Volatile.Read(ref budgetTripped) != 0;
             result.BudgetGateReason = budgetReason ?? string.Empty;
+
+            // Drain per-run diagnostics into the result so the analyzer
+            // can surface them to the browser via PublishWarning.
+            while (_runDiagnostics != null && _runDiagnostics.TryDequeue(out var diag))
+            {
+                result.DiagnosticMessages.Add(diag);
+            }
+            _runDiagnostics = null;
 
             SafeReport(progress, new OrchestratorEvent
             {
@@ -942,7 +990,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"[QA-DIAG] Analyst pass failed (non-fatal): {ex.GetType().Name}: {ex.Message}");
+                        EmitDiagnostic(progress, $"Analyst pass failed (non-fatal): {ex.GetType().Name}: {ex.Message}");
                         zr.AnalystFailureCode = EdogQaLlmClient.ErrorCodeAnalystNetworkError;
                     }
 
@@ -1134,8 +1182,8 @@ namespace Microsoft.LiveTable.Service.DevMode
 
                         if (uncovered.Count > 0)
                         {
-                            Console.WriteLine(
-                                $"[QA-DIAG] Coverage gap: {uncovered.Count}/{expectedIds.Count} analyst observations "
+                            EmitDiagnostic(progress,
+                                $"Coverage gap: {uncovered.Count}/{expectedIds.Count} analyst observations "
                                 + $"uncovered by Architect sketches: [{string.Join(", ", uncovered)}]");
                             SafeReport(progress, new OrchestratorEvent
                             {
@@ -1148,14 +1196,14 @@ namespace Microsoft.LiveTable.Service.DevMode
                         }
                         else
                         {
-                            Console.WriteLine($"[QA-DIAG] Coverage check passed: all {expectedIds.Count} analyst observations covered");
+                            EmitDiagnostic(progress, $"Coverage check passed: all {expectedIds.Count} analyst observations covered");
                         }
 
                         analystDoc.Dispose();
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"[QA-DIAG] Coverage check failed (non-fatal): {ex.GetType().Name}: {ex.Message}");
+                        EmitDiagnostic(progress, $"Coverage check failed (non-fatal): {ex.GetType().Name}: {ex.Message}");
                     }
                 }
 
@@ -1573,6 +1621,25 @@ namespace Microsoft.LiveTable.Service.DevMode
             if (progress == null) return;
             try { progress.Report(ev); }
             catch { /* I7: progress callbacks must never bubble. */ }
+        }
+
+        /// <summary>
+        /// Mirror a <c>[QA-DIAG]</c> message to stdout (for the FLT log
+        /// file), enqueue it on the per-run diagnostic sink (so
+        /// <see cref="OrchestratorResult.DiagnosticMessages"/> carries
+        /// it back to the analyzer / hub for browser surfacing), and
+        /// emit a <see cref="OrchestratorEventKind.DiagnosticMessage"/>
+        /// progress event for any live SignalR listener.
+        /// </summary>
+        private void EmitDiagnostic(IProgress<OrchestratorEvent> progress, string message)
+        {
+            Console.WriteLine($"[QA-DIAG] {message}");
+            _runDiagnostics?.Enqueue(message);
+            SafeReport(progress, new OrchestratorEvent
+            {
+                Kind = OrchestratorEventKind.DiagnosticMessage,
+                Message = message,
+            });
         }
 
         /// <summary>
