@@ -196,21 +196,4 @@ namespace Microsoft.LiveTable.Service.DevMode
         public int MaxBodyBytes { get; init; }
     }
 
-    // ──────────────────────────────────────────────
-    // MitmPendingIntercept — Diagnostic view of a paused request
-    // ──────────────────────────────────────────────
-
-    /// <summary>Public diagnostic view of a pending breakpoint. Returned by <c>ListPending</c>.</summary>
-    internal sealed class MitmPendingIntercept
-    {
-        public string InterceptId { get; init; }
-        public string RuleId { get; init; }
-        public string RuleName { get; init; }
-        public MitmPhase Phase { get; init; }
-        public string OwnerConnectionId { get; init; }
-        public System.DateTimeOffset CreatedAtUtc { get; init; }
-        public System.DateTimeOffset DeadlineUtc { get; init; }
-        public string RequestMethod { get; init; }
-        public string RequestUrl { get; init; }
-    }
 }
