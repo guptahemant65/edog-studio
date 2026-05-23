@@ -37,7 +37,6 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// </summary>
         /// <returns>JSON with capacity info and session list.</returns>
         [HttpGet]
-        [RequestTimeout]
         [Route("sessions")]
         [SkipNetworkAccessFilteringForOutOfScopeApi]
         public IActionResult GetSessions()
