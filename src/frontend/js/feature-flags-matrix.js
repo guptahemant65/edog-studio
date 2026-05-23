@@ -887,7 +887,7 @@ class FeatureFlagsMatrix {
     obs.lastResult = !!data.result;
     obs.overridden = !!data.overridden;
     // Keep last 50 evaluations per flag
-    obs.history.push({ time: now, result: !!data.result, overridden: !!data.overridden, durationMs: data.durationMs });
+    obs.history.push({ time: now, result: !!data.result, overridden: !!data.overridden, durationMs: data.durationMs, caller: data.caller || null });
     if (obs.history.length > 50) obs.history.shift();
     obs.evalCount = (obs.evalCount || 0) + 1;
     this._observations.set(wireKey, obs);
@@ -933,6 +933,7 @@ class FeatureFlagsMatrix {
 
     var header = `<div class="ff-eh-header"><span class="ff-eh-title">${this._esc(wireKey)}</span><span class="ff-eh-count">${obs.evalCount} evaluation(s)</span><button class="ff-eh-close">\u2715</button></div>`;
 
+    var self = this;
     var rows = obs.history.slice().reverse().map(function(h) {
       var t = new Date(h.time);
       var timeStr = t.toLocaleTimeString();
@@ -940,10 +941,11 @@ class FeatureFlagsMatrix {
       var resultText = h.result ? 'TRUE' : 'FALSE';
       var overrideTag = h.overridden ? ' <span class="ff-eh-override">OVERRIDE</span>' : '';
       var durText = h.durationMs != null ? h.durationMs.toFixed(2) + 'ms' : '\u2014';
-      return `<tr><td class="ff-eh-time">${timeStr}</td><td class="${resultCls}">${resultText}${overrideTag}</td><td class="ff-eh-dur">${durText}</td></tr>`;
+      var callerText = h.caller ? '<span class="ff-eh-caller" title="' + self._esc(h.caller) + '">' + self._esc(h.caller.split('.').pop()) + '</span>' : '<span class="ff-eh-nocaller">\u2014</span>';
+      return `<tr><td class="ff-eh-time">${timeStr}</td><td class="${resultCls}">${resultText}${overrideTag}</td><td class="ff-eh-dur">${durText}</td><td>${callerText}</td></tr>`;
     }).join('');
 
-    var table = `<table class="ff-eh-table"><thead><tr><th>Time</th><th>Result</th><th>Duration</th></tr></thead><tbody>${rows}</tbody></table>`;
+    var table = `<table class="ff-eh-table"><thead><tr><th>Time</th><th>Result</th><th>Duration</th><th>Caller</th></tr></thead><tbody>${rows}</tbody></table>`;
 
     panel.innerHTML = header + table;
 

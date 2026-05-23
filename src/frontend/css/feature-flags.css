@@ -1061,7 +1061,7 @@ table.ff-table tbody tr.overridden:hover { background: rgba(229, 148, 12, 0.10);
   border-radius: var(--radius-lg, 8px);
   box-shadow: var(--shadow-xl, 0 12px 40px rgba(0,0,0,0.10), 0 4px 12px rgba(0,0,0,0.06));
   max-height: 320px;
-  width: 340px;
+  width: 440px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -1091,3 +1091,5 @@ table.ff-table tbody tr.overridden:hover { background: rgba(229, 148, 12, 0.10);
 .ff-eh-false { color: var(--status-failed); font-weight: 600; }
 .ff-eh-override { background: var(--accent); color: white; font-size: 9px; padding: 1px 5px; border-radius: 3px; font-weight: 600; margin-left: 4px; }
 .ff-eh-dur { color: var(--text-muted); text-align: right; }
+.ff-eh-caller { font-family: var(--font-mono); font-size: 10px; color: var(--accent); background: rgba(109,92,255,0.06); padding: 1px 5px; border-radius: 3px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; }
+.ff-eh-nocaller { color: var(--text-muted); }

@@ -88,6 +88,10 @@ namespace Microsoft.LiveTable.Service.DevMode
             {
                 _lastPublished[dedupKey] = now;
 
+                // Capture caller context — which FLT code path triggered this evaluation
+                string callerCodeMarker = null;
+                try { callerCodeMarker = MonitoredScope.CurrentCodeMarkerName; } catch { }
+
                 var eventData = new
                 {
                     flagName = featureName,
@@ -97,6 +101,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     result,
                     durationMs = sw.Elapsed.TotalMilliseconds,
                     overridden,
+                    caller = callerCodeMarker,
                 };
 
                 EdogTopicRouter.Publish("flag", eventData);
