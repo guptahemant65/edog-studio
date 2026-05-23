@@ -212,7 +212,7 @@ namespace Microsoft.LiveTable.Service.DevMode
     /// One row in the registry. Mutable LastActivity so TouchActivity is
     /// allocation-free on the hot path.
     /// </summary>
-    internal sealed class EdogSessionEntry
+    public sealed class EdogSessionEntry
     {
         public string ConnectionId { get; set; }
         public string Machine { get; set; }
@@ -228,7 +228,7 @@ namespace Microsoft.LiveTable.Service.DevMode
     /// <summary>
     /// Wire-shape returned by <c>/api/edog/sessions</c>.
     /// </summary>
-    internal sealed class EdogSessionSnapshot
+    public sealed class EdogSessionSnapshot
     {
         public string CapacityId { get; set; }
         public string CapacityName { get; set; }
