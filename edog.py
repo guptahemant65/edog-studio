@@ -162,7 +162,7 @@ def load_config():
     config_path = get_config_path()
     if config_path.exists():
         try:
-            with open(config_path) as f:
+            with open(config_path, encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
             print(f"⚠️ Could not load config: {e}")
@@ -173,7 +173,7 @@ def save_config(config):
     """Save config to file. Also clears token cache since config changes may invalidate it."""
     config_path = get_config_path()
     try:
-        with open(config_path, "w") as f:
+        with open(config_path, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=2)
         # Clear token cache since config changes may invalidate the cached token
         token_cache = Path(__file__).parent / ".edog-token-cache"
@@ -212,7 +212,7 @@ def get_workload_dev_mode_path(flt_repo_path=None):
         return None
 
     try:
-        with open(launch_settings) as f:
+        with open(launch_settings, encoding="utf-8") as f:
             settings = json.load(f)
 
         # Extract path from commandLineArgs: -DevMode:LocalConfigFilePath="C:\...\workload-dev-mode.json"
@@ -238,7 +238,7 @@ def read_workload_dev_mode_config(flt_repo_path=None):
         return {}
 
     try:
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
 
         result = {}
@@ -261,12 +261,12 @@ def write_workload_dev_mode_config(capacity_id, flt_repo_path=None):
         return False
 
     try:
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
 
         data["CapacityGuid"] = capacity_id
 
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4)
 
         return True
@@ -981,7 +981,7 @@ def uninstall_git_hook(repo_root):
         print("   No pre-commit hook found")
         return True
 
-    content = hook_file.read_text()
+    content = hook_file.read_text(encoding="utf-8")
     if "EDOG DevMode pre-commit hook" not in content:
         print("   Pre-commit hook exists but is not EDOG's hook")
         return False
@@ -1173,7 +1173,7 @@ def cache_token(token, expiry_timestamp):
         # Simple obfuscation (base64) - not secure, just prevents casual viewing
         data = f"{expiry_timestamp}|{token}"
         encoded = base64.b64encode(data.encode()).decode()
-        cache_path.write_text(encoded)
+        cache_path.write_text(encoded, encoding="utf-8")
         return True
     except Exception:
         return False
@@ -1188,7 +1188,7 @@ def load_cached_token():
         return None, None
 
     try:
-        encoded = cache_path.read_text()
+        encoded = cache_path.read_text(encoding="utf-8")
         data = base64.b64decode(encoded.encode()).decode()
         expiry_str, token = data.split("|", 1)
         expiry_timestamp = float(expiry_str)
