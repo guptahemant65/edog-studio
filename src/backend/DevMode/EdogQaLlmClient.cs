@@ -112,7 +112,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         internal const string PromptCacheKeyArchitect = "edog-qa-architect-v11";
 
         /// <summary>Stable cache key for the Editor's system+schema prefix.</summary>
-        internal const string PromptCacheKeyEditor = "edog-qa-editor-v11";
+        internal const string PromptCacheKeyEditor = "edog-qa-editor-v12";
 
         /// <summary>Stable cache key for the Analyst's system+schema prefix. The Analyst is the
         /// first pass of the 2-step Analyst→Architect pipeline; its prompt is intentionally
@@ -2638,9 +2638,16 @@ namespace Microsoft.LiveTable.Service.DevMode
             + "TimerTick = {\"tickSource\":\"source\",\"topic\":\"topic\",\"maxWaitMs\":5000}; "
             + "DiInvocation = {\"serviceType\":\"Namespace.Service\",\"method\":\"MethodName\",\"args\":[]}. "
             + "If testingGuidance.stimuliRequired provides concrete stimulus shapes, use those values directly in stimulusSpec as valid JSON. "
-            + "MATCHERS CONTRACT: matcherSpec MUST also be valid double-quoted JSON, not descriptive text. When typed matchers[] are present, emit matcherSpec as the JSON-serialized equivalent. "
+            + "MATCHERS CONTRACT (HARD REQUIREMENT — empty matchers[] is a quarantine offence): "
+            + "The typed `matchers` array is the CANONICAL assertion surface. It MUST NOT be empty when expectations[] is non-empty. "
+            + "For EACH expectation you emit, you MUST emit AT LEAST ONE corresponding entry in `matchers` with a concrete `topicField`, a typed `assertion`, and a typed `value`. "
+            + "If you cannot determine a specific value, emit `{\"topicField\":\"<topic.field>\",\"assertion\":\"Exists\",\"value\":{\"boolean\":true}}` — NEVER omit the matcher. "
+            + "The `matcherSpec` field on each expectation MUST be a JSON STRING containing valid double-quoted JSON (NOT a description, NOT a paraphrase, NOT a sentence). "
+            + "It MUST be the JSON-serialized form of the corresponding typed matcher entry — e.g. matcherSpec=\"{\\\"topicField\\\":\\\"http.statusCode\\\",\\\"assertion\\\":\\\"Equals\\\",\\\"value\\\":{\\\"integer\\\":200}}\". "
+            + "Phrases like \"verify that the OBO token is acquired\" are ILLEGAL in matcherSpec and will be rejected — convert them into typed matchers + JSON. "
             + "Each matcher = {\"topicField\":\"topic.field\",\"assertion\":\"Equals|NotEquals|Exists|InRange|ContainsAll|OneOf|Length\",\"value\":{typed value object}}. "
             + "Typed values use one of Value_string, Value_integer, Value_datetime, Value_range, Value_array (plus boolean/length helpers when needed by Exists or Length assertions). "
+            + "WORKED MATCHER EXAMPLE — for an OBO-token acquisition assertion, emit: expectations=[{\"type\":\"EventPresent\",\"topic\":\"token\",\"matcherSpec\":\"{\\\"topicField\\\":\\\"token.oboAcquired\\\",\\\"assertion\\\":\\\"Exists\\\",\\\"value\\\":{\\\"boolean\\\":true}}\",\"rationale\":\"OBO token acquired on the new flag-on branch\"}] AND matchers=[{\"topicField\":\"token.oboAcquired\",\"assertion\":\"Exists\",\"value\":{\"boolean\":true}}]. Note: matchers[] is populated, matcherSpec parses as JSON, and the two are byte-equivalent. "
             + "CRITICAL: stimulusSpec and matcherSpec use DOUBLE QUOTES for JSON. Single quotes are invalid JSON and will be rejected by the projector. "
             + "VERB SELECTION GUIDE (the validator's match key is (category, verb, line-overlap); a wrong verb produces a false-negative match against curator-graded gold-corpus expectations). "
             + "Choose the MOST SPECIFIC verb for the assertion's intent: "
@@ -2693,8 +2700,9 @@ namespace Microsoft.LiveTable.Service.DevMode
             + "(codePaths, featureFlagMatrix, stimuliRequired, observableSignals, errorModesToTest, externalDependencyFailures, diagnosticNotes); "
             + "each Architect scenarioSketch declares addressesCodePathIds + addressesErrorModeIds that reference those IDs. "
             + "Use these as additional context when picking stimuli and matchers: prefer a stimulus whose 'kind' matches an entry in stimuliRequired, "
-            + "and prefer a matcher whose 'topicField' aligns with an entry in observableSignals. Do NOT introduce scenarios that address codePaths or errorModes the Architect did not sketch — coverage is the Architect's responsibility. "
-            + "When emitting compatibility-mirror stimulusSpec/matcherSpec strings, you may quote ids from the Analyst testingGuidance for traceability, but never invent new ones.";
+            + "and prefer a matcher whose 'topicField' aligns with an entry in observableSignals (use the signal's 'source' as the topicField when possible). "
+            + "Do NOT introduce scenarios that address codePaths or errorModes the Architect did not sketch — coverage is the Architect's responsibility. "
+            + "TESTING-GUIDANCE TEXT IS DIAGNOSTIC CONTEXT, NOT MATCHER COPY: descriptive sentences inside testingGuidance (codePaths[].description, observableSignals[].description, etc.) are guidance for picking the right typed matcher — they are NEVER copied verbatim into matcherSpec or matchers[]. Always structure them as typed matchers per the MATCHERS CONTRACT above.";
 
         // F27 P11: runtime-gated prompt selectors. Default-true env var is read once via Lazy<bool>.
         private static string ArchitectSystemPrompt => EdogQaFeatureFlags.P11ElicitationEnabled

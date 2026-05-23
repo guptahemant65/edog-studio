@@ -1131,9 +1131,17 @@ namespace Microsoft.LiveTable.Service.DevMode
                 }
 
                 // ── Coverage checker (deterministic, no LLM call) ────
-                // Parse analyst observations and verify every behavioral
-                // path + error path has at least one scenarioSketch that
-                // references it. Log uncovered observations as warnings.
+                // Informational only — never blocks. Verifies that the
+                // Architect's per-sketch coverage IDs (addressesCodePathIds /
+                // addressesErrorModeIds, F27 P11) reference the Analyst's
+                // codePaths/errorModesToTest enumeration. The Architect's
+                // groundingEvidence IDs (ev-*) live in a DIFFERENT namespace
+                // from the Analyst's cp-*/em-* IDs, so comparing EvidenceRefs
+                // against expectedIds was always 100% uncovered — that
+                // historical bug is fixed here. Falls back to an
+                // informational note when neither side declares IDs we can
+                // line up; the real quality gates are the validator + linter,
+                // not this diagnostic.
                 if (!string.IsNullOrWhiteSpace(zoneCtx.AnalystObservations)
                     && architectResult.Plan?.ScenarioSketches != null)
                 {
@@ -1161,42 +1169,77 @@ namespace Microsoft.LiveTable.Service.DevMode
                             }
                         }
 
-                        // Collect all IDs referenced by sketches (via title or evidenceRefs)
+                        // Collect coverage IDs from the Architect's per-sketch
+                        // addressesCodePathIds + addressesErrorModeIds (these
+                        // are the cp-*/em-* references that line up with the
+                        // Analyst enumeration). EvidenceRefs (ev-*) are
+                        // INTENTIONALLY ignored here — they're a different
+                        // namespace and produced the historical 100%-uncovered
+                        // false alarm.
                         var coveredIds = new HashSet<string>(StringComparer.Ordinal);
+                        var sketchCount = 0;
+                        var sketchesWithCoverageIds = 0;
                         foreach (var sketch in architectResult.Plan.ScenarioSketches)
                         {
-                            if (sketch.EvidenceRefs != null)
+                            if (sketch == null) continue;
+                            sketchCount++;
+                            var hadCoverageId = false;
+                            if (sketch.AddressesCodePathIds != null)
                             {
-                                foreach (var r in sketch.EvidenceRefs)
+                                foreach (var r in sketch.AddressesCodePathIds)
                                 {
-                                    if (!string.IsNullOrEmpty(r)) coveredIds.Add(r);
+                                    if (!string.IsNullOrEmpty(r)) { coveredIds.Add(r); hadCoverageId = true; }
                                 }
                             }
-                        }
-
-                        var uncovered = new List<string>();
-                        foreach (var id in expectedIds)
-                        {
-                            if (!coveredIds.Contains(id)) uncovered.Add(id);
-                        }
-
-                        if (uncovered.Count > 0)
-                        {
-                            EmitDiagnostic(progress,
-                                $"Coverage gap: {uncovered.Count}/{expectedIds.Count} analyst observations "
-                                + $"uncovered by Architect sketches: [{string.Join(", ", uncovered)}]");
-                            SafeReport(progress, new OrchestratorEvent
+                            if (sketch.AddressesErrorModeIds != null)
                             {
-                                Kind = OrchestratorEventKind.ZoneValidated,
-                                ZoneId = zr.ZoneId,
-                                ZoneInputIndex = zoneInputIndex,
-                                Message = $"Coverage gap: {uncovered.Count} analyst observations without sketches",
-                                ErrorCode = "COVERAGE_GAP",
-                            });
+                                foreach (var r in sketch.AddressesErrorModeIds)
+                                {
+                                    if (!string.IsNullOrEmpty(r)) { coveredIds.Add(r); hadCoverageId = true; }
+                                }
+                            }
+                            if (hadCoverageId) sketchesWithCoverageIds++;
+                        }
+
+                        if (expectedIds.Count == 0)
+                        {
+                            EmitDiagnostic(progress, "Coverage check skipped: Analyst emitted no codePaths/errorModesToTest IDs to verify against.");
+                        }
+                        else if (sketchesWithCoverageIds == 0)
+                        {
+                            // Architect produced sketches but none declared
+                            // coverage IDs — can't compute coverage. Surface
+                            // as informational, not a warning, because the
+                            // validator/linter are the real gates.
+                            EmitDiagnostic(progress,
+                                $"Coverage check skipped: {sketchCount} Architect sketches but none declared addressesCodePathIds/addressesErrorModeIds.");
                         }
                         else
                         {
-                            EmitDiagnostic(progress, $"Coverage check passed: all {expectedIds.Count} analyst observations covered");
+                            var uncovered = new List<string>();
+                            foreach (var id in expectedIds)
+                            {
+                                if (!coveredIds.Contains(id)) uncovered.Add(id);
+                            }
+
+                            if (uncovered.Count > 0)
+                            {
+                                EmitDiagnostic(progress,
+                                    $"Coverage gap: {uncovered.Count}/{expectedIds.Count} analyst observations "
+                                    + $"uncovered by Architect sketches: [{string.Join(", ", uncovered)}]");
+                                SafeReport(progress, new OrchestratorEvent
+                                {
+                                    Kind = OrchestratorEventKind.ZoneValidated,
+                                    ZoneId = zr.ZoneId,
+                                    ZoneInputIndex = zoneInputIndex,
+                                    Message = $"Coverage gap: {uncovered.Count} analyst observations without sketches",
+                                    ErrorCode = "COVERAGE_GAP",
+                                });
+                            }
+                            else
+                            {
+                                EmitDiagnostic(progress, $"Coverage check passed: all {expectedIds.Count} analyst observations covered");
+                            }
                         }
 
                         analystDoc.Dispose();
@@ -1444,10 +1487,47 @@ namespace Microsoft.LiveTable.Service.DevMode
                 // pass can only ADD scenarios. Repair input is the
                 // quarantined list as JSON-encoded diagnostic data
                 // (not free-text instructions — see SECURITY.md §3 A1).
+                //
+                // SYSTEMIC-QUARANTINE SHORT-CIRCUIT: if >=80% of the
+                // quarantined scenarios share the SAME failure code AND
+                // there are at least 5 of them, the failure is a
+                // systemic Editor-output problem (e.g. empty matchers[],
+                // descriptive matcherSpec). Asking the Editor to repair
+                // its own output one more time in the same format will
+                // burn budget without recovering — the fix has to land
+                // in the Editor prompt / schema, not in another repair
+                // pass. Skip the repair, surface the root cause, and let
+                // the operator iterate on the prompt.
+                if (config.EnableRepairLoop
+                    && zr.Quarantined.Count >= 5)
+                {
+                    var (dominantCode, dominantCount) = ComputeDominantQuarantineCode(zr.Quarantined);
+                    if (!string.IsNullOrEmpty(dominantCode)
+                        && dominantCount * 5 >= zr.Quarantined.Count * 4) // >=80%
+                    {
+                        EmitDiagnostic(progress,
+                            $"Systemic quarantine detected: {dominantCount}/{zr.Quarantined.Count} scenarios "
+                            + $"failed with the same code [{dominantCode}]. Skipping Editor repair loop — "
+                            + "the Editor output format is broken, not individual scenarios. Fix the Editor "
+                            + "prompt/schema upstream rather than burning budget on retries.");
+                        SafeReport(progress, new OrchestratorEvent
+                        {
+                            Kind = OrchestratorEventKind.ZoneValidated,
+                            ZoneId = zr.ZoneId,
+                            ZoneInputIndex = zoneInputIndex,
+                            Message = $"Systemic quarantine: {dominantCount}/{zr.Quarantined.Count} share code {dominantCode}",
+                            ErrorCode = "SYSTEMIC_QUARANTINE_SKIP_REPAIR",
+                        });
+                        zr.RepairBranch = "skipped_systemic";
+                        zr.RepairFailureCode = dominantCode;
+                    }
+                }
+
                 if (config.EnableRepairLoop
                     && zr.RepairAttempts < ComputeMaxRepairPasses(config.ReachableSlotCount)
                     && zr.Quarantined.Count > 0
                     && !isBudgetTripped()
+                    && zr.RepairBranch != "skipped_systemic"
                     && (config.EditorRepairOverride != null || config.Editor != null))
                 {
                     zr.InitialAcceptedCount = zr.Accepted.Count;
@@ -1667,6 +1747,38 @@ namespace Microsoft.LiveTable.Service.DevMode
                 return (r, true);
             }
             return (null, false);
+        }
+
+        /// <summary>
+        /// Detect a systemic quarantine pattern: the wire code shared by
+        /// the largest plurality of quarantined scenarios, plus its
+        /// count. Used by the Branch B short-circuit to avoid spending
+        /// repair budget when the failure is uniform across the batch
+        /// (e.g. every scenario emitted an empty matchers[] array, or
+        /// every matcherSpec is descriptive text). Caller decides the
+        /// dominance threshold; this helper just returns the tally.
+        /// </summary>
+        private static (string Code, int Count) ComputeDominantQuarantineCode(
+            List<EdogQaScenarioValidator.QuarantinedScenario> quarantined)
+        {
+            if (quarantined == null || quarantined.Count == 0) return (string.Empty, 0);
+            var tally = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var q in quarantined)
+            {
+                if (q?.Reasons == null || q.Reasons.Count == 0) continue;
+                // Tally the FIRST reason code per scenario — the validator
+                // emits reasons in priority order, so the first is the
+                // root cause for scoring purposes.
+                var code = q.Reasons[0]?.Code;
+                if (string.IsNullOrEmpty(code)) continue;
+                tally[code] = tally.TryGetValue(code, out var n) ? n + 1 : 1;
+            }
+            var winner = (Code: string.Empty, Count: 0);
+            foreach (var kv in tally)
+            {
+                if (kv.Value > winner.Count) winner = (kv.Key, kv.Value);
+            }
+            return winner;
         }
 
         /// <summary>
