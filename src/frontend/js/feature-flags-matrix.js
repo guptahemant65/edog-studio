@@ -760,6 +760,14 @@ class FeatureFlagsMatrix {
         }
       });
     });
+    // Wire obs cell click -> open evaluation history
+    wrap.querySelectorAll('.ff-obs').forEach(obsEl => {
+      const row = obsEl.closest('tr[data-flag]');
+      if (!row) return;
+      const wk = row.dataset.flag;
+      obsEl.style.cursor = 'pointer';
+      obsEl.addEventListener('click', () => this._showEvalHistory(wk));
+    });
   }
 
   _renderRow(row, mainline, sovereign) {
