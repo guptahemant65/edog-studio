@@ -393,6 +393,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         {
             app.MapGet("/api/flt/config", apiProxy.HandleConfig);
             app.MapGet("/api/edog/health", apiProxy.HandleHealth);
+            app.MapGet("/api/edog/sessions", apiProxy.HandleSessions);
         }
 
         // Interceptor status — source of truth for which EDOG interceptors are active
