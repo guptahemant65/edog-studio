@@ -92,7 +92,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         internal const int MaxDescriptionLength = 500;
         internal const int MaxReasonLength      = 240;
         internal const int MinTimeoutMs         = 1_000;
-        internal const int MaxTimeoutMs         = 60_000;
+        internal const int MaxTimeoutMs         = 120_000;
         internal const int MinPriority          = 1;
         internal const int MaxPriority          = 5;
 
@@ -800,18 +800,21 @@ namespace Microsoft.LiveTable.Service.DevMode
                         });
                     }
 
+                    // Grounding slot checks are informational — the Editor doesn't
+                    // have catalog hash data in its context, so it can't produce
+                    // matcherTopicHashes. Don't quarantine for this.
                     if (hasGroundingClaim && (matcherTopicHashes == null || matcherTopicHashes.Count == 0))
                     {
-                        sink.Add(new QuarantineReason
+                        informational.Add(new QuarantineReason
                         {
                             Code = CodeGroundingSlotMismatch,
-                            Message = "Typed matchers require catalogHashes.matcherTopicHashes so the scenario stays grounded to the active catalog.",
+                            Message = "Typed matchers have no catalogHashes.matcherTopicHashes — scenario is not grounded to the catalog.",
                             FieldPath = "catalogHashes.matcherTopicHashes",
                         });
                     }
                     else if (hasGroundingClaim && matcherTopicHashes != null && !string.IsNullOrWhiteSpace(topic) && !matcherTopicHashes.ContainsKey(topic))
                     {
-                        sink.Add(new QuarantineReason
+                        informational.Add(new QuarantineReason
                         {
                             Code = CodeGroundingSlotMismatch,
                             Message = $"Matcher topic '{topic}' is not present in catalogHashes.matcherTopicHashes.",

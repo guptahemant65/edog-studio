@@ -2946,8 +2946,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                 }
 
                 // Timeout
-                if (s.TimeoutMs < 1000 || s.TimeoutMs > 60000)
-                    errors.Add(new QaValidationError { ScenarioId = s.Id, Field = "timeoutMs", Message = "Timeout must be 1000-60000 ms" });
+                if (s.TimeoutMs < 1000 || s.TimeoutMs > 120000)
+                    errors.Add(new QaValidationError { ScenarioId = s.Id, Field = "timeoutMs", Message = "Timeout must be 1000-120000 ms" });
             }
 
             return errors;
