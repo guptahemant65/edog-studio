@@ -44,8 +44,19 @@ class HttpPipelineTab {
     // DOM cache
     this._els = {};
 
+    // ── F28 MITM state ──
+    this._mitmEnabled = false;                          // intercept armed?
+    this._mitmRules = [];                               // rule store mirror
+    this._mitmPaused = new Map();                       // interceptId → snapshot
+    this._mitmRowMenu = null;                           // HttpRowMenu instance
+    this._mitmModalEl = null;                           // detached modal node (if any)
+    this._editSummary = { method: false, url: false, headers: false, body: false };
+    this._editBuffer = null;                            // working copy of paused snapshot
+    this._mitmSubscribed = false;
+
     // Bound handler for SignalR
     this._onEvent = this._onEvent.bind(this);
+    this._onMitmEvent = this._onMitmEvent.bind(this);
 
     // Build DOM
     this._buildDOM();
@@ -68,6 +79,7 @@ class HttpPipelineTab {
     if (this._active) return;
     this._active = true;
     // SignalR subscription is done in constructor — no need to re-subscribe here
+    this._subscribeMitmTopic();
     document.addEventListener('keydown', this._globalKeyHandler);
     document.addEventListener('click', this._onDocClick);
     this._scheduleRender();
@@ -104,7 +116,11 @@ class HttpPipelineTab {
       requestSizeBytes: d.requestSizeBytes || 0,
       responseSizeBytes: d.responseSizeBytes || 0,
       httpClientName: d.httpClientName || '',
-      correlationId: d.correlationId || ''
+      correlationId: d.correlationId || '',
+      mitm: d.mitm || null,
+      _paused: false,
+      _interceptId: null,
+      _phase: null
     };
 
     // Ring buffer: drop oldest if at capacity
@@ -198,6 +214,20 @@ class HttpPipelineTab {
     // Row 1: search + method pills + status pills
     var row1 = document.createElement('div');
     row1.className = 'http-toolbar-row';
+
+    // ── F28: Intercept toggle (placed first for prominence) ──
+    var intercept = document.createElement('button');
+    intercept.type = 'button';
+    intercept.className = 'http-intercept-toggle';
+    intercept.setAttribute('aria-pressed', 'false');
+    intercept.setAttribute('aria-label', 'Toggle HTTP interception');
+    intercept.title = 'Toggle interception (Ctrl+Shift+I)';
+    intercept.innerHTML =
+      '<span class="http-it-dot"></span>' +
+      '<span class="http-it-label">Intercept OFF</span>';
+    row1.appendChild(intercept);
+    this._els.interceptToggle = intercept;
+    row1.appendChild(this._makeSep());
 
     // Search box
     var search = document.createElement('div');
@@ -449,8 +479,8 @@ class HttpPipelineTab {
     // Tab bar
     var tabs = document.createElement('div');
     tabs.className = 'http-detail-tabs';
-    var tabNames = ['Request', 'Response', 'Timing', 'Headers'];
-    var tabIds = ['request', 'response', 'timing', 'headers'];
+    var tabNames = ['Request', 'Response', 'Timing', 'Headers', 'Intercept'];
+    var tabIds = ['request', 'response', 'timing', 'headers', 'intercept'];
     for (var i = 0; i < tabNames.length; i++) {
       var tab = document.createElement('button');
       tab.className = 'http-detail-tab' + (tabIds[i] === 'request' ? ' active' : '');
@@ -498,6 +528,13 @@ class HttpPipelineTab {
 
   _bindEvents() {
     var self = this;
+
+    // ── F28: Intercept toggle button ──
+    if (this._els.interceptToggle) {
+      this._els.interceptToggle.addEventListener('click', function() {
+        self._onMitmToggle();
+      });
+    }
 
     // Search
     this._els.searchInput.addEventListener('input', function() {
@@ -661,6 +698,36 @@ class HttpPipelineTab {
         e.preventDefault();
         self._exportOpen = !self._exportOpen;
         self._els.exportDD.classList.toggle('open', self._exportOpen);
+      }
+      // ── F28 MITM keyboard shortcuts ──
+      // Ctrl+Shift+I: toggle interception
+      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'i') {
+        e.preventDefault();
+        self._onMitmToggle();
+      }
+      // Ctrl+Shift+K: kill switch
+      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        self._onMitmKillSwitch();
+      }
+      // Per-row shortcuts (only when a row is paused + selected, not in inputs)
+      var tag = e.target && e.target.tagName;
+      var inEditable = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' ||
+        (e.target && e.target.isContentEditable);
+      if (inEditable) return;
+      var sel = self._getSelectedRow();
+      if (!sel) return;
+      var pausedId = sel._paused ? sel._interceptId : null;
+      if (e.key === 'Enter' && pausedId) {
+        e.preventDefault();
+        if (self._hasEdits()) self._onModifyForward(pausedId);
+        else self._onForward(pausedId);
+      } else if ((e.key === 'd' || e.key === 'D') && pausedId) {
+        e.preventDefault();
+        self._onBlock(pausedId);
+      } else if ((e.key === 'p' || e.key === 'P')) {
+        e.preventDefault();
+        self._onSendToPlayground(sel);
       }
     };
 
@@ -904,13 +971,22 @@ class HttpPipelineTab {
       row.dataset.id = req._id;
       row.setAttribute('role', 'row');
       row.tabIndex = -1;
+
+      // F28: paused row + mitm action badge
+      var mitmInfo = req.mitm || null;
+      var pausedSnap = req._paused && req._interceptId
+        ? this._mitmPaused.get(req._interceptId) : null;
+      if (pausedSnap) rowCls += ' http-row-paused';
+      row.className = rowCls + (pausedSnap ? ' http-row-paused' : '');
+      var mitmBadgeHtml = this._renderMitmBadge(req, pausedSnap);
+
       row.innerHTML =
         '<div class="http-cell"><span class="http-method ' + methodCls + '">' + this._esc(req.method) + '</span></div>' +
-        '<div class="http-cell http-url">' + this._esc(req.url) + '</div>' +
+        '<div class="http-cell http-url">' + this._esc(req.url) + mitmBadgeHtml + '</div>' +
         '<div class="http-cell"><span class="http-status ' + statusCls + '">' +
           (statusIcon ? '<span style="font-size:10px">' + statusIcon + '</span> ' : '') +
-          sc + '</span></div>' +
-        '<div class="http-cell http-dur ' + durCls + '">' + durFmt + '</div>' +
+          (pausedSnap ? '\u25CF PAUSED' : sc) + '</span></div>' +
+        '<div class="http-cell http-dur ' + durCls + '">' + (pausedSnap ? '—' : durFmt) + '</div>' +
         '<div class="http-cell">' + (req.httpClientName ? '<span class="http-handler-pill">' + this._esc(req.httpClientName) + '</span>' : '') + '</div>' +
         '<div class="http-cell http-time">' + ts + '</div>';
 
@@ -919,6 +995,11 @@ class HttpPipelineTab {
           self._selectedId = r._id;
           self._highlightSelected();
           self._openDetail(r._id);
+        });
+        // F28: right-click context menu
+        row.addEventListener('contextmenu', function(ev) {
+          ev.preventDefault();
+          self._showRowMenu(ev.clientX, ev.clientY, r);
         });
       })(req);
 
@@ -1009,18 +1090,55 @@ class HttpPipelineTab {
     if (!req) return;
 
     var body = this._els.detailBody;
+    // F28: if row is paused, auto-pin detail to Intercept tab when first opened
+    var pausedSnap = req._paused && req._interceptId
+      ? this._mitmPaused.get(req._interceptId) : null;
+
+    // Show/hide Intercept tab based on paused state
+    var interceptTab = this._els.detailTabs.querySelector('.http-detail-tab[data-dtab="intercept"]');
+    if (interceptTab) {
+      interceptTab.style.display = pausedSnap ? '' : 'none';
+    }
+
+    if (pausedSnap && this._detailTab !== 'intercept' && !this._editBuffer) {
+      this._detailTab = 'intercept';
+      var tabs = this._els.detailTabs.querySelectorAll('.http-detail-tab');
+      for (var ti = 0; ti < tabs.length; ti++) {
+        var on = tabs[ti].dataset.dtab === 'intercept';
+        tabs[ti].classList.toggle('active', on);
+        tabs[ti].setAttribute('aria-selected', on ? 'true' : 'false');
+      }
+      this._updateDetailIndicator();
+    }
+
     switch (this._detailTab) {
       case 'request':
         body.innerHTML = this._renderRequestTab(req);
         break;
       case 'response':
-        body.innerHTML = this._renderResponseTab(req);
+        body.innerHTML = pausedSnap
+          ? this._renderForgeTab(pausedSnap)
+          : this._renderResponseTab(req);
         break;
       case 'timing':
         body.innerHTML = this._renderTimingTab(req);
         break;
       case 'headers':
         body.innerHTML = this._renderHeadersTab(req);
+        break;
+      case 'intercept':
+        if (pausedSnap) {
+          body.innerHTML = this._renderInterceptTab(pausedSnap);
+          this._bindInterceptTab(pausedSnap);
+        } else {
+          body.innerHTML =
+            '<div class="http-detail-section">' +
+              '<div class="http-detail-section-title">No active breakpoint</div>' +
+              '<div style="color:var(--text-muted);font-size:12px">' +
+                'This request is not currently paused. Create a breakpoint rule to intercept matching traffic.' +
+              '</div>' +
+            '</div>';
+        }
         break;
     }
   }
@@ -1329,5 +1447,854 @@ class HttpPipelineTab {
     }
 
     return String(val);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // F28 — MITM (Man-in-the-Middle) — intercept toggle, breakpoints,
+  // editable request, action footer, "Send to Playground".
+  // ═══════════════════════════════════════════════════════════════════
+
+  /** Subscribe to the `mitm` SignalR topic. Idempotent. */
+  _subscribeMitmTopic() {
+    if (!this._signalr || this._mitmSubscribed) return;
+    this._signalr.on('mitm', this._onMitmEvent);
+    this._signalr.subscribeTopic('mitm');
+    this._mitmSubscribed = true;
+    // Best-effort fetch of capability + existing rules. Silently ignore failures.
+    this._invokeMitm('MitmGetCapabilities').then(function() {}).catch(function() {});
+    this._refreshMitmRules();
+  }
+
+  /** Convenience wrapper around SignalR.invoke that resolves to null on failure. */
+  _invokeMitm(method, arg) {
+    var conn = this._signalr && this._signalr.connection;
+    if (!conn || conn.state !== 'Connected') {
+      return Promise.resolve(null);
+    }
+    try {
+      return arg === undefined
+        ? conn.invoke(method)
+        : conn.invoke(method, arg);
+    } catch (e) {
+      return Promise.resolve(null);
+    }
+  }
+
+  _refreshMitmRules() {
+    var self = this;
+    this._invokeMitm('MitmListRules').then(function(res) {
+      if (res && res.rules) self._mitmRules = res.rules;
+    }).catch(function() {});
+  }
+
+  /** SignalR `mitm` topic handler. */
+  _onMitmEvent(envelope) {
+    var d = envelope && envelope.data ? envelope.data : envelope;
+    if (!d || !d.type) return;
+    switch (d.type) {
+      case 'capabilityChanged':
+        this._mitmEnabled = !!d.enabled;
+        this._renderMitmToggle();
+        break;
+      case 'interceptionToggled':
+        this._mitmEnabled = !!d.enabled;
+        this._renderMitmToggle();
+        break;
+      case 'ruleCreated':
+        if (d.rule) {
+          var existing = this._mitmRules.findIndex(function(r) { return r.id === d.rule.id; });
+          if (existing >= 0) this._mitmRules[existing] = d.rule;
+          else this._mitmRules.push(d.rule);
+        }
+        break;
+      case 'ruleDeleted':
+        if (d.ruleId) {
+          this._mitmRules = this._mitmRules.filter(function(r) { return r.id !== d.ruleId; });
+        }
+        break;
+      case 'breakpointHit':
+        this._onMitmBreakpointHit(d);
+        break;
+      case 'breakpointResumed':
+      case 'breakpointTimedOut':
+        this._onMitmBreakpointResumed(d);
+        break;
+      case 'cleared':
+        this._mitmPaused.clear();
+        this._editBuffer = null;
+        this._scheduleRender();
+        if (window.edogToast) window.edogToast('All breakpoints cleared', 'success');
+        break;
+      case 'sentToPlayground':
+        // Audit only — toast already shown locally
+        break;
+    }
+  }
+
+  _onMitmBreakpointHit(snap) {
+    if (!snap || !snap.interceptId) return;
+    this._mitmPaused.set(snap.interceptId, snap);
+
+    // Find or create a synthetic row for the paused intercept.
+    var existing = null;
+    for (var i = 0; i < this._events.length; i++) {
+      if (this._events[i]._interceptId === snap.interceptId) {
+        existing = this._events[i];
+        break;
+      }
+    }
+    if (!existing) {
+      var req = snap.request || {};
+      var entry = {
+        _id: this._nextId++,
+        _ts: snap.createdAtUtc || new Date().toISOString(),
+        _seq: this._nextId,
+        method: (req.method || 'GET').toUpperCase(),
+        url: this._sanitizeUrl(req.url || ''),
+        statusCode: 0,
+        durationMs: 0,
+        requestHeaders: this._redactHeaders(req.headers || {}),
+        responseHeaders: {},
+        responseBodyPreview: '',
+        requestBodyPreview: (req.body || '').slice(0, 4096),
+        requestSizeBytes: req.bodyBytes || 0,
+        responseSizeBytes: 0,
+        httpClientName: req.httpClientName || '',
+        correlationId: req.correlationId || '',
+        mitm: { ruleId: snap.ruleId, ruleName: snap.ruleName, action: 'paused', phase: snap.phase },
+        _paused: true,
+        _interceptId: snap.interceptId,
+        _phase: snap.phase
+      };
+      if (this._events.length >= this._MAX_EVENTS) this._events.shift();
+      this._events.push(entry);
+    } else {
+      existing._paused = true;
+      existing._interceptId = snap.interceptId;
+    }
+    this._applyFilters();
+  }
+
+  _onMitmBreakpointResumed(d) {
+    if (!d || !d.interceptId) return;
+    this._mitmPaused.delete(d.interceptId);
+    for (var i = 0; i < this._events.length; i++) {
+      if (this._events[i]._interceptId === d.interceptId) {
+        this._events[i]._paused = false;
+        if (d.verdict && this._events[i].mitm) {
+          this._events[i].mitm.verdict = d.verdict;
+          this._events[i].mitm.action = this._verdictToAction(d.verdict);
+        }
+        break;
+      }
+    }
+    if (this._editBuffer && this._editBuffer.interceptId === d.interceptId) {
+      this._editBuffer = null;
+      this._resetEditSummary();
+    }
+    this._scheduleRender();
+    if (!this._els.detail.classList.contains('closed')) {
+      this._renderDetail();
+    }
+  }
+
+  _verdictToAction(verdict) {
+    switch (verdict) {
+      case 'forward': return 'passthrough-tagged';
+      case 'modify':  return 'modified';
+      case 'block':   return 'blocked';
+      case 'forge':   return 'forged';
+      default:        return verdict;
+    }
+  }
+
+  /** Intercept toolbar toggle visual state. */
+  _renderMitmToggle() {
+    var btn = this._els.interceptToggle;
+    if (!btn) return;
+    btn.classList.toggle('armed', !!this._mitmEnabled);
+    btn.setAttribute('aria-pressed', this._mitmEnabled ? 'true' : 'false');
+    var label = btn.querySelector('.http-it-label');
+    if (label) label.textContent = this._mitmEnabled ? 'Intercept ON' : 'Intercept OFF';
+  }
+
+  _onMitmToggle() {
+    var self = this;
+    var next = !this._mitmEnabled;
+    // Optimistic UI
+    this._mitmEnabled = next;
+    this._renderMitmToggle();
+    this._invokeMitm('MitmToggleInterception', next).then(function(res) {
+      if (res && res.success === false) {
+        // Revert on explicit failure
+        self._mitmEnabled = !next;
+        self._renderMitmToggle();
+        if (window.edogToast) window.edogToast(res.message || 'Toggle failed', 'error');
+      } else if (window.edogToast) {
+        window.edogToast('Interception ' + (next ? 'armed' : 'disabled'),
+          next ? 'success' : 'info');
+      }
+    }).catch(function() {
+      self._mitmEnabled = !next;
+      self._renderMitmToggle();
+    });
+  }
+
+  _onMitmKillSwitch() {
+    var self = this;
+    this._invokeMitm('MitmClearAll').then(function() {
+      self._mitmPaused.clear();
+      self._editBuffer = null;
+      self._scheduleRender();
+      if (window.edogToast) window.edogToast('Kill switch — all intercepts resumed', 'warning');
+    }).catch(function() {});
+  }
+
+  /** Returns badge HTML for a row based on mitm state. */
+  _renderMitmBadge(req, pausedSnap) {
+    if (pausedSnap) {
+      return ' <span class="http-mitm-badge mb-paused"><span class="mb-dot"></span>PAUSED</span>';
+    }
+    var m = req.mitm;
+    if (!m || !m.action) return '';
+    var map = {
+      'modified':          { cls: 'mb-modified',    label: 'MODIFIED' },
+      'response-modified': { cls: 'mb-modified',    label: 'MODIFIED' },
+      'blocked':           { cls: 'mb-blocked',     label: 'BLOCKED' },
+      'forged':            { cls: 'mb-forged',      label: 'FORGED' },
+      'timed-out':         { cls: 'mb-blocked',     label: 'TIMEOUT' },
+      'cancelled':         { cls: 'mb-blocked',     label: 'CANCELLED' },
+      'delayed':           { cls: 'mb-delayed',     label: 'DELAYED' },
+      'replayed':          { cls: 'mb-replayed',    label: 'REPLAYED' },
+      'passthrough-tagged':{ cls: 'mb-passthrough', label: 'PASSED' }
+    };
+    var meta = map[m.action];
+    if (!meta) return '';
+    return ' <span class="http-mitm-badge ' + meta.cls +
+      '" title="' + this._esc(m.ruleName || m.ruleId || '') + '">' +
+      '<span class="mb-dot"></span>' + meta.label + '</span>';
+  }
+
+  /** Render the Intercept tab for a paused snapshot. */
+  _renderInterceptTab(snap) {
+    if (!this._editBuffer || this._editBuffer.interceptId !== snap.interceptId) {
+      var req = snap.request || {};
+      this._editBuffer = {
+        interceptId: snap.interceptId,
+        phase: snap.phase,
+        method: req.method || 'GET',
+        url: req.url || '',
+        headers: Object.assign({}, req.headers || {}),
+        body: req.body == null ? '' : req.body,
+        bodyTruncated: !!req.bodyTruncated,
+        forge: {
+          statusCode: 200,
+          reasonPhrase: 'OK',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{\n  "edog": "forged response"\n}'
+        }
+      };
+      this._resetEditSummary();
+    }
+
+    var methodOptions = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']
+      .map(function(m) {
+        return '<option value="' + m + '"' + (m === snap.request.method ? ' selected' : '') + '>' + m + '</option>';
+      }).join('');
+
+    var html =
+      '<div class="http-mitm-banner" role="status">' +
+        '<span class="http-mitm-banner-icon">\u25C6</span>' +
+        '<span class="http-mitm-banner-text">Editing intercepted request</span>' +
+        '<span class="http-mitm-banner-sub">' + this._esc(snap.ruleName || snap.ruleId || '') + ' \u00B7 ' + this._esc(snap.phase || 'request') + '</span>' +
+      '</div>' +
+
+      '<div class="http-mitm-edit-summary" id="mitm-edit-summary" style="display:none">' +
+        '<span class="http-mitm-edit-summary-dot"></span>' +
+        '<span id="mitm-edit-summary-text">No changes</span>' +
+      '</div>' +
+
+      '<div class="http-detail-section">' +
+        '<div class="http-detail-section-title">Method &amp; URL</div>' +
+        '<div class="http-mitm-edit-row">' +
+          '<select class="http-mitm-edit-method" data-mitm-field="method" aria-label="HTTP method">' + methodOptions + '</select>' +
+          '<input class="http-mitm-edit-url" data-mitm-field="url" type="text" value="' +
+            this._esc(snap.request.url || '') + '" spellcheck="false" aria-label="Request URL">' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="http-detail-section">' +
+        '<div class="http-detail-section-title">Headers</div>' +
+        this._renderMitmHeadersEditor(this._editBuffer.headers) +
+      '</div>';
+
+    if (this._editBuffer.bodyTruncated) {
+      html +=
+        '<div class="http-detail-section">' +
+          '<div class="http-detail-section-title">Body</div>' +
+          '<div style="color:var(--text-muted);font-size:12px;padding:8px;border:1px dashed var(--border-bright);border-radius:var(--radius-md)">' +
+            'Body &gt; 10&nbsp;MB &mdash; cannot modify. Use Forward or Forge.' +
+          '</div>' +
+        '</div>';
+    } else {
+      html +=
+        '<div class="http-detail-section">' +
+          '<div class="http-detail-section-title">Body</div>' +
+          '<div class="http-mitm-body-wrap">' +
+            '<span class="http-mitm-body-label">\u270E EDITABLE</span>' +
+            '<textarea class="http-mitm-body-editor" data-mitm-field="body" spellcheck="false" aria-label="Request body">' +
+              this._esc(this._editBuffer.body) + '</textarea>' +
+          '</div>' +
+        '</div>';
+    }
+
+    // Action footer
+    html +=
+      '<div class="http-mitm-footer">' +
+        '<button class="http-mitm-btn btn-forward" data-mitm-act="forward" title="Forward (Enter)">\u25B6 Forward</button>' +
+        '<button class="http-mitm-btn btn-modify" data-mitm-act="modify" title="Forward modified (Enter when edited)">\u270E Modify &amp; Forward</button>' +
+        '<button class="http-mitm-btn btn-drop" data-mitm-act="block" title="Drop (D)">\u2715 Drop</button>' +
+        '<button class="http-mitm-btn btn-forge" data-mitm-act="forge" title="Forge response">\u25C6 Forge\u2026</button>' +
+        '<div class="http-mitm-footer-spacer"></div>' +
+        '<button class="http-mitm-btn btn-playground" data-mitm-act="playground" title="Send to Playground (P)">\u2192 Playground</button>' +
+      '</div>';
+
+    return html;
+  }
+
+  _renderMitmHeadersEditor(headers) {
+    var html = '<div class="http-mitm-headers" data-mitm-headers>';
+    var keys = Object.keys(headers || {});
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      html +=
+        '<div class="http-mitm-he-row">' +
+          '<span class="http-mitm-he-key" contenteditable="true" spellcheck="false" data-mitm-hkey="' + this._esc(k) + '">' + this._esc(k) + '</span>' +
+          '<span class="http-mitm-he-val" contenteditable="true" spellcheck="false" data-mitm-hkey="' + this._esc(k) + '">' + this._esc(String(headers[k])) + '</span>' +
+          '<button class="http-mitm-he-del" data-mitm-hdel="' + this._esc(k) + '" title="Remove header" aria-label="Remove header">\u2715</button>' +
+        '</div>';
+    }
+    html +=
+      '<button class="http-mitm-he-add" data-mitm-hadd title="Add header">' +
+        '<span style="font-size:13px">+</span> Add header' +
+      '</button>';
+    html += '</div>';
+    return html;
+  }
+
+  /** Forge editor (used in Response tab when paused). */
+  _renderForgeTab(snap) {
+    if (!this._editBuffer || this._editBuffer.interceptId !== snap.interceptId) {
+      // The intercept tab also seeds the buffer — this case is rare.
+      this._renderInterceptTab(snap);
+    }
+    var f = this._editBuffer.forge;
+    return (
+      '<div class="http-mitm-forge">' +
+        '<div class="http-mitm-forge-title">\u25C6 Forge Response</div>' +
+        '<div class="http-mitm-forge-status-row">' +
+          '<input class="http-mitm-forge-status" data-mitm-field="forge.statusCode" type="number" min="100" max="599" value="' + f.statusCode + '" aria-label="Status code">' +
+          '<input class="http-mitm-forge-reason" data-mitm-field="forge.reasonPhrase" type="text" value="' + this._esc(f.reasonPhrase) + '" placeholder="Reason phrase" aria-label="Reason phrase">' +
+        '</div>' +
+        '<div class="http-detail-section-title" style="margin-top:8px">Response Body</div>' +
+        '<textarea class="http-mitm-body-editor" data-mitm-field="forge.body" spellcheck="false" aria-label="Forged response body">' +
+          this._esc(f.body) + '</textarea>' +
+        '<button class="http-mitm-btn btn-forge" data-mitm-act="forge" style="margin-top:8px">\u25C6 Send Forged Response</button>' +
+      '</div>'
+    );
+  }
+
+  /** Wire up event handlers for the Intercept tab content. */
+  _bindInterceptTab(snap) {
+    var self = this;
+    var body = this._els.detailBody;
+    if (!body) return;
+
+    // Method
+    var methodEl = body.querySelector('[data-mitm-field="method"]');
+    if (methodEl) {
+      methodEl.addEventListener('change', function() {
+        self._editBuffer.method = methodEl.value;
+        self._trackEdit('method', methodEl.value !== (snap.request.method || ''));
+      });
+    }
+
+    // URL
+    var urlEl = body.querySelector('[data-mitm-field="url"]');
+    if (urlEl) {
+      urlEl.addEventListener('input', function() {
+        self._editBuffer.url = urlEl.value;
+        self._trackEdit('url', urlEl.value !== (snap.request.url || ''));
+      });
+    }
+
+    // Body
+    var bodyEl = body.querySelector('textarea[data-mitm-field="body"]');
+    if (bodyEl) {
+      bodyEl.addEventListener('input', function() {
+        self._editBuffer.body = bodyEl.value;
+        self._trackEdit('body', bodyEl.value !== (snap.request.body || ''));
+      });
+    }
+
+    // Forge fields (when shown via Response tab)
+    var forgeStatus = body.querySelector('[data-mitm-field="forge.statusCode"]');
+    if (forgeStatus) {
+      forgeStatus.addEventListener('input', function() {
+        var n = parseInt(forgeStatus.value, 10);
+        if (!isNaN(n)) self._editBuffer.forge.statusCode = n;
+      });
+    }
+    var forgeReason = body.querySelector('[data-mitm-field="forge.reasonPhrase"]');
+    if (forgeReason) {
+      forgeReason.addEventListener('input', function() {
+        self._editBuffer.forge.reasonPhrase = forgeReason.value;
+      });
+    }
+    var forgeBody = body.querySelector('textarea[data-mitm-field="forge.body"]');
+    if (forgeBody) {
+      forgeBody.addEventListener('input', function() {
+        self._editBuffer.forge.body = forgeBody.value;
+      });
+    }
+
+    // Header editor (delegated)
+    var headersHost = body.querySelector('[data-mitm-headers]');
+    if (headersHost) {
+      headersHost.addEventListener('input', function(ev) {
+        var k = ev.target && ev.target.dataset ? ev.target.dataset.mitmHkey : null;
+        if (!k) return;
+        if (ev.target.classList.contains('http-mitm-he-key')) {
+          // Rename header
+          var newKey = ev.target.textContent.trim();
+          if (newKey && newKey !== k) {
+            var val = self._editBuffer.headers[k];
+            delete self._editBuffer.headers[k];
+            self._editBuffer.headers[newKey] = val;
+            ev.target.dataset.mitmHkey = newKey;
+            // Update sibling value's key reference
+            var valEl = ev.target.parentElement.querySelector('.http-mitm-he-val');
+            if (valEl) valEl.dataset.mitmHkey = newKey;
+          }
+        } else if (ev.target.classList.contains('http-mitm-he-val')) {
+          self._editBuffer.headers[ev.target.dataset.mitmHkey] = ev.target.textContent;
+        }
+        self._trackEdit('headers', self._headersDiffer(snap.request.headers || {}, self._editBuffer.headers));
+      });
+      headersHost.addEventListener('click', function(ev) {
+        var del = ev.target.closest('[data-mitm-hdel]');
+        if (del) {
+          var k = del.getAttribute('data-mitm-hdel');
+          delete self._editBuffer.headers[k];
+          self._trackEdit('headers', self._headersDiffer(snap.request.headers || {}, self._editBuffer.headers));
+          self._renderDetail();
+          return;
+        }
+        if (ev.target.closest('[data-mitm-hadd]')) {
+          var newKey = 'X-Custom-' + (Object.keys(self._editBuffer.headers).length + 1);
+          self._editBuffer.headers[newKey] = '';
+          self._trackEdit('headers', true);
+          self._renderDetail();
+        }
+      });
+    }
+
+    // Action buttons (event delegation on footer)
+    var footer = body.querySelector('.http-mitm-footer');
+    if (footer) {
+      footer.addEventListener('click', function(ev) {
+        var btn = ev.target.closest('[data-mitm-act]');
+        if (!btn) return;
+        var act = btn.getAttribute('data-mitm-act');
+        var iid = snap.interceptId;
+        if (act === 'forward') {
+          self._hasEdits() ? self._onModifyForward(iid) : self._onForward(iid);
+        } else if (act === 'modify')     self._onModifyForward(iid);
+        else if (act === 'block')        self._onBlock(iid);
+        else if (act === 'forge')        self._onForge(iid);
+        else if (act === 'playground')   self._onSendToPlayground(self._getSelectedRow());
+      });
+    }
+
+    this._renderEditSummary();
+  }
+
+  _headersDiffer(a, b) {
+    var ak = Object.keys(a || {}), bk = Object.keys(b || {});
+    if (ak.length !== bk.length) return true;
+    for (var i = 0; i < ak.length; i++) {
+      if (a[ak[i]] !== b[ak[i]]) return true;
+    }
+    return false;
+  }
+
+  _trackEdit(field, isModified) {
+    if (!this._editSummary) this._editSummary = {};
+    this._editSummary[field] = !!isModified;
+    this._renderEditSummary();
+  }
+
+  _resetEditSummary() {
+    this._editSummary = { method: false, url: false, headers: false, body: false };
+    this._renderEditSummary();
+  }
+
+  _hasEdits() {
+    var s = this._editSummary || {};
+    return !!(s.method || s.url || s.headers || s.body);
+  }
+
+  _renderEditSummary() {
+    var host = document.getElementById('mitm-edit-summary');
+    if (!host) return;
+    var text = document.getElementById('mitm-edit-summary-text');
+    var s = this._editSummary || {};
+    var parts = [];
+    if (s.method)  parts.push('method');
+    if (s.url)     parts.push('URL');
+    if (s.headers) parts.push('headers');
+    if (s.body)    parts.push('body');
+    if (parts.length === 0) {
+      host.style.display = 'none';
+      return;
+    }
+    host.style.display = '';
+    if (text) text.textContent = 'Modified: ' + parts.join(', ');
+  }
+
+  // ── Decision RPCs ─────────────────────────────────────────────────
+
+  _onForward(interceptId) {
+    var self = this;
+    this._invokeMitm('MitmResumeBreakpoint', {
+      interceptId: interceptId,
+      verdict: 'forward'
+    }).then(function(res) {
+      self._flashRow(interceptId, 'forward');
+      if (res && res.success === false && window.edogToast) {
+        window.edogToast(res.message || 'Resume failed', 'error');
+      }
+    });
+  }
+
+  _onModifyForward(interceptId) {
+    var self = this;
+    var buf = this._editBuffer || {};
+    var snap = this._mitmPaused.get(interceptId);
+    var orig = snap && snap.request ? snap.request : {};
+
+    var modifications = {};
+    if (this._editSummary.method && buf.method && buf.method !== orig.method) {
+      modifications.method = buf.method;
+    }
+    if (this._editSummary.url && buf.url && buf.url !== orig.url) {
+      modifications.url = buf.url;
+    }
+    if (this._editSummary.headers) {
+      modifications.setHeaders = {};
+      modifications.removeHeaders = [];
+      var ok = Object.keys(orig.headers || {});
+      var nk = Object.keys(buf.headers || {});
+      // Removed
+      for (var i = 0; i < ok.length; i++) {
+        if (!(ok[i] in buf.headers)) modifications.removeHeaders.push(ok[i]);
+      }
+      // Added or changed
+      for (var j = 0; j < nk.length; j++) {
+        if (buf.headers[nk[j]] !== (orig.headers || {})[nk[j]]) {
+          modifications.setHeaders[nk[j]] = buf.headers[nk[j]];
+        }
+      }
+    }
+    if (this._editSummary.body && (buf.body || '') !== (orig.body || '')) {
+      modifications.body = buf.body;
+    }
+
+    this._invokeMitm('MitmResumeBreakpoint', {
+      interceptId: interceptId,
+      verdict: 'modify',
+      modifications: modifications
+    }).then(function(res) {
+      self._flashRow(interceptId, 'forward');
+      if (res && res.success === false && window.edogToast) {
+        window.edogToast(res.message || 'Modify failed', 'error');
+      }
+    });
+  }
+
+  _onBlock(interceptId) {
+    var self = this;
+    this._invokeMitm('MitmResumeBreakpoint', {
+      interceptId: interceptId,
+      verdict: 'block',
+      block: {
+        statusCode: 503,
+        reasonPhrase: 'Blocked by EDOG',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{"error":"blocked by edog mitm"}'
+      }
+    }).then(function(res) {
+      self._flashRow(interceptId, 'drop');
+      if (res && res.success === false && window.edogToast) {
+        window.edogToast(res.message || 'Block failed', 'error');
+      }
+    });
+  }
+
+  _onForge(interceptId) {
+    var self = this;
+    var f = (this._editBuffer && this._editBuffer.forge) || {};
+    this._invokeMitm('MitmResumeBreakpoint', {
+      interceptId: interceptId,
+      verdict: 'forge',
+      forge: {
+        statusCode: f.statusCode || 200,
+        reasonPhrase: f.reasonPhrase || 'OK',
+        headers: f.headers || {},
+        body: f.body || ''
+      }
+    }).then(function(res) {
+      self._flashRow(interceptId, 'forward');
+      if (res && res.success === false && window.edogToast) {
+        window.edogToast(res.message || 'Forge failed', 'error');
+      }
+    });
+  }
+
+  _flashRow(interceptId, kind) {
+    var row = null;
+    var rows = this._els.scroll ? this._els.scroll.querySelectorAll('.http-row') : [];
+    for (var i = 0; i < rows.length; i++) {
+      var id = parseInt(rows[i].dataset.id, 10);
+      var entry = this._findEvent(id);
+      if (entry && entry._interceptId === interceptId) {
+        row = rows[i];
+        break;
+      }
+    }
+    if (!row) return;
+    var cls = kind === 'drop' ? 'http-mitm-flash-drop' : 'http-mitm-flash-forward';
+    row.classList.add(cls);
+    setTimeout(function() { row.classList.remove(cls); }, 500);
+  }
+
+  _findEvent(id) {
+    for (var i = 0; i < this._events.length; i++) {
+      if (this._events[i]._id === id) return this._events[i];
+    }
+    return null;
+  }
+
+  _getSelectedRow() {
+    if (this._selectedId == null) return null;
+    return this._findEvent(this._selectedId);
+  }
+
+  // ── Send to Playground ────────────────────────────────────────────
+
+  /** Convert a captured row to a PlaygroundTransfer + open the Playground tab. */
+  _onSendToPlayground(rowData) {
+    if (!rowData) return;
+    var self = this;
+    var truncated = rowData.responseBodyPreview &&
+      rowData.responseBodyPreview.length >= 4096;
+
+    var dispatch = function(body) {
+      var headers = [];
+      var src = rowData.requestHeaders || {};
+      var keys = Object.keys(src);
+      for (var i = 0; i < keys.length; i++) {
+        headers.push({ name: keys[i], value: String(src[keys[i]]) });
+      }
+      var transfer = {
+        source: rowData._paused ? 'mitm-paused' : 'http-tab',
+        sourceRowId: rowData._seq || rowData._id,
+        interceptId: rowData._interceptId || null,
+        method: rowData.method,
+        url: rowData.url,
+        headers: headers,
+        body: body != null ? body : (rowData.requestBodyPreview || null),
+        tokenType: self._detectTokenType(rowData.url)
+      };
+      self._activatePlaygroundWith(transfer);
+    };
+
+    // If response body might be truncated, ask server for full payload.
+    if (truncated && this._signalr) {
+      this._invokeMitm('MitmSendToPlayground', {
+        sourceRowId: rowData._seq || rowData._id,
+        interceptId: rowData._interceptId || null
+      }).then(function(res) {
+        if (res && res.success && res.payload) {
+          // Server-built transfer — but Playground expects `headers: [{key,value}]`
+          var p = res.payload;
+          var hdrs = (p.headers || []).map(function(h) {
+            return { name: h.name || h.key, value: h.value };
+          });
+          self._activatePlaygroundWith({
+            source: p.source || transfer.source,
+            sourceRowId: p.sourceRowId,
+            interceptId: p.interceptId,
+            method: p.method,
+            url: p.url,
+            headers: hdrs,
+            body: p.body,
+            tokenType: p.tokenType
+          });
+        } else {
+          dispatch(null);
+        }
+      }).catch(function() { dispatch(null); });
+    } else {
+      dispatch(null);
+    }
+  }
+
+  _activatePlaygroundWith(transfer) {
+    // Convert PlaygroundTransfer.headers [{name,value}] →
+    // RequestBuilder.setRequest expects headers: [{key,value}]
+    var hdrs = (transfer.headers || []).map(function(h) {
+      return { key: h.name || h.key, value: h.value };
+    });
+    var setReq = {
+      method: transfer.method,
+      url: transfer.url,
+      headers: hdrs,
+      body: transfer.body || '',
+      tokenType: transfer.tokenType || null
+    };
+
+    var app = window.edogApp;
+    var playground = app && app.apiPlayground;
+
+    var apply = function() {
+      var pg = window.edogApp && window.edogApp.apiPlayground;
+      if (pg && pg._requestBuilder && typeof pg._requestBuilder.setRequest === 'function') {
+        try { pg._requestBuilder.setRequest(setReq); } catch (e) { console.error('[mitm→playground]', e); }
+      }
+      if (window.edogToast) {
+        var label = transfer.sourceRowId != null ? 'row #' + transfer.sourceRowId : 'request';
+        window.edogToast('Sent ' + label + ' to Playground', 'success');
+      }
+    };
+
+    // Activate the Playground tab (constructs ApiPlayground on first use).
+    if (app && typeof app.switchTab === 'function') {
+      app.switchTab('api');
+      // setRequest after the playground module mounts. Use 2 rAFs.
+      requestAnimationFrame(function() {
+        requestAnimationFrame(apply);
+      });
+    } else if (playground) {
+      apply();
+    } else if (window.edogToast) {
+      window.edogToast('Playground not available', 'warning');
+    }
+  }
+
+  _detectTokenType(url) {
+    if (!url) return null;
+    var u = String(url).toLowerCase();
+    if (u.indexOf('onelake') !== -1 || u.indexOf('fabric.microsoft.com') !== -1) return 'fabric';
+    if (u.indexOf('login.microsoftonline.com') !== -1) return 'bearer';
+    if (u.indexOf('management.azure.com') !== -1) return 'bearer';
+    if (u.indexOf('mwc') !== -1) return 'mwc';
+    return null;
+  }
+
+  // ── Context menu (right-click on row) ─────────────────────────────
+
+  _showRowMenu(x, y, rowData) {
+    var self = this;
+    if (!window.HttpRowMenu) return;
+    if (!this._mitmRowMenu) {
+      this._mitmRowMenu = new window.HttpRowMenu();
+    }
+    this._selectedId = rowData._id;
+    this._highlightSelected();
+    this._mitmRowMenu.show(x, y, rowData, {
+      onPlayground: function() { self._onSendToPlayground(rowData); },
+      onCopyUrl: function() {
+        self._copyToClipboard(rowData.url);
+        if (window.edogToast) window.edogToast('URL copied', 'success');
+      },
+      onCopyCurl: function() {
+        self._copyToClipboard(self._buildCurl(rowData));
+        if (window.edogToast) window.edogToast('cURL copied', 'success');
+      },
+      onCopyFetch: function() {
+        self._copyToClipboard(self._buildFetch(rowData));
+        if (window.edogToast) window.edogToast('fetch() copied', 'success');
+      },
+      onBlock: function() {
+        // Create a simple block rule for this URL — best-effort
+        self._invokeMitm('MitmCreateRule', {
+          id: 'blk-' + Date.now(),
+          name: 'Block ' + rowData.url.slice(0, 64),
+          enabled: true,
+          priority: 100,
+          match: {
+            urlPattern: { kind: 'substring', value: rowData.url },
+            methods: [rowData.method],
+            phase: 'request'
+          },
+          action: {
+            type: 'block',
+            config: { statusCode: 503, body: '{"error":"blocked by edog"}' }
+          }
+        }).then(function(res) {
+          if (window.edogToast) {
+            window.edogToast(res && res.success === false
+              ? (res.message || 'Block rule failed')
+              : 'Block rule created',
+              res && res.success === false ? 'error' : 'success');
+          }
+        });
+      },
+      onHar: function() {
+        self._exportAs('har');
+      },
+      onDelete: function() {
+        self._events = self._events.filter(function(r) { return r._id !== rowData._id; });
+        if (self._selectedId === rowData._id) self._closeDetail();
+        self._applyFilters();
+      }
+    });
+  }
+
+  _buildCurl(r) {
+    var parts = ['curl -X ' + r.method, '"' + r.url + '"'];
+    var hk = Object.keys(r.requestHeaders || {});
+    for (var i = 0; i < hk.length; i++) {
+      parts.push('-H "' + hk[i] + ': ' + String(r.requestHeaders[hk[i]]).replace(/"/g, '\\"') + '"');
+    }
+    if (r.requestBodyPreview) {
+      parts.push("-d '" + r.requestBodyPreview.replace(/'/g, "'\\''") + "'");
+    }
+    return parts.join(' \\\n  ');
+  }
+
+  _buildFetch(r) {
+    var headers = {};
+    var hk = Object.keys(r.requestHeaders || {});
+    for (var i = 0; i < hk.length; i++) headers[hk[i]] = String(r.requestHeaders[hk[i]]);
+    var init = { method: r.method, headers: headers };
+    if (r.requestBodyPreview) init.body = r.requestBodyPreview;
+    return 'fetch("' + r.url + '", ' + JSON.stringify(init, null, 2) + ');';
+  }
+
+  _copyToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).catch(function() {});
+    } else {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch (e) { /* ignore */ }
+      document.body.removeChild(ta);
+    }
   }
 }

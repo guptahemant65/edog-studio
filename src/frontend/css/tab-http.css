@@ -978,3 +978,837 @@
 .http-row.entering {
   animation: http-row-enter 150ms ease-out both;
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   F28 — HTTP MITM
+   Intercept toggle, paused rows, badges, editing mode, action footer,
+   context menu, status indicator, modal detach.
+   Uses only tokens from variables.css + tab-http.css :root block.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── F28 Keyframes ────────────────────────────────────────────────── */
+@keyframes mitm-pulse-amber {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+@keyframes mitm-pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 var(--http-amber-bg); }
+  50%      { box-shadow: 0 0 0 4px var(--http-amber-bg); }
+}
+@keyframes mitm-breathe {
+  0%, 100% { background: var(--http-amber-bg); }
+  50%      { background: rgba(229, 148, 12, 0.04); }
+}
+@keyframes mitm-badge-pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.08); }
+}
+@keyframes mitm-banner-slide {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes mitm-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes mitm-slide-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes mitm-slide-down {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes mitm-slide-right {
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes mitm-slide-in-right {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+@keyframes mitm-ctx-appear {
+  from { opacity: 0; transform: scale(0.96) translateY(-4px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes mitm-ctx-stagger {
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes mitm-modal-in {
+  from { opacity: 0; transform: scale(0.94) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes mitm-modal-out {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0; transform: scale(0.96) translateY(8px); }
+}
+@keyframes mitm-backdrop-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes mitm-backdrop-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+@keyframes mitm-forward-flash {
+  0%   { background: rgba(24, 160, 88, 0.20); }
+  100% { background: transparent; }
+}
+@keyframes mitm-drop-flash {
+  0%   { background: rgba(229, 69, 59, 0.20); }
+  100% { background: transparent; }
+}
+@keyframes mitm-glow-ring {
+  0%, 100% { box-shadow: 0 0 0 2px var(--accent-glow); }
+  50%      { box-shadow: 0 0 0 4px var(--accent-glow); }
+}
+@keyframes mitm-pulse-accent {
+  0%, 100% { box-shadow: 0 0 0 0 var(--accent-glow); }
+  50%      { box-shadow: 0 0 0 6px transparent; }
+}
+@keyframes mitm-check-pop {
+  0%   { transform: scale(0); }
+  60%  { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+@keyframes mitm-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes mitm-item-flash {
+  0%   { background: var(--accent-dim); }
+  100% { background: transparent; }
+}
+@keyframes mitm-detach-pop {
+  0%   { transform: scale(0.95); opacity: 0.8; }
+  50%  { transform: scale(1.02); }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes mitm-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes mitm-status-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.6; }
+}
+@keyframes mitm-toast-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes mitm-toast-out {
+  to { opacity: 0; transform: translateY(-8px) scale(0.96); }
+}
+@keyframes mitm-tab-underline {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+@keyframes mitm-bounce-in {
+  0%   { transform: scale(0.3); opacity: 0; }
+  50%  { transform: scale(1.05); }
+  70%  { transform: scale(0.95); }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes mitm-row-fade-in {
+  from { opacity: 0; background: var(--accent-dim); }
+  to   { opacity: 1; background: transparent; }
+}
+
+/* ── Intercept toggle (toolbar pill) ─────────────────────────────── */
+.http-intercept-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 4px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-bright);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  font-family: var(--font-body);
+  transition: background var(--transition-fast),
+              border-color var(--transition-fast),
+              color var(--transition-fast),
+              box-shadow var(--transition-normal);
+  white-space: nowrap;
+}
+.http-intercept-toggle:hover { background: var(--accent-hover); }
+.http-intercept-toggle:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-glow);
+}
+.http-intercept-toggle .http-it-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+  transition: background var(--transition-fast), box-shadow var(--transition-fast);
+}
+.http-intercept-toggle.armed {
+  background: var(--http-amber-bg);
+  border-color: var(--http-amber);
+  color: var(--http-amber);
+  animation: mitm-pulse-glow 2.4s ease-in-out infinite;
+}
+.http-intercept-toggle.armed .http-it-dot {
+  background: var(--http-amber);
+  box-shadow: 0 0 6px var(--http-amber-bg);
+  animation: mitm-pulse-amber 2s ease-in-out infinite;
+}
+
+/* ── Row badges (mitm action) ─────────────────────────────────────── */
+.http-mitm-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  margin-left: var(--space-1);
+  vertical-align: middle;
+  animation: mitm-bounce-in 240ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.http-mitm-badge .mb-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+.http-mitm-badge.mb-paused {
+  background: var(--http-amber-bg);
+  color: var(--http-amber);
+  animation: mitm-pulse-amber 2s ease-in-out infinite;
+}
+.http-mitm-badge.mb-modified {
+  background: var(--http-blue-bg);
+  color: var(--http-blue);
+}
+.http-mitm-badge.mb-blocked {
+  background: var(--http-red-bg);
+  color: var(--http-red);
+}
+.http-mitm-badge.mb-forged {
+  background: var(--http-purple-bg);
+  color: var(--http-purple);
+}
+.http-mitm-badge.mb-delayed {
+  background: var(--http-amber-bg);
+  color: var(--http-amber);
+}
+.http-mitm-badge.mb-replayed {
+  background: rgba(13, 148, 136, 0.12);
+  color: var(--http-teal);
+}
+.http-mitm-badge.mb-passthrough {
+  background: rgba(0, 0, 0, 0);
+  color: var(--text-muted);
+  border: 1px solid var(--border-bright);
+}
+
+/* ── Paused row treatment ─────────────────────────────────────────── */
+.http-row.http-row-paused {
+  border-left: 3px solid var(--http-amber);
+  background: linear-gradient(
+    90deg,
+    var(--http-amber-bg) 0%,
+    transparent 60%
+  );
+  animation: mitm-breathe 3s ease-in-out infinite;
+}
+.http-row.http-row-paused:hover {
+  background: linear-gradient(
+    90deg,
+    rgba(229, 148, 12, 0.16) 0%,
+    var(--accent-hover) 60%
+  );
+}
+.http-row.http-row-paused.selected {
+  background: linear-gradient(
+    90deg,
+    rgba(229, 148, 12, 0.18) 0%,
+    var(--accent-dim) 60%
+  );
+}
+.http-row.http-row-paused .http-method {
+  box-shadow: inset 0 0 0 1px var(--http-amber);
+}
+
+/* Forward / drop flash overlay on row */
+.http-row.http-mitm-flash-forward { animation: mitm-forward-flash 420ms ease-out; }
+.http-row.http-mitm-flash-drop    { animation: mitm-drop-flash 420ms ease-out; }
+
+/* ── Editing mode banner (in detail panel) ────────────────────────── */
+.http-mitm-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 8px 14px;
+  margin: 0 0 var(--space-3) 0;
+  border-radius: var(--radius-md);
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-glow);
+  border-left: 3px solid var(--accent);
+  animation: mitm-banner-slide 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.http-mitm-banner-icon {
+  color: var(--accent);
+  font-size: 15px;
+  flex-shrink: 0;
+  animation: mitm-badge-pulse 2.2s ease-in-out infinite;
+}
+.http-mitm-banner-text {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--accent);
+}
+.http-mitm-banner-sub {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-muted);
+  margin-left: auto;
+  font-family: var(--font-mono);
+}
+
+/* ── Editable fields (URL + method) ──────────────────────────────── */
+.http-mitm-edit-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  border: 1px solid var(--accent-glow);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  margin-bottom: var(--space-2);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-normal);
+}
+.http-mitm-edit-row:hover { border-color: var(--accent); }
+.http-mitm-edit-row:focus-within {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-glow);
+}
+.http-mitm-edit-method {
+  padding: 6px 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--accent-dim);
+  border: none;
+  border-right: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+  outline: none;
+  min-width: 84px;
+}
+.http-mitm-edit-method:hover { background: var(--accent-hover); }
+.http-mitm-edit-url {
+  flex: 1;
+  padding: 6px 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--accent-dim);
+  color: var(--text);
+  border: none;
+  outline: none;
+  min-width: 0;
+}
+.http-mitm-edit-url:hover { background: var(--accent-hover); }
+.http-mitm-edit-url:focus {
+  background: var(--accent-dim);
+  box-shadow: inset 0 0 0 1px var(--accent-glow);
+}
+
+/* ── Headers editor (key/value grid) ──────────────────────────────── */
+.http-mitm-headers {
+  border: 1px solid var(--accent-glow);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  margin-bottom: var(--space-2);
+  background: var(--surface);
+}
+.http-mitm-he-row {
+  display: grid;
+  grid-template-columns: 170px 1fr 28px;
+  align-items: stretch;
+  border-bottom: 1px solid var(--border);
+  transition: background var(--transition-fast);
+}
+.http-mitm-he-row:last-child { border-bottom: none; }
+.http-mitm-he-row:hover { background: var(--accent-hover); }
+.http-mitm-he-key {
+  padding: 5px 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--http-blue);
+  font-weight: 500;
+  border-right: 1px solid var(--border);
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  background: transparent;
+  outline: none;
+}
+.http-mitm-he-key:focus { background: var(--accent-dim); box-shadow: inset 0 0 0 1px var(--accent-glow); }
+.http-mitm-he-val {
+  padding: 5px 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  outline: none;
+  cursor: text;
+  transition: background var(--transition-fast);
+}
+.http-mitm-he-val:hover { background: var(--accent-hover); }
+.http-mitm-he-val:focus {
+  background: var(--accent-dim);
+  box-shadow: inset 0 0 0 1px var(--accent-glow);
+  white-space: pre-wrap;
+}
+.http-mitm-he-del {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  opacity: 0;
+  transition: opacity var(--transition-fast), color var(--transition-fast);
+}
+.http-mitm-he-row:hover .http-mitm-he-del { opacity: 1; }
+.http-mitm-he-del:hover { color: var(--http-red); }
+.http-mitm-he-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  padding: 6px 12px;
+  border: none;
+  border-top: 1px dashed var(--border-bright);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  width: 100%;
+  transition: background var(--transition-fast), color var(--transition-fast);
+  font-family: var(--font-body);
+}
+.http-mitm-he-add:hover { background: var(--accent-hover); color: var(--accent); }
+
+/* ── Body editor ──────────────────────────────────────────────────── */
+.http-mitm-body-wrap {
+  position: relative;
+  margin-bottom: var(--space-2);
+}
+.http-mitm-body-label {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  font-size: 10px;
+  color: var(--accent);
+  font-weight: 600;
+  font-family: var(--font-mono);
+  z-index: 1;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--surface);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+}
+.http-mitm-body-editor {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.7;
+  padding: 10px 14px;
+  background: var(--accent-dim);
+  color: var(--text);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--accent-glow);
+  resize: vertical;
+  min-height: 120px;
+  max-height: 320px;
+  outline: none;
+  tab-size: 2;
+  white-space: pre;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+.http-mitm-body-editor:hover { border-color: var(--accent); }
+.http-mitm-body-editor:focus {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-glow);
+}
+
+/* Syntax highlighting hints (assigned by JS) */
+.http-mitm-syn-key  { color: var(--http-blue); }
+.http-mitm-syn-str  { color: var(--http-green); }
+.http-mitm-syn-num  { color: var(--http-amber); }
+.http-mitm-syn-bool { color: var(--http-purple); }
+.http-mitm-syn-null { color: var(--text-muted); }
+
+/* ── Edit summary chip ───────────────────────────────────────────── */
+.http-mitm-edit-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--accent);
+  background: var(--accent-dim);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-2);
+  animation: mitm-fade-in 160ms ease both;
+}
+.http-mitm-edit-summary-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+  animation: mitm-pulse-accent 2s ease-in-out infinite;
+}
+
+/* ── Forge response section ──────────────────────────────────────── */
+.http-mitm-forge {
+  border: 2px dashed var(--http-amber);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  background: var(--http-amber-bg);
+  margin-bottom: var(--space-3);
+  animation: mitm-slide-down 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.http-mitm-forge-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--http-amber);
+  margin-bottom: var(--space-2);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.http-mitm-forge-status-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+.http-mitm-forge-status {
+  width: 70px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-bright);
+  background: var(--surface);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  text-align: center;
+  outline: none;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-normal);
+}
+.http-mitm-forge-status:focus {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-glow);
+}
+.http-mitm-forge-reason {
+  flex: 1;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-bright);
+  background: var(--surface);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text);
+  outline: none;
+  min-width: 0;
+}
+.http-mitm-forge-reason:focus {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-glow);
+}
+
+/* ── Action footer (sticky) ──────────────────────────────────────── */
+.http-mitm-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  animation: mitm-slide-up 200ms ease both;
+}
+.http-mitm-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  border-radius: var(--radius-md);
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  transition: transform var(--transition-fast),
+              background var(--transition-fast),
+              box-shadow var(--transition-normal),
+              color var(--transition-fast);
+}
+.http-mitm-btn:hover    { transform: translateY(-1px); }
+.http-mitm-btn:active   { transform: translateY(0); }
+.http-mitm-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-glow);
+}
+.http-mitm-btn.btn-forward {
+  background: var(--http-green);
+  color: #fff;
+  border-color: var(--http-green);
+}
+.http-mitm-btn.btn-forward:hover { box-shadow: 0 2px 10px rgba(24, 160, 88, 0.30); }
+.http-mitm-btn.btn-modify {
+  background: var(--http-blue);
+  color: #fff;
+  border-color: var(--http-blue);
+}
+.http-mitm-btn.btn-modify:hover { box-shadow: 0 2px 10px rgba(45, 127, 249, 0.30); }
+.http-mitm-btn.btn-drop {
+  background: transparent;
+  color: var(--http-red);
+  border-color: var(--http-red);
+}
+.http-mitm-btn.btn-drop:hover { background: var(--http-red-bg); }
+.http-mitm-btn.btn-forge {
+  background: transparent;
+  color: var(--http-amber);
+  border-color: var(--http-amber);
+}
+.http-mitm-btn.btn-forge:hover { background: var(--http-amber-bg); }
+.http-mitm-btn.btn-playground {
+  background: transparent;
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.http-mitm-btn.btn-playground:hover { background: var(--accent-dim); }
+.http-mitm-btn.btn-ghost {
+  background: transparent;
+  color: var(--text-muted);
+  border-color: var(--border-bright);
+}
+.http-mitm-btn.btn-ghost:hover { background: var(--accent-hover); color: var(--text); }
+.http-mitm-footer-spacer { flex: 1; }
+
+/* ── Context menu (glass) ────────────────────────────────────────── */
+.http-row-menu {
+  position: fixed;
+  z-index: 9000;
+  min-width: 224px;
+  background: var(--surface);
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-md);
+  padding: 4px;
+  box-shadow: var(--shadow-xl);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--text);
+  animation: mitm-ctx-appear 110ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  user-select: none;
+}
+.http-row-menu.closing { animation: mitm-fade-in 100ms ease reverse both; }
+.http-row-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--text);
+  transition: background var(--transition-fast), color var(--transition-fast);
+  opacity: 0;
+  animation: mitm-ctx-stagger 160ms ease both;
+}
+.http-row-menu-item:hover,
+.http-row-menu-item.focused {
+  background: var(--accent-hover);
+}
+.http-row-menu-item:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+.http-row-menu-item.danger { color: var(--http-red); }
+.http-row-menu-item.danger:hover,
+.http-row-menu-item.danger.focused {
+  background: var(--http-red-bg);
+  color: var(--http-red);
+}
+.http-row-menu-item.activated { animation: mitm-item-flash 160ms ease-out; }
+.http-row-menu-item[aria-disabled="true"] {
+  color: var(--text-muted);
+  cursor: not-allowed;
+  pointer-events: none;
+  opacity: 0.55;
+}
+.http-row-menu-shortcut {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-left: 20px;
+  flex-shrink: 0;
+}
+.http-row-menu-sep {
+  height: 1px;
+  background: var(--border-bright);
+  margin: 4px 6px;
+}
+
+/* ── Detail panel slide-in ───────────────────────────────────────── */
+.http-detail.http-mitm-active {
+  animation: mitm-slide-up 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  border-top: 2px solid var(--accent);
+}
+
+/* ── Detach to modal ─────────────────────────────────────────────── */
+.http-mitm-detach-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 13px;
+  transition: background var(--transition-fast),
+              color var(--transition-fast),
+              transform var(--transition-fast);
+}
+.http-mitm-detach-btn:hover {
+  background: var(--accent-hover);
+  color: var(--text);
+  transform: translateY(-1px);
+}
+.http-mitm-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.25);
+  z-index: 8000;
+  animation: mitm-backdrop-in 150ms ease;
+}
+[data-theme="dark"] .http-mitm-modal-backdrop { background: rgba(0, 0, 0, 0.50); }
+.http-mitm-modal-backdrop.closing { animation: mitm-backdrop-out 150ms ease forwards; }
+.http-mitm-modal {
+  position: fixed;
+  z-index: 8001;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  overflow: hidden;
+  min-width: 480px;
+  min-height: 360px;
+  width: 720px;
+  height: 540px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation: mitm-modal-in 220ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  resize: both;
+}
+.http-mitm-modal.closing { animation: mitm-modal-out 160ms ease forwards; }
+.http-mitm-modal-drag {
+  height: 10px;
+  cursor: move;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.http-mitm-modal-drag::after {
+  content: '';
+  width: 36px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--text-muted);
+  opacity: 0.4;
+}
+.http-mitm-modal-body {
+  flex: 1;
+  overflow: auto;
+  padding: var(--space-3) var(--space-4);
+}
+
+/* ── Status bar MITM indicator ───────────────────────────────────── */
+.http-mitm-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: var(--space-2);
+  animation: mitm-fade-in 200ms ease both;
+}
+.http-mitm-status .mitm-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: mitm-status-pulse 2s ease-in-out infinite;
+}
+.http-mitm-status.armed {
+  background: var(--http-amber-bg);
+  color: var(--http-amber);
+}
+.http-mitm-status.armed .mitm-status-dot {
+  background: var(--http-amber);
+  box-shadow: 0 0 5px var(--http-amber-bg);
+}
+
+/* ── Detail-tab intercept marker ─────────────────────────────────── */
+.http-detail-tab[data-dtab="intercept"] {
+  color: var(--accent);
+}
+.http-detail-tab[data-dtab="intercept"]::before {
+  content: '\25CF';
+  font-size: 8px;
+  margin-right: 5px;
+  color: var(--http-amber);
+  animation: mitm-pulse-amber 2s ease-in-out infinite;
+}
+
