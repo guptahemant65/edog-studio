@@ -241,6 +241,21 @@ namespace Microsoft.LiveTable.Service.DevMode
             IReadOnlyList<EdogQaLlmClient.GeneratedScenario> scenarios,
             string unifiedDiff,
             ValidationContext context)
+            => Validate(plan, scenarios, unifiedDiff, context, testingGuidance: null);
+
+        /// <summary>
+        /// F27 P11 overload: accepts the Analyst-produced <paramref name="testingGuidance"/>
+        /// directly. The Architect no longer carries testingGuidance on its plan (moved to
+        /// the Analyst pass to free Architect output budget); coverage gates read from this
+        /// parameter instead of <c>plan.TestingGuidance</c>. Pass <c>null</c> to fall back
+        /// to legacy behavior (no coverage gate fires).
+        /// </summary>
+        public static ValidationResult Validate(
+            EdogQaLlmClient.ArchitectPlan plan,
+            IReadOnlyList<EdogQaLlmClient.GeneratedScenario> scenarios,
+            string unifiedDiff,
+            ValidationContext context,
+            EdogQaLlmClient.TestingGuidance testingGuidance)
         {
             var result = new ValidationResult();
 
@@ -481,7 +496,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             // (Older builds joined by OriginalIndex, but the Editor may
             // drop or reorder scenarios so the index isn't trustworthy.)
             if (EdogQaFeatureFlags.P11ElicitationEnabled
-                && plan?.TestingGuidance != null
+                && testingGuidance != null
                 && plan.PlanOutcome == EdogQaLlmClient.PlanOutcomeTestable
                 && result.Accepted.Count > 0)
             {
@@ -515,7 +530,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     }
                 }
 
-                var codePaths = plan.TestingGuidance.CodePaths ?? new List<EdogQaLlmClient.CodePathItem>();
+                var codePaths = testingGuidance.CodePaths ?? new List<EdogQaLlmClient.CodePathItem>();
                 var gapCount = 0;
                 foreach (var cp in codePaths)
                 {
@@ -532,7 +547,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     }
                 }
 
-                var errorModes = plan.TestingGuidance.ErrorModesToTest ?? new List<EdogQaLlmClient.ErrorModeItem>();
+                var errorModes = testingGuidance.ErrorModesToTest ?? new List<EdogQaLlmClient.ErrorModeItem>();
                 foreach (var em in errorModes)
                 {
                     if (em == null || string.IsNullOrWhiteSpace(em.Id)) continue;

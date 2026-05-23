@@ -294,6 +294,13 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             public EdogQaLlmClient.ArchitectPlan Plan { get; set; }
 
+            /// <summary>F27 P11: testingGuidance projected out of the Analyst's observations
+            /// (codePaths, featureFlagMatrix, stimuliRequired, observableSignals,
+            /// errorModesToTest, externalDependencyFailures). Null when P11 is disabled or
+            /// when the Analyst was skipped/failed. Consumed by the scenario validator
+            /// (coverage gate) and surfaced to the curator UI.</summary>
+            public EdogQaLlmClient.TestingGuidance TestingGuidance { get; set; }
+
             /// <summary>Validator-accepted scenarios for THIS zone (pre cross-zone dedup). Each carries SemanticHash; the orchestrator consumes these to build the global merged list.</summary>
             public List<EdogQaScenarioValidator.AcceptedScenario> Accepted { get; set; } = new();
 
@@ -465,6 +472,13 @@ namespace Microsoft.LiveTable.Service.DevMode
             public int DuplicateCount { get; set; }
 
             public string ErrorCode { get; set; } = string.Empty;
+
+            /// <summary>F27 P11: testingGuidance produced by the Analyst pass.
+            /// Set on the <see cref="OrchestratorEventKind.ZoneArchitectCompleted"/> event so the
+            /// frontend's Testing Guidance panel can render counts/lists without waiting for
+            /// the full zone-completion payload. Null when P11 is disabled or the Analyst pass
+            /// produced no parseable testingGuidance block.</summary>
+            public EdogQaLlmClient.TestingGuidance TestingGuidance { get; set; }
         }
 
         // ═══════════════════════════════════════════════════════════════
@@ -946,6 +960,13 @@ namespace Microsoft.LiveTable.Service.DevMode
                             && !string.IsNullOrWhiteSpace(analystResult.AnalystObservations))
                         {
                             zoneCtx.AnalystObservations = analystResult.AnalystObservations;
+                            // F27 P11: stash testingGuidance on the ZoneResult so the
+                            // validator (coverage gate) and downstream consumers can read it
+                            // without re-parsing the Analyst JSON.
+                            if (analystResult.TestingGuidance != null)
+                            {
+                                zr.TestingGuidance = analystResult.TestingGuidance;
+                            }
                         }
                         else if (analystResult.Errors != null && analystResult.Errors.Count > 0)
                         {
@@ -1016,6 +1037,10 @@ namespace Microsoft.LiveTable.Service.DevMode
                     InputTokens = architectResult.ArchitectInputTokens,
                     OutputTokens = architectResult.ArchitectOutputTokens,
                     ReasoningTokens = architectResult.ArchitectReasoningTokens,
+                    // F27 P11: forward the Analyst-produced testingGuidance so the frontend
+                    // can render the Testing Guidance panel immediately on Architect-complete
+                    // (rather than waiting for the full ZoneCompleted payload).
+                    TestingGuidance = zr.TestingGuidance,
                 });
 
                 if (architectResult.Status == EdogQaLlmClient.LlmClientStatus.Failed)
@@ -1068,7 +1093,10 @@ namespace Microsoft.LiveTable.Service.DevMode
                     {
                         var analystDoc = System.Text.Json.JsonDocument.Parse(zoneCtx.AnalystObservations);
                         var expectedIds = new HashSet<string>(StringComparer.Ordinal);
-                        foreach (var listName in new[] { "behavioralPaths", "errorPaths" })
+                        // F27 P11: when the Analyst schema is the elicitation variant the
+                        // observation lists are renamed to codePaths/errorModesToTest. Read
+                        // BOTH so the gate works on legacy + P11 payloads without branching.
+                        foreach (var listName in new[] { "behavioralPaths", "errorPaths", "codePaths", "errorModesToTest" })
                         {
                             if (analystDoc.RootElement.TryGetProperty(listName, out var arr)
                                 && arr.ValueKind == System.Text.Json.JsonValueKind.Array)
@@ -1299,7 +1327,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                     architectResult.Plan,
                     editorResult.Scenarios ?? new List<EdogQaLlmClient.GeneratedScenario>(),
                     zoneInput.UnifiedDiff ?? zoneInput.RedactedDiff ?? string.Empty,
-                    config.Validation);
+                    config.Validation,
+                    zr.TestingGuidance);
 
                 zr.Accepted = validation.Accepted ?? new();
                 zr.Quarantined = validation.Quarantined ?? new();
@@ -1433,7 +1462,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                                 architectResult.Plan,
                                 repairResult.Scenarios ?? new List<EdogQaLlmClient.GeneratedScenario>(),
                                 zoneInput.UnifiedDiff ?? zoneInput.RedactedDiff ?? string.Empty,
-                                config.Validation);
+                                config.Validation,
+                                zr.TestingGuidance);
 
                             zr.RepairAcceptedCount = repairValidation.Accepted?.Count ?? 0;
                             zr.RepairQuarantinedCount = repairValidation.Quarantined?.Count ?? 0;
@@ -1468,6 +1498,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                                     zoneCtx,
                                     repairValidation.Quarantined,
                                     zoneInput.UnifiedDiff ?? zoneInput.RedactedDiff ?? string.Empty,
+                                    zr.TestingGuidance,
                                     ct).ConfigureAwait(false);
                                 if (escalationDispatched)
                                 {
@@ -1643,6 +1674,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             EdogQaLlmClient.ZoneContext zoneCtx,
             List<EdogQaScenarioValidator.QuarantinedScenario> quarantined,
             string unifiedDiff,
+            EdogQaLlmClient.TestingGuidance testingGuidance,
             CancellationToken ct)
         {
             if (!config.EnableRepairLoop || quarantined == null || quarantined.Count == 0)
@@ -1676,7 +1708,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                 plan,
                 repairResult.Scenarios ?? new List<EdogQaLlmClient.GeneratedScenario>(),
                 unifiedDiff,
-                config.Validation);
+                config.Validation,
+                testingGuidance);
             return (repairResult, validation, dispatched);
         }
 
