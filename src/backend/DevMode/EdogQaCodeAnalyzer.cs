@@ -1505,6 +1505,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                     string swaggerJson = null;
                     string frameworkEndpointsJson = null;
 
+                    // Swagger is required for HTTP route discovery. Without it,
+                    // the Architect only sees DiInvocation entry points.
                     try
                     {
                         using var swaggerResponse = await SharedHttpClient.Value.GetAsync(
@@ -1512,9 +1514,26 @@ namespace Microsoft.LiveTable.Service.DevMode
                         if (swaggerResponse.IsSuccessStatusCode)
                         {
                             swaggerJson = await swaggerResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+                            Console.WriteLine($"[QA-DIAG] Swagger fetched: {swaggerJson?.Length ?? 0} bytes");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"[QA-DIAG] Swagger fetch failed: HTTP {(int)swaggerResponse.StatusCode}");
                         }
                     }
-                    catch { /* swagger unavailable — catalog degrades gracefully */ }
+                    catch (Exception swaggerEx)
+                    {
+                        Console.WriteLine($"[QA-DIAG] Swagger fetch error: {swaggerEx.GetType().Name}: {swaggerEx.Message}");
+                    }
+
+                    if (string.IsNullOrEmpty(swaggerJson))
+                    {
+                        degradationFlags.Add("swagger_unavailable");
+                        PublishWarning(
+                            "SWAGGER_UNAVAILABLE: Could not fetch runtime swagger from /api/playground/swagger/spec. "
+                            + "HTTP route discovery is disabled — all scenarios will use DiInvocation. "
+                            + "Ensure FLT is running in Connected phase and the dev-server proxy is active.");
+                    }
 
                     try
                     {
@@ -1528,6 +1547,11 @@ namespace Microsoft.LiveTable.Service.DevMode
                     catch { /* framework endpoints unavailable */ }
 
                     var zoneId = zones.FirstOrDefault()?.ZoneId ?? "zone-00";
+
+                    // Extract compact route summary from swagger instead of
+                    // passing the full 167KB spec. The catalog assembler needs
+                    // the full spec for slot hashing, but we also build a
+                    // lightweight route list for the zone summary.
                     object swaggerObj = null;
                     if (!string.IsNullOrEmpty(swaggerJson))
                     {
