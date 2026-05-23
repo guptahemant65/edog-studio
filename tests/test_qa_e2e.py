@@ -1886,9 +1886,7 @@ def test_qa_architect_prompt_declares_coverage_and_line_precision() -> None:
     # Step-1 Analyst owns the exhaustive observation burden — the
     # Architect explicitly references the Analyst's lists rather than
     # re-deriving them from the diff.
-    assert "Analyst" in text, (
-        "Architect prompt must reference the Analyst's frozen observations as the source of truth"
-    )
+    assert "Analyst" in text, "Architect prompt must reference the Analyst's frozen observations as the source of truth"
 
 
 def test_qa_architect_prompt_declares_t2_granularity_and_category_policy() -> None:

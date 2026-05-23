@@ -102,9 +102,13 @@ def harness_environment() -> dict:
 def built_harness(harness_environment) -> Path:
     env = harness_environment
     cmd = [
-        env["dotnet"], "build", str(CSPROJ),
+        env["dotnet"],
+        "build",
+        str(CSPROJ),
         f"-p:FltBin={env['flt_bin']}",
-        "--nologo", "--verbosity", "minimal",
+        "--nologo",
+        "--verbosity",
+        "minimal",
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=300, cwd=PROJECT_DIR)
     if result.returncode != 0:
@@ -122,7 +126,10 @@ def built_harness(harness_environment) -> Path:
 def _run(dotnet: str, dll: Path) -> dict:
     result = subprocess.run(
         [dotnet, str(dll), "api-surface-render"],
-        capture_output=True, text=True, timeout=60, cwd=dll.parent,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        cwd=dll.parent,
     )
     if result.returncode != 0:
         raise AssertionError(
@@ -134,7 +141,8 @@ def _run(dotnet: str, dll: Path) -> dict:
 
 
 def test_api_surface_renderer_resolves_dev_server_key_names(
-    harness_environment, built_harness,
+    harness_environment,
+    built_harness,
 ) -> None:
     """The Architect prompt's API Surface section must surface the
     actual ``method`` / ``urlTemplate`` / ``name`` values from the
@@ -145,31 +153,24 @@ def test_api_surface_renderer_resolves_dev_server_key_names(
     assert data["ok"] is True, data
 
     r = data["renderer"]
-    assert r["contains_section_header"] is True, (
-        "API Surface section header missing from rendered prompt"
-    )
-    assert r["contains_verb"] is True, (
-        "HTTP verb ('GET') missing — `method` key lookup is broken again"
-    )
+    assert r["contains_section_header"] is True, "API Surface section header missing from rendered prompt"
+    assert r["contains_verb"] is True, "HTTP verb ('GET') missing — `method` key lookup is broken again"
     assert r["contains_url_template"] is True, (
         "urlTemplate ('/liveTable/insights/summary') missing — "
         "`urlTemplate` key lookup is broken again (was reading `url_template`)"
     )
     assert r["contains_name"] is True, (
-        "Endpoint name ('Get Insights Summary') missing — "
-        "`name` key lookup is broken again (was reading `summary`)"
+        "Endpoint name ('Get Insights Summary') missing — `name` key lookup is broken again (was reading `summary`)"
     )
-    assert r["contains_must_match_rule"] is True, (
-        "MUST-match-catalog rule line missing — Architect lost the grounding"
-    )
+    assert r["contains_must_match_rule"] is True, "MUST-match-catalog rule line missing — Architect lost the grounding"
     assert r["contains_placeholder_question_marks"] is False, (
-        "Rendered prompt still contains `? ?` placeholder bullets — "
-        "the key-name lookup regressed"
+        "Rendered prompt still contains `? ?` placeholder bullets — the key-name lookup regressed"
     )
 
 
 def test_linter_lnt001_path_in_catalog_uses_dev_server_key_names(
-    harness_environment, built_harness,
+    harness_environment,
+    built_harness,
 ) -> None:
     """LNT001_PathInCatalog must fire when stimulus.path is not in the
     catalog and stay silent when it is. The rule was silently dead
@@ -186,6 +187,5 @@ def test_linter_lnt001_path_in_catalog_uses_dev_server_key_names(
         f"Findings: {L['lnt001_findings']}"
     )
     assert L["lnt001_fires_on_good"] is False, (
-        "LNT001_PathInCatalog over-fired on a scenario whose path "
-        "matches the catalog. The templates set may be empty."
+        "LNT001_PathInCatalog over-fired on a scenario whose path matches the catalog. The templates set may be empty."
     )

@@ -1096,9 +1096,7 @@ def compute_pr_stability(pr_dir: Path, max_runs: int) -> dict[str, Any] | None:
     evidence = sum(pair_evidence) / len(pair_evidence)
     category = sum(pair_categories) / len(pair_categories)
     overall = (
-        STABILITY_TITLE_WEIGHT * title
-        + STABILITY_EVIDENCE_WEIGHT * evidence
-        + STABILITY_CATEGORY_WEIGHT * category
+        STABILITY_TITLE_WEIGHT * title + STABILITY_EVIDENCE_WEIGHT * evidence + STABILITY_CATEGORY_WEIGHT * category
     )
     return {
         "runs_compared": len(runs),
@@ -1185,10 +1183,7 @@ def audit_architect_temperature() -> dict[str, Any]:
             "temperature_pinned_to_zero": pinned,
             "temperature_mentioned": mentioned,
         }
-    any_unpinned = any(
-        f.get("present") and not f.get("temperature_pinned_to_zero")
-        for f in findings.values()
-    )
+    any_unpinned = any(f.get("present") and not f.get("temperature_pinned_to_zero") for f in findings.values())
     return {
         "available": True,
         "source": _ARCHITECT_CLIENT_PATH.relative_to(REPO_ROOT).as_posix(),

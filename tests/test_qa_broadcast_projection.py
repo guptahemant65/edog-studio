@@ -166,7 +166,8 @@ def _diff(case: dict) -> str:
 
 
 def test_broadcast_projection_round_trip_preserves_all_stimulus_variants(
-    harness_environment, built_harness,
+    harness_environment,
+    built_harness,
 ) -> None:
     """Every StimulusType variant (HttpRequest / SignalRBroadcast /
     DagTrigger / FileEvent / TimerTick / DiInvocation) must survive
@@ -183,8 +184,7 @@ def test_broadcast_projection_round_trip_preserves_all_stimulus_variants(
 
     cases = {c["name"]: c for c in data["cases"]}
     assert set(cases.keys()) == EXPECTED_CASES, (
-        f"Harness emitted unexpected case set: {set(cases.keys())}. "
-        f"Expected: {EXPECTED_CASES}."
+        f"Harness emitted unexpected case set: {set(cases.keys())}. Expected: {EXPECTED_CASES}."
     )
 
     failures = []
@@ -209,7 +209,8 @@ def test_broadcast_projection_round_trip_preserves_all_stimulus_variants(
 
 
 def test_broadcast_projection_includes_all_union_variants_in_wire_payload(
-    harness_environment, built_harness,
+    harness_environment,
+    built_harness,
 ) -> None:
     """The projected wire envelope MUST mention every union variant
     discriminator key — even when the active variant is set, the
@@ -230,6 +231,5 @@ def test_broadcast_projection_includes_all_union_variants_in_wire_payload(
         wire = case["projectedStimulusJson"]
         missing = [k for k in union_keys if f'"{k}"' not in wire]
         assert not missing, (
-            f"[{case['name']}] projected wire payload is missing union variant key(s) "
-            f"{missing}. Full wire: {wire}"
+            f"[{case['name']}] projected wire payload is missing union variant key(s) {missing}. Full wire: {wire}"
         )

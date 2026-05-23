@@ -54,8 +54,7 @@ def test_parse_dotenv_missing_file_returns_empty_dict(edog, tmp_path):
 def test_parse_dotenv_basic_pairs(edog, tmp_path):
     env_file = tmp_path / ".env"
     env_file.write_text(
-        "AZURE_OPENAI_ENDPOINT=https://aoai.test/\n"
-        "AZURE_OPENAI_API_KEY=sk-1234\n",
+        "AZURE_OPENAI_ENDPOINT=https://aoai.test/\nAZURE_OPENAI_API_KEY=sk-1234\n",
         encoding="utf-8",
     )
     result = edog._parse_dotenv_file(env_file)
@@ -66,8 +65,7 @@ def test_parse_dotenv_basic_pairs(edog, tmp_path):
 def test_parse_dotenv_strips_quotes(edog, tmp_path):
     env_file = tmp_path / ".env"
     env_file.write_text(
-        'AZURE_OPENAI_ENDPOINT="https://aoai.test/"\n'
-        "AZURE_OPENAI_API_KEY='sk-1234'\n",
+        "AZURE_OPENAI_ENDPOINT=\"https://aoai.test/\"\nAZURE_OPENAI_API_KEY='sk-1234'\n",
         encoding="utf-8",
     )
     result = edog._parse_dotenv_file(env_file)
@@ -104,8 +102,7 @@ def test_parse_dotenv_supports_export_prefix(edog, tmp_path):
 
 def test_build_flt_env_includes_dotenv_keys(edog, tmp_path):
     (tmp_path / ".env").write_text(
-        "AZURE_OPENAI_PRO_ENDPOINT=https://pro.test/\n"
-        "AZURE_OPENAI_PRO_API_KEY=sk-pro\n",
+        "AZURE_OPENAI_PRO_ENDPOINT=https://pro.test/\nAZURE_OPENAI_PRO_API_KEY=sk-pro\n",
         encoding="utf-8",
     )
     env = edog._build_flt_subprocess_env(tmp_path, base_env={"PATH": "/usr/bin"})
@@ -149,8 +146,7 @@ def test_build_flt_env_does_not_alias_when_base_already_set(edog, tmp_path):
     distinct keys for Architect vs Editor), the loader MUST NOT clobber
     the base with PRO."""
     (tmp_path / ".env").write_text(
-        "AZURE_OPENAI_PRO_ENDPOINT=https://pro.test/\n"
-        "AZURE_OPENAI_ENDPOINT=https://base.test/\n",
+        "AZURE_OPENAI_PRO_ENDPOINT=https://pro.test/\nAZURE_OPENAI_ENDPOINT=https://base.test/\n",
         encoding="utf-8",
     )
     env = edog._build_flt_subprocess_env(tmp_path, base_env={})
@@ -166,9 +162,7 @@ def test_start_flt_service_passes_env_to_popen(edog):
     assert "_build_flt_subprocess_env(" in src, (
         "start_flt_service must build a merged env via _build_flt_subprocess_env."
     )
-    assert "env=flt_env" in src, (
-        "subprocess.Popen for FLT must pass env=flt_env so the child sees AZURE_OPENAI_* keys."
-    )
+    assert "env=flt_env" in src, "subprocess.Popen for FLT must pass env=flt_env so the child sees AZURE_OPENAI_* keys."
 
 
 def test_dev_server_deploy_uses_build_flt_subprocess_env():

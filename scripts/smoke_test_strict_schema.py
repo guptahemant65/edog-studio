@@ -10,14 +10,15 @@ Reads creds from .env. Sends four schema variants:
 
 Exit code 0 if reality matches the research finding; 1 otherwise.
 """
+
 from __future__ import annotations
 
 import json
 import os
 import sys
 from pathlib import Path
-from urllib import request as urlrequest
 from urllib import error as urlerror
+from urllib import request as urlrequest
 
 
 def load_env(path: Path) -> dict[str, str]:
@@ -36,11 +37,7 @@ def load_env(path: Path) -> dict[str, str]:
 
 
 def call_azure(endpoint: str, deployment: str, api_key: str, api_version: str, schema: dict) -> tuple[int, str]:
-    url = (
-        endpoint.rstrip("/")
-        + f"/openai/deployments/{deployment}/chat/completions"
-        + f"?api-version={api_version}"
-    )
+    url = endpoint.rstrip("/") + f"/openai/deployments/{deployment}/chat/completions" + f"?api-version={api_version}"
     body = {
         "messages": [
             {"role": "system", "content": "You output a tiny JSON object per the schema."},
@@ -71,7 +68,7 @@ def call_azure(endpoint: str, deployment: str, api_key: str, api_version: str, s
             return resp.status, resp.read().decode("utf-8", errors="replace")
     except urlerror.HTTPError as e:
         return e.code, e.read().decode("utf-8", errors="replace")
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         return -1, repr(e)
 
 
@@ -82,10 +79,18 @@ SCHEMA_A_ONEOF = {
     "properties": {
         "pick": {
             "oneOf": [
-                {"type": "object", "additionalProperties": False, "required": ["kind", "v"],
-                 "properties": {"kind": {"const": "a"}, "v": {"type": "string"}}},
-                {"type": "object", "additionalProperties": False, "required": ["kind", "n"],
-                 "properties": {"kind": {"const": "b"}, "n": {"type": "integer"}}},
+                {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["kind", "v"],
+                    "properties": {"kind": {"const": "a"}, "v": {"type": "string"}},
+                },
+                {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["kind", "n"],
+                    "properties": {"kind": {"const": "b"}, "n": {"type": "integer"}},
+                },
             ]
         }
     },
@@ -100,10 +105,14 @@ SCHEMA_B_ALLOF_IFTHEN = {
         "field": {"type": "string"},
     },
     "allOf": [
-        {"if": {"properties": {"topic": {"const": "http"}}},
-         "then": {"properties": {"field": {"enum": ["method", "status"]}}}},
-        {"if": {"properties": {"topic": {"const": "log"}}},
-         "then": {"properties": {"field": {"enum": ["level", "message"]}}}},
+        {
+            "if": {"properties": {"topic": {"const": "http"}}},
+            "then": {"properties": {"field": {"enum": ["method", "status"]}}},
+        },
+        {
+            "if": {"properties": {"topic": {"const": "log"}}},
+            "then": {"properties": {"field": {"enum": ["level", "message"]}}},
+        },
     ],
 }
 
@@ -114,10 +123,18 @@ SCHEMA_C_ANYOF = {
     "properties": {
         "pick": {
             "anyOf": [
-                {"type": "object", "additionalProperties": False, "required": ["kind", "v"],
-                 "properties": {"kind": {"type": "string", "const": "a"}, "v": {"type": "string"}}},
-                {"type": "object", "additionalProperties": False, "required": ["kind", "n"],
-                 "properties": {"kind": {"type": "string", "const": "b"}, "n": {"type": "integer"}}},
+                {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["kind", "v"],
+                    "properties": {"kind": {"type": "string", "const": "a"}, "v": {"type": "string"}},
+                },
+                {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["kind", "n"],
+                    "properties": {"kind": {"type": "string", "const": "b"}, "n": {"type": "integer"}},
+                },
             ]
         }
     },
@@ -127,18 +144,14 @@ SCHEMA_D_COMPOSITE_ENUM = {
     "type": "object",
     "additionalProperties": False,
     "required": ["topicField"],
-    "properties": {
-        "topicField": {
-            "enum": ["http.method", "http.status", "log.level", "log.message"]
-        }
-    },
+    "properties": {"topicField": {"enum": ["http.method", "http.status", "log.level", "log.message"]}},
 }
 
 TESTS = [
-    ("A_oneOf",           SCHEMA_A_ONEOF,           "REJECTED"),
-    ("B_allOf_ifthen",    SCHEMA_B_ALLOF_IFTHEN,    "REJECTED"),
-    ("C_anyOf_control",   SCHEMA_C_ANYOF,           "ACCEPTED"),
-    ("D_composite_enum",  SCHEMA_D_COMPOSITE_ENUM,  "ACCEPTED"),
+    ("A_oneOf", SCHEMA_A_ONEOF, "REJECTED"),
+    ("B_allOf_ifthen", SCHEMA_B_ALLOF_IFTHEN, "REJECTED"),
+    ("C_anyOf_control", SCHEMA_C_ANYOF, "ACCEPTED"),
+    ("D_composite_enum", SCHEMA_D_COMPOSITE_ENUM, "ACCEPTED"),
 ]
 
 
@@ -148,7 +161,9 @@ def main() -> int:
     prefix = os.environ.get("SMOKE_ENV_PREFIX", "PRO")  # PRO=gpt-5.4, ALT=gpt-5.4-pro
     endpoint = env.get(f"AZURE_OPENAI_{prefix}_ENDPOINT") or env.get("AZURE_OPENAI_ENDPOINT")
     api_key = env.get(f"AZURE_OPENAI_{prefix}_API_KEY") or env.get("AZURE_OPENAI_API_KEY")
-    api_version = env.get(f"AZURE_OPENAI_{prefix}_API_VERSION") or env.get("AZURE_OPENAI_API_VERSION") or "2024-08-01-preview"
+    api_version = (
+        env.get(f"AZURE_OPENAI_{prefix}_API_VERSION") or env.get("AZURE_OPENAI_API_VERSION") or "2024-08-01-preview"
+    )
     deployment = env.get(f"AZURE_OPENAI_{prefix}_DEPLOYMENT") or env.get("AZURE_OPENAI_DEPLOYMENT")
     if not (endpoint and api_key and deployment):
         print("MISSING_CONFIG: endpoint/api_key/deployment not in .env", file=sys.stderr)
@@ -169,13 +184,15 @@ def main() -> int:
             try:
                 err = json.loads(body)
                 msg = err.get("error", {}).get("message") or body[:300]
-            except Exception:  # noqa: BLE001
+            except Exception:
                 msg = body[:300]
             print(f"   reason: {msg}")
         print()
     print("=" * 80)
     if all_match:
-        print("VERDICT: research finding CONFIRMED — Azure strict mode rejects oneOf/allOf/if-then, accepts anyOf + composite enum.")
+        print(
+            "VERDICT: research finding CONFIRMED — Azure strict mode rejects oneOf/allOf/if-then, accepts anyOf + composite enum."
+        )
         return 0
     print("VERDICT: research finding CONTRADICTED — see actuals above.")
     return 1
