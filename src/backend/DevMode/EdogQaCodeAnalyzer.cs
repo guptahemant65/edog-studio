@@ -1537,14 +1537,51 @@ namespace Microsoft.LiveTable.Service.DevMode
 
                     try
                     {
-                        var fltBinPath = Environment.GetEnvironmentVariable("FLT_BIN_PATH") ?? string.Empty;
-                        var fwPath = System.IO.Path.Combine(fltBinPath, "framework-endpoints.json");
-                        if (System.IO.File.Exists(fwPath))
+                        // framework-endpoints.json lives in edog-studio/data/ not FLT bin
+                        var edogRoot = System.IO.Path.GetDirectoryName(
+                            System.IO.Path.GetDirectoryName(typeof(EdogQaCodeAnalyzer).Assembly.Location))
+                            ?? string.Empty;
+                        // Walk up to find the edog-studio repo root
+                        var candidates = new[]
                         {
-                            frameworkEndpointsJson = System.IO.File.ReadAllText(fwPath);
+                            System.IO.Path.Combine(edogRoot, "data", "framework-endpoints.json"),
+                            System.IO.Path.Combine(Environment.GetEnvironmentVariable("FLT_BIN_PATH") ?? string.Empty, "framework-endpoints.json"),
+                            System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "data", "framework-endpoints.json"),
+                        };
+                        foreach (var candidate in candidates)
+                        {
+                            if (System.IO.File.Exists(candidate))
+                            {
+                                frameworkEndpointsJson = System.IO.File.ReadAllText(candidate);
+                                Console.WriteLine($"[QA-DIAG] framework-endpoints.json loaded: {frameworkEndpointsJson.Length} bytes from {candidate}");
+                                break;
+                            }
+                        }
+                        if (string.IsNullOrEmpty(frameworkEndpointsJson))
+                        {
+                            Console.WriteLine("[QA-DIAG] framework-endpoints.json not found — SignalR slots will be empty");
                         }
                     }
                     catch { /* framework endpoints unavailable */ }
+
+                    // FLT repo root for DAG/FileEvent/TimerTick scanners
+                    string fltRepoRoot = null;
+                    try
+                    {
+                        var configPath = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "edog-config.json");
+                        if (System.IO.File.Exists(configPath))
+                        {
+                            var configJson = System.IO.File.ReadAllText(configPath);
+                            using var configDoc = System.Text.Json.JsonDocument.Parse(configJson);
+                            if (configDoc.RootElement.TryGetProperty("flt_repo_path", out var repoPath)
+                                && repoPath.ValueKind == System.Text.Json.JsonValueKind.String)
+                            {
+                                fltRepoRoot = repoPath.GetString();
+                                Console.WriteLine($"[QA-DIAG] FLT repo root: {fltRepoRoot}");
+                            }
+                        }
+                    }
+                    catch { /* config unavailable */ }
 
                     var zoneId = zones.FirstOrDefault()?.ZoneId ?? "zone-00";
 
@@ -1562,7 +1599,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                         catch { /* malformed swagger — treat as absent */ }
                     }
 
-                    var snapshot = catalog.Assemble(zoneId, null, swaggerObj, frameworkEndpointsJson);
+                    var snapshot = catalog.Assemble(zoneId, fltRepoRoot, swaggerObj, frameworkEndpointsJson);
 
                     if (snapshot != null && snapshot.Slots != null && snapshot.Slots.Count > 0)
                     {
