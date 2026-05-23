@@ -662,6 +662,26 @@ namespace Microsoft.LiveTable.Service.DevMode
             "event_present", "event_absent", "event_count", "event_order", "timing", "field_match",
             "EventPresent", "EventAbsent", "EventCount", "EventOrder", "Timing", "FieldMatch"
         };
+
+        /// <summary>
+        /// Closed topic vocabulary the QA schema accepts for
+        /// <c>expectations[*].topic</c>. Mirrors the enum in
+        /// <see cref="EdogQaLlmClient"/>'s single-scenario schema and the
+        /// EditorSystemPrompt "EXPECTATION TOPIC VOCABULARY" block. The
+        /// submission validator uses this set instead of
+        /// <see cref="EdogTopicRouter.GetBuffer"/> because the runtime router
+        /// only carries topics that are actively intercepted in the current
+        /// FLT process — but the schema legitimately allows topics whose
+        /// interceptors exist in the FLT codebase even when no buffer is
+        /// registered for them in this session (the symptom that caused
+        /// QaSubmitCuratedScenarios to fail server-side with "Unknown topic").
+        /// </summary>
+        private static readonly HashSet<string> ValidTopicVocabulary = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "http", "token", "flag", "perf", "spark", "log",
+            "telemetry", "retry", "cache", "fileop", "catalog",
+            "dag", "flt-ops", "nexus", "di", "capacity",
+        };
         private const int MaxScenariosPerRun = 50;
 
         // ─── 1.1 Code Analysis ─────────────────────────────────────────
@@ -2919,7 +2939,7 @@ namespace Microsoft.LiveTable.Service.DevMode
 
                         if (string.IsNullOrEmpty(exp.Topic))
                             errors.Add(new QaValidationError { ScenarioId = s.Id, Field = $"expectations[{exp.Id}].topic", Message = "Topic is required" });
-                        else if (EdogTopicRouter.GetBuffer(exp.Topic) == null)
+                        else if (!ValidTopicVocabulary.Contains(exp.Topic))
                             errors.Add(new QaValidationError { ScenarioId = s.Id, Field = $"expectations[{exp.Id}].topic", Message = $"Unknown topic: {exp.Topic}" });
                     }
                 }

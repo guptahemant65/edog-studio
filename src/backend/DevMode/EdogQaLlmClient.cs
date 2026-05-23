@@ -111,8 +111,8 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <summary>Stable cache key for the Architect's system+schema prefix. Spec §3.4: the prefix is identical across every zone + every analysis for a given client version. F27 P11: bumped from v2 to v11 — invalidates the prefix cache on the gpt-5 deployment so old plans don't leak into new-schema decoding. Structural-fixes bump (service-to-route + FF override + matcher kind/literal redesign + topic-vocabulary injection): v13.</summary>
         internal const string PromptCacheKeyArchitect = "edog-qa-architect-v14";
 
-        /// <summary>Stable cache key for the Editor's system+schema prefix. Bumped to v14 alongside the structural-fixes drop (kind/literal matcher schema, featureFlagOverrides field, topic-vocabulary injection).</summary>
-        internal const string PromptCacheKeyEditor = "edog-qa-editor-v15";
+        /// <summary>Stable cache key for the Editor's system+schema prefix. Bumped to v14 alongside the structural-fixes drop (kind/literal matcher schema, featureFlagOverrides field, topic-vocabulary injection). v16: adds required stimulusId field + STIMULUS ASSIGNMENT prompt block so scenarios mechanically pick distinct stimuli from testingGuidance.stimuliRequired (LNT009 fix).</summary>
+        internal const string PromptCacheKeyEditor = "edog-qa-editor-v16";
 
         /// <summary>Stable cache key for the Analyst's system+schema prefix. The Analyst is the
         /// first pass of the 2-step Analyst→Architect pipeline; its prompt is intentionally
@@ -453,6 +453,18 @@ namespace Microsoft.LiveTable.Service.DevMode
             public string StimulusType { get; set; }
 
             public string StimulusSpec { get; set; }
+
+            /// <summary>
+            /// The <c>st-N</c> id from the Architect's
+            /// <see cref="TestingGuidance.StimuliRequired"/> list that this
+            /// scenario exercises. Required field on the Editor schema —
+            /// scenarios that target different code paths MUST set different
+            /// <c>stimulusId</c> values when the Analyst exposed distinct
+            /// stimuli, so the projector + curator can mechanically diversify
+            /// the materialized HTTP/SignalR/DAG payloads instead of folding
+            /// every scenario onto the same endpoint (LNT009 root cause).
+            /// </summary>
+            public string StimulusId { get; set; }
 
             public List<GeneratedExpectation> Expectations { get; set; } = new();
 
@@ -1393,6 +1405,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 {
                     "id", "title", "description", "category", "priority",
                     "impactZone", "technique", "stimulusType", "stimulusSpec",
+                    "stimulusId",
                     "expectations", "matchers", "timeoutMs",
                     "catalogHashes", "groundingEvidenceRefs", "confidence", "originalIndex",
                     "sketchId", "featureFlagOverrides",
@@ -1431,6 +1444,11 @@ namespace Microsoft.LiveTable.Service.DevMode
                     {
                         ["type"] = "string",
                         ["description"] = "Valid double-quoted JSON string representing the stimulus payload. Must parse as JSON.",
+                    },
+                    ["stimulusId"] = new Dictionary<string, object>
+                    {
+                        ["type"] = "string",
+                        ["description"] = "The st-N ID from testingGuidance.stimuliRequired that this scenario exercises. Must reference a valid stimulus from the Analyst's testingGuidance. Scenarios testing different code paths MUST use different stimulusId values when distinct stimuli are available.",
                     },
                     ["expectations"] = new Dictionary<string, object>
                     {
@@ -2438,6 +2456,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             + "TimerTick = {\"tickSource\":\"source\",\"topic\":\"topic\",\"maxWaitMs\":5000}; "
             + "DiInvocation = {\"serviceType\":\"Namespace.Service\",\"method\":\"MethodName\",\"args\":[]}. "
             + "If testingGuidance.stimuliRequired provides concrete stimulus shapes, use those values directly in stimulusSpec as valid JSON. "
+            + "STIMULUS ASSIGNMENT: each scenario MUST set stimulusId to the st-N entry from testingGuidance.stimuliRequired that exercises the code path this scenario tests. Scenarios testing the same code path share the same stimulusId. Scenarios testing DIFFERENT code paths MUST use DIFFERENT stimulusId values when different stimuli are available. The stimulusSpec JSON MUST match the stimulus shape described by the referenced stimuliRequired entry — use its kind, path, method, and headers as the concrete values. Do NOT use the same stimulus for all scenarios. "
             + "MATCHERS CONTRACT (HARD REQUIREMENT — empty matchers[] is a quarantine offence): "
             + "The typed `matchers` array is the CANONICAL assertion surface. It MUST NOT be empty when expectations[] is non-empty. "
             + "For EACH expectation you emit, you MUST emit AT LEAST ONE corresponding entry in `matchers` with a concrete `topicField`, a typed `assertion`, and a typed `value`. "

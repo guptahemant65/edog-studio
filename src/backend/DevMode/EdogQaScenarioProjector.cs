@@ -98,11 +98,31 @@ namespace Microsoft.LiveTable.Service.DevMode
                 .GroupBy(e => e.EvidenceId, StringComparer.Ordinal)
                 .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
 
+            // F27 P11 / LNT009 fix: index the Architect's stimuliRequired by
+            // st-N id so the projector can repair stub stimuli from the
+            // Analyst's toolingHint when the Editor's stimulusSpec failed to
+            // parse as JSON. This is defense-in-depth — the Editor SHOULD
+            // populate a concrete stimulusSpec from the same stimuliRequired
+            // entry, but a stub fallback that copies the shape across every
+            // scenario is what produces the "all 20 scenarios share the same
+            // HTTP stimulus" LNT009 symptom.
+            var stimuliById = new Dictionary<string, EdogQaLlmClient.StimulusRequirement>(StringComparer.Ordinal);
+            if (plan.TestingGuidance?.StimuliRequired != null)
+            {
+                foreach (var st in plan.TestingGuidance.StimuliRequired)
+                {
+                    if (st != null && !string.IsNullOrWhiteSpace(st.Id) && !stimuliById.ContainsKey(st.Id))
+                    {
+                        stimuliById[st.Id] = st;
+                    }
+                }
+            }
+
             var result = new ProjectionResult();
             foreach (var acc in accepted)
             {
                 var reasons = new List<EdogQaScenarioValidator.QuarantineReason>();
-                var projected = ProjectOne(acc, evidenceById, reasons, result.Diagnostics);
+                var projected = ProjectOne(acc, evidenceById, stimuliById, reasons, result.Diagnostics);
                 if (reasons.Count > 0)
                 {
                     result.Rejected.Add(new EdogQaScenarioValidator.QuarantinedScenario
@@ -161,6 +181,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         private static Scenario ProjectOne(
             EdogQaScenarioValidator.AcceptedScenario accepted,
             IReadOnlyDictionary<string, EdogQaLlmClient.ArchitectGroundingEvidence> evidenceById,
+            IReadOnlyDictionary<string, EdogQaLlmClient.StimulusRequirement> stimuliById,
             List<EdogQaScenarioValidator.QuarantineReason> reasons,
             List<string> diagnostics)
         {
@@ -207,25 +228,46 @@ namespace Microsoft.LiveTable.Service.DevMode
                     Console.WriteLine($"[QA-DIAG] {diagMsg}");
                     diagnostics?.Add(diagMsg);
 
+                    // LNT009 defense-in-depth: if the scenario references a
+                    // stimulusId from the Architect's stimuliRequired and that
+                    // entry's toolingHint contains a JSON snippet describing
+                    // the concrete shape, parse it and use those values to
+                    // populate the stub. This stops every fallback scenario
+                    // collapsing onto the same {GET /api/unknown} skeleton.
+                    JsonElement? guidanceShape = null;
+                    if (!string.IsNullOrWhiteSpace(src.StimulusId)
+                        && stimuliById != null
+                        && stimuliById.TryGetValue(src.StimulusId, out var stimReq)
+                        && !string.IsNullOrWhiteSpace(stimReq?.ToolingHint))
+                    {
+                        using var hintDoc = TryParseJson(stimReq.ToolingHint, out var hintFail);
+                        if (hintFail == null && hintDoc.RootElement.ValueKind == JsonValueKind.Object)
+                        {
+                            guidanceShape = hintDoc.RootElement.Clone();
+                            diagnostics?.Add(
+                                $"Projector: stimulusSpec stub for '{src.Id}' enriched from stimuliRequired '{src.StimulusId}'.");
+                        }
+                    }
+
                     switch (stimulusType)
                     {
                         case StimulusType.HttpRequest:
-                            stimulus.HttpRequest = new HttpRequestSpec { Method = "GET", Path = "/api/unknown" };
+                            stimulus.HttpRequest = BuildHttpStubFromGuidance(guidanceShape);
                             break;
                         case StimulusType.SignalRBroadcast:
-                            stimulus.SignalRBroadcast = new SignalRBroadcastSpec { Hub = "unknown", Method = "unknown" };
+                            stimulus.SignalRBroadcast = BuildSignalRStubFromGuidance(guidanceShape);
                             break;
                         case StimulusType.DagTrigger:
-                            stimulus.DagTrigger = new DagTriggerSpec { IterationId = "unknown" };
+                            stimulus.DagTrigger = BuildDagStubFromGuidance(guidanceShape);
                             break;
                         case StimulusType.FileEvent:
-                            stimulus.FileEvent = new FileEventSpec { Path = "unknown" };
+                            stimulus.FileEvent = BuildFileStubFromGuidance(guidanceShape);
                             break;
                         case StimulusType.TimerTick:
-                            stimulus.TimerTick = new TimerTickSpec { TickSource = "unknown" };
+                            stimulus.TimerTick = BuildTimerStubFromGuidance(guidanceShape);
                             break;
                         case StimulusType.DiInvocation:
-                            stimulus.DiInvocation = new DiInvocationSpec { ServiceType = "unknown", Method = "unknown" };
+                            stimulus.DiInvocation = BuildDiStubFromGuidance(guidanceShape);
                             break;
                     }
                 }
@@ -1078,6 +1120,82 @@ namespace Microsoft.LiveTable.Service.DevMode
         // ──────────────────────────────────────────────────────────────
         // Helpers.
         // ──────────────────────────────────────────────────────────────
+
+        // LNT009 defense-in-depth: build stub stimuli from the Architect's
+        // testingGuidance.stimuliRequired[*].toolingHint when the Editor's
+        // stimulusSpec failed to parse. Each helper reads the well-known
+        // shape fields (path, method, headers, body, contentType, hub, etc.)
+        // off the guidance object and falls back to "unknown" when absent.
+        // The guidance object is the toolingHint parsed as a JSON object.
+
+        private static HttpRequestSpec BuildHttpStubFromGuidance(JsonElement? guidance)
+        {
+            var spec = new HttpRequestSpec { Method = "GET", Path = "/api/unknown" };
+            if (guidance == null) return spec;
+            var g = guidance.Value;
+            if (TryGetString(g, "method", out var method)) spec.Method = method;
+            if (TryGetString(g, "path", out var path)) spec.Path = path;
+            if (TryGetString(g, "contentType", out var ct)) spec.ContentType = ct;
+            if (g.TryGetProperty("headers", out var headersEl) && headersEl.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var p in headersEl.EnumerateObject())
+                {
+                    spec.Headers[p.Name] = p.Value.ValueKind == JsonValueKind.String ? p.Value.GetString() : p.Value.ToString();
+                }
+            }
+            if (g.TryGetProperty("body", out var bodyEl) && bodyEl.ValueKind != JsonValueKind.Undefined && bodyEl.ValueKind != JsonValueKind.Null)
+            {
+                spec.Body = JsonSerializer.Deserialize<object>(bodyEl.GetRawText());
+            }
+            return spec;
+        }
+
+        private static SignalRBroadcastSpec BuildSignalRStubFromGuidance(JsonElement? guidance)
+        {
+            var spec = new SignalRBroadcastSpec { Hub = "unknown", Method = "unknown" };
+            if (guidance == null) return spec;
+            var g = guidance.Value;
+            if (TryGetString(g, "hub", out var hub)) spec.Hub = hub;
+            if (TryGetString(g, "method", out var method)) spec.Method = method;
+            return spec;
+        }
+
+        private static DagTriggerSpec BuildDagStubFromGuidance(JsonElement? guidance)
+        {
+            var spec = new DagTriggerSpec { IterationId = "unknown" };
+            if (guidance == null) return spec;
+            var g = guidance.Value;
+            if (TryGetString(g, "iterationId", out var iter)) spec.IterationId = iter;
+            return spec;
+        }
+
+        private static FileEventSpec BuildFileStubFromGuidance(JsonElement? guidance)
+        {
+            var spec = new FileEventSpec { Path = "unknown" };
+            if (guidance == null) return spec;
+            var g = guidance.Value;
+            if (TryGetString(g, "path", out var p)) spec.Path = p;
+            return spec;
+        }
+
+        private static TimerTickSpec BuildTimerStubFromGuidance(JsonElement? guidance)
+        {
+            var spec = new TimerTickSpec { TickSource = "unknown" };
+            if (guidance == null) return spec;
+            var g = guidance.Value;
+            if (TryGetString(g, "tickSource", out var ts)) spec.TickSource = ts;
+            return spec;
+        }
+
+        private static DiInvocationSpec BuildDiStubFromGuidance(JsonElement? guidance)
+        {
+            var spec = new DiInvocationSpec { ServiceType = "unknown", Method = "unknown" };
+            if (guidance == null) return spec;
+            var g = guidance.Value;
+            if (TryGetString(g, "serviceType", out var st)) spec.ServiceType = st;
+            if (TryGetString(g, "method", out var method)) spec.Method = method;
+            return spec;
+        }
 
         private static JsonDocument TryParseJson(string text, out string error)
         {
