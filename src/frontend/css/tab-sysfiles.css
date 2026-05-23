@@ -958,3 +958,224 @@
   from { transform: rotate(0deg) translateX(40px); }
   to { transform: rotate(-360deg) translateX(40px); }
 }
+
+
+/* ── Detail header actions (close + detach) ── */
+
+.sf-detail-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+.sf-detail-detach {
+  width: var(--row-height);
+  height: var(--row-height);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--sf-transition), transform var(--sf-transition);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.sf-detail-detach:hover { background: var(--accent-hover); transform: translateY(-1px); }
+.sf-detail-detach svg { width: 14px; height: 14px; fill: var(--text-muted); }
+.sf-detail-detach:hover svg { fill: var(--text); }
+
+/* ── Prominent Copy button ── */
+
+.sf-copy-btn.sf-copy-btn--primary {
+  padding: 5px 12px;
+  height: 28px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--accent);
+  color: var(--accent-fg, #fff);
+  border-color: var(--accent);
+  gap: 6px;
+}
+
+.sf-copy-btn.sf-copy-btn--primary svg { width: 14px; height: 14px; fill: currentColor; }
+.sf-copy-btn.sf-copy-btn--primary:hover { filter: brightness(1.08); border-color: var(--accent); background: var(--accent); }
+
+.sf-copy-raw-btn {
+  padding: 3px 8px;
+  height: 26px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all var(--sf-transition);
+}
+
+.sf-copy-raw-btn:hover { color: var(--text); border-color: var(--border-bright); background: var(--accent-hover); }
+.sf-copy-raw-btn.sf--hidden { display: none; }
+
+/* ── Word wrap toggle ── */
+
+.sf-wrap-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px var(--space-2);
+  height: 26px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  transition: all var(--sf-transition);
+  background: var(--surface);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.sf-wrap-btn:hover { color: var(--text); border-color: var(--border-bright); background: var(--accent-hover); }
+.sf-wrap-btn.sf--active { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
+.sf-wrap-btn svg { width: 12px; height: 12px; fill: currentColor; }
+
+/* ── Word wrap behavior ── */
+
+.sf-detail-body.sf--wrap .sf-json-content,
+.sf-detail-body.sf--wrap .sf-text-content {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+/* ── Text viewer (line-numbered, monospace) ── */
+
+.sf-text-viewer {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.7;
+  padding: var(--space-2) 0;
+}
+
+.sf-text-line { display: flex; padding: 0 var(--space-4) 0 0; min-height: 22px; align-items: flex-start; }
+.sf-text-line:hover { background: var(--accent-hover); }
+
+.sf-text-content {
+  flex: 1;
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+}
+
+/* Gutter alignment tweak — already styled via .sf-json-gutter; ensure consistency */
+.sf-text-line .sf-json-gutter { line-height: 1.7; }
+
+/* ── Detach modal ── */
+
+@keyframes sf-modal-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.94); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+@keyframes sf-modal-out {
+  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  to   { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
+}
+
+@keyframes sf-backdrop-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.sf-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.25);
+  z-index: 8000;
+  animation: sf-backdrop-in 150ms ease;
+}
+
+[data-theme="dark"] .sf-modal-backdrop { background: rgba(0, 0, 0, 0.55); }
+
+.sf-modal-backdrop.sf--closing { animation: sf-backdrop-in 150ms ease reverse forwards; }
+
+.sf-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 8001;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  overflow: hidden;
+  min-width: 520px;
+  min-height: 400px;
+  width: min(1100px, 90vw);
+  height: min(800px, 88vh);
+  resize: both;
+  animation: sf-modal-in 220ms var(--sf-spring) both;
+}
+
+.sf-modal.sf--closing { animation: sf-modal-out 160ms ease forwards; }
+
+.sf-modal-drag {
+  height: 12px;
+  cursor: move;
+  background: var(--surface-3);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sf-modal-drag::after {
+  content: '';
+  width: 36px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--text-muted);
+  opacity: 0.4;
+}
+
+.sf-modal-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.sf-modal-breadcrumb-slot { flex: 1; min-width: 0; display: flex; }
+.sf-modal-breadcrumb-slot .sf-breadcrumb { padding: 0; border: none; }
+
+.sf-modal-close {
+  width: var(--row-height);
+  height: var(--row-height);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: background var(--sf-transition);
+  flex-shrink: 0;
+}
+
+.sf-modal-close:hover { background: var(--accent-hover); }
+.sf-modal-close svg { width: 14px; height: 14px; fill: var(--text-muted); }
+
+.sf-modal-meta-slot { flex-shrink: 0; }
+.sf-modal-toolbar-slot { flex-shrink: 0; }
+.sf-modal-body { flex: 1; overflow: auto; min-height: 0; }

@@ -20,7 +20,9 @@ const _SF_ICONS = {
   filter: '<svg viewBox="0 0 24 24"><path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/></svg>',
   file: '<svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>',
   fileAlt: '<svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm-1 9h-2V7h2v4zm0 4h-2v-2h2v2z"/></svg>',
-  lock: '<svg viewBox="0 0 24 24" width="12" height="12"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1s3.1 1.39 3.1 3.1v2z"/></svg>'
+  lock: '<svg viewBox="0 0 24 24" width="12" height="12"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1s3.1 1.39 3.1 3.1v2z"/></svg>',
+  detach: '<svg viewBox="0 0 24 24"><path d="M14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7zM19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7z"/></svg>',
+  wrap: '<svg viewBox="0 0 24 24"><path d="M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3 3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"/></svg>'
 };
 
 // ===== SYSTEM FILES TAB =====
@@ -50,6 +52,11 @@ class SystemFilesTab {
     this._sortDir = 'desc';
     this._detailOpen = false;
     this._detailHeight = 280;
+    this._wordWrap = false;
+    this._modalEl = null;
+    this._modalBackdrop = null;
+    this._modalAnchors = null;
+    this._currentOp = null;
 
     // Dropdown state
     this._dirDropdownOpen = false;
@@ -103,6 +110,7 @@ class SystemFilesTab {
     document.removeEventListener('click', this._onDocClick);
     document.removeEventListener('keydown', this._onDocKeyDown);
     clearTimeout(this._toastTimer);
+    if (this._modalEl) this._closeModal();
     this._removeBodyEls();
   }
 
@@ -219,10 +227,14 @@ class SystemFilesTab {
     this._dom.detailBreadcrumb = root.querySelector('.sf-breadcrumb');
     this._dom.detailMeta = root.querySelector('.sf-detail-meta');
     this._dom.detailClose = root.querySelector('.sf-detail-close');
+    this._dom.detailDetach = root.querySelector('.sf-detail-detach');
+    this._dom.detailHeader = root.querySelector('.sf-detail-header');
     this._dom.contentToolbar = root.querySelector('.sf-content-toolbar');
     this._dom.contentType = root.querySelector('.sf-content-type');
     this._dom.contentSearchInput = root.querySelector('.sf-content-search input');
     this._dom.copyBtn = root.querySelector('.sf-copy-btn');
+    this._dom.copyRawBtn = root.querySelector('.sf-copy-raw-btn');
+    this._dom.wrapBtn = root.querySelector('.sf-wrap-btn');
     this._dom.detailBody = root.querySelector('.sf-detail-body');
 
     this._bindToolbar();
@@ -307,7 +319,10 @@ class SystemFilesTab {
       <div class="sf-detail-resize"></div>
       <div class="sf-detail-header">
         <div class="sf-breadcrumb"></div>
-        <button class="sf-detail-close" title="Close (Esc)">${_SF_ICONS.close}</button>
+        <div class="sf-detail-header-actions">
+          <button class="sf-detail-detach" title="Pop out to modal">${_SF_ICONS.detach}</button>
+          <button class="sf-detail-close" title="Close (Esc)">${_SF_ICONS.close}</button>
+        </div>
       </div>
       <div class="sf-detail-meta"></div>
       <div class="sf-content-toolbar">
@@ -316,10 +331,15 @@ class SystemFilesTab {
           ${_SF_ICONS.search}
           <input type="text" placeholder="Search content..." spellcheck="false">
         </div>
-        <button class="sf-copy-btn">
-          ${_SF_ICONS.copy}
-          Copy
+        <button class="sf-wrap-btn" title="Toggle word wrap">
+          ${_SF_ICONS.wrap}
+          <span>Wrap</span>
         </button>
+        <button class="sf-copy-btn sf-copy-btn--primary" title="Copy (pretty-printed if JSON)">
+          ${_SF_ICONS.copy}
+          <span>Copy</span>
+        </button>
+        <button class="sf-copy-raw-btn sf--hidden" title="Copy raw (unformatted)">Raw</button>
       </div>
       <div class="sf-detail-body"></div>
     </div>`;
@@ -459,7 +479,10 @@ class SystemFilesTab {
   _bindDetail() {
     const d = this._dom;
 
-    d.detailClose.addEventListener('click', () => this._deselectRow());
+    d.detailClose.addEventListener('click', () => {
+      if (this._modalEl) { this._closeModal(); return; }
+      this._deselectRow();
+    });
 
     // Resize handle
     d.detailResize.addEventListener('mousedown', (e) => {
@@ -467,7 +490,7 @@ class SystemFilesTab {
       const startY = e.clientY;
       const startH = this._detailHeight;
       const onMove = (ev) => {
-        this._detailHeight = Math.max(150, Math.min(600, startH + (startY - ev.clientY)));
+        this._detailHeight = Math.max(150, Math.min(window.innerHeight * 0.85, startH + (startY - ev.clientY)));
         d.detail.style.height = this._detailHeight + 'px';
       };
       const onUp = () => {
@@ -487,13 +510,35 @@ class SystemFilesTab {
       });
     });
 
-    // Copy
+    // Copy (smart — pretty-print JSON by default)
     d.copyBtn.addEventListener('click', () => {
-      if (this._selectedIdx >= 0 && this._selectedIdx < this._filtered.length) {
-        const op = this._filtered[this._selectedIdx];
-        if (op.contentPreview) this._copyText(op.contentPreview);
+      const op = this._currentOp;
+      if (!op || !op.contentPreview) return;
+      if (this._isJsonContent(op)) {
+        try {
+          const pretty = JSON.stringify(JSON.parse(op.contentPreview), null, 2);
+          this._copyText(pretty, 'Copied formatted JSON');
+          return;
+        } catch (_e) { /* fall through to raw */ }
       }
+      this._copyText(op.contentPreview, 'Copied');
     });
+
+    // Copy raw (unformatted)
+    d.copyRawBtn.addEventListener('click', () => {
+      const op = this._currentOp;
+      if (op && op.contentPreview) this._copyText(op.contentPreview, 'Copied raw');
+    });
+
+    // Word wrap toggle
+    d.wrapBtn.addEventListener('click', () => {
+      this._wordWrap = !this._wordWrap;
+      d.wrapBtn.classList.toggle('sf--active', this._wordWrap);
+      d.detailBody.classList.toggle('sf--wrap', this._wordWrap);
+    });
+
+    // Detach to modal
+    d.detailDetach.addEventListener('click', () => this._detachToModal());
   }
 
   // ── Body-level elements (tooltip, sparkline) ──
@@ -782,8 +827,10 @@ class SystemFilesTab {
   }
 
   _deselectRow() {
+    if (this._modalEl) this._closeModal();
     this._selectedIdx = -1;
     this._detailOpen = false;
+    this._currentOp = null;
     this._dom.detail.classList.remove('sf--open');
     this._renderTable();
   }
@@ -795,6 +842,7 @@ class SystemFilesTab {
 
   _openDetail(op) {
     const d = this._dom;
+    this._currentOp = op;
     d.detail.classList.add('sf--open');
     d.detail.style.height = this._detailHeight + 'px';
 
@@ -840,6 +888,8 @@ class SystemFilesTab {
 
     // Content
     d.contentSearchInput.value = '';
+    const showRaw = !!(op.hasContent && op.contentPreview && this._isJsonContent(op));
+    d.copyRawBtn.classList.toggle('sf--hidden', !showRaw);
     if (op.hasContent && op.contentPreview) {
       if (this._isJsonContent(op)) {
         d.contentType.textContent = 'JSON';
@@ -852,7 +902,7 @@ class SystemFilesTab {
       } else {
         d.contentType.textContent = 'TEXT';
         d.contentToolbar.classList.remove('sf--hidden');
-        d.detailBody.innerHTML = '<pre style="padding:16px;font-family:var(--font-mono);font-size:12px;white-space:pre-wrap;word-break:break-all">' + this._esc(op.contentPreview) + '</pre>';
+        this._renderTextViewer(op.contentPreview);
       }
     } else {
       d.contentToolbar.classList.add('sf--hidden');
@@ -881,7 +931,7 @@ class SystemFilesTab {
     try {
       obj = JSON.parse(jsonStr);
     } catch (_e) {
-      this._dom.detailBody.innerHTML = '<pre style="padding:16px;font-family:var(--font-mono);font-size:12px;white-space:pre-wrap;word-break:break-all">' + this._esc(jsonStr) + '</pre>';
+      this._renderTextViewer(jsonStr);
       return;
     }
 
@@ -1095,6 +1145,134 @@ class SystemFilesTab {
       '</div>';
   }
 
+  // ── Text Viewer (line-numbered) ──
+
+  _renderTextViewer(text) {
+    const lines = String(text == null ? '' : text).split('\n');
+    const parts = ['<div class="sf-text-viewer">'];
+    for (let i = 0; i < lines.length; i++) {
+      parts.push(
+        '<div class="sf-json-line sf-text-line">' +
+        '<span class="sf-json-gutter">' + (i + 1) + '</span>' +
+        '<span class="sf-json-content sf-text-content">' + this._esc(lines[i] || ' ') + '</span>' +
+        '</div>'
+      );
+    }
+    parts.push('</div>');
+    this._dom.detailBody.innerHTML = parts.join('');
+  }
+
+  // ── Detach to modal ──
+
+  _detachToModal() {
+    if (this._modalEl || !this._currentOp) return;
+    const d = this._dom;
+
+    const backdrop = document.createElement('div');
+    backdrop.className = 'sf-modal-backdrop';
+
+    const modal = document.createElement('div');
+    modal.className = 'sf-modal';
+    modal.innerHTML =
+      '<div class="sf-modal-drag" title="Drag to move"></div>' +
+      '<div class="sf-modal-header">' +
+        '<div class="sf-modal-breadcrumb-slot"></div>' +
+        '<button class="sf-modal-close" title="Re-dock to drawer (Esc)">' + _SF_ICONS.close + '</button>' +
+      '</div>' +
+      '<div class="sf-modal-meta-slot"></div>' +
+      '<div class="sf-modal-toolbar-slot"></div>' +
+      '<div class="sf-modal-body"></div>';
+
+    // Re-parent the live elements; remember origin for restoration.
+    const moves = [
+      { node: d.detailBreadcrumb, slot: '.sf-modal-breadcrumb-slot' },
+      { node: d.detailMeta,       slot: '.sf-modal-meta-slot' },
+      { node: d.contentToolbar,   slot: '.sf-modal-toolbar-slot' },
+      { node: d.detailBody,       slot: '.sf-modal-body' }
+    ];
+    this._modalAnchors = moves.map(m => ({
+      node: m.node,
+      parent: m.node.parentNode,
+      next: m.node.nextSibling
+    }));
+    moves.forEach(m => modal.querySelector(m.slot).appendChild(m.node));
+
+    document.body.appendChild(backdrop);
+    document.body.appendChild(modal);
+    this._modalBackdrop = backdrop;
+    this._modalEl = modal;
+
+    // Drawer collapses while modal is shown.
+    d.detail.classList.remove('sf--open');
+
+    modal.querySelector('.sf-modal-close').addEventListener('click', () => this._closeModal());
+    backdrop.addEventListener('click', () => this._closeModal());
+
+    this._makeModalDraggable(modal);
+  }
+
+  _closeModal() {
+    if (!this._modalEl) return;
+    const d = this._dom;
+
+    // Restore moved nodes to their original positions.
+    if (this._modalAnchors) {
+      this._modalAnchors.forEach(a => {
+        if (a.next && a.next.parentNode === a.parent) {
+          a.parent.insertBefore(a.node, a.next);
+        } else {
+          a.parent.appendChild(a.node);
+        }
+      });
+    }
+    this._modalAnchors = null;
+
+    const modal = this._modalEl;
+    const backdrop = this._modalBackdrop;
+    modal.classList.add('sf--closing');
+    if (backdrop) backdrop.classList.add('sf--closing');
+    setTimeout(() => {
+      modal.remove();
+      if (backdrop) backdrop.remove();
+    }, 160);
+    this._modalEl = null;
+    this._modalBackdrop = null;
+
+    // Re-open drawer if a row is still selected.
+    if (this._detailOpen && this._selectedIdx >= 0) {
+      d.detail.classList.add('sf--open');
+      d.detail.style.height = this._detailHeight + 'px';
+    }
+  }
+
+  _makeModalDraggable(modal) {
+    const handle = modal.querySelector('.sf-modal-drag');
+    if (!handle) return;
+    handle.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      const rect = modal.getBoundingClientRect();
+      modal.style.left = rect.left + 'px';
+      modal.style.top = rect.top + 'px';
+      modal.style.transform = 'none';
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const startLeft = rect.left;
+      const startTop = rect.top;
+      const onMove = (ev) => {
+        const nx = Math.max(8, Math.min(window.innerWidth - rect.width - 8, startLeft + (ev.clientX - startX)));
+        const ny = Math.max(8, Math.min(window.innerHeight - rect.height - 8, startTop + (ev.clientY - startY)));
+        modal.style.left = nx + 'px';
+        modal.style.top = ny + 'px';
+      };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  }
+
   // ── Tooltip ──
 
   _showTooltip(e, op) {
@@ -1188,6 +1366,7 @@ class SystemFilesTab {
       e.preventDefault();
       if (this._kbIdx >= 0) this._selectRow(this._kbIdx);
     } else if (e.key === 'Escape') {
+      if (this._modalEl) { this._closeModal(); return; }
       if (this._detailOpen) this._deselectRow();
     } else if (e.ctrlKey && e.key === 'e') {
       e.preventDefault();
@@ -1287,9 +1466,9 @@ class SystemFilesTab {
     return String(str).replace(/[&<>"']/g, c => map[c]);
   }
 
-  _copyText(text) {
+  _copyText(text, msg) {
     if (navigator.clipboard) {
-      navigator.clipboard.writeText(text).then(() => this._toast('Copied'));
+      navigator.clipboard.writeText(text).then(() => this._toast(msg || 'Copied'));
     }
   }
 
