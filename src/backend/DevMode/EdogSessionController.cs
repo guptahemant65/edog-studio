@@ -5,12 +5,13 @@
 #nullable disable
 #pragma warning disable // DevMode-only file — suppress all warnings
 
-namespace Microsoft.LiveTable.Service.DevMode
+namespace Microsoft.LiveTable.Service.Controllers
 {
     using System;
     using Microsoft.AspNetCore.Cors;
     using Microsoft.AspNetCore.Mvc;
     using Microsoft.Fabric.Platform.AccessProtection.WebApi.Attributes;
+    using Microsoft.LiveTable.Service.DevMode;
     using Microsoft.MWC.Workload.Client.Library.Controllers;
     using Microsoft.MWC.Workload.Client.Library.Http;
     using Microsoft.ServicePlatform.WebApi.Authentication;
