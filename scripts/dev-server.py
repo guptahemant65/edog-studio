@@ -1077,7 +1077,7 @@ def _get_mwc_token(bearer: str, ws_id: str, artifact_id: str, cap_id: str, workl
     cache_key = f"{ws_id}:{artifact_id}:{cap_id}:{workload_type}"
     with _mwc_lock:
         cached = _mwc_cache.get(cache_key)
-        if cached and time.time() < cached["expiry"] - 300:
+        if cached and time.time() < cached["expiry"] - 300 and cached.get("bearer") == bearer:
             print(f"  [MWC] Cache hit for {cache_key[:30]}...")
             return cached["token"], cached["host"]
 
@@ -1124,7 +1124,7 @@ def _get_mwc_token(bearer: str, ws_id: str, artifact_id: str, cap_id: str, workl
         expiry = time.time() + 3600  # fallback: 1 hour
 
     with _mwc_lock:
-        _mwc_cache[cache_key] = {"token": token, "host": host, "expiry": expiry}
+        _mwc_cache[cache_key] = {"token": token, "host": host, "expiry": expiry, "bearer": bearer}
     remaining = int((expiry - time.time()) / 60)
     print(f"  [MWC] Token cached, expires in {remaining} min")
     return token, host
@@ -2234,7 +2234,7 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
         # Step 0: Fetch MWC token
         if not _deploy_step(0, "Fetching MWC token...", deploy_id):
             return
-        bearer, _ = _read_cache(BEARER_CACHE)
+        bearer = _ensure_bearer()
         if not bearer:
             _deploy_log("No bearer token — authenticate first", "error")
             with _studio_lock:
@@ -6920,7 +6920,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             )
             return
 
-        bearer, _ = _read_cache(BEARER_CACHE)
+        bearer = _ensure_bearer()
         if not bearer:
             self._json_response(401, {"error": "no_bearer_token", "message": "Bearer token not cached"})
             return
