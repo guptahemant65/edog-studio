@@ -119,14 +119,14 @@ class QaEditor {
       ['happy_path', 'error_path', 'edge_case', 'regression', 'performance'],
       scn.category, function(val) { scn.category = val; });
 
-    // Priority
+    // Priority (schema: 1..5)
     this._addField('Priority', 'number', scn.priority, 'qa-editor-priority',
       function(val) { scn.priority = parseInt(val, 10) || 1; },
-      { min: 1, max: 10 });
+      { min: 1, max: 5 });
 
-    // Timeout
-    this._addField('Timeout (ms)', 'number', scn.timeout, 'qa-editor-timeout',
-      function(val) { scn.timeout = parseInt(val, 10) || 20000; },
+    // Timeout — C# sends as timeoutMs (camelCase)
+    this._addField('Timeout (ms)', 'number', scn.timeoutMs, 'qa-editor-timeout',
+      function(val) { scn.timeoutMs = parseInt(val, 10) || 30000; },
       { min: 1000, max: 60000, step: 1000 });
 
     // Stimulus (JSON)
