@@ -77,6 +77,25 @@ namespace Microsoft.LiveTable.Service.DevMode
                 // silently no-op'ing forever.
                 _registered = true;
 
+                // Auto-register deployer's session so other engineers' probes
+                // see this capacity as occupied even before SignalR connects.
+                try
+                {
+                    EdogSessionRegistry.Register(
+                        $"deploy-{Environment.MachineName}",
+                        Environment.MachineName,
+                        Environment.UserName,
+                        string.Empty,
+                        string.Empty,
+                        string.Empty,
+                        string.Empty);
+                    Console.WriteLine($"[EDOG] Session registered: {Environment.UserName}@{Environment.MachineName}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[EDOG] Session auto-register failed (non-fatal): {ex.Message}");
+                }
+
                 Console.WriteLine("[EDOG] DevMode interceptors registered");
             }
             catch (Exception ex)
