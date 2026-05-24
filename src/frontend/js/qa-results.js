@@ -253,9 +253,9 @@ class QaResults {
         lines.push('');
         lines.push('<details><summary><strong>' + v + '</strong> \u2014 ' + this._mdEscape(title) + '</summary>');
         lines.push('');
-        if (f.failureMessage) {
+        if (f.errorMessage || f.failureMessage) {
           lines.push('```');
-          lines.push(String(f.failureMessage));
+          lines.push(String(f.errorMessage || f.failureMessage));
           lines.push('```');
         }
         var exps = f.expectations || f.expectationResults || [];
@@ -263,7 +263,9 @@ class QaResults {
           var e = exps[k];
           var st = e.status || 'unknown';
           var icon = st === 'passed' ? '\u2705' : (st === 'failed' ? '\u274C' : (st === 'timeout' ? '\u23F1\uFE0F' : '\u26AA'));
-          lines.push('- ' + icon + ' ' + this._mdEscape(e.description || e.id || e.expectationId || ''));
+          var desc = this._mdEscape(e.description || e.id || e.expectationId || '');
+          var reason = e.failureReason ? ' — ' + this._mdEscape(e.failureReason.split('\n')[0]) : '';
+          lines.push('- ' + icon + ' ' + desc + reason);
         }
         lines.push('');
         lines.push('</details>');
@@ -465,12 +467,52 @@ class QaResults {
       detail.appendChild(expList);
     }
 
-    // Failure message
-    if (scn.failureMessage) {
+    // Failure message or success summary
+    if (scn.failureMessage || scn.errorMessage) {
       var failEl = document.createElement('div');
       failEl.className = 'qa-result-failure';
-      failEl.textContent = scn.failureMessage;
+      failEl.textContent = scn.failureMessage || scn.errorMessage;
       detail.appendChild(failEl);
+    }
+
+    // Actionable root-cause diagnosis
+    var diagEl = this._buildDiagnosisBlock(scn, expectations);
+    if (diagEl) detail.appendChild(diagEl);
+
+    // Captured events (raw interceptor data)
+    var capturedEvents = scn.capturedEvents || [];
+    if (capturedEvents.length > 0) {
+      var evtSection = document.createElement('div');
+      evtSection.className = 'qa-result-events';
+      var evtHeader = document.createElement('div');
+      evtHeader.className = 'qa-result-events-header';
+      evtHeader.textContent = 'Captured Events (' + capturedEvents.length +
+        (scn.eventsCaptured > capturedEvents.length ? ' of ' + scn.eventsCaptured : '') + ')';
+      evtSection.appendChild(evtHeader);
+
+      for (var ei = 0; ei < Math.min(capturedEvents.length, 20); ei++) {
+        var evt = capturedEvents[ei];
+        var evtRow = document.createElement('div');
+        evtRow.className = 'qa-result-event-row';
+        var topicBadge = document.createElement('code');
+        topicBadge.className = 'qa-result-event-topic';
+        topicBadge.textContent = evt.topic || '?';
+        evtRow.appendChild(topicBadge);
+        var dataEl = document.createElement('code');
+        dataEl.className = 'qa-result-event-data';
+        try {
+          var dataStr = typeof evt.data === 'string' ? evt.data : JSON.stringify(evt.data, null, 0);
+          dataEl.textContent = dataStr.length > 300 ? dataStr.substring(0, 300) + '\u2026' : dataStr;
+        } catch (e) { dataEl.textContent = String(evt.data); }
+        evtRow.appendChild(dataEl);
+        evtSection.appendChild(evtRow);
+      }
+      detail.appendChild(evtSection);
+    } else if (verdict !== 'passed' && (scn.eventsCaptured || 0) === 0) {
+      var noEvtEl = document.createElement('div');
+      noEvtEl.className = 'qa-result-events qa-result-events-empty';
+      noEvtEl.textContent = 'No events captured — interceptors did not fire for this stimulus.';
+      detail.appendChild(noEvtEl);
     }
 
     card.appendChild(detail);
@@ -489,6 +531,87 @@ class QaResults {
     });
 
     return card;
+  }
+
+  /** Build an actionable diagnosis block for a scenario result. */
+  _buildDiagnosisBlock(scn, expectations) {
+    var verdict = (scn.verdict || scn.overallVerdict || '').toLowerCase();
+    var error = scn.errorMessage || scn.failureMessage || '';
+    var failedPhase = (scn.failedAtPhase || '').toLowerCase();
+    var eventsCaptured = scn.eventsCaptured || 0;
+    var passedExps = expectations.filter(function(e) { return e.status === 'passed'; }).length;
+    var totalExps = expectations.length;
+
+    var el = document.createElement('div');
+    el.className = 'qa-result-diagnosis';
+
+    if (verdict === 'passed') {
+      el.innerHTML =
+        '<strong>Proved:</strong> ' + totalExps + ' expectation(s) matched against ' +
+        eventsCaptured + ' captured event(s). ' +
+        'The code path under test produced the expected observable signals.';
+      el.classList.add('diagnosis-passed');
+      return el;
+    }
+
+    if (error.indexOf('No service for type') >= 0) {
+      var svcMatch = error.match(/type '([^']+)'/);
+      var svcName = svcMatch ? svcMatch[1].split('.').pop() : 'the target service';
+      el.innerHTML =
+        '<strong>Root cause:</strong> DiInvocation stimulus — <code>' + svcName +
+        '</code> is not registered in the DevMode DI container. ' +
+        '<br><strong>Fix:</strong> This scenario uses a DiInvocation stimulus that resolves the service directly. ' +
+        'Either register the service in EdogDevModeRegistrar, or change the Architect to emit an HttpRequest stimulus that reaches this service through an API endpoint.';
+      el.classList.add('diagnosis-di');
+      return el;
+    }
+
+    if (verdict === 'timedout' && eventsCaptured === 0) {
+      el.innerHTML =
+        '<strong>Root cause:</strong> Zero events captured on the asserted topic(s). ' +
+        'The HTTP stimulus returned successfully but the target code path did not execute or did not publish events to the interceptor. ' +
+        '<br><strong>Fix:</strong> The PR\'s changed code is likely not deployed in this FLT instance. ' +
+        'Run QA after deploying the PR branch, or use a PR that modifies already-deployed code paths.';
+      el.classList.add('diagnosis-env');
+      return el;
+    }
+
+    if (verdict === 'timedout' && eventsCaptured > 0) {
+      el.innerHTML =
+        '<strong>Root cause:</strong> ' + eventsCaptured + ' events captured but ' +
+        (totalExps - passedExps) + '/' + totalExps + ' expectation(s) did not match within the timeout. ' +
+        'Events exist on the topic but the matcher topicField or value did not match the event shape. ' +
+        '<br><strong>Fix:</strong> Check if the matcher topicField path matches the actual interceptor event fields. ' +
+        'Use the TOPIC FIELD SCHEMA in the Editor context as reference.';
+      el.classList.add('diagnosis-matcher');
+      return el;
+    }
+
+    if (verdict === 'partial') {
+      el.innerHTML =
+        '<strong>Root cause:</strong> ' + passedExps + '/' + totalExps + ' expectations matched. ' +
+        'Some assertions resolved but others timed out or failed against ' + eventsCaptured + ' captured events. ' +
+        '<br><strong>Fix:</strong> Expand the scenario detail to see which expectations failed and why.';
+      el.classList.add('diagnosis-partial');
+      return el;
+    }
+
+    if (failedPhase === 'stimulate') {
+      el.innerHTML =
+        '<strong>Root cause:</strong> Stimulus failed at phase "stimulate" — the HTTP/DI call could not execute. ' +
+        '<br><strong>Error:</strong> ' + (error || 'Unknown') +
+        '<br><strong>Fix:</strong> Verify the target endpoint/service exists in the running FLT instance.';
+      el.classList.add('diagnosis-stimulus');
+      return el;
+    }
+
+    if (verdict === 'failed' && error) {
+      el.innerHTML = '<strong>Root cause:</strong> ' + error;
+      el.classList.add('diagnosis-failed');
+      return el;
+    }
+
+    return null;
   }
 
   /** Load run history for the current PR (or unscoped if none). */

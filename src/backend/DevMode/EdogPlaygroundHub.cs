@@ -2575,6 +2575,19 @@ namespace Microsoft.LiveTable.Service.DevMode
                         completedAt = sr.CompletedAt,
                         expectations = sr.Expectations ?? new List<ExpectationResult>(),
                         eventsCaptured = sr.EventsCaptured,
+                        // Surface the actual captured events so the results
+                        // UI can show exactly what the interceptors saw.
+                        // Capped at 50 to keep the wire payload bounded.
+                        capturedEvents = (sr.CapturedEvents ?? new List<TopicEvent>())
+                            .Take(50)
+                            .Select(e => new
+                            {
+                                topic = e.Topic,
+                                timestamp = e.Timestamp,
+                                data = e.Data,
+                                sequenceId = e.SequenceId,
+                            })
+                            .ToList(),
                         errorMessage = sr.ErrorMessage,
                         failedAtPhase = sr.FailedAtPhase.ToString().ToLowerInvariant()
                     };
