@@ -3438,3 +3438,52 @@ def test_qa_t1j_scipy_available_in_dev_env() -> None:
         raise AssertionError(
             "scipy.optimize.linear_sum_assignment must be importable. Run `pip install -r requirements-dev.txt`."
         ) from e
+
+
+# ──────────────────────────────────────────────────────────────────
+# Section — Bug fix regression tests (2025-05-25 QA scenario bugs)
+# ──────────────────────────────────────────────────────────────────
+
+
+def test_qa_expectation_model_has_vacuous_legacy_flag() -> None:
+    """The Expectation model must expose VacuousLegacy so the execution
+    engine can short-circuit false-positive evaluations."""
+    src = (REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaModels.cs").read_text(encoding="utf-8")
+    assert "VacuousLegacy" in src, "Expectation.VacuousLegacy flag not found"
+    assert "Inconclusive" in src, "ExpectationStatus.Inconclusive not found"
+
+
+def test_qa_matcher_schema_has_topic_field_enum() -> None:
+    """The topicField property in the matcher JSON schema must be an enum
+    (not free-form string) to prevent LLM hallucination of field names."""
+    src = (REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaLlmClient.cs").read_text(encoding="utf-8")
+    assert "AllValidTopicFields" in src, "TopicFieldRegistry/AllValidTopicFields not found"
+    assert "TopicFieldRegistry" in src, "TopicFieldRegistry not found"
+
+
+def test_qa_topic_field_registry_covers_expectation_topics() -> None:
+    """Every topic in the expectation enum must have an entry in TopicFieldRegistry."""
+    src = (REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaLlmClient.cs").read_text(encoding="utf-8")
+    for topic in ["http", "token", "flag", "perf", "spark", "log", "telemetry",
+                   "retry", "cache", "fileop", "catalog", "dag", "flt-ops", "nexus", "di", "capacity"]:
+        assert f'["{topic}"]' in src, f"TopicFieldRegistry missing topic: {topic}"
+
+
+def test_qa_framework_endpoints_has_signalr_hubs() -> None:
+    """framework-endpoints.json must contain a 'hubs' section with at least
+    one hub so SignalR catalog slots are non-empty."""
+    import json
+    path = REPO_ROOT / "data" / "framework-endpoints.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert "hubs" in data, "Missing 'hubs' section in framework-endpoints.json"
+    assert len(data["hubs"]) > 0, "hubs array is empty"
+    hub = data["hubs"][0]
+    assert "name" in hub, "hub entry missing 'name'"
+    assert "methods" in hub, "hub entry missing 'methods'"
+    assert len(hub["methods"]) > 0, "hub methods array is empty"
+
+
+def test_qa_deploy_copies_framework_endpoints() -> None:
+    """edog.py must copy framework-endpoints.json to DevMode output during deploy."""
+    src = (REPO_ROOT / "edog.py").read_text(encoding="utf-8")
+    assert "framework-endpoints.json" in src, "edog.py must copy framework-endpoints.json"
