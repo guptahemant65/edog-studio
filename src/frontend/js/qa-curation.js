@@ -466,7 +466,11 @@ class QaCuration {
       totalGenerated: this._totalGenerated || this._scenarios.length
     };
 
+    console.log('[QA-DIAG] Submitting', approved.length, 'scenarios, payload ~' +
+      Math.round(JSON.stringify(submission).length / 1024) + 'KB');
+
     conn.invoke('QaSubmitCuratedScenarios', submission).then(function (result) {
+      console.log('[QA-DIAG] Submit result:', result);
       if (result && result.success) {
         self._panel.setRunId(result.runId);
         var runRequest = {
@@ -492,6 +496,8 @@ class QaCuration {
       }
       throw new Error((runResult && runResult.message) || 'Run start failed');
     }).catch(function (err) {
+      console.error('[QA-DIAG] *** Submit FAILED:', err, err.stack || '');
+      console.log('[QA-DIAG] Submission payload size:', JSON.stringify(submission).length, 'bytes, scenarios:', approved.length);
       self._submitBtn.disabled = false;
       self._submitBtn.textContent = 'Run Approved (' + self._approved.size + ') \u25B8';
       if (window.edogToast) {

@@ -974,6 +974,16 @@ namespace Microsoft.LiveTable.Service.DevMode
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"[QA-DIAG] *** QaSubmitCuratedScenarios EXCEPTION: {ex.GetType().Name}: {ex.Message}");
+                Console.WriteLine($"[QA-DIAG] Stack: {ex.StackTrace?.Substring(0, Math.Min(500, ex.StackTrace?.Length ?? 0))}");
+                _ = BroadcastQaEventAsync("QaAnalysisWarning", new
+                {
+                    eventType = "QaAnalysisWarning",
+                    correlationId = submission?.CorrelationId,
+                    timestamp = DateTimeOffset.UtcNow,
+                    warning = "qa_diagnostic",
+                    message = $"*** SUBMIT EXCEPTION: {ex.GetType().Name}: {ex.Message}",
+                });
                 System.Diagnostics.Debug.WriteLine($"[QA] QaSubmitCuratedScenarios error: {ex.Message}");
                 return Task.FromResult(new QaSubmissionResult
                 {
