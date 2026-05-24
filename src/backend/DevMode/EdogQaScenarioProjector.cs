@@ -547,6 +547,18 @@ namespace Microsoft.LiveTable.Service.DevMode
             var flagOverridesSource = src.FeatureFlagOverrides ?? new List<EdogQaLlmClient.FlagOverride>();
             var flagOverridesProjected = new List<FlagOverride>();
             var setupSteps = new List<SetupStep>();
+
+            // Clear any LLM-generated flag header before projecting — the
+            // projector rebuilds it from featureFlagOverrides. Without this,
+            // the LLM's header and the projector's header stack up to produce
+            // duplicates like "Flag=false, Flag=false".
+            if (flagOverridesSource.Count > 0
+                && stimulusType == StimulusType.HttpRequest
+                && stimulus.HttpRequest?.Headers != null)
+            {
+                stimulus.HttpRequest.Headers.Remove("X-Feature-Flag-Override");
+            }
+
             foreach (var fo in flagOverridesSource)
             {
                 if (fo == null || string.IsNullOrWhiteSpace(fo.FlagName)) continue;
