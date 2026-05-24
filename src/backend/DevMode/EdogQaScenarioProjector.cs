@@ -473,13 +473,15 @@ namespace Microsoft.LiveTable.Service.DevMode
                     // from the typed matchers array by topic so the assertion
                     // engine can evaluate them.
                     var legacyMatcher = BuildLegacyMatcherFromTyped(src.Matchers, expSrc.Topic);
+                    var vacuous = IsVacuous(legacyMatcher);
                     expectations.Add(new Expectation
                     {
                         Id = $"exp-{i + 1}",
                         Type = expType,
                         Topic = expSrc.Topic,
-                        Matcher = legacyMatcher,
+                        Matcher = vacuous ? null : legacyMatcher,
                         Description = expSrc.Rationale,
+                        VacuousLegacy = vacuous,
                     });
                     continue;
                 }
@@ -903,6 +905,20 @@ namespace Microsoft.LiveTable.Service.DevMode
             if (range.Count > 0) matcher.Range = range;
             if (contains.Count > 0) matcher.Contains = contains;
             return matcher;
+        }
+
+        /// <summary>
+        /// Returns true when a LegacyMatcher has all predicate fields null/empty,
+        /// meaning it would match every event (vacuous acceptance).
+        /// </summary>
+        private static bool IsVacuous(LegacyMatcher matcher)
+        {
+            if (matcher == null) return true;
+            return matcher.Exact == null
+                && matcher.Contains == null
+                && matcher.Regex == null
+                && matcher.Range == null
+                && matcher.Exists == null;
         }
 
         private static object ExtractTypedMatcherValue(JsonElement value)
