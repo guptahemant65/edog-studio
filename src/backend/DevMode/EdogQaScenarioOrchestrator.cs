@@ -2036,6 +2036,41 @@ namespace Microsoft.LiveTable.Service.DevMode
                 }
             }
 
+            // LNT011: matcher literals that look like regex/templates/log fragments
+            foreach (var acceptedScenario in accepted)
+            {
+                var scenario = acceptedScenario?.Scenario;
+                if (scenario?.Matchers == null) continue;
+                foreach (var m in scenario.Matchers)
+                {
+                    if (m?.Value.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
+                    string literalStr = null;
+                    try
+                    {
+                        if (m.Value.TryGetProperty("kind", out var kindEl)
+                            && kindEl.GetString() == "string_literal"
+                            && m.Value.TryGetProperty("literal", out var litEl)
+                            && litEl.ValueKind == System.Text.Json.JsonValueKind.String)
+                        {
+                            literalStr = litEl.GetString();
+                        }
+                    }
+                    catch { continue; }
+                    if (string.IsNullOrWhiteSpace(literalStr)) continue;
+                    if (literalStr.Contains("(") || literalStr.Contains(".*")
+                        || literalStr.StartsWith("^") || literalStr.EndsWith("$")
+                        || literalStr.Contains("{0") || literalStr.Contains("%s"))
+                    {
+                        GetOrAdd(scenario).Reasons.Add(new EdogQaLlmClient.RepairFeedbackReason
+                        {
+                            Code = "LNT011_MatcherLiteralQuality",
+                            Message = $"Matcher literal '{literalStr}' looks like a log fragment or regex. Use an atomic contract value (e.g. 'DirectAAD', not 'direct token (no OBO)').",
+                        });
+                        break;
+                    }
+                }
+            }
+
             return itemsById.Values
                 .OrderBy(item => item.OriginalIndex ?? int.MaxValue)
                 .ThenBy(item => item.ScenarioId ?? string.Empty, StringComparer.Ordinal)

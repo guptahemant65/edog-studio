@@ -112,7 +112,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         internal const string PromptCacheKeyArchitect = "edog-qa-architect-v15";
 
         /// <summary>Stable cache key for the Editor's system+schema prefix. Bumped to v14 alongside the structural-fixes drop (kind/literal matcher schema, featureFlagOverrides field, topic-vocabulary injection). v16: adds required stimulusId field + STIMULUS ASSIGNMENT prompt block so scenarios mechanically pick distinct stimuli from testingGuidance.stimuliRequired (LNT009 fix).</summary>
-        internal const string PromptCacheKeyEditor = "edog-qa-editor-v20";
+        internal const string PromptCacheKeyEditor = "edog-qa-editor-v21";
 
         /// <summary>Stable cache key for the Analyst's system+schema prefix. The Analyst is the
         /// first pass of the 2-step Analyst→Architect pipeline; its prompt is intentionally
@@ -2506,6 +2506,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             + "{\"kind\":\"exists\",\"expected\":true} for Exists; "
             + "{\"kind\":\"length_bound\",\"min\":1,\"max\":null} for Length. "
             + "The `literal` / `items` / `expected` / `min` / `max` fields ARE the concrete payload. NEVER put the variant name in the payload slot — emitting `{\"kind\":\"string_literal\",\"literal\":\"string\"}` is the placeholder failure mode this schema redesign exists to prevent. Use the TOPIC VOCABULARY block above to pick concrete literals (e.g. `\"DirectAAD\"`, not `\"string\"`; `200`, not `\"integer\"`). "
+            + "MATCHER LITERAL HYGIENE (LNT011): matcher string literals must be atomic contract values — identifiers, enum names, status codes. NEVER use log message fragments (e.g. 'direct token (no OBO)'), regex patterns (e.g. '.*auth.*'), or format templates (e.g. '{0} seconds'). If the observable signal is a log line, match on the structured field value (e.g. 'DirectAAD'), not the human-readable message text. "
             + "WORKED MATCHER EXAMPLE — for an OBO-token acquisition assertion, emit: expectations=[{\"type\":\"EventPresent\",\"topic\":\"token\",\"matcherSpec\":\"{\\\"topicField\\\":\\\"token.oboAcquired\\\",\\\"assertion\\\":\\\"Exists\\\",\\\"value\\\":{\\\"kind\\\":\\\"exists\\\",\\\"expected\\\":true}}\",\"rationale\":\"OBO token acquired on the new flag-on branch\"}] AND matchers=[{\"topicField\":\"token.oboAcquired\",\"assertion\":\"Exists\",\"value\":{\"kind\":\"exists\",\"expected\":true}}]. Note: matchers[] is populated, matcherSpec parses as JSON, and the two are byte-equivalent. "
             + "CRITICAL: stimulusSpec and matcherSpec use DOUBLE QUOTES for JSON. Single quotes are invalid JSON and will be rejected by the projector. "
             + "VERB SELECTION GUIDE (the validator's match key is (category, verb, line-overlap); a wrong verb produces a false-negative match against curator-graded gold-corpus expectations). "
