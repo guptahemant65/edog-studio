@@ -3035,8 +3035,29 @@ mark.gd-hl {
   overflow-y: auto;
   background: var(--surface);
   flex-shrink: 0;
+  position: relative;
+  transition: width 150ms ease-out, min-width 150ms ease-out, opacity 150ms ease-out;
+}
+.ws-inspector-panel.collapsed {
+  width: 0 !important; min-width: 0 !important;
+  overflow: hidden; opacity: 0;
+  border-left: none;
 }
 
+/* Resize handle — thin grab strip on inspector's left edge */
+.ws-inspector-resize {
+  position: absolute; left: -3px; top: 0; bottom: 0; width: 6px;
+  cursor: col-resize; z-index: 10;
+  background: transparent;
+  transition: background 150ms ease-out;
+}
+.ws-inspector-resize:hover,
+.ws-inspector-resize.dragging {
+  background: var(--accent);
+  opacity: 0.35;
+}
+
+/* Collapse / expand toggle in header */
 .ws-inspector-header {
   padding: var(--space-3) var(--space-4);
   font-size: var(--text-xs);
@@ -3045,7 +3066,32 @@ mark.gd-hl {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  user-select: none;
 }
+.ws-inspector-toggle {
+  background: none; border: none; cursor: pointer;
+  color: var(--text-muted); padding: 2px; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-sm);
+  transition: color 150ms ease-out, background 150ms ease-out;
+}
+.ws-inspector-toggle:hover { color: var(--text); background: var(--surface-2); }
+
+/* Floating re-open tab when inspector is collapsed */
+.ws-inspector-tab {
+  position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+  width: 24px; height: 48px; z-index: 20;
+  background: var(--surface); border: 1px solid var(--border);
+  border-right: none; border-radius: var(--radius-md) 0 0 var(--radius-md);
+  display: none; align-items: center; justify-content: center;
+  cursor: pointer; color: var(--text-muted);
+  transition: color 150ms ease-out, background 150ms ease-out;
+  box-shadow: -2px 0 6px rgba(0,0,0,0.08);
+}
+.ws-inspector-tab:hover { color: var(--accent); background: var(--surface-2); }
+.ws-inspector-panel.collapsed ~ .ws-inspector-tab,
+.workspace-explorer .ws-inspector-tab.visible { display: flex; }
 
 .ws-inspector-content {
   padding: var(--space-4);
@@ -39188,8 +39234,17 @@ window.onerror = function(msg, src, line, col, err) {
             </div>
           </div>
           <div class="ws-inspector-panel" id="ws-inspector-panel">
-            <div class="ws-inspector-header">INSPECTOR</div>
+            <div class="ws-inspector-resize" id="ws-inspector-resize"></div>
+            <div class="ws-inspector-header">
+              <span>INSPECTOR</span>
+              <button class="ws-inspector-toggle" id="ws-inspector-toggle" title="Collapse inspector" aria-label="Collapse inspector">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg>
+              </button>
+            </div>
             <div id="ws-inspector-content" class="ws-inspector-content"></div>
+          </div>
+          <div class="ws-inspector-tab" id="ws-inspector-tab" title="Open inspector">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="11 7 6 12 11 17"/><polyline points="18 7 13 12 18 17"/></svg>
           </div>
         </div>
       </div>
@@ -45483,7 +45538,7 @@ class FabricApiClient {
     var method = (fetchOptions.method || 'GET').toUpperCase();
     var isRetryable = method === 'GET';
     var maxRetries = isRetryable ? 3 : 0;
-    var TRANSIENT = new Set([408, 429, 500, 502, 503, 504]);
+    var TRANSIENT = new Set([400, 408, 429, 500, 502, 503, 504]);
     var delays = [1000, 2000, 4000];
 
     for (var attempt = 0; attempt <= maxRetries; attempt++) {
@@ -92367,10 +92422,91 @@ class WorkspaceExplorer {
     this._bindNewEnvironment();
     this._bindWorkspaceSelectEvent();
     this._bindGlobalKeys();
+    this._initInspectorControls();
     this._showEmptyContent();
     this._clearInspector();
     await this.loadWorkspaces();
     this._initSessionGuard();
+  }
+
+  // ────────────────────────────────────────────
+  // Inspector: collapse / expand + drag-resize
+  // ────────────────────────────────────────────
+
+  _initInspectorControls() {
+    const panel = document.getElementById('ws-inspector-panel');
+    const toggle = document.getElementById('ws-inspector-toggle');
+    const handle = document.getElementById('ws-inspector-resize');
+    const tab = document.getElementById('ws-inspector-tab');
+    if (!panel) return;
+
+    const STORAGE_KEY = 'edog:inspector-state';
+    const MIN_W = 200;
+    const MAX_RATIO = 0.4;
+
+    // Restore persisted state
+    const saved = (() => {
+      try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
+      catch { return {}; }
+    })();
+    if (saved.width) panel.style.width = saved.width + 'px';
+    if (saved.collapsed) {
+      panel.classList.add('collapsed');
+      if (tab) tab.classList.add('visible');
+    }
+
+    const persist = () => {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          width: parseInt(panel.style.width || getComputedStyle(panel).width, 10),
+          collapsed: panel.classList.contains('collapsed'),
+        }));
+      } catch { /* private mode */ }
+    };
+
+    // Collapse toggle
+    const collapsePanel = () => {
+      panel.classList.add('collapsed');
+      if (tab) tab.classList.add('visible');
+      persist();
+    };
+    const expandPanel = () => {
+      panel.classList.remove('collapsed');
+      if (tab) tab.classList.remove('visible');
+      persist();
+    };
+
+    if (toggle) toggle.addEventListener('click', collapsePanel);
+    if (tab) tab.addEventListener('click', expandPanel);
+
+    // Drag-to-resize
+    if (handle) {
+      let startX, startW;
+      const onMove = (e) => {
+        const maxW = window.innerWidth * MAX_RATIO;
+        const delta = startX - e.clientX;
+        const newW = Math.max(MIN_W, Math.min(maxW, startW + delta));
+        panel.style.width = newW + 'px';
+      };
+      const onUp = () => {
+        handle.classList.remove('dragging');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        persist();
+      };
+      handle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        startX = e.clientX;
+        startW = panel.getBoundingClientRect().width;
+        handle.classList.add('dragging');
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+      });
+    }
   }
 
   // ────────────────────────────────────────────

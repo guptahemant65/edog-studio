@@ -2045,10 +2045,91 @@ class WorkspaceExplorer {
     this._bindNewEnvironment();
     this._bindWorkspaceSelectEvent();
     this._bindGlobalKeys();
+    this._initInspectorControls();
     this._showEmptyContent();
     this._clearInspector();
     await this.loadWorkspaces();
     this._initSessionGuard();
+  }
+
+  // ────────────────────────────────────────────
+  // Inspector: collapse / expand + drag-resize
+  // ────────────────────────────────────────────
+
+  _initInspectorControls() {
+    const panel = document.getElementById('ws-inspector-panel');
+    const toggle = document.getElementById('ws-inspector-toggle');
+    const handle = document.getElementById('ws-inspector-resize');
+    const tab = document.getElementById('ws-inspector-tab');
+    if (!panel) return;
+
+    const STORAGE_KEY = 'edog:inspector-state';
+    const MIN_W = 200;
+    const MAX_RATIO = 0.4;
+
+    // Restore persisted state
+    const saved = (() => {
+      try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
+      catch { return {}; }
+    })();
+    if (saved.width) panel.style.width = saved.width + 'px';
+    if (saved.collapsed) {
+      panel.classList.add('collapsed');
+      if (tab) tab.classList.add('visible');
+    }
+
+    const persist = () => {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          width: parseInt(panel.style.width || getComputedStyle(panel).width, 10),
+          collapsed: panel.classList.contains('collapsed'),
+        }));
+      } catch { /* private mode */ }
+    };
+
+    // Collapse toggle
+    const collapsePanel = () => {
+      panel.classList.add('collapsed');
+      if (tab) tab.classList.add('visible');
+      persist();
+    };
+    const expandPanel = () => {
+      panel.classList.remove('collapsed');
+      if (tab) tab.classList.remove('visible');
+      persist();
+    };
+
+    if (toggle) toggle.addEventListener('click', collapsePanel);
+    if (tab) tab.addEventListener('click', expandPanel);
+
+    // Drag-to-resize
+    if (handle) {
+      let startX, startW;
+      const onMove = (e) => {
+        const maxW = window.innerWidth * MAX_RATIO;
+        const delta = startX - e.clientX;
+        const newW = Math.max(MIN_W, Math.min(maxW, startW + delta));
+        panel.style.width = newW + 'px';
+      };
+      const onUp = () => {
+        handle.classList.remove('dragging');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        persist();
+      };
+      handle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        startX = e.clientX;
+        startW = panel.getBoundingClientRect().width;
+        handle.classList.add('dragging');
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+      });
+    }
   }
 
   // ────────────────────────────────────────────

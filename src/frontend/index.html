@@ -193,8 +193,17 @@ window.onerror = function(msg, src, line, col, err) {
             </div>
           </div>
           <div class="ws-inspector-panel" id="ws-inspector-panel">
-            <div class="ws-inspector-header">INSPECTOR</div>
+            <div class="ws-inspector-resize" id="ws-inspector-resize"></div>
+            <div class="ws-inspector-header">
+              <span>INSPECTOR</span>
+              <button class="ws-inspector-toggle" id="ws-inspector-toggle" title="Collapse inspector" aria-label="Collapse inspector">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg>
+              </button>
+            </div>
             <div id="ws-inspector-content" class="ws-inspector-content"></div>
+          </div>
+          <div class="ws-inspector-tab" id="ws-inspector-tab" title="Open inspector">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="11 7 6 12 11 17"/><polyline points="18 7 13 12 18 17"/></svg>
           </div>
         </div>
       </div>
