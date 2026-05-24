@@ -462,7 +462,20 @@ class EdogLogViewer {
     // Execution badge clear
     const execBadgeClear = document.getElementById('exec-badge-clear');
     if (execBadgeClear) {
-      execBadgeClear.addEventListener('click', () => this.clearRaidFilter());
+      execBadgeClear.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.clearRaidFilter();
+      });
+    }
+
+    // Execution badge click → toggle drawer open/collapsed
+    const execBadge = document.getElementById('execution-badge');
+    if (execBadge) {
+      execBadge.addEventListener('click', (e) => {
+        if (e.target.id === 'exec-badge-clear') return;
+        this.execSummary.toggle();
+      });
+      execBadge.style.cursor = 'pointer';
     }
 
     // Level buttons
@@ -1169,7 +1182,12 @@ class EdogLogViewer {
     }
     const data = this.execSummary.compute(this.state.raidFilter);
     if (data) {
+      const drawer = document.getElementById('exec-drawer');
+      const isCollapsed = drawer && drawer.classList.contains('collapsed');
+      // Render data into DOM (updates content even when collapsed)
       this.execSummary.render(data);
+      // If user collapsed the drawer, keep it collapsed — don't force open
+      if (isCollapsed) this.execSummary.collapse();
       // Update badge counts
       this.showExecutionBadge(this.state.raidFilter);
     }

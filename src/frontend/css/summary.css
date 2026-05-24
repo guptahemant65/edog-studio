@@ -118,7 +118,8 @@
 
 /* Shrink the logs/tab content when the drawer is open */
 .rt-content { transition: padding-right 280ms cubic-bezier(0.16, 1, 0.3, 1); }
-.rt-content.exec-drawer-open { padding-right: 380px; }
+.rt-content.exec-drawer-open .rt-tab-content { right: 380px; }
+.rt-content.exec-drawer-open { padding-right: 0; }
 
 /* When drawer is open & no data → show the empty card */
 .exec-drawer .exec-summary { flex: 1; overflow-y: auto; display: none; }
@@ -633,5 +634,5 @@
 /* ─── Responsive: hide drawer on very narrow viewports ─── */
 @media (max-width: 900px) {
   .exec-drawer { width: 100%; border-left: none; }
-  .rt-content.exec-drawer-open { padding-right: 0; }
+  .rt-content.exec-drawer-open .rt-tab-content { right: 0; }
 }

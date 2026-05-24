@@ -397,10 +397,7 @@ class ExecutionSummary {
     const closeBtn = container.querySelector('#exd-close-btn');
     if (closeBtn) {
       closeBtn.addEventListener('click', () => {
-        this.clearSummary();
-        // Also clear the underlying RAID filter via main.js wiring
-        const mainClear = document.getElementById('exec-badge-clear');
-        if (mainClear) mainClear.click();
+        this.collapse();
       });
     }
     // Iteration ID copy
@@ -425,10 +422,36 @@ class ExecutionSummary {
     const drawer = document.getElementById('exec-drawer');
     const rtContent = document.getElementById('rt-content');
     if (!drawer) return;
-    drawer.classList.remove('closing');
+    drawer.classList.remove('closing', 'collapsed');
     drawer.classList.add('open', 'has-data');
     drawer.setAttribute('aria-hidden', 'false');
     if (rtContent) rtContent.classList.add('exec-drawer-open');
+  }
+
+  /** Collapse the drawer (hide visually) but keep data intact for re-open. */
+  collapse = () => {
+    const drawer = document.getElementById('exec-drawer');
+    const rtContent = document.getElementById('rt-content');
+    if (!drawer || !drawer.classList.contains('open')) return;
+    drawer.classList.add('closing');
+    drawer.classList.remove('open');
+    drawer.setAttribute('aria-hidden', 'true');
+    if (rtContent) rtContent.classList.remove('exec-drawer-open');
+    setTimeout(() => {
+      drawer.classList.remove('closing');
+      drawer.classList.add('collapsed');
+    }, 240);
+  }
+
+  /** Toggle drawer open/collapsed. Only works when data exists. */
+  toggle = () => {
+    const drawer = document.getElementById('exec-drawer');
+    if (!drawer) return;
+    if (drawer.classList.contains('open')) {
+      this.collapse();
+    } else if (drawer.classList.contains('collapsed') || drawer.classList.contains('has-data')) {
+      this.open();
+    }
   }
 
   clearSummary = () => {
@@ -436,9 +459,9 @@ class ExecutionSummary {
     const container = document.getElementById('exec-summary-data');
     const rtContent = document.getElementById('rt-content');
     if (!drawer) return;
-    if (!drawer.classList.contains('open')) return;
+    if (!drawer.classList.contains('open') && !drawer.classList.contains('collapsed')) return;
     drawer.classList.add('closing');
-    drawer.classList.remove('open');
+    drawer.classList.remove('open', 'collapsed');
     drawer.setAttribute('aria-hidden', 'true');
     if (rtContent) rtContent.classList.remove('exec-drawer-open');
     setTimeout(() => {

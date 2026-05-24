@@ -9345,7 +9345,8 @@ mark.gd-hl {
 
 /* Shrink the logs/tab content when the drawer is open */
 .rt-content { transition: padding-right 280ms cubic-bezier(0.16, 1, 0.3, 1); }
-.rt-content.exec-drawer-open { padding-right: 380px; }
+.rt-content.exec-drawer-open .rt-tab-content { right: 380px; }
+.rt-content.exec-drawer-open { padding-right: 0; }
 
 /* When drawer is open & no data → show the empty card */
 .exec-drawer .exec-summary { flex: 1; overflow-y: auto; display: none; }
@@ -9860,7 +9861,7 @@ mark.gd-hl {
 /* ─── Responsive: hide drawer on very narrow viewports ─── */
 @media (max-width: 900px) {
   .exec-drawer { width: 100%; border-left: none; }
-  .rt-content.exec-drawer-open { padding-right: 0; }
+  .rt-content.exec-drawer-open .rt-tab-content { right: 0; }
 }
 
     /* === css/smart.css === */
@@ -23280,7 +23281,7 @@ svg.iw-dag-connections {
   overflow: hidden;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 150ms ease;
+  transition: opacity 150ms ease, right 280ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .rt-tab-content.active {
@@ -45398,7 +45399,7 @@ class FabricApiClient {
     try {
       var url = '/api/flt-proxy' + path;
       var headers = { 'Content-Type': 'application/json' };
-      var resp = await fetch(url, { ...options, headers: headers });
+      var resp = await this._fltFetchWithRetry(url, { ...options, headers: headers });
       if (!resp.ok) {
         console.warn('FLT API error:', resp.status, path);
         return null;
@@ -45431,7 +45432,7 @@ class FabricApiClient {
       'Content-Type': 'application/json',
       ...options.headers,
     };
-    var resp = await fetch(url, { ...options, headers: headers });
+    var resp = await this._fltFetchWithRetry(url, { ...options, headers: headers });
     if (!resp.ok) {
       var err2 = new Error('FLT API error: ' + resp.status + ' ' + path);
       err2.status = resp.status;
@@ -45460,12 +45461,41 @@ class FabricApiClient {
     }
     var url = '/api/flt-proxy' + path;
     var headers = { 'Content-Type': 'application/json' };
-    var resp = await fetch(url, { ...options, headers: headers });
+    var resp = await this._fltFetchWithRetry(url, { ...options, headers: headers });
     if (!resp.ok) {
       var err2 = new Error('FLT API error: ' + resp.status + ' ' + path);
       err2.status = resp.status;
       err2.path = path;
       throw err2;
+    }
+    return resp;
+  }
+
+  /**
+   * Shared retry wrapper for FLT proxy calls. Only retries GET requests
+   * on transient HTTP status codes (server errors, rate limits, timeouts).
+   * Non-GET requests and non-transient errors pass through immediately.
+   * @param {string} url - Full URL to fetch.
+   * @param {object} fetchOptions - Options passed to fetch().
+   * @returns {Promise<Response>} The fetch Response (may be non-ok).
+   */
+  async _fltFetchWithRetry(url, fetchOptions) {
+    var method = (fetchOptions.method || 'GET').toUpperCase();
+    var isRetryable = method === 'GET';
+    var maxRetries = isRetryable ? 3 : 0;
+    var TRANSIENT = new Set([408, 429, 500, 502, 503, 504]);
+    var delays = [1000, 2000, 4000];
+
+    for (var attempt = 0; attempt <= maxRetries; attempt++) {
+      var resp = await fetch(url, fetchOptions);
+      if (resp.ok || !TRANSIENT.has(resp.status) || attempt === maxRetries) {
+        return resp;
+      }
+      console.warn(
+        'FLT retry ' + (attempt + 1) + '/' + maxRetries +
+        ' (' + resp.status + ') ' + url.replace('/api/flt-proxy', '')
+      );
+      await new Promise(function(r) { setTimeout(r, delays[attempt]); });
     }
     return resp;
   }
@@ -49353,10 +49383,7 @@ class ExecutionSummary {
     const closeBtn = container.querySelector('#exd-close-btn');
     if (closeBtn) {
       closeBtn.addEventListener('click', () => {
-        this.clearSummary();
-        // Also clear the underlying RAID filter via main.js wiring
-        const mainClear = document.getElementById('exec-badge-clear');
-        if (mainClear) mainClear.click();
+        this.collapse();
       });
     }
     // Iteration ID copy
@@ -49381,10 +49408,36 @@ class ExecutionSummary {
     const drawer = document.getElementById('exec-drawer');
     const rtContent = document.getElementById('rt-content');
     if (!drawer) return;
-    drawer.classList.remove('closing');
+    drawer.classList.remove('closing', 'collapsed');
     drawer.classList.add('open', 'has-data');
     drawer.setAttribute('aria-hidden', 'false');
     if (rtContent) rtContent.classList.add('exec-drawer-open');
+  }
+
+  /** Collapse the drawer (hide visually) but keep data intact for re-open. */
+  collapse = () => {
+    const drawer = document.getElementById('exec-drawer');
+    const rtContent = document.getElementById('rt-content');
+    if (!drawer || !drawer.classList.contains('open')) return;
+    drawer.classList.add('closing');
+    drawer.classList.remove('open');
+    drawer.setAttribute('aria-hidden', 'true');
+    if (rtContent) rtContent.classList.remove('exec-drawer-open');
+    setTimeout(() => {
+      drawer.classList.remove('closing');
+      drawer.classList.add('collapsed');
+    }, 240);
+  }
+
+  /** Toggle drawer open/collapsed. Only works when data exists. */
+  toggle = () => {
+    const drawer = document.getElementById('exec-drawer');
+    if (!drawer) return;
+    if (drawer.classList.contains('open')) {
+      this.collapse();
+    } else if (drawer.classList.contains('collapsed') || drawer.classList.contains('has-data')) {
+      this.open();
+    }
   }
 
   clearSummary = () => {
@@ -49392,9 +49445,9 @@ class ExecutionSummary {
     const container = document.getElementById('exec-summary-data');
     const rtContent = document.getElementById('rt-content');
     if (!drawer) return;
-    if (!drawer.classList.contains('open')) return;
+    if (!drawer.classList.contains('open') && !drawer.classList.contains('collapsed')) return;
     drawer.classList.add('closing');
-    drawer.classList.remove('open');
+    drawer.classList.remove('open', 'collapsed');
     drawer.setAttribute('aria-hidden', 'true');
     if (rtContent) rtContent.classList.remove('exec-drawer-open');
     setTimeout(() => {
@@ -107714,7 +107767,20 @@ class EdogLogViewer {
     // Execution badge clear
     const execBadgeClear = document.getElementById('exec-badge-clear');
     if (execBadgeClear) {
-      execBadgeClear.addEventListener('click', () => this.clearRaidFilter());
+      execBadgeClear.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.clearRaidFilter();
+      });
+    }
+
+    // Execution badge click → toggle drawer open/collapsed
+    const execBadge = document.getElementById('execution-badge');
+    if (execBadge) {
+      execBadge.addEventListener('click', (e) => {
+        if (e.target.id === 'exec-badge-clear') return;
+        this.execSummary.toggle();
+      });
+      execBadge.style.cursor = 'pointer';
     }
 
     // Level buttons
@@ -108421,7 +108487,12 @@ class EdogLogViewer {
     }
     const data = this.execSummary.compute(this.state.raidFilter);
     if (data) {
+      const drawer = document.getElementById('exec-drawer');
+      const isCollapsed = drawer && drawer.classList.contains('collapsed');
+      // Render data into DOM (updates content even when collapsed)
       this.execSummary.render(data);
+      // If user collapsed the drawer, keep it collapsed — don't force open
+      if (isCollapsed) this.execSummary.collapse();
       // Update badge counts
       this.showExecutionBadge(this.state.raidFilter);
     }
