@@ -456,6 +456,41 @@ class QaResults {
 
         expList.appendChild(expRow);
 
+        // Show the matched event (proof of what passed) or closest miss (debug for failures)
+        if (matched) {
+          var matchBlock = document.createElement('div');
+          matchBlock.className = 'qa-result-exp-match';
+          var matchLabel = document.createElement('span');
+          matchLabel.className = 'qa-result-exp-match-label passed';
+          matchLabel.textContent = 'Matched event:';
+          matchBlock.appendChild(matchLabel);
+          var matchData = document.createElement('code');
+          matchData.className = 'qa-result-exp-match-data';
+          try {
+            var d = matched.data || matched.Data;
+            var s = typeof d === 'string' ? d : JSON.stringify(d, null, 0);
+            matchData.textContent = s.length > 400 ? s.substring(0, 400) + '\u2026' : s;
+          } catch (e) { matchData.textContent = String(matched); }
+          matchBlock.appendChild(matchData);
+          expList.appendChild(matchBlock);
+        } else if (closest) {
+          var missBlock = document.createElement('div');
+          missBlock.className = 'qa-result-exp-match';
+          var missLabel = document.createElement('span');
+          missLabel.className = 'qa-result-exp-match-label failed';
+          missLabel.textContent = 'Closest miss:';
+          missBlock.appendChild(missLabel);
+          var missData = document.createElement('code');
+          missData.className = 'qa-result-exp-match-data';
+          try {
+            var d2 = closest.data || closest.Data;
+            var s2 = typeof d2 === 'string' ? d2 : JSON.stringify(d2, null, 0);
+            missData.textContent = s2.length > 400 ? s2.substring(0, 400) + '\u2026' : s2;
+          } catch (e) { missData.textContent = String(closest); }
+          missBlock.appendChild(missData);
+          expList.appendChild(missBlock);
+        }
+
         var failureReason = exp.failureReason || exp.FailureReason;
         if (failureReason) {
           var reasonRow = document.createElement('div');

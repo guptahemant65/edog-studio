@@ -1648,6 +1648,33 @@
   padding: var(--space-2);
 }
 
+/* ── Matched/closest-miss event under expectations ── */
+.qa-result-exp-match {
+  margin: 2px 0 6px 20px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--border-dim);
+  background: rgba(255, 255, 255, 0.02);
+}
+.qa-result-exp-match-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-right: var(--space-1);
+}
+.qa-result-exp-match-label.passed { color: var(--level-ok); }
+.qa-result-exp-match-label.failed { color: var(--level-warn); }
+.qa-result-exp-match-data {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  word-break: break-all;
+  line-height: 1.4;
+}
+
 /* ── Editor Form Elements ── */
 .qa-editor-label {
   display: block;
