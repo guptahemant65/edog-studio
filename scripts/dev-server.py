@@ -1643,7 +1643,7 @@ def _resolve_mwc_for_jupyter(cap_id: str, ws_id: str = "", nb_id: str = "", lh_i
 
     # Generate a Notebook-scoped MWC token
     if ws_id and nb_id:
-        bearer, _ = _read_cache(BEARER_CACHE)
+        bearer = _ensure_bearer()
         if bearer:
             try:
                 print(f"  [JUPYTER] Generating Notebook MWC token for nb={nb_id[:8]}...")
@@ -2837,9 +2837,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         if CONFIG_PATH.exists():
             config = json.loads(CONFIG_PATH.read_text())
 
-        bearer, _ = _read_cache(BEARER_CACHE)
-        if not bearer:
-            bearer = _ensure_bearer()
+        bearer = _ensure_bearer()
 
         with _studio_lock:
             flt_port = _studio_state.get("fltPort")
@@ -2880,9 +2878,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
 
     def _proxy_fabric(self, method):
         """Proxy /api/fabric/* to redirect host with bearer token."""
-        bearer, _ = _read_cache(BEARER_CACHE)
-        if not bearer:
-            bearer = _ensure_bearer()
+        bearer = _ensure_bearer()
         if not bearer:
             self._send_json(401, {"error": "no_bearer_token", "message": "Bearer token not cached"})
             return
@@ -2952,9 +2948,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         extracted from the bearer token's `upn` JWT claim as a fallback.
         Capacity-admin headers are required on the redirect host.
         """
-        bearer, _ = _read_cache(BEARER_CACHE)
-        if not bearer:
-            bearer = _ensure_bearer()
+        bearer = _ensure_bearer()
         if not bearer:
             self._send_json(401, {"error": "no_bearer_token", "message": "Bearer token not cached"})
             return
@@ -3988,7 +3982,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             )
             return
 
-        bearer, _ = _read_cache(BEARER_CACHE)
+        bearer = _ensure_bearer()
         if not bearer:
             self._json_response(401, {"error": "no_bearer", "message": "No bearer token available"})
             return
@@ -4176,7 +4170,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         art_id = cfg.get("artifact_id", "")
         cap_id = cfg.get("capacity_id", "")
 
-        bearer, _ = _read_cache(BEARER_CACHE)
+        bearer = _ensure_bearer()
 
         runtime_spec, err = _fetch_runtime_swagger(
             bearer,
@@ -4740,7 +4734,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         art_id = cfg.get("artifact_id", "")
         cap_id = cfg.get("capacity_id", "")
 
-        bearer, _ = _read_cache(BEARER_CACHE)
+        bearer = _ensure_bearer()
 
         runtime_spec, err = _fetch_runtime_swagger(
             bearer,
@@ -4852,7 +4846,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         ws_id = cfg.get("workspace_id", "")
         art_id = cfg.get("artifact_id", "")
         cap_id = cfg.get("capacity_id", "")
-        bearer, _ = _read_cache(BEARER_CACHE)
+        bearer = _ensure_bearer()
 
         spec, err = _fetch_runtime_swagger(
             bearer,
@@ -4955,7 +4949,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         timeout = parsed["timeout"]
 
         # Resolve token + compose upstream URL per tokenType
-        bearer, _ = _read_cache(BEARER_CACHE)
+        bearer = _ensure_bearer()
         if not bearer:
             self._json_response(401, {"error": "no_token", "message": "Bearer cache empty — re-auth required"})
             return
@@ -6021,9 +6015,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             )
             return
 
-        bearer, _ = _read_cache(BEARER_CACHE)
-        if not bearer:
-            bearer = _ensure_bearer()
+        bearer = _ensure_bearer()
         if not bearer:
             self._json_response(401, {"error": "no_bearer", "message": "No bearer token available"})
             return
@@ -6094,9 +6086,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._json_response(400, {"error": "missing_params", "message": "wsId, lhId, and capId are required"})
             return
 
-        bearer, _ = _read_cache(BEARER_CACHE)
-        if not bearer:
-            bearer = _ensure_bearer()
+        bearer = _ensure_bearer()
         if not bearer:
             self._json_response(401, {"error": "no_bearer_token", "message": "Bearer token not cached"})
             return
@@ -6261,9 +6251,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._json_response(400, {"error": "no_valid_tables", "message": "No valid table entries in request"})
             return
 
-        bearer, _ = _read_cache(BEARER_CACHE)
-        if not bearer:
-            bearer = _ensure_bearer()
+        bearer = _ensure_bearer()
         if not bearer:
             self._json_response(401, {"error": "no_bearer_token", "message": "Bearer token not cached"})
             return
@@ -6959,7 +6947,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._json_response(400, {"error": "missing_params", "message": "wsId and nbId are required"})
             return
 
-        bearer, _ = _read_cache(BEARER_CACHE)
+        bearer = _ensure_bearer()
         if not bearer:
             self._json_response(401, {"error": "no_bearer_token", "message": "Bearer token not cached"})
             return
@@ -7087,7 +7075,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._json_response(400, {"error": "missing_params", "message": "wsId and nbId are required"})
             return
 
-        bearer, _ = _read_cache(BEARER_CACHE)
+        bearer = _ensure_bearer()
         if not bearer:
             self._json_response(401, {"error": "no_bearer_token", "message": "Bearer token not cached"})
             return
@@ -7155,7 +7143,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._json_response(400, {"error": "missing_params", "message": "wsId and nbId are required"})
             return
 
-        bearer, _ = _read_cache(BEARER_CACHE)
+        bearer = _ensure_bearer()
         if not bearer:
             self._json_response(401, {"error": "no_bearer_token", "message": "Bearer token not cached"})
             return
@@ -7201,7 +7189,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._json_response(400, {"error": "missing_params", "message": "location query param is required"})
             return
 
-        bearer, _ = _read_cache(BEARER_CACHE)
+        bearer = _ensure_bearer()
         if not bearer:
             self._json_response(401, {"error": "no_bearer_token", "message": "Bearer token not cached"})
             return
@@ -7242,7 +7230,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._json_response(400, {"error": "missing_params", "message": "location is required"})
             return
 
-        bearer, _ = _read_cache(BEARER_CACHE)
+        bearer = _ensure_bearer()
         if not bearer:
             self._json_response(401, {"error": "no_bearer_token", "message": "Bearer token not cached"})
             return
