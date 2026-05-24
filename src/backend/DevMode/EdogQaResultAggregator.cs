@@ -322,13 +322,14 @@ namespace Microsoft.LiveTable.Service.DevMode
             return results
                 .OrderBy(r => r.Verdict switch
                 {
-                    ScenarioVerdict.Crashed  => 0,
-                    ScenarioVerdict.Failed   => 1,
-                    ScenarioVerdict.TimedOut  => 2,
-                    ScenarioVerdict.Partial   => 3,
-                    ScenarioVerdict.Skipped   => 4,
-                    ScenarioVerdict.Passed    => 5,
-                    _                         => 6
+                    ScenarioVerdict.Crashed      => 0,
+                    ScenarioVerdict.Failed       => 1,
+                    ScenarioVerdict.TimedOut      => 2,
+                    ScenarioVerdict.Partial       => 3,
+                    ScenarioVerdict.Inconclusive  => 4,
+                    ScenarioVerdict.Skipped       => 5,
+                    ScenarioVerdict.Passed        => 6,
+                    _                             => 7
                 })
                 .ThenBy(r => r.DurationMs)
                 .ToList();

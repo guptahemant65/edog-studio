@@ -496,38 +496,50 @@ namespace Microsoft.LiveTable.Service.DevMode
                 _logger.LogDebug("[QA] {Id} Phase 6: EVALUATE", scenario.Id);
 
                 var allEvents = session.GetAllCapturedEvents();
-                // A legacy expectation with all-null matcher fields
-                // (exact/contains/regex/range/exists all null) matches
-                // EVERY event — producing false positives. When contract
-                // matchers exist, they carry the real assertions; skip
-                // vacuous legacy expectations to avoid inflating the
-                // pass count.
                 var hasContractMatchers = scenario.Matchers != null && scenario.Matchers.Count > 0;
                 var hasLegacyExpectations = scenario.Expectations != null && scenario.Expectations.Count > 0;
-                if (hasLegacyExpectations && hasContractMatchers)
-                {
-                    // Check if ALL legacy expectations have empty matchers
-                    var allVacuous = scenario.Expectations.All(e =>
-                        e.Matcher == null
-                        || (e.Matcher.Exact == null
-                            && e.Matcher.Contains == null
-                            && e.Matcher.Regex == null
-                            && e.Matcher.Range == null
-                            && e.Matcher.Exists == null));
-                    if (allVacuous)
-                    {
-                        // Contract matchers are the sole assertion surface
-                        hasLegacyExpectations = false;
-                    }
-                }
                 var expectationResults = new List<ExpectationResult>();
                 AssertionVerdict verdict = null;
 
+                // Short-circuit VacuousLegacy expectations BEFORE evaluation.
+                // These have all-null legacy matchers (typed assertions were
+                // unsupported like ContainsAll/OneOf/Length) and would match
+                // every event, producing false positives.
+                var vacuousResults = new List<ExpectationResult>();
                 if (hasLegacyExpectations)
                 {
-                    verdict = assertionEngine.ComputeVerdict();
-                    expectationResults.AddRange(verdict.ExpectationResults);
+                    var nonVacuousCount = scenario.Expectations.Count(e => !e.VacuousLegacy);
+                    foreach (var exp in scenario.Expectations.Where(e => e.VacuousLegacy))
+                    {
+                        vacuousResults.Add(new ExpectationResult
+                        {
+                            ExpectationId = exp.Id,
+                            Description = exp.Description,
+                            Status = hasContractMatchers
+                                ? ExpectationStatus.Inconclusive
+                                : ExpectationStatus.Failed,
+                            FailureReason = hasContractMatchers
+                                ? "Vacuous legacy matcher — contract matchers are the assertion surface"
+                                : "Vacuous legacy matcher — no assertions to evaluate",
+                        });
+                    }
+
+                    if (nonVacuousCount > 0)
+                    {
+                        verdict = assertionEngine.ComputeVerdict();
+                        // Filter out vacuous expectations from verdict results
+                        var vacuousIds = new HashSet<string>(
+                            scenario.Expectations.Where(e => e.VacuousLegacy).Select(e => e.Id));
+                        expectationResults.AddRange(
+                            verdict.ExpectationResults.Where(r => !vacuousIds.Contains(r.ExpectationId)));
+                    }
+                    else
+                    {
+                        // All legacy expectations are vacuous — skip legacy eval
+                        hasLegacyExpectations = false;
+                    }
                 }
+                expectationResults.AddRange(vacuousResults);
 
                 if (hasContractMatchers)
                 {
@@ -538,13 +550,18 @@ namespace Microsoft.LiveTable.Service.DevMode
                 result.CapturedEvents = allEvents.ToList();
                 result.EventsCaptured = allEvents.Count;
 
-                var allPassed = expectationResults.Count > 0
-                    && expectationResults.All(e => e.Status == ExpectationStatus.Passed);
-                var anyPassed = expectationResults.Any(e => e.Status == ExpectationStatus.Passed);
-                var anyFailed = expectationResults.Any(e => e.Status != ExpectationStatus.Passed);
+                var actionableResults = expectationResults
+                    .Where(e => e.Status != ExpectationStatus.Inconclusive).ToList();
+                var allPassed = actionableResults.Count > 0
+                    && actionableResults.All(e => e.Status == ExpectationStatus.Passed);
+                var anyPassed = actionableResults.Any(e => e.Status == ExpectationStatus.Passed);
+                var anyFailed = actionableResults.Any(e => e.Status != ExpectationStatus.Passed);
+                var anyInconclusive = expectationResults.Any(e => e.Status == ExpectationStatus.Inconclusive);
                 var legacyResultCount = verdict?.ExpectationResults?.Count ?? 0;
                 var contractFailures = hasContractMatchers
-                    && expectationResults.Skip(legacyResultCount)
+                    && expectationResults
+                        .Where(e => e.Status != ExpectationStatus.Inconclusive)
+                        .Skip(legacyResultCount)
                         .Any(e => e.Status != ExpectationStatus.Passed);
 
                 // Determine scenario verdict
@@ -560,7 +577,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 }
                 else if (captureOutcome == CaptureOutcome.TimedOut
                     && hasLegacyExpectations
-                    && verdict.OnlyTimingFailures
+                    && verdict != null && verdict.OnlyTimingFailures
                     && !contractFailures)
                 {
                     result.Verdict = ScenarioVerdict.Partial;
@@ -570,6 +587,11 @@ namespace Microsoft.LiveTable.Service.DevMode
                     result.Verdict = anyPassed && anyFailed
                         ? ScenarioVerdict.Partial
                         : (hasContractMatchers ? ScenarioVerdict.Inconclusive : ScenarioVerdict.TimedOut);
+                }
+                else if (actionableResults.Count == 0 && anyInconclusive)
+                {
+                    // Only inconclusive results, no contract matchers
+                    result.Verdict = ScenarioVerdict.Inconclusive;
                 }
                 else
                 {
