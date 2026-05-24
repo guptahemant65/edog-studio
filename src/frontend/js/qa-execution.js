@@ -152,11 +152,13 @@ class QaExecution {
   // ── Event Handlers ──
 
   onRunStarted(data) {
+    console.log('[QA-DIAG] Execution.onRunStarted:', data);
     this._isRunning = true;
     this._runStartedAt = Date.now();
   }
 
   onScenarioStarted(data) {
+    console.log('[QA-DIAG] Execution.onScenarioStarted:', data.scenarioId, data.title);
     this._activeScenarioId = data.scenarioId;
     var row = this._scenarioEls[data.scenarioId];
     if (!row) return;
@@ -177,6 +179,7 @@ class QaExecution {
   }
 
   onPhaseChanged(data) {
+    console.log('[QA-DIAG] Execution.onPhaseChanged:', data.scenarioId, data.phase);
     var row = this._scenarioEls[data.scenarioId];
     if (!row) return;
     var phaseEl = row.querySelector('[data-field="phase"]');
@@ -184,6 +187,7 @@ class QaExecution {
   }
 
   onExpectationMatched(data) {
+    console.log('[QA-DIAG] Execution.onExpectationMatched:', data.scenarioId, data.expectationId, 'status=' + data.status);
     var row = this._scenarioEls[data.scenarioId];
     if (!row) return;
     var expRow = row.querySelector('[data-exp-id="' + data.expectationId + '"]');
@@ -205,6 +209,10 @@ class QaExecution {
   }
 
   onScenarioCompleted(data) {
+    console.log('[QA-DIAG] Execution.onScenarioCompleted:', data.scenarioId,
+      'verdict=' + (data.result && data.result.verdict),
+      'error=' + (data.result && data.result.errorMessage),
+      'failedAtPhase=' + (data.result && data.result.failedAtPhase));
     var row = this._scenarioEls[data.scenarioId];
     if (!row) return;
 
@@ -232,6 +240,9 @@ class QaExecution {
   }
 
   onRunCompleted(data) {
+    console.log('[QA-DIAG] Execution.onRunCompleted:', data.runId,
+      'passed=' + data.passedCount, 'failed=' + data.failedCount,
+      'cancelled=' + data.cancelledByUser);
     this._isRunning = false;
     this._stopTimer();
 

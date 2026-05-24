@@ -1103,6 +1103,15 @@ namespace Microsoft.LiveTable.Service.DevMode
                     catch (OperationCanceledException) { /* cancelled — clean */ }
                     catch (Exception ex)
                     {
+                        Console.WriteLine($"[QA-DIAG] *** Execution loop EXCEPTION: {ex.GetType().Name}: {ex.Message}");
+                        _ = BroadcastQaEventAsync("QaAnalysisWarning", new
+                        {
+                            eventType = "QaAnalysisWarning",
+                            correlationId,
+                            timestamp = DateTimeOffset.UtcNow,
+                            warning = "qa_diagnostic",
+                            message = $"*** EXECUTION EXCEPTION: {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace?.Substring(0, Math.Min(500, ex.StackTrace?.Length ?? 0))}",
+                        });
                         System.Diagnostics.Debug.WriteLine($"[QA] Execution loop error: {ex.Message}");
                         await PublishQaErrorAsync(correlationId, runId, "INTERNAL_ERROR",
                             $"Execution failed: {ex.Message}", null, null, "error", false).ConfigureAwait(false);
@@ -2384,6 +2393,18 @@ namespace Microsoft.LiveTable.Service.DevMode
             // green verdicts — broadcast a QaError and finish the run as
             // failed with zero scenarios executed.
             var engine = EdogQaServiceLocator.ExecutionEngine;
+
+            // ── Execution diagnostics to browser console ──────────────
+            Console.WriteLine($"[QA-DIAG] Execution loop started: runId={runId}, scenarios={scenarios.Count}, globalTimeout={globalTimeout}ms");
+            _ = BroadcastQaEventAsync("QaAnalysisWarning", new
+            {
+                eventType = "QaAnalysisWarning",
+                correlationId,
+                timestamp = DateTimeOffset.UtcNow,
+                warning = "qa_diagnostic",
+                message = $"Execution loop started: {scenarios.Count} scenarios, timeout={globalTimeout}ms, engine={(engine != null ? engine.GetType().Name : "NULL")}",
+            });
+
             if (engine == null)
             {
                 await PublishQaErrorAsync(
@@ -2410,10 +2431,29 @@ namespace Microsoft.LiveTable.Service.DevMode
             List<Scenario> engineScenarios;
             try
             {
+                Console.WriteLine($"[QA-DIAG] Converting {scenarios.Count} submitted scenarios to engine format...");
                 engineScenarios = scenarios.Select(ConvertSubmittedToEngineScenario).ToList();
+                Console.WriteLine($"[QA-DIAG] Conversion OK: {engineScenarios.Count} engine scenarios");
+                _ = BroadcastQaEventAsync("QaAnalysisWarning", new
+                {
+                    eventType = "QaAnalysisWarning",
+                    correlationId,
+                    timestamp = DateTimeOffset.UtcNow,
+                    warning = "qa_diagnostic",
+                    message = $"Scenario conversion OK: {engineScenarios.Count} engine scenarios ready",
+                });
             }
             catch (Exception convEx)
             {
+                Console.WriteLine($"[QA-DIAG] *** Conversion FAILED: {convEx.GetType().Name}: {convEx.Message}");
+                _ = BroadcastQaEventAsync("QaAnalysisWarning", new
+                {
+                    eventType = "QaAnalysisWarning",
+                    correlationId,
+                    timestamp = DateTimeOffset.UtcNow,
+                    warning = "qa_diagnostic",
+                    message = $"*** CONVERSION FAILED: {convEx.GetType().Name}: {convEx.Message}",
+                });
                 await PublishQaErrorAsync(
                     correlationId, runId,
                     errorCode: "SCENARIO_CONVERSION_FAILED",
@@ -2562,10 +2602,18 @@ namespace Microsoft.LiveTable.Service.DevMode
                 }
                 catch (Exception bridgeEx)
                 {
-                    // Don't fail the run for a broadcast hiccup, but make
-                    // sure the failure isn't completely invisible.
-                    System.Diagnostics.Debug.WriteLine(
-                        $"[QA] Progress bridge failed for {p?.ScenarioId} phase={p?.Phase}: {bridgeEx}");
+                    // Don't fail the run for a broadcast hiccup, but surface
+                    // the failure to the browser console.
+                    Console.WriteLine(
+                        $"[QA-DIAG] *** Bridge failed for {p?.ScenarioId} phase={p?.Phase}: {bridgeEx.GetType().Name}: {bridgeEx.Message}");
+                    _ = BroadcastQaEventAsync("QaAnalysisWarning", new
+                    {
+                        eventType = "QaAnalysisWarning",
+                        correlationId,
+                        timestamp = DateTimeOffset.UtcNow,
+                        warning = "qa_diagnostic",
+                        message = $"*** Bridge error for {p?.ScenarioId}: {bridgeEx.GetType().Name}: {bridgeEx.Message}",
+                    });
                 }
                 finally
                 {
@@ -2575,16 +2623,44 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             try
             {
+                Console.WriteLine($"[QA-DIAG] Calling engine.ExecuteRunAsync: runId={runId}, scenarios={engineScenarios.Count}");
+                _ = BroadcastQaEventAsync("QaAnalysisWarning", new
+                {
+                    eventType = "QaAnalysisWarning",
+                    correlationId,
+                    timestamp = DateTimeOffset.UtcNow,
+                    warning = "qa_diagnostic",
+                    message = $"Engine.ExecuteRunAsync starting: {engineScenarios.Count} scenarios",
+                });
                 engineRunResult = await engine
                     .ExecuteRunAsync(runId, engineScenarios, EnqueueBridge, ct)
                     .ConfigureAwait(false);
+                Console.WriteLine($"[QA-DIAG] Engine.ExecuteRunAsync returned: verdict={engineRunResult?.OverallVerdict}");
+                _ = BroadcastQaEventAsync("QaAnalysisWarning", new
+                {
+                    eventType = "QaAnalysisWarning",
+                    correlationId,
+                    timestamp = DateTimeOffset.UtcNow,
+                    warning = "qa_diagnostic",
+                    message = $"Engine execution done: verdict={engineRunResult?.OverallVerdict}, passed={passedCount}, failed={failedCount}",
+                });
             }
             catch (OperationCanceledException)
             {
+                Console.WriteLine($"[QA-DIAG] Engine execution CANCELLED");
                 cancelledByUser = true;
             }
             catch (Exception engineEx)
             {
+                Console.WriteLine($"[QA-DIAG] *** Engine execution FAILED: {engineEx.GetType().Name}: {engineEx.Message}");
+                _ = BroadcastQaEventAsync("QaAnalysisWarning", new
+                {
+                    eventType = "QaAnalysisWarning",
+                    correlationId,
+                    timestamp = DateTimeOffset.UtcNow,
+                    warning = "qa_diagnostic",
+                    message = $"*** ENGINE FAILED: {engineEx.GetType().Name}: {engineEx.Message}",
+                });
                 await PublishQaErrorAsync(
                     correlationId, runId,
                     errorCode: "ENGINE_EXECUTION_FAILED",
