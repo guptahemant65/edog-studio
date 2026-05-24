@@ -2645,14 +2645,14 @@ namespace Microsoft.LiveTable.Service.DevMode
                 engineRunResult = await engine
                     .ExecuteRunAsync(runId, engineScenarios, EnqueueBridge, ct)
                     .ConfigureAwait(false);
-                Console.WriteLine($"[QA-DIAG] Engine.ExecuteRunAsync returned: verdict={engineRunResult?.OverallVerdict}");
+                Console.WriteLine($"[QA-DIAG] Engine.ExecuteRunAsync returned: passed={engineRunResult?.Passed}, failed={engineRunResult?.Failed}");
                 _ = BroadcastQaEventAsync("QaAnalysisWarning", new
                 {
                     eventType = "QaAnalysisWarning",
                     correlationId,
                     timestamp = DateTimeOffset.UtcNow,
                     warning = "qa_diagnostic",
-                    message = $"Engine execution done: verdict={engineRunResult?.OverallVerdict}, passed={passedCount}, failed={failedCount}",
+                    message = $"Engine execution done: passed={engineRunResult?.Passed}, failed={engineRunResult?.Failed}, passed={passedCount}, failed={failedCount}",
                 });
             }
             catch (OperationCanceledException)

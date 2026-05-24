@@ -254,9 +254,6 @@ window.onerror = function(msg, src, line, col, err) {
         <!-- Tab content containers -->
         <div id="rt-content" class="rt-content">
           <div id="rt-tab-logs" class="rt-tab-content active">
-            <!-- Execution Summary (shown when filtering by execution ID) -->
-            <div id="exec-summary-data" class="exec-summary" style="display:none"></div>
-            <div id="exec-summary-empty" style="display:none"></div>
             <!-- Breakpoints bar -->
             <div id="breakpoints-bar" class="breakpoints-bar"></div>
             <!-- Logs toolbar (scoped to logs view) -->
@@ -344,6 +341,18 @@ window.onerror = function(msg, src, line, col, err) {
           <div id="rt-tab-di" class="rt-tab-content"></div>
           <div id="rt-tab-perf" class="rt-tab-content"></div>
         </div>
+
+        <!-- Execution Summary Drawer (slide-in from right when RAID filter applied) -->
+        <aside id="exec-drawer" class="exec-drawer" aria-hidden="true">
+          <div id="exec-summary-data" class="exec-summary"></div>
+          <div id="exec-summary-empty" class="exec-drawer-empty">
+            <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
+            </svg>
+            <div class="exec-drawer-empty-title">No execution selected</div>
+            <div class="exec-drawer-empty-sub">Apply a RAID filter to inspect</div>
+          </div>
+        </aside>
       </div>
 
       <!-- View 3: API Playground -->
