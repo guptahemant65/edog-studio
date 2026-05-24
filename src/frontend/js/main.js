@@ -115,6 +115,7 @@ class EdogLogViewer {
     this.execSummary = new ExecutionSummary(this.state, this.renderer);
     this.scrollTimeout = null;
     this.raidDebounceTimeout = null;
+    this._execRefreshPending = false;
 
     // Cockpit modules
     this.apiClient = new FabricApiClient();
@@ -638,6 +639,7 @@ class EdogLogViewer {
         this.extractEndpointFromLog(data);
         this.extractComponentFromLog(data);
         this.extractIterationIdFromLog(data);
+        this.scheduleExecutionRefresh();
         // Throttle cluster refresh — rebuild at most once per second
         if (this.logsEnhancements && !this._clusterRefreshPending) {
           this._clusterRefreshPending = true;
@@ -652,6 +654,7 @@ class EdogLogViewer {
         this.autoDetector.processTelemetry(data);
         this.extractEndpointFromTelemetry(data);
         this.extractIterationIdFromTelemetry(data);
+        this.scheduleExecutionRefresh();
         this.renderer.scheduleRender();
       }
     } catch (err) {
@@ -686,6 +689,7 @@ class EdogLogViewer {
     }
 
     if (logs.length > 0 || telemetry.length > 0) {
+      this.scheduleExecutionRefresh();
       this.renderer.scheduleRender();
     }
   }
@@ -1169,6 +1173,16 @@ class EdogLogViewer {
       // Update badge counts
       this.showExecutionBadge(this.state.raidFilter);
     }
+  }
+
+  /** Throttled refresh — called from log/telemetry ingestion when raidFilter is active. */
+  scheduleExecutionRefresh = () => {
+    if (!this.state.raidFilter || this._execRefreshPending) return;
+    this._execRefreshPending = true;
+    setTimeout(() => {
+      this._execRefreshPending = false;
+      this.refreshExecutionSummary();
+    }, 1000);
   }
 
   // ===== EXPORT MANAGER (C04) =====
