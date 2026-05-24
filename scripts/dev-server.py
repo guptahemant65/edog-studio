@@ -3100,8 +3100,14 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 if e.code == 404:
                     self._json_response(200, {"available": True, "sessions": [], "reason": "no_devmode"})
                     return
-                sys.stderr.write(f"[EDOG] session-probe HTTP {e.code}: {e.reason}\n")
-                self._json_response(200, {"available": True, "sessions": [], "reason": f"http_{e.code}"})
+                # Capture error body for debugging
+                err_body = ""
+                try:
+                    err_body = e.read(4096).decode("utf-8", errors="replace")
+                except Exception:
+                    pass
+                sys.stderr.write(f"[EDOG] session-probe HTTP {e.code}: {e.reason} body={err_body[:500]}\n")
+                self._json_response(200, {"available": True, "sessions": [], "reason": f"http_{e.code}", "debug": err_body[:500]})
                 return
             except (urllib.error.URLError, TimeoutError) as e:
                 sys.stderr.write(f"[EDOG] session-probe network: {e}\n")
