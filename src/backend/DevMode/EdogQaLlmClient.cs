@@ -111,8 +111,8 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <summary>Stable cache key for the Architect's system+schema prefix. Spec §3.4: the prefix is identical across every zone + every analysis for a given client version. F27 P11: bumped from v2 to v11 — invalidates the prefix cache on the gpt-5 deployment so old plans don't leak into new-schema decoding. Structural-fixes bump (service-to-route + FF override + matcher kind/literal redesign + topic-vocabulary injection): v13.</summary>
         internal const string PromptCacheKeyArchitect = "edog-qa-architect-v15";
 
-        /// <summary>Stable cache key for the Editor's system+schema prefix. Bumped to v14 alongside the structural-fixes drop (kind/literal matcher schema, featureFlagOverrides field, topic-vocabulary injection). v16: adds required stimulusId field + STIMULUS ASSIGNMENT prompt block so scenarios mechanically pick distinct stimuli from testingGuidance.stimuliRequired (LNT009 fix).</summary>
-        internal const string PromptCacheKeyEditor = "edog-qa-editor-v22";
+        /// <summary>Stable cache key for the Editor's system+schema prefix. Bumped to v14 alongside the structural-fixes drop (kind/literal matcher schema, featureFlagOverrides field, topic-vocabulary injection). v16: adds required stimulusId field + STIMULUS ASSIGNMENT prompt block so scenarios mechanically pick distinct stimuli from testingGuidance.stimuliRequired (LNT009 fix). v23: adds min/max constraints on priority (1..5) and timeoutMs (1000..60000) to schema + editor prompt.</summary>
+        internal const string PromptCacheKeyEditor = "edog-qa-editor-v23";
 
         /// <summary>Stable cache key for the Analyst's system+schema prefix. The Analyst is the
         /// first pass of the 2-step Analyst→Architect pipeline; its prompt is intentionally
@@ -1485,7 +1485,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                         ["type"] = "string",
                         ["enum"] = new[] { "HappyPath", "ErrorPath", "EdgeCase", "Regression", "Performance" },
                     },
-                    ["priority"] = new Dictionary<string, object> { ["type"] = "integer" },
+                    ["priority"] = new Dictionary<string, object> { ["type"] = "integer", ["minimum"] = 1, ["maximum"] = 5 },
                     ["impactZone"] = new Dictionary<string, object> { ["type"] = "string" },
                     ["technique"] = new Dictionary<string, object>
                     {
@@ -1549,7 +1549,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                         ["type"] = "array",
                         ["items"] = new Dictionary<string, object> { ["$ref"] = "#/$defs/Matcher" },
                     },
-                    ["timeoutMs"] = new Dictionary<string, object> { ["type"] = "integer" },
+                    ["timeoutMs"] = new Dictionary<string, object> { ["type"] = "integer", ["minimum"] = 1000, ["maximum"] = 60000 },
                     ["catalogHashes"] = new Dictionary<string, object> { ["$ref"] = "#/$defs/CatalogHashes" },
                     ["groundingEvidenceRefs"] = new Dictionary<string, object>
                     {
@@ -2518,6 +2518,8 @@ namespace Microsoft.LiveTable.Service.DevMode
             + "ONLY — you are forbidden from introducing new file/line citations. If a sketch needs an evidence "
             + "anchor that is not in the plan, omit that scenario rather than fabricating one. "
             + "TITLE LENGTH HARD CAP: every scenario title MUST be ≤120 characters (downstream validator rejects with EDITOR_SCHEMA_VIOLATION). Aim for ≤100 chars; if a sketch implies a longer title, compress it to a concise behavioural summary before emitting. "
+            + "PRIORITY RANGE: priority MUST be an integer 1..5 (1 = highest, 5 = lowest). Do NOT use the scenario index as priority — assign priority based on the test's importance to the code change. "
+            + "TIMEOUT RANGE: timeoutMs MUST be an integer 1000..60000 (1–60 seconds). Default to 30000 (30s) unless the scenario tests a known slow path. Values above 60000 are rejected. "
             + "EXPECTATION TOPIC VOCABULARY (CLOSED SET — pick exactly one of these per expectation, "
             + "lowercase, no other values accepted; downstream validator quarantines unknown topics): "
             + "http, token, flag, perf, spark, log, telemetry, retry, cache, fileop, catalog, dag, "
@@ -3342,8 +3344,12 @@ namespace Microsoft.LiveTable.Service.DevMode
                 if (string.IsNullOrWhiteSpace(s.Title)) errors.Add($"scenarios[{i}].title missing");
                 if (s.Title != null && s.Title.Length > 120) errors.Add($"scenarios[{i}].title exceeds 120 chars");
                 if (s.Description != null && s.Description.Length > 500) errors.Add($"scenarios[{i}].description exceeds 500 chars");
-                if (s.Priority < 1 || s.Priority > 5) errors.Add($"scenarios[{i}].priority must be 1..5 (got {s.Priority})");
-                if (s.TimeoutMs < 1000 || s.TimeoutMs > 60_000) errors.Add($"scenarios[{i}].timeoutMs must be 1000..60000 (got {s.TimeoutMs})");
+                // Auto-clamp priority and timeoutMs — these are trivially fixable
+                // and not worth rejecting the entire zone over.
+                if (s.Priority < 1) s.Priority = 1;
+                else if (s.Priority > 5) s.Priority = 5;
+                if (s.TimeoutMs < 1000) s.TimeoutMs = 1000;
+                else if (s.TimeoutMs > 60_000) s.TimeoutMs = 60_000;
                 if (s.Confidence < 0.0 || s.Confidence > 1.0) errors.Add($"scenarios[{i}].confidence must be 0.0..1.0 (got {s.Confidence})");
                 if (s.GroundingEvidenceRefs == null || s.GroundingEvidenceRefs.Count == 0)
                 {
