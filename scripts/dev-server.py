@@ -2619,6 +2619,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_certs()
         elif self.path == "/api/edog/health":
             self._serve_health()
+        elif self.path == "/api/edog/git-diff":
+            self._serve_git_diff()
         elif self.path == "/api/identity":
             self._serve_identity()
         elif self.path.startswith("/api/edog/session-probe"):
@@ -5261,6 +5263,80 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 "gitDirtyEdogFiles": git_dirty_edog,
                 "gitDirtyTotal": git_dirty_total,
                 "fltRepo": flt_repo_resp,
+            },
+        )
+
+    def _serve_git_diff(self):
+        """GET /api/edog/git-diff — full file list + unified diff for the FLT repo.
+
+        Powers the topbar "+N dirty" badge modal. Returns branch, parsed
+        porcelain file list, working-tree diff, and staged diff. All git
+        invocations are best-effort; failures degrade to empty strings.
+        """
+        cfg = {}
+        with contextlib.suppress(Exception):
+            cfg = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
+        repo_info = get_configured_repo(cfg)
+        if not repo_info or not repo_info.get("valid"):
+            self._json_response(
+                200,
+                {
+                    "configured": repo_info is not None,
+                    "valid": False,
+                    "reason": (repo_info or {}).get("reason", "not_configured"),
+                    "branch": "",
+                    "files": [],
+                    "diff": "",
+                    "stagedDiff": "",
+                },
+            )
+            return
+
+        repo_path = repo_info["path"]
+        branch = repo_info.get("gitBranch", "")
+
+        def _run_git(args: list[str]) -> str:
+            try:
+                result = subprocess.run(
+                    ["git", *args],
+                    cwd=repo_path,
+                    capture_output=True,
+                    text=True,
+                    timeout=15,
+                    check=False,
+                    encoding="utf-8",
+                    errors="replace",
+                )
+                if result.returncode != 0:
+                    return ""
+                return result.stdout
+            except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+                return ""
+
+        porcelain = _run_git(["status", "--porcelain"])
+        files = []
+        for raw_line in porcelain.splitlines():
+            if len(raw_line) < 4:
+                continue
+            # Porcelain format: XY<space>path  (X = index, Y = working tree)
+            xy = raw_line[:2]
+            path = raw_line[3:].strip()
+            # Prefer the working-tree status; fall back to index status; '?' for untracked.
+            status = xy[1].strip() or xy[0].strip() or "?"
+            files.append({"status": status, "path": path, "xy": xy})
+
+        diff = _run_git(["diff", "--no-color"])
+        staged_diff = _run_git(["diff", "--cached", "--no-color"])
+
+        self._json_response(
+            200,
+            {
+                "configured": True,
+                "valid": True,
+                "branch": branch,
+                "files": files,
+                "diff": diff,
+                "stagedDiff": staged_diff,
             },
         )
 

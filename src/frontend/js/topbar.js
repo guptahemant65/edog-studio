@@ -30,7 +30,9 @@ class TopBar {
   init() {
     this._createTokenInspector();
     this._createDeployTooltip();
+    this._createGitDiffModal();
     this._bindTokenClick();
+    this._bindGitDiffClick();
     this._startConfigPolling();
     this._fetchUserIdentity();
   }
@@ -276,7 +278,13 @@ class TopBar {
       const dirty = health.gitDirtyFiles || 0;
       const hasDirty = dirty > 0;
       this._patchMeta.style.display = hasDirty ? '' : 'none';
-      if (hasDirty && this._patchEl) this._patchEl.textContent = '+' + dirty + ' dirty';
+      if (hasDirty) {
+        if (this._patchEl) this._patchEl.textContent = '+' + dirty + ' dirty';
+        this._patchMeta.classList.add('clickable');
+        this._patchMeta.setAttribute('role', 'button');
+        this._patchMeta.setAttribute('tabindex', '0');
+        this._patchMeta.setAttribute('title', 'View git changes');
+      }
     }
   }
 
@@ -910,6 +918,628 @@ class TopBar {
   }
 
   _escTip(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  // ─── Git Diff Modal ─────────────────────────────────────────────
+  // Centered modal (80vw × 85vh) with:
+  //   • Stats bar (files / +ins / -del)
+  //   • Live search across diff
+  //   • Sticky file-card sidebar with per-file +/- counts
+  //   • Collapsible per-file diff sections, two-column line-number gutter
+  //   • Hunk headers with extracted function context
+  //   • Copy-all + per-file copy
+  //   • Glass-morphism backdrop, spring scale entrance, staggered card fade-in
+
+  _createGitDiffModal() {
+    if (document.getElementById('git-diff-modal')) return;
+
+    var overlay = document.createElement('div');
+    overlay.id = 'gd-overlay';
+    overlay.className = 'git-diff-overlay';
+    document.body.appendChild(overlay);
+
+    var el = document.createElement('div');
+    el.id = 'git-diff-modal';
+    el.className = 'git-diff-modal';
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-modal', 'true');
+    el.setAttribute('aria-label', 'Git changes');
+    el.innerHTML =
+      '<div class="gd-header">' +
+        '<div class="gd-header-left">' +
+          '<div class="gd-title-block">' +
+            '<span class="gd-title">Git Changes</span>' +
+            '<div class="gd-subtitle">' +
+              '<span class="gd-branch-chip" id="gd-branch">' +
+                '<span class="gd-branch-dot"></span>' +
+                '<span class="gd-branch-name">\u2014</span>' +
+              '</span>' +
+              '<span class="gd-stats" id="gd-stats">' +
+                '<span class="gd-stat-files"><span id="gd-stat-files-n">0</span> files</span>' +
+                '<span class="gd-stat-sep">\u00B7</span>' +
+                '<span class="gd-stat-add">+<span id="gd-stat-add-n">0</span></span>' +
+                '<span class="gd-stat-del">\u2212<span id="gd-stat-del-n">0</span></span>' +
+              '</span>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="gd-header-right">' +
+          '<div class="gd-search">' +
+            '<svg class="gd-search-icon" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5l3 3"/></svg>' +
+            '<input type="search" id="gd-search-input" class="gd-search-input" placeholder="Search diff\u2026" spellcheck="false" autocomplete="off" />' +
+            '<span class="gd-search-count" id="gd-search-count"></span>' +
+          '</div>' +
+          '<button class="gd-btn" id="gd-copy-btn" title="Copy full unified diff">' +
+            '<svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4.5" y="4.5" width="9" height="9" rx="1.5"/><path d="M11.5 4.5V3a1.5 1.5 0 00-1.5-1.5H3A1.5 1.5 0 001.5 3v7A1.5 1.5 0 003 11.5h1.5"/></svg>' +
+            '<span class="gd-btn-label">Copy diff</span>' +
+          '</button>' +
+          '<button class="gd-close" id="gd-close-btn" aria-label="Close" title="Close (Esc)">\u2715</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="gd-content">' +
+        '<aside class="gd-sidebar" id="gd-sidebar">' +
+          '<div class="gd-sidebar-title">Files</div>' +
+          '<div class="gd-sidebar-list" id="gd-sidebar-list"></div>' +
+        '</aside>' +
+        '<main class="gd-main" id="gd-main">' +
+          '<div class="gd-empty">Loading\u2026</div>' +
+        '</main>' +
+      '</div>';
+    document.body.appendChild(el);
+
+    this._gitDiffEl = el;
+    this._gitDiffOverlay = overlay;
+    this._gitDiffData = null;
+    this._gitDiffParsed = null;
+    this._gitDiffSearchTerm = '';
+
+    var self = this;
+    overlay.addEventListener('click', function() { self._closeGitDiff(); });
+    el.querySelector('#gd-close-btn').addEventListener('click', function() { self._closeGitDiff(); });
+    el.querySelector('#gd-copy-btn').addEventListener('click', function() { self._copyGitDiff(); });
+
+    var searchInput = el.querySelector('#gd-search-input');
+    searchInput.addEventListener('input', function() {
+      self._gitDiffSearchTerm = searchInput.value || '';
+      self._applyGitDiffSearch();
+    });
+
+    this._gitDiffEscHandler = function(e) {
+      if (!self._gitDiffEl || !self._gitDiffEl.classList.contains('open')) return;
+      if (e.key === 'Escape') {
+        // If search has focus and has text, clear it first; otherwise close.
+        if (document.activeElement === searchInput && searchInput.value) {
+          searchInput.value = '';
+          self._gitDiffSearchTerm = '';
+          self._applyGitDiffSearch();
+        } else {
+          self._closeGitDiff();
+        }
+      } else if ((e.key === 'f' || e.key === 'F') && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        searchInput.focus();
+        searchInput.select();
+      }
+    };
+    document.addEventListener('keydown', this._gitDiffEscHandler);
+  }
+
+  _bindGitDiffClick() {
+    if (!this._patchMeta) return;
+    var self = this;
+    var open = function() {
+      if (self._patchMeta.style.display === 'none') return;
+      self._openGitDiff();
+    };
+    this._patchMeta.addEventListener('click', open);
+    this._patchMeta.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+    });
+  }
+
+  async _openGitDiff() {
+    if (!this._gitDiffEl) return;
+    this._gitDiffEl.classList.add('open');
+    this._gitDiffOverlay.classList.add('open');
+    var main = document.getElementById('gd-main');
+    var sidebarList = document.getElementById('gd-sidebar-list');
+    if (main) main.innerHTML = '<div class="gd-empty">' + this._gdSpinner() + '<div>Loading git changes\u2026</div></div>';
+    if (sidebarList) sidebarList.innerHTML = '';
+    try {
+      var resp = await fetch('/api/edog/git-diff');
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      var data = await resp.json();
+      this._gitDiffData = data;
+      this._renderGitDiff(data);
+    } catch (e) {
+      if (main) main.innerHTML = '<div class="gd-empty gd-error">Failed to load diff: ' + this._escTip(String(e && e.message || e)) + '</div>';
+    }
+  }
+
+  _closeGitDiff() {
+    if (!this._gitDiffEl) return;
+    this._gitDiffEl.classList.remove('open');
+    this._gitDiffOverlay.classList.remove('open');
+  }
+
+  _gdSpinner() {
+    return '<div class="gd-spinner" aria-hidden="true"></div>';
+  }
+
+  // Parse a unified diff into a list of file entries with hunks.
+  _parseUnifiedDiff(raw, source) {
+    var files = [];
+    if (!raw) return files;
+    var lines = raw.split('\n');
+    var current = null;
+    var inHunk = false;
+    var oldNum = 0;
+    var newNum = 0;
+
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+
+      if (line.indexOf('diff --git') === 0) {
+        if (current) files.push(current);
+        var pathMatch = line.match(/ a\/(.+?) b\/(.+)$/);
+        var path = pathMatch ? pathMatch[2] : line.replace(/^diff --git\s+/, '');
+        current = {
+          source: source,
+          path: path,
+          oldPath: pathMatch ? pathMatch[1] : path,
+          newPath: pathMatch ? pathMatch[2] : path,
+          mode: null,
+          isNew: false,
+          isDeleted: false,
+          isRename: false,
+          isBinary: false,
+          additions: 0,
+          deletions: 0,
+          hunks: [],
+        };
+        inHunk = false;
+        continue;
+      }
+      if (!current) continue;
+
+      if (line.indexOf('new file mode') === 0) { current.isNew = true; continue; }
+      if (line.indexOf('deleted file mode') === 0) { current.isDeleted = true; continue; }
+      if (line.indexOf('rename from') === 0) { current.isRename = true; continue; }
+      if (line.indexOf('rename to') === 0) { current.isRename = true; continue; }
+      if (line.indexOf('Binary files') === 0 || line.indexOf('GIT binary patch') === 0) {
+        current.isBinary = true;
+        inHunk = false;
+        continue;
+      }
+      if (line.indexOf('index ') === 0 || line.indexOf('similarity ') === 0 ||
+          line.indexOf('old mode') === 0 || line.indexOf('new mode') === 0) {
+        continue;
+      }
+      if (line.indexOf('--- ') === 0 || line.indexOf('+++ ') === 0) {
+        continue;
+      }
+
+      if (line.indexOf('@@') === 0) {
+        var hm = line.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$/);
+        if (hm) {
+          oldNum = parseInt(hm[1], 10);
+          newNum = parseInt(hm[3], 10);
+          current.hunks.push({
+            header: line,
+            context: (hm[5] || '').trim(),
+            oldStart: oldNum,
+            newStart: newNum,
+            lines: [],
+          });
+          inHunk = true;
+        }
+        continue;
+      }
+
+      if (!inHunk) continue;
+      var hunk = current.hunks[current.hunks.length - 1];
+      var ch = line.charAt(0);
+      if (ch === '+') {
+        hunk.lines.push({ type: '+', text: line.substring(1), oldNum: null, newNum: newNum });
+        newNum++;
+        current.additions++;
+      } else if (ch === '-') {
+        hunk.lines.push({ type: '-', text: line.substring(1), oldNum: oldNum, newNum: null });
+        oldNum++;
+        current.deletions++;
+      } else if (ch === '\\') {
+        // "\ No newline at end of file" — render as meta line, no numbers.
+        hunk.lines.push({ type: '\\', text: line, oldNum: null, newNum: null });
+      } else {
+        // Context line (leading space or empty).
+        var ctx = line.length ? line.substring(1) : '';
+        hunk.lines.push({ type: ' ', text: ctx, oldNum: oldNum, newNum: newNum });
+        oldNum++;
+        newNum++;
+      }
+    }
+    if (current) files.push(current);
+    return files;
+  }
+
+  _renderGitDiff(data) {
+    var main = document.getElementById('gd-main');
+    var sidebarList = document.getElementById('gd-sidebar-list');
+    var branchChip = document.getElementById('gd-branch');
+    var branchName = branchChip ? branchChip.querySelector('.gd-branch-name') : null;
+    if (!main || !sidebarList) return;
+
+    if (!data || !data.valid) {
+      if (branchName) branchName.textContent = '\u2014';
+      this._updateStatsBar(0, 0, 0);
+      main.innerHTML = this._renderEmptyClean('No FLT repo configured.');
+      sidebarList.innerHTML = '';
+      return;
+    }
+
+    if (branchName) branchName.textContent = data.branch || '\u2014';
+
+    var stagedFiles = this._parseUnifiedDiff(data.stagedDiff || '', 'staged');
+    var unstagedFiles = this._parseUnifiedDiff(data.diff || '', 'unstaged');
+
+    // Merge: if a path appears in both, show two entries (staged + unstaged) — git semantics.
+    var diffFiles = unstagedFiles.concat(stagedFiles);
+
+    // Add untracked files from porcelain that have no diff entry.
+    var porcelain = Array.isArray(data.files) ? data.files : [];
+    var seen = {};
+    diffFiles.forEach(function(f) { seen[f.path] = true; });
+    var untracked = [];
+    porcelain.forEach(function(p) {
+      if (p.status === '?' && !seen[p.path]) {
+        untracked.push({
+          source: 'untracked',
+          path: p.path,
+          oldPath: p.path,
+          newPath: p.path,
+          isNew: true,
+          isDeleted: false,
+          isBinary: false,
+          additions: 0,
+          deletions: 0,
+          hunks: [],
+        });
+      }
+    });
+    var allFiles = diffFiles.concat(untracked);
+
+    var totalAdd = 0, totalDel = 0;
+    allFiles.forEach(function(f) { totalAdd += f.additions; totalDel += f.deletions; });
+    this._updateStatsBar(allFiles.length, totalAdd, totalDel);
+
+    this._gitDiffParsed = allFiles;
+
+    if (!allFiles.length) {
+      main.innerHTML = this._renderEmptyClean('Working tree clean');
+      sidebarList.innerHTML = '';
+      return;
+    }
+
+    // Sidebar: file cards
+    var sidebarHtml = '';
+    for (var i = 0; i < allFiles.length; i++) {
+      sidebarHtml += this._renderFileCard(allFiles[i], i);
+    }
+    sidebarList.innerHTML = sidebarHtml;
+
+    // Main: per-file diff sections
+    var mainHtml = '';
+    for (var j = 0; j < allFiles.length; j++) {
+      mainHtml += this._renderFileDiffSection(allFiles[j], j);
+    }
+    main.innerHTML = mainHtml;
+
+    var self = this;
+
+    // File card click → scroll to section + select
+    sidebarList.querySelectorAll('.gd-file-card').forEach(function(card) {
+      card.addEventListener('click', function() {
+        var idx = card.getAttribute('data-idx');
+        sidebarList.querySelectorAll('.gd-file-card').forEach(function(c) { c.classList.remove('selected'); });
+        card.classList.add('selected');
+        var target = main.querySelector('.gd-file-section[data-idx="' + idx + '"]');
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+
+    // Collapse/expand on file section header click
+    main.querySelectorAll('.gd-file-section').forEach(function(section) {
+      var hdr = section.querySelector('.gd-file-section-header');
+      var caret = hdr.querySelector('.gd-caret');
+      hdr.addEventListener('click', function(e) {
+        // Don't toggle when clicking the copy button
+        if (e.target.closest('.gd-file-copy-btn')) return;
+        section.classList.toggle('collapsed');
+        if (caret) caret.textContent = section.classList.contains('collapsed') ? '\u25B8' : '\u25BE';
+      });
+      var copyBtn = section.querySelector('.gd-file-copy-btn');
+      if (copyBtn) {
+        copyBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          var idx = parseInt(section.getAttribute('data-idx'), 10);
+          self._copyFileDiff(idx, copyBtn);
+        });
+      }
+    });
+
+    // IntersectionObserver: highlight active card while scrolling
+    if ('IntersectionObserver' in window) {
+      var sections = main.querySelectorAll('.gd-file-section');
+      var io = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+          if (entry.isIntersecting && entry.intersectionRatio > 0.25) {
+            var idx = entry.target.getAttribute('data-idx');
+            sidebarList.querySelectorAll('.gd-file-card').forEach(function(c) {
+              c.classList.toggle('active', c.getAttribute('data-idx') === idx);
+            });
+          }
+        });
+      }, { root: main, threshold: [0.25, 0.6] });
+      sections.forEach(function(s) { io.observe(s); });
+      this._gitDiffObserver = io;
+    }
+
+    // Re-apply any search filter
+    if (this._gitDiffSearchTerm) this._applyGitDiffSearch();
+  }
+
+  _updateStatsBar(files, adds, dels) {
+    var f = document.getElementById('gd-stat-files-n');
+    var a = document.getElementById('gd-stat-add-n');
+    var d = document.getElementById('gd-stat-del-n');
+    if (f) f.textContent = files;
+    if (a) a.textContent = adds;
+    if (d) d.textContent = dels;
+  }
+
+  _renderFileCard(file, idx) {
+    var parts = file.path.split('/');
+    var name = parts.pop();
+    var dir = parts.join('/');
+    var statusInfo = this._fileStatusInfo(file);
+    var srcChip = file.source === 'staged'
+      ? '<span class="gd-src-chip gd-src-staged" title="Staged">S</span>'
+      : (file.source === 'untracked'
+          ? '<span class="gd-src-chip gd-src-untracked" title="Untracked">U</span>'
+          : '');
+    var binary = file.isBinary ? '<span class="gd-binary-tag">binary</span>' : '';
+
+    var hasNumbers = (file.additions + file.deletions) > 0;
+    var addPct = hasNumbers ? Math.round((file.additions / (file.additions + file.deletions)) * 100) : 0;
+    var delPct = hasNumbers ? 100 - addPct : 0;
+    var bar = hasNumbers
+      ? '<div class="gd-card-bar"><span class="gd-bar-add" style="width:' + addPct + '%"></span><span class="gd-bar-del" style="width:' + delPct + '%"></span></div>'
+      : '<div class="gd-card-bar gd-card-bar-empty"></div>';
+
+    var delay = Math.min(idx, 14) * 28;
+    return '<button class="gd-file-card" data-idx="' + idx + '" data-path="' + this._escTip(file.path) + '" style="animation-delay:' + delay + 'ms">' +
+      '<span class="gd-status gd-status-' + statusInfo.cls + '" title="' + statusInfo.label + '">' + statusInfo.glyph + '</span>' +
+      '<span class="gd-card-text">' +
+        '<span class="gd-card-name">' + this._escTip(name) + (binary ? ' ' + binary : '') + '</span>' +
+        (dir ? '<span class="gd-card-dir">' + this._escTip(dir) + '</span>' : '') +
+        bar +
+      '</span>' +
+      '<span class="gd-card-meta">' +
+        srcChip +
+        (file.additions ? '<span class="gd-card-add">+' + file.additions + '</span>' : '') +
+        (file.deletions ? '<span class="gd-card-del">\u2212' + file.deletions + '</span>' : '') +
+      '</span>' +
+    '</button>';
+  }
+
+  _renderFileDiffSection(file, idx) {
+    var statusInfo = this._fileStatusInfo(file);
+    var sourceTag = file.source === 'staged'
+      ? '<span class="gd-source-tag gd-source-staged">STAGED</span>'
+      : (file.source === 'untracked'
+          ? '<span class="gd-source-tag gd-source-untracked">UNTRACKED</span>'
+          : '<span class="gd-source-tag gd-source-unstaged">UNSTAGED</span>');
+
+    var headerCounts = '';
+    if (file.additions) headerCounts += '<span class="gd-h-add">+' + file.additions + '</span>';
+    if (file.deletions) headerCounts += '<span class="gd-h-del">\u2212' + file.deletions + '</span>';
+
+    var body;
+    if (file.isBinary) {
+      body = '<div class="gd-binary-note">Binary file \u2014 no textual diff.</div>';
+    } else if (!file.hunks.length) {
+      if (file.source === 'untracked') {
+        body = '<div class="gd-binary-note gd-untracked-note">Untracked file. Run <code>git add</code> to view its contents in a diff.</div>';
+      } else {
+        body = '<div class="gd-binary-note">No content changes (mode/rename only).</div>';
+      }
+    } else {
+      var hunksHtml = '';
+      for (var i = 0; i < file.hunks.length; i++) {
+        hunksHtml += this._renderHunk(file.hunks[i]);
+      }
+      body = '<div class="gd-hunks">' + hunksHtml + '</div>';
+    }
+
+    return '<section class="gd-file-section" data-idx="' + idx + '" data-path="' + this._escTip(file.path) + '">' +
+      '<header class="gd-file-section-header">' +
+        '<span class="gd-caret">\u25BE</span>' +
+        '<span class="gd-status gd-status-' + statusInfo.cls + '">' + statusInfo.glyph + '</span>' +
+        '<span class="gd-file-path">' +
+          '<svg class="gd-file-icon" width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 1.5h6l4 4V14a.5.5 0 01-.5.5H3A.5.5 0 012.5 14V2A.5.5 0 013 1.5z"/><path d="M9 1.5V5a.5.5 0 00.5.5H13"/></svg>' +
+          '<span class="gd-file-path-text">' + this._escTip(file.path) + '</span>' +
+        '</span>' +
+        sourceTag +
+        '<span class="gd-h-counts">' + headerCounts + '</span>' +
+        '<button class="gd-file-copy-btn" title="Copy this file\'s diff">' +
+          '<svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4.5" y="4.5" width="9" height="9" rx="1.5"/><path d="M11.5 4.5V3a1.5 1.5 0 00-1.5-1.5H3A1.5 1.5 0 001.5 3v7A1.5 1.5 0 003 11.5h1.5"/></svg>' +
+        '</button>' +
+      '</header>' +
+      '<div class="gd-file-section-body">' + body + '</div>' +
+    '</section>';
+  }
+
+  _renderHunk(hunk) {
+    var ctx = hunk.context ? '<span class="gd-hunk-ctx">' + this._escTip(hunk.context) + '</span>' : '';
+    var rows = '';
+    for (var i = 0; i < hunk.lines.length; i++) {
+      var ln = hunk.lines[i];
+      var cls, sign;
+      if (ln.type === '+') { cls = 'gd-row gd-row-add'; sign = '+'; }
+      else if (ln.type === '-') { cls = 'gd-row gd-row-del'; sign = '\u2212'; }
+      else if (ln.type === '\\') { cls = 'gd-row gd-row-meta'; sign = ''; }
+      else { cls = 'gd-row gd-row-ctx'; sign = ''; }
+
+      var oldN = ln.oldNum != null ? ln.oldNum : '';
+      var newN = ln.newNum != null ? ln.newNum : '';
+      rows +=
+        '<div class="' + cls + '">' +
+          '<span class="gd-gutter gd-gutter-old">' + oldN + '</span>' +
+          '<span class="gd-gutter gd-gutter-new">' + newN + '</span>' +
+          '<span class="gd-sign">' + sign + '</span>' +
+          '<span class="gd-code">' + this._escTip(ln.text) + '</span>' +
+        '</div>';
+    }
+    return '<div class="gd-hunk">' +
+      '<div class="gd-hunk-header">' +
+        '<span class="gd-hunk-range">@@ \u2212' + hunk.oldStart + ' +' + hunk.newStart + ' @@</span>' +
+        ctx +
+      '</div>' +
+      '<div class="gd-hunk-body">' + rows + '</div>' +
+    '</div>';
+  }
+
+  _fileStatusInfo(file) {
+    if (file.isRename) return { cls: 'r', glyph: 'R', label: 'Renamed' };
+    if (file.isNew && file.source === 'untracked') return { cls: 'u', glyph: '?', label: 'Untracked' };
+    if (file.isNew) return { cls: 'a', glyph: 'A', label: 'Added' };
+    if (file.isDeleted) return { cls: 'd', glyph: 'D', label: 'Deleted' };
+    return { cls: 'm', glyph: 'M', label: 'Modified' };
+  }
+
+  _renderEmptyClean(message) {
+    return '<div class="gd-empty-clean">' +
+      '<div class="gd-check-circle">' +
+        '<svg width="36" height="36" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+          '<circle cx="18" cy="18" r="15" class="gd-check-ring"/>' +
+          '<path d="M11 18.5l5 5 9-10" class="gd-check-tick"/>' +
+        '</svg>' +
+      '</div>' +
+      '<div class="gd-empty-title">' + this._escTip(message || 'Working tree clean') + '</div>' +
+      '<div class="gd-empty-sub">Nothing to commit.</div>' +
+    '</div>';
+  }
+
+  _applyGitDiffSearch() {
+    var main = document.getElementById('gd-main');
+    var countEl = document.getElementById('gd-search-count');
+    if (!main) return;
+    var term = (this._gitDiffSearchTerm || '').trim();
+    var rows = main.querySelectorAll('.gd-row');
+    var matchCount = 0;
+
+    if (!term) {
+      rows.forEach(function(r) {
+        r.classList.remove('gd-match', 'gd-dim');
+        var code = r.querySelector('.gd-code');
+        if (code && code.dataset.original != null) {
+          code.innerHTML = code.dataset.original;
+          delete code.dataset.original;
+        }
+      });
+      if (countEl) countEl.textContent = '';
+      main.querySelectorAll('.gd-file-section').forEach(function(s) { s.classList.remove('gd-no-match'); });
+      return;
+    }
+
+    var termLower = term.toLowerCase();
+    var rx;
+    try {
+      rx = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    } catch (_e) {
+      rx = null;
+    }
+
+    main.querySelectorAll('.gd-file-section').forEach(function(section) {
+      var sectionMatches = 0;
+      section.querySelectorAll('.gd-row').forEach(function(r) {
+        var code = r.querySelector('.gd-code');
+        if (!code) return;
+        if (code.dataset.original == null) code.dataset.original = code.innerHTML;
+        var text = code.textContent || '';
+        if (text.toLowerCase().indexOf(termLower) !== -1) {
+          r.classList.add('gd-match'); r.classList.remove('gd-dim');
+          sectionMatches++;
+          matchCount++;
+          if (rx) {
+            // Highlight matches inside the (already-escaped) original.
+            var escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            var hlRx = new RegExp('(' + escapedTerm + ')', 'gi');
+            code.innerHTML = code.dataset.original.replace(hlRx, '<mark class="gd-hl">$1</mark>');
+          }
+        } else {
+          r.classList.remove('gd-match'); r.classList.add('gd-dim');
+          code.innerHTML = code.dataset.original;
+        }
+      });
+      section.classList.toggle('gd-no-match', sectionMatches === 0);
+    });
+
+    if (countEl) countEl.textContent = matchCount + (matchCount === 1 ? ' match' : ' matches');
+  }
+
+  async _copyGitDiff() {
+    var data = this._gitDiffData;
+    if (!data) return;
+    var parts = [];
+    if ((data.stagedDiff || '').trim()) parts.push(data.stagedDiff);
+    if ((data.diff || '').trim()) parts.push(data.diff);
+    var text = parts.join('\n');
+    var btn = document.getElementById('gd-copy-btn');
+    var label = btn ? btn.querySelector('.gd-btn-label') : null;
+    try {
+      await navigator.clipboard.writeText(text);
+      if (label) {
+        var orig = label.textContent;
+        label.textContent = 'Copied';
+        btn.classList.add('copied');
+        setTimeout(function() {
+          label.textContent = orig;
+          btn.classList.remove('copied');
+        }, 1400);
+      }
+    } catch (_e) {
+      if (label) label.textContent = 'Copy failed';
+    }
+  }
+
+  async _copyFileDiff(idx, btn) {
+    var file = this._gitDiffParsed && this._gitDiffParsed[idx];
+    if (!file) return;
+    // Reconstruct unified diff for this file from the parsed structure.
+    var out = ['diff --git a/' + file.oldPath + ' b/' + file.newPath];
+    if (file.isNew) out.push('new file');
+    if (file.isDeleted) out.push('deleted file');
+    out.push('--- ' + (file.isNew ? '/dev/null' : 'a/' + file.oldPath));
+    out.push('+++ ' + (file.isDeleted ? '/dev/null' : 'b/' + file.newPath));
+    for (var i = 0; i < file.hunks.length; i++) {
+      var h = file.hunks[i];
+      out.push(h.header);
+      for (var j = 0; j < h.lines.length; j++) {
+        var l = h.lines[j];
+        if (l.type === '\\') out.push(l.text);
+        else if (l.type === ' ') out.push(' ' + l.text);
+        else out.push(l.type + l.text);
+      }
+    }
+    var text = out.join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      if (btn) {
+        btn.classList.add('copied');
+        setTimeout(function() { btn.classList.remove('copied'); }, 1200);
+      }
+    } catch (_e) { /* ignore */ }
+  }
 
   destroy() {
     if (this._tokenTimer) clearInterval(this._tokenTimer);
