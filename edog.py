@@ -70,6 +70,7 @@ FILES = {
     / "WorkloadParameters/ParametersManifest.json",
     "TestRollout": Path("Service/Microsoft.LiveTable.Service.EntryPoint") / "WorkloadParameters/Rollouts/Test.json",
     "DagExecutionHandlerV2": SERVICE_PATH / "Core/V2/DagExecutionHandlerV2.cs",
+    "ControllersConfig": SERVICE_PATH / "Initialization/ControllersConfig.cs",
 }
 
 # DevMode log viewer files (created, not patched)
@@ -928,10 +929,10 @@ if echo "$STAGED" | grep -q "DevMode/"; then
 fi
 
 # 2. Block staged files that contain EDOG markers
-EDOG_PATCHED="GTSBasedSparkClient.cs Program.cs WorkloadApp.cs ParametersManifest.json Test.json"
+EDOG_PATCHED="GTSBasedSparkClient.cs Program.cs WorkloadApp.cs ParametersManifest.json Test.json ControllersConfig.cs"
 for file in $EDOG_PATCHED; do
     if echo "$STAGED" | grep -q "$file"; then
-        if git diff --cached -- "*$file" | grep -qE "EDOG DevMode|EdogLogServer|EdogTelemetryInterceptor|DisableFLTAuth.*true"; then
+        if git diff --cached -- "*$file" | grep -qE "EDOG DevMode|EdogLogServer|EdogTelemetryInterceptor|DisableFLTAuth.*true|EdogSessionController"; then
             echo ""
             echo "COMMIT BLOCKED: EDOG DevMode changes in $file!"
             echo ""
@@ -2070,7 +2071,51 @@ def revert_dag_execution_hook_patch(content):
     return re.sub(pattern, "", content)
 
 
-def apply_disable_flt_auth_manifest(content):
+def apply_controllers_config_patch(content):
+    """Register EdogSessionController in the authentication map (ControllersConfig.cs).
+
+    The MWC AuthenticationEngine attribute dispatches by controller name (class
+    name minus "Controller" suffix).  Without a map entry the platform returns
+    500 InternalError Param1:EdogSession.  We register with NoAuth — same as
+    PublicUnprotectedController — since MWC token validation already ran at the
+    gateway layer.
+    """
+    if "EdogSessionController" in content:
+        return content, "already_applied"
+
+    if "controllersTypeToAuthMap" not in content:
+        return content, "pattern_not_found"
+
+    lines = content.split("\n")
+    in_map = False
+    insert_idx = None
+    for i, line in enumerate(lines):
+        if "controllersTypeToAuthMap" in line:
+            in_map = True
+        if in_map and line.strip() == "};":
+            insert_idx = i
+            break
+
+    if insert_idx is None:
+        return content, "pattern_not_found"
+
+    edog_lines = [
+        "                // EDOG DevMode - register session probe controller",
+        "                { typeof(EdogSessionController), new[] { platformAuthProvider.GetNoAuthenticationAuthenticator() } },",
+    ]
+    for j, entry in enumerate(edog_lines):
+        lines.insert(insert_idx + j, entry)
+
+    return "\n".join(lines), "applied"
+
+
+def revert_controllers_config_patch(content):
+    """Remove EdogSessionController registration from ControllersConfig.cs."""
+    pattern = (
+        r"\n[ ]*// EDOG DevMode - register session probe controller"
+        r"\n[ ]*\{ typeof\(EdogSessionController\), new\[\] \{ platformAuthProvider\.GetNoAuthenticationAuthenticator\(\) \} \},"
+    )
+    return re.sub(pattern, "", content)
     """Set DisableFLTAuth to true in ParametersManifest.json."""
     if '"DisableFLTAuth": true' in content:
         return content, "already_applied"
@@ -2604,6 +2649,28 @@ def apply_all_changes(token, repo_root):
             modified_contents[rel_path] = content
             warnings.append("⚠️  DAG execution hook: pattern not found in DagExecutionHandlerV2.cs")
 
+    # 4c. Patch ControllersConfig.cs to register EdogSessionController auth
+    rel_path = FILES["ControllersConfig"]
+    filepath = repo_root / rel_path
+    content = read_file(filepath)
+    if content:
+        new_content, status = apply_controllers_config_patch(content)
+        if status == "applied":
+            original_contents[rel_path] = content
+            write_file(filepath, new_content)
+            modified_contents[rel_path] = new_content
+            changes_made.append("✅ Session probe controller auth (ControllersConfig.cs)")
+        elif status == "already_applied":
+            reverted = revert_controllers_config_patch(content)
+            if reverted != content:
+                original_contents[rel_path] = reverted
+                modified_contents[rel_path] = content
+            changes_made.append("⏭️  Session probe controller auth (already)")
+        elif status == "pattern_not_found":
+            original_contents[rel_path] = content
+            modified_contents[rel_path] = content
+            warnings.append("⚠️  Session probe controller auth: pattern not found in ControllersConfig.cs")
+
     # 5. Disable FLT auth for EDOG DevMode (ParametersManifest.json and Test.json)
     for file_key, apply_fn, revert_fn, desc in [
         (
@@ -2740,6 +2807,22 @@ def revert_all_changes(repo_root):
         print(f"   ⚠️ Error reverting DagExecutionHandlerV2.cs: {e}")
         all_success = False
 
+    # 5c. Revert ControllersConfig.cs session probe controller auth
+    try:
+        rel_path = FILES["ControllersConfig"]
+        filepath = repo_root / rel_path
+        content = read_file(filepath)
+        if content:
+            reverted = revert_controllers_config_patch(content)
+            if reverted != content:
+                write_file(filepath, reverted)
+                print("   ✅ Reverted session probe controller auth (ControllersConfig.cs)")
+            else:
+                print("   ⏭️  ControllersConfig.cs (clean)")
+    except Exception as e:
+        print(f"   ⚠️ Error reverting ControllersConfig.cs: {e}")
+        all_success = False
+
     # 6. Revert DisableFLTAuth in ParametersManifest.json and Test.json
     for file_key, revert_fn, desc in [
         ("ParametersManifest", revert_disable_flt_auth_manifest, "DisableFLTAuth (ParametersManifest.json)"),
@@ -2804,6 +2887,13 @@ def check_status(repo_root):
     if content:
         applied = "EdogTelemetryInterceptor" in content
         status.append(("Log viewer telemetry interceptor (WorkloadApp.cs)", applied))
+
+    # Check ControllersConfig.cs session probe auth
+    filepath = repo_root / FILES["ControllersConfig"]
+    content = read_file(filepath)
+    if content:
+        applied = "EdogSessionController" in content
+        status.append(("Session probe controller auth (ControllersConfig.cs)", applied))
 
     # Check DisableFLTAuth (ParametersManifest.json)
     filepath = repo_root / FILES["ParametersManifest"]
