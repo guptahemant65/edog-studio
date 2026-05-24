@@ -33,6 +33,10 @@ class SmartContextBar {
       const elapsedEl = this.element.querySelector('.elapsed');
       if (elapsedEl && elapsed) elapsedEl.textContent = elapsed + 's';
     }, 1000);
+    // Auto-apply RAID filter so the execution summary panel populates
+    if (iterationId && window.edogApp && typeof window.edogApp.applyRaidFilter === 'function') {
+      window.edogApp.applyRaidFilter(iterationId);
+    }
   }
 
   updateExecution = (exec, iterationId) => {
@@ -54,7 +58,7 @@ class SmartContextBar {
       ${nodeText ? '<span class="node-progress">' + nodeText + '</span>' : ''}
       <span class="elapsed">${elapsed}s</span>
       ${exec.endpoint ? '<span class="endpoint">' + exec.endpoint + '</span>' : ''}
-      <span class="iter-id">${iterationId}</span>
+      <span class="iter-id" style="cursor:pointer" title="Click to filter logs by this execution" onclick="if(window.edogApp&&window.edogApp.applyRaidFilter)window.edogApp.applyRaidFilter('${iterationId}')">${iterationId}</span>
       <span class="dismiss" onclick="document.getElementById('smart-context-bar').classList.remove('active')">\u2715</span>
     `;
     this.element.classList.add('active');
