@@ -1873,6 +1873,11 @@ def _deploy_step(step, message, deploy_id):
 # Event set when FLT stdout shows "DevConnection started" (service fully ready)
 _flt_ready_event = threading.Event()
 
+# Timestamp when the most recent FLT deploy completed (routing confirmed).
+# Used by the proxy to apply a post-deploy grace window: 400s from FLT during
+# this window are treated as transient (FLT internal state not yet ready).
+_flt_deploy_completed_at: float = 0.0
+
 
 def _kill_stale_flt_processes(keep_pid=None, deploy_id=None):
     """Kill any orphaned FLT (Microsoft.LiveTable.Service.EntryPoint) processes from prior runs.
@@ -2325,12 +2330,14 @@ def _warmup_capacity_route(ws_id: str, lh_id: str, cap_id: str, deploy_id: str) 
                 bearer, ws_id, lh_id, cap_id, workload_type="LiveTable"
             )
 
-            # Phase B: Lightweight GET through capacity to verify routing
+            # Phase B: Probe getLatestDag — the first real API the frontend
+            # fires.  This ensures FLT's internal metadata is loaded, not
+            # just that routing works.
             probe_url = (
                 f"{host}/webapi/capacities/{cap_id}/workloads/LiveTable"
                 f"/LiveTableService/automatic"
                 f"/v1/workspaces/{ws_id}/lakehouses/{lh_id}"
-                f"/devmode/edogSessions/list"
+                f"/liveTable/getLatestDag?showExtendedLineage=true"
             )
             req = urllib.request.Request(probe_url, method="GET")
             req.add_header("Authorization", f"MwcToken {mwc_token}")
@@ -4222,6 +4229,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                     s in probe
                     for s in ("endpointnotfound", "route not found", "workload not registered", "not found")
                 )
+
             if routing_lag:
                 self._json_response(
                     503,
