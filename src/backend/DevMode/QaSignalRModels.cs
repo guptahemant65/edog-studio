@@ -141,8 +141,11 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <summary>Expectations to evaluate.</summary>
         public List<QaSubmittedExpectation> Expectations { get; set; } = new();
 
-        /// <summary>Typed p10 matchers submitted alongside the legacy expectations.</summary>
-        public List<Matcher> Matchers { get; set; } = new();
+        /// <summary>Typed p10 matchers submitted alongside the legacy expectations.
+        /// Deserialized as opaque JSON because MatcherValue is abstract and
+        /// System.Text.Json cannot instantiate it without a custom converter.
+        /// The execution path re-parses these in ConvertSubmittedToEngineScenario.</summary>
+        public List<System.Text.Json.JsonElement> Matchers { get; set; } = new();
 
         /// <summary>Catalog hash envelope grounding the submitted scenario.</summary>
         public CatalogHashes CatalogHashes { get; set; }
@@ -693,8 +696,11 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <summary>Short failure summary. Null/empty when the scenario passed.</summary>
         public string ErrorSummary { get; set; }
 
-        /// <summary>Typed matchers captured for p10 replay and migration.</summary>
-        public List<Matcher> Matchers { get; set; } = new();
+        /// <summary>Typed matchers captured for p10 replay and migration.
+        /// Stored as opaque objects (JsonElement at runtime) because
+        /// MatcherValue is abstract and cannot round-trip through
+        /// System.Text.Json without a custom converter.</summary>
+        public List<object> Matchers { get; set; } = new();
 
         /// <summary>CatalogHashes captured alongside the scenario for p10 grounding checks.</summary>
         public CatalogHashes CatalogHashes { get; set; }

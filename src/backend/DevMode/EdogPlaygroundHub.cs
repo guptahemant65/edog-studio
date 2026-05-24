@@ -2586,7 +2586,9 @@ namespace Microsoft.LiveTable.Service.DevMode
                         Category = category,
                         Status = verdictStr,
                         ErrorSummary = sr.ErrorMessage,
-                        Matchers = submitted?.Matchers != null ? new List<Matcher>(submitted.Matchers) : new List<Matcher>(),
+                        Matchers = submitted?.Matchers != null
+                            ? submitted.Matchers.Cast<object>().ToList()
+                            : new List<object>(),
                         CatalogHashes = submitted?.CatalogHashes,
                         Lifecycle = (submitted?.Lifecycle ?? ScenarioLifecycle.Completed).ToString(),
                     });
