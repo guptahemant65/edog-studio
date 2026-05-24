@@ -182,6 +182,44 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <summary>Default Azure OpenAI Responses API version. Mirrors <see cref="EdogQaCapabilityProbe"/>.</summary>
         internal const string DefaultApiVersion = "2025-04-01-preview";
 
+        // ── Topic Field Registry (canonical source of truth) ─────────
+
+        /// <summary>
+        /// Canonical registry of valid topic → field mappings. Single source of truth
+        /// for: (1) the JSON schema enum, (2) the prompt TOPIC FIELD SCHEMA block,
+        /// (3) the validator field check. NEVER hardcode topic fields elsewhere.
+        /// </summary>
+        internal static readonly Dictionary<string, string[]> TopicFieldRegistry = new()
+        {
+            ["http"] = new[] { "method", "url", "statusCode", "durationMs", "requestHeaders", "responseHeaders", "responseBodyPreview", "requestBodyPreview", "requestSizeBytes", "responseSizeBytes", "httpClientName", "correlationId" },
+            ["token"] = new[] { "tokenType", "scheme", "audience", "expiryUtc", "issuedUtc", "httpClientName", "endpoint", "claims" },
+            ["retry"] = new[] { "endpoint", "statusCode", "retryAttempt", "totalAttempts", "waitDurationMs", "strategyName", "reason", "isThrottle", "retryAfterMs", "iterationId" },
+            ["log"] = new[] { "message", "level", "category", "exception", "timestamp", "iterationId", "correlationId" },
+            ["flag"] = new[] { "flagName", "tenantId", "capacityId", "workspaceId", "result", "durationMs", "overridden", "caller" },
+            ["di"] = new[] { "serviceType", "implementationType", "lifetime", "isIntercepted" },
+            ["perf"] = new[] { "marker", "durationMs", "caller", "context" },
+            ["cache"] = new[] { "key", "operation", "hit", "sizeBytes", "ttlMs" },
+            ["telemetry"] = new[] { "eventName", "properties", "measurements" },
+            ["spark"] = new[] { "sessionId", "appId", "status", "durationMs" },
+            ["fileop"] = new[] { "path", "operation", "sizeBytes", "durationMs" },
+            ["catalog"] = new[] { "entityType", "operation", "entityId" },
+            ["dag"] = new[] { "nodeId", "status", "iterationId", "durationMs" },
+            ["flt-ops"] = new[] { "operation", "status", "durationMs" },
+            ["nexus"] = new[] { "endpoint", "method", "statusCode" },
+            ["capacity"] = new[] { "capacityId", "operation", "status" },
+        };
+
+        /// <summary>All valid topicField values in "topic.field" format.</summary>
+        internal static readonly string[] AllValidTopicFields = TopicFieldRegistry
+            .SelectMany(kv => kv.Value.Select(f => $"{kv.Key}.{f}"))
+            .ToArray();
+
+        /// <summary>Topics with complete field catalogs (schema-enforced).</summary>
+        internal static readonly HashSet<string> WellModeledTopics = new()
+        {
+            "http", "token", "retry", "log", "flag", "di", "perf", "cache"
+        };
+
         // ── Config types ───────────────────────────────────────────────
 
         /// <summary>Explicit Architect configuration. Production callers use <see cref="ReadArchitectConfigFromEnv"/>; tests inject directly.</summary>
@@ -1345,7 +1383,11 @@ namespace Microsoft.LiveTable.Service.DevMode
                 ["required"] = new[] { "topicField", "assertion", "value" },
                 ["properties"] = new Dictionary<string, object>
                 {
-                    ["topicField"] = new Dictionary<string, object> { ["type"] = "string" },
+                    ["topicField"] = new Dictionary<string, object>
+                    {
+                        ["type"] = "string",
+                        ["enum"] = AllValidTopicFields,
+                    },
                     ["assertion"] = new Dictionary<string, object>
                     {
                         ["type"] = "string",
@@ -2730,14 +2772,10 @@ namespace Microsoft.LiveTable.Service.DevMode
             // on each interceptor's published events, so matcher topicField
             // paths resolve at execution time instead of hallucinating fields.
             sb.AppendLine("---BEGIN TOPIC FIELD SCHEMA (trusted harness context — use ONLY these fields in matcher topicField)---");
-            sb.AppendLine("http: method, url, statusCode, durationMs, requestHeaders, responseHeaders, responseBodyPreview, requestBodyPreview, requestSizeBytes, responseSizeBytes, httpClientName, correlationId");
-            sb.AppendLine("token: tokenType, scheme, audience, expiryUtc, issuedUtc, httpClientName, endpoint, claims");
-            sb.AppendLine("retry: endpoint, statusCode, retryAttempt, totalAttempts, waitDurationMs, strategyName, reason, isThrottle, retryAfterMs, iterationId");
-            sb.AppendLine("log: message, level, category, exception, timestamp, iterationId, correlationId (structured log entries — field names match the FLT logger output)");
-            sb.AppendLine("flag: flagName, tenantId, capacityId, workspaceId, result, durationMs, overridden, caller");
-            sb.AppendLine("di: serviceType, implementationType, lifetime, isIntercepted");
-            sb.AppendLine("perf: marker, durationMs, caller, context");
-            sb.AppendLine("cache: key, operation, hit, sizeBytes, ttlMs");
+            foreach (var kv in TopicFieldRegistry)
+            {
+                sb.AppendLine($"{kv.Key}: {string.Join(", ", kv.Value)}");
+            }
             sb.AppendLine("RULE: matcher topicField MUST be '<topic>.<field>' where <field> is one of the fields listed above. Example: http.statusCode, token.tokenType, retry.retryAttempt, log.message, flag.result. Do NOT invent fields — if the assertion cannot be expressed with these fields, use the Exists assertion on the topic root.");
             sb.AppendLine("---END TOPIC FIELD SCHEMA---");
 
