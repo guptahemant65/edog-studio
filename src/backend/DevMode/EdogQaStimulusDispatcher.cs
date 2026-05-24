@@ -714,29 +714,35 @@ namespace Microsoft.LiveTable.Service.DevMode
             if (spec == null)
                 return new StimulusResult { Success = false, Error = "HttpRequest spec is null" };
 
-            // ── Session-context rewriting ──────────────────────────────
-            // The LLM generates placeholder GUIDs and fake auth tokens
-            // because it doesn't have access to the live session. Rewrite
-            // path placeholders with real workspace/lakehouse IDs from the
-            // EdogSessionRegistry, and inject the real MWC control-token
-            // header so the FLT API authenticates the request.
-            var rewrittenPath = RewritePathPlaceholders(spec.Path);
-            var rewrittenHeaders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            if (spec.Headers != null)
-            {
-                foreach (var (key, value) in spec.Headers)
-                    rewrittenHeaders[key] = value;
-            }
-            RewriteAuthHeader(rewrittenHeaders);
+            // ── Route through /api/flt-proxy ───────────────────────────
+            // The dev-server's flt-proxy automatically handles:
+            //   - Real bearer → MWC token minting
+            //   - Full capacity endpoint URL construction with real
+            //     workspace/lakehouse IDs from edog-config.json
+            //   - Correct Authorization: MwcToken header
+            //
+            // The LLM generates controller-relative paths (e.g.
+            // /liveTable/insights/summary) or full v1/workspaces/... URLs.
+            // We strip the v1/workspaces/.../liveTable prefix and route
+            // through the proxy so auth and path construction are handled.
+            var proxyPath = NormalizeToProxyPath(spec.Path);
 
             var request = new HttpRequestMessage
             {
                 Method = new HttpMethod(spec.Method ?? "GET"),
-                RequestUri = BuildUri(rewrittenPath),
+                RequestUri = new Uri($"http://localhost:{_fltPort}/api/flt-proxy{proxyPath}"),
             };
 
-            foreach (var (key, value) in rewrittenHeaders)
-                request.Headers.TryAddWithoutValidation(key, value);
+            // Forward only non-auth headers — the proxy handles auth
+            if (spec.Headers != null)
+            {
+                foreach (var (key, value) in spec.Headers)
+                {
+                    if (string.Equals(key, "Authorization", StringComparison.OrdinalIgnoreCase))
+                        continue; // proxy handles auth
+                    request.Headers.TryAddWithoutValidation(key, value);
+                }
+            }
 
             if (spec.Body != null)
             {
@@ -796,99 +802,57 @@ namespace Microsoft.LiveTable.Service.DevMode
             }
         }
 
-        // ── Session-context rewriting helpers ──────────────────────────
+        // ── Path normalization for flt-proxy routing ──────────────
 
         /// <summary>
-        /// Rewrites placeholder workspace/lakehouse IDs in the path with real
-        /// values from the active EdogSessionRegistry. Handles both patterns
-        /// the LLM generates:
-        ///   - Zero-GUIDs: /workspaces/00000000-0000-0000-0000-000000000002/...
-        ///   - Template vars: /workspaces/{workspaceId}/lakehouses/{artifactId}/...
+        /// Normalizes LLM-generated paths to controller-relative paths
+        /// suitable for /api/flt-proxy. The proxy auto-prepends the
+        /// full capacity/workspace/lakehouse URL prefix.
+        ///
+        /// Input patterns the LLM generates:
+        ///   - Full: /v1/workspaces/{wsId}/lakehouses/{lhId}/liveTable/insights/summary
+        ///   - With zeros: /v1/workspaces/00000000-.../lakehouses/00000000-.../liveTable/...
+        ///   - Controller-relative: /liveTable/insights/summary
+        ///   - Bare: /insights/summary
+        ///
+        /// Output: /liveTable/insights/summary (controller-relative)
         /// </summary>
-        private static string RewritePathPlaceholders(string path)
+        private static string NormalizeToProxyPath(string path)
         {
-            if (string.IsNullOrEmpty(path)) return path;
+            if (string.IsNullOrEmpty(path)) return "/liveTable";
 
-            try
+            // Strip the /v1/workspaces/{id}/lakehouses/{id} prefix
+            // Match pattern: anything up to /liveTable or /liveTableSchedule or /liveTableMaintanance
+            var controllerPrefixes = new[] { "/liveTable", "/liveTableSchedule", "/liveTableMaintanance", "/insights" };
+            foreach (var prefix in controllerPrefixes)
             {
-                var snapshot = EdogSessionRegistry.GetSnapshot();
-                var session = snapshot?.Sessions?.Count > 0 ? snapshot.Sessions[0] : null;
-                if (session == null) return path;
+                var idx = path.IndexOf(prefix, StringComparison.OrdinalIgnoreCase);
+                if (idx >= 0)
+                    return path.Substring(idx);
+            }
 
-                if (string.IsNullOrEmpty(session.WorkspaceId) || string.IsNullOrEmpty(session.LakehouseId))
-                    return path;
-
-                // Pattern 1: curly-brace template variables
-                // {workspaceId}, {workspace_id}, {wsId} → real workspace
-                // {artifactId}, {artifact_id}, {lakehouseId}, {lakehouse_id}, {lhId} → real lakehouse
-                path = System.Text.RegularExpressions.Regex.Replace(
-                    path,
-                    @"\{(?:workspaceId|workspace_id|wsId)\}",
-                    session.WorkspaceId,
-                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-                path = System.Text.RegularExpressions.Regex.Replace(
-                    path,
-                    @"\{(?:artifactId|artifact_id|lakehouseId|lakehouse_id|lhId)\}",
-                    session.LakehouseId,
-                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-
-                // Pattern 2: zero-GUID placeholders
-                var zeroGuid = "00000000-0000-0000-0000-000000000";
-                if (path.Contains(zeroGuid))
+            // If no known controller prefix found, strip any /v1/workspaces/... prefix
+            var v1Idx = path.IndexOf("/v1/", StringComparison.OrdinalIgnoreCase);
+            if (v1Idx >= 0)
+            {
+                // Find the segment after lakehouses/{id}/
+                var lakehouseIdx = path.IndexOf("/lakehouses/", v1Idx, StringComparison.OrdinalIgnoreCase);
+                if (lakehouseIdx >= 0)
                 {
-                    var idx1 = path.IndexOf(zeroGuid, StringComparison.Ordinal);
-                    if (idx1 >= 0)
+                    // Skip /lakehouses/{guid}/ to get to the controller path
+                    var afterLakehouse = path.IndexOf('/', lakehouseIdx + 12 + 1); // +12 for "/lakehouses/", +1 to skip past guid start
+                    if (afterLakehouse > 0)
                     {
-                        var end1 = path.IndexOf('/', idx1 + 36);
-                        if (end1 < 0) end1 = path.Length;
-                        var len1 = Math.Min(36, end1 - idx1);
-                        path = path.Substring(0, idx1) + session.WorkspaceId + path.Substring(idx1 + len1);
-
-                        var idx2 = path.IndexOf(zeroGuid, idx1 + session.WorkspaceId.Length, StringComparison.Ordinal);
-                        if (idx2 >= 0)
-                        {
-                            var end2 = path.IndexOf('/', idx2 + 36);
-                            if (end2 < 0) end2 = path.Length;
-                            var len2 = Math.Min(36, end2 - idx2);
-                            path = path.Substring(0, idx2) + session.LakehouseId + path.Substring(idx2 + len2);
-                        }
+                        // Find the next / after the GUID (36 chars or template var)
+                        var guidEnd = path.IndexOf('/', lakehouseIdx + 13);
+                        if (guidEnd > 0)
+                            return path.Substring(guidEnd);
                     }
                 }
-
-                return path;
             }
-            catch
-            {
-                return path;
-            }
-        }
 
-        /// <summary>
-        /// Ensures the request has a valid auth header. The LLM may generate
-        /// fake tokens, empty headers, or no auth at all. Always inject the
-        /// real EDOG control token from the session registry.
-        /// </summary>
-        private static void RewriteAuthHeader(Dictionary<string, string> headers)
-        {
-            try
-            {
-                var snapshot = EdogSessionRegistry.GetSnapshot();
-                var session = snapshot?.Sessions?.Count > 0 ? snapshot.Sessions[0] : null;
-                if (session == null) return;
-
-                // Remove fake auth headers the LLM generated
-                headers.Remove("Authorization");
-
-                // The FLT API proxy uses X-EDOG-Control-Token for
-                // internal requests. The session's ConnectionId serves
-                // as the identity — the proxy validates it against the
-                // registered session list.
-                if (!string.IsNullOrEmpty(session.ConnectionId))
-                {
-                    headers["X-EDOG-Control-Token"] = session.ConnectionId;
-                }
-            }
-            catch { /* non-fatal */ }
+            // Already controller-relative or unknown — pass through
+            return path.StartsWith("/") ? path : "/" + path;
         }
     }
 
