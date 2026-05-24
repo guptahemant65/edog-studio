@@ -2100,6 +2100,7 @@ def apply_controllers_config_patch(content):
         return content, "pattern_not_found"
 
     edog_lines = [
+        "",
         "                // EDOG DevMode - register session probe controller",
         "                { typeof(EdogSessionController), new[] { platformAuthProvider.GetNoAuthenticationAuthenticator() } },",
     ]
@@ -2112,7 +2113,7 @@ def apply_controllers_config_patch(content):
 def revert_controllers_config_patch(content):
     """Remove EdogSessionController registration from ControllersConfig.cs."""
     pattern = (
-        r"\n[ ]*// EDOG DevMode - register session probe controller"
+        r"\n\n[ ]*// EDOG DevMode - register session probe controller"
         r"\n[ ]*\{ typeof\(EdogSessionController\), new\[\] \{ platformAuthProvider\.GetNoAuthenticationAuthenticator\(\) \} \},"
     )
     return re.sub(pattern, "", content)
