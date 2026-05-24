@@ -1589,6 +1589,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                         // Walk up to find the edog-studio repo root
                         var candidates = new[]
                         {
+                            // DevMode output dir (copied by edog.py during deploy)
+                            System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "DevMode", "framework-endpoints.json"),
                             System.IO.Path.Combine(edogRoot, "data", "framework-endpoints.json"),
                             System.IO.Path.Combine(Environment.GetEnvironmentVariable("FLT_BIN_PATH") ?? string.Empty, "framework-endpoints.json"),
                             System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "data", "framework-endpoints.json"),

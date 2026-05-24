@@ -1765,6 +1765,9 @@ def apply_log_viewer_files(repo_root):
                 shutil.copy2(components_src, out_devmode / "edog-flt-components.json")
             if config_src.exists():
                 shutil.copy2(config_src, out_devmode / "edog-config.json")
+            fw_endpoints_src = Path(__file__).parent / "data" / "framework-endpoints.json"
+            if fw_endpoints_src.exists():
+                shutil.copy2(fw_endpoints_src, out_devmode / "framework-endpoints.json")
 
     if created_files:
         return "applied", created_files
