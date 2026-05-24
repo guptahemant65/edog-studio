@@ -395,6 +395,8 @@ class DagStudio {
     this._gantt = null;
     this._dag = null;
     this._active = false;
+    this._activationId = 0;
+    this._pendingCompletionRefresh = false;
     this._lockCheckInterval = null;
     this._elapsedInterval = null;
     this._execPollInterval = null;
@@ -483,6 +485,7 @@ class DagStudio {
   async activate() {
     if (this._active) return;
     this._active = true;
+    var activationId = ++this._activationId;
     // Lazy init renderer
     if (!this._renderer) {
       this._renderer = new DagCanvasRenderer(this._graphPanel);
@@ -515,18 +518,25 @@ class DagStudio {
     this._gantt.onNodeUnhovered = function() {
       if (self._renderer) self._renderer.clearHighlight();
     };
-    // Subscribe to SignalR telemetry topic
+    // Ensure SignalR subscriptions (idempotent — no-op if already active)
     this._signalR.on('telemetry', this._onTelemetryEvent);
     this._signalR.subscribeTopic('telemetry');
-    // Subscribe to log topic (backup channel for autoDetector)
     this._signalR.on('log', this._onLogEntry);
     this._signalR.subscribeTopic('log');
     // Keyboard shortcuts
     document.addEventListener('keydown', this._onKeyDown);
+    // Snapshot execution state before async work
+    var hasExecState = !!this._esm.activeIterationId && this._esm.status !== 'idle';
     requestAnimationFrame(async function() {
-      if (!self._active) return;
+      if (!self._active || activationId !== self._activationId) return;
       await self._loadDag();
-      await self._loadHistory();
+      if (!self._active || activationId !== self._activationId) return;
+      if (hasExecState) {
+        self._restoreExecutionState();
+      } else {
+        await self._loadHistory();
+      }
+      if (!self._active || activationId !== self._activationId) return;
       self._startLockCheck();
     });
   }
@@ -534,12 +544,11 @@ class DagStudio {
   deactivate() {
     if (!this._active) return;
     this._active = false;
-    // Unsubscribe telemetry
-    this._signalR.off('telemetry', this._onTelemetryEvent);
-    this._signalR.unsubscribeTopic('telemetry');
-    // Unsubscribe log backup channel
-    this._signalR.off('log', this._onLogEntry);
-    this._signalR.unsubscribeTopic('log');
+    // Keep SignalR subscriptions + listeners alive — they self-guard
+    // via _esm.activeIterationId check and the _active guard in callbacks.
+    // Never call unsubscribeTopic (it kills shared topic streams used by
+    // main.js too). ESM continues tracking active executions while the
+    // user is on another tab.
     // Pause rendering
     if (this._renderer) this._renderer.pauseRendering();
     // Remove keyboard listener
@@ -618,8 +627,9 @@ class DagStudio {
       if (minimap) minimap.style.opacity = '1';
       var executableCount = nodes.filter(function(n) { return n.executable !== false; }).length;
       if (this._ganttCount) this._ganttCount.textContent = String(executableCount);
-      this._renderControls('idle');
-      this._renderStatus('idle');
+      var currentStatus = this._esm.activeIterationId ? this._esm.status : 'idle';
+      this._renderControls(currentStatus);
+      this._renderStatus(currentStatus);
       this._updateSummary();
     } catch (err) {
       console.error('[DagStudio] Failed to load DAG:', err);
@@ -800,6 +810,35 @@ class DagStudio {
       if (this._statusTimer) this._statusTimer.style.display = 'none';
     } catch (err) {
       console.error('[DagStudio] Failed to load execution:', err);
+    }
+  }
+
+  /** Restore execution visuals from ESM state after tab switch. */
+  async _restoreExecutionState() {
+    var status = this._esm.status;
+    var isRunning = status === 'running';
+    var isTerminal = status === 'completed' || status === 'failed' || status === 'cancelled';
+    // Re-apply node states to renderer and gantt
+    if (this._gantt && this._dag && this._dag.nodes) {
+      var executableNodes = this._dag.nodes.filter(function(n) { return n.executable !== false; });
+      this._gantt.renderExecution(executableNodes, this._esm.startedAt || Date.now());
+    }
+    for (var entry of this._esm.nodeStates) {
+      if (this._renderer) this._renderer.updateNodeState(entry[0], entry[1].status);
+      if (this._gantt) this._gantt.updateBar(entry[0], entry[1]);
+    }
+    this._renderControls(status);
+    this._renderStatus(status);
+    this._updateSummary();
+    if (isRunning) {
+      this._startElapsedTimer();
+      this._startExecPoller();
+      this._pollExecStatus();
+    } else if (isTerminal || this._pendingCompletionRefresh) {
+      this._pendingCompletionRefresh = false;
+      if (this._statusTimer) this._statusTimer.style.display = 'none';
+      await this._loadHistory();
+      this._checkLockState();
     }
   }
 
@@ -1109,6 +1148,7 @@ class DagStudio {
 
   _onExecutionStateChanged(status) {
     console.log('[DAG-DIAG] Execution state changed:', status);
+    if (!this._active) return;
     this._renderControls(status);
     this._renderStatus(status);
     this._updateSummary();
@@ -1120,6 +1160,7 @@ class DagStudio {
 
   _onNodeStateChanged(nodeId, state) {
     console.log('[DAG-DIAG] Node state changed:', nodeId.substring(0, 8), state.status, state.source);
+    if (!this._active) return;
     if (this._renderer) this._renderer.updateNodeState(nodeId, state.status);
     if (this._gantt) this._gantt.updateBar(nodeId, state);
     this._updateSummary();
@@ -1128,6 +1169,10 @@ class DagStudio {
   _onExecutionComplete(iterationId, finalStatus) {
     this._stopElapsedTimer();
     this._stopExecPoller();
+    if (!this._active) {
+      this._pendingCompletionRefresh = true;
+      return;
+    }
     if (this._statusTimer) this._statusTimer.style.display = 'none';
     this._renderControls(finalStatus);
     this._renderStatus(finalStatus);
