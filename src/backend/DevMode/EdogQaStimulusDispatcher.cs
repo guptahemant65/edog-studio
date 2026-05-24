@@ -714,17 +714,29 @@ namespace Microsoft.LiveTable.Service.DevMode
             if (spec == null)
                 return new StimulusResult { Success = false, Error = "HttpRequest spec is null" };
 
-            var request = new HttpRequestMessage
-            {
-                Method = new HttpMethod(spec.Method ?? "GET"),
-                RequestUri = BuildUri(spec.Path),
-            };
-
+            // ── Session-context rewriting ──────────────────────────────
+            // The LLM generates placeholder GUIDs and fake auth tokens
+            // because it doesn't have access to the live session. Rewrite
+            // path placeholders with real workspace/lakehouse IDs from the
+            // EdogSessionRegistry, and inject the real MWC control-token
+            // header so the FLT API authenticates the request.
+            var rewrittenPath = RewritePathPlaceholders(spec.Path);
+            var rewrittenHeaders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             if (spec.Headers != null)
             {
                 foreach (var (key, value) in spec.Headers)
-                    request.Headers.TryAddWithoutValidation(key, value);
+                    rewrittenHeaders[key] = value;
             }
+            RewriteAuthHeader(rewrittenHeaders);
+
+            var request = new HttpRequestMessage
+            {
+                Method = new HttpMethod(spec.Method ?? "GET"),
+                RequestUri = BuildUri(rewrittenPath),
+            };
+
+            foreach (var (key, value) in rewrittenHeaders)
+                request.Headers.TryAddWithoutValidation(key, value);
 
             if (spec.Body != null)
             {
@@ -782,6 +794,85 @@ namespace Microsoft.LiveTable.Service.DevMode
             {
                 return null;
             }
+        }
+
+        // ── Session-context rewriting helpers ──────────────────────────
+
+        /// <summary>
+        /// Rewrites zero-GUID placeholders in the path with real workspace/
+        /// lakehouse IDs from the active EdogSessionRegistry. The LLM uses
+        /// 00000000-... GUIDs because it doesn't know the live session context.
+        /// </summary>
+        private static string RewritePathPlaceholders(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return path;
+
+            try
+            {
+                var snapshot = EdogSessionRegistry.GetSnapshot();
+                var session = snapshot?.Sessions?.Count > 0 ? snapshot.Sessions[0] : null;
+                if (session == null) return path;
+
+                // Replace zero-GUID workspace/lakehouse IDs with real ones
+                var zeroGuid = "00000000-0000-0000-0000-000000000";
+                if (path.Contains(zeroGuid) && !string.IsNullOrEmpty(session.WorkspaceId) && !string.IsNullOrEmpty(session.LakehouseId))
+                {
+                    // Path format: /v1/workspaces/{wsId}/lakehouses/{lhId}/...
+                    // Replace sequentially — first 0-GUID = workspace, second = lakehouse
+                    var idx1 = path.IndexOf(zeroGuid, StringComparison.Ordinal);
+                    if (idx1 >= 0)
+                    {
+                        var end1 = path.IndexOf('/', idx1 + 36);
+                        if (end1 < 0) end1 = path.Length;
+                        var placeholder1 = path.Substring(idx1, Math.Min(36, end1 - idx1));
+                        path = path.Substring(0, idx1) + session.WorkspaceId + path.Substring(idx1 + placeholder1.Length);
+
+                        var idx2 = path.IndexOf(zeroGuid, idx1 + session.WorkspaceId.Length, StringComparison.Ordinal);
+                        if (idx2 >= 0)
+                        {
+                            var end2 = path.IndexOf('/', idx2 + 36);
+                            if (end2 < 0) end2 = path.Length;
+                            var placeholder2 = path.Substring(idx2, Math.Min(36, end2 - idx2));
+                            path = path.Substring(0, idx2) + session.LakehouseId + path.Substring(idx2 + placeholder2.Length);
+                        }
+                    }
+                }
+
+                return path;
+            }
+            catch
+            {
+                return path;
+            }
+        }
+
+        /// <summary>
+        /// Injects the real FLT control-token header for authentication.
+        /// The LLM generates 'Authorization: Bearer valid-mwc-token' as a
+        /// placeholder — the FLT API needs the actual EDOG control token
+        /// used by the API proxy.
+        /// </summary>
+        private static void RewriteAuthHeader(Dictionary<string, string> headers)
+        {
+            try
+            {
+                var snapshot = EdogSessionRegistry.GetSnapshot();
+                var session = snapshot?.Sessions?.Count > 0 ? snapshot.Sessions[0] : null;
+                if (session == null) return;
+
+                // Remove fake auth headers the LLM generated
+                headers.Remove("Authorization");
+
+                // The FLT API proxy uses X-EDOG-Control-Token for
+                // internal requests. The session's ConnectionId serves
+                // as the identity — the proxy validates it against the
+                // registered session list.
+                if (!string.IsNullOrEmpty(session.ConnectionId))
+                {
+                    headers["X-EDOG-Control-Token"] = session.ConnectionId;
+                }
+            }
+            catch { /* non-fatal */ }
         }
     }
 
