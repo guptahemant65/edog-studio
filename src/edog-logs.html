@@ -38826,6 +38826,33 @@ svg.iw-dag-connections {
   padding: var(--space-2);
 }
 
+/* ── Matched/closest-miss event under expectations ── */
+.qa-result-exp-match {
+  margin: 2px 0 6px 20px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--border-dim);
+  background: rgba(255, 255, 255, 0.02);
+}
+.qa-result-exp-match-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-right: var(--space-1);
+}
+.qa-result-exp-match-label.passed { color: var(--level-ok); }
+.qa-result-exp-match-label.failed { color: var(--level-warn); }
+.qa-result-exp-match-data {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  word-break: break-all;
+  line-height: 1.4;
+}
+
 /* ── Editor Form Elements ── */
 .qa-editor-label {
   display: block;
@@ -96598,29 +96625,41 @@ class WorkspaceExplorer {
   /**
    * Invoke the EdogIdentify hub RPC so the server registers this session
    * (osUser, machine, lakehouseId, etc.) for collision detection.
+   * Falls back to /api/flt/config for workspace/lakehouse IDs when
+   * deployTarget isn't populated yet.
    */
-  _sendEdogIdentify() {
+  async _sendEdogIdentify() {
     const ws = window.edogWs;
     if (!ws || !ws.connection) return;
     const ident = this._edogIdentity || {};
     const target = (window.edogStudioStatus && window.edogStudioStatus.deployTarget) || {};
-    const payload = {
-      machine: ident.machine || '',
-      osUser: ident.osUser || '',
-      lakehouseId: target.artifactId || '',
-      lakehouseName: target.lakehouseName || '',
-      workspaceId: target.workspaceId || '',
-      workspaceName: target.workspaceName || '',
-    };
+
+    let workspaceId = target.workspaceId || '';
+    let artifactId = target.artifactId || '';
+    let lakehouseName = target.lakehouseName || '';
+    let workspaceName = target.workspaceName || '';
+
+    // Fallback: read from /api/flt/config if deployTarget is empty
+    if (!workspaceId || !artifactId) {
+      try {
+        const resp = await fetch('/api/flt/config');
+        if (resp.ok) {
+          const cfg = await resp.json();
+          workspaceId = workspaceId || cfg.workspaceId || '';
+          artifactId = artifactId || cfg.artifactId || '';
+        }
+      } catch (_e) { /* config endpoint optional */ }
+    }
+
     try {
       ws.connection.invoke(
         'EdogIdentify',
-        payload.machine,
-        payload.osUser,
-        payload.lakehouseId,
-        payload.lakehouseName,
-        payload.workspaceId,
-        payload.workspaceName
+        ident.machine || '',
+        ident.osUser || '',
+        artifactId,
+        lakehouseName,
+        workspaceId,
+        workspaceName
       ).catch(() => { /* server may not implement yet */ });
     } catch (_e) { /* hub method optional */ }
   }
@@ -106559,6 +106598,41 @@ class QaResults {
         }
 
         expList.appendChild(expRow);
+
+        // Show the matched event (proof of what passed) or closest miss (debug for failures)
+        if (matched) {
+          var matchBlock = document.createElement('div');
+          matchBlock.className = 'qa-result-exp-match';
+          var matchLabel = document.createElement('span');
+          matchLabel.className = 'qa-result-exp-match-label passed';
+          matchLabel.textContent = 'Matched event:';
+          matchBlock.appendChild(matchLabel);
+          var matchData = document.createElement('code');
+          matchData.className = 'qa-result-exp-match-data';
+          try {
+            var d = matched.data || matched.Data;
+            var s = typeof d === 'string' ? d : JSON.stringify(d, null, 0);
+            matchData.textContent = s.length > 400 ? s.substring(0, 400) + '\u2026' : s;
+          } catch (e) { matchData.textContent = String(matched); }
+          matchBlock.appendChild(matchData);
+          expList.appendChild(matchBlock);
+        } else if (closest) {
+          var missBlock = document.createElement('div');
+          missBlock.className = 'qa-result-exp-match';
+          var missLabel = document.createElement('span');
+          missLabel.className = 'qa-result-exp-match-label failed';
+          missLabel.textContent = 'Closest miss:';
+          missBlock.appendChild(missLabel);
+          var missData = document.createElement('code');
+          missData.className = 'qa-result-exp-match-data';
+          try {
+            var d2 = closest.data || closest.Data;
+            var s2 = typeof d2 === 'string' ? d2 : JSON.stringify(d2, null, 0);
+            missData.textContent = s2.length > 400 ? s2.substring(0, 400) + '\u2026' : s2;
+          } catch (e) { missData.textContent = String(closest); }
+          missBlock.appendChild(missData);
+          expList.appendChild(missBlock);
+        }
 
         var failureReason = exp.failureReason || exp.FailureReason;
         if (failureReason) {
