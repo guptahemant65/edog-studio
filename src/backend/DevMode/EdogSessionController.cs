@@ -10,10 +10,7 @@ namespace Microsoft.LiveTable.Service.Controllers
     using System;
     using Microsoft.AspNetCore.Cors;
     using Microsoft.AspNetCore.Mvc;
-    using Microsoft.Fabric.Platform.AccessProtection.Context;
     using Microsoft.Fabric.Platform.AccessProtection.WebApi.Attributes;
-    using Microsoft.LiveTable.Service.Authorization;
-    using Microsoft.LiveTable.Service.Common;
     using Microsoft.LiveTable.Service.Common.Annotations;
     using Microsoft.LiveTable.Service.DevMode;
     using Microsoft.MWC.Workload.Client.Library.Controllers;
@@ -26,13 +23,6 @@ namespace Microsoft.LiveTable.Service.Controllers
     /// </summary>
     [AuthenticationEngine]
     [EnableCors(PolicyName = CorsPolicies.AllowAllCorsPolicyName)]
-    [ResolveTenantIdForFabricAccessProtection]
-    [FabricTenantSingleWorkspaceItemResource(
-        itemType: FabricItemType.Unknown,
-        tenantIdKey: HttpConstants.WorkspaceTenantID,
-        workspaceIdKey: "workspaceId",
-        itemIdKey: "artifactId",
-        TenantIdSource = ContextValueSource.RequestProperties)]
     [InitializeCapacityContext]
     [Route("v1/workspaces/{workspaceId}/lakehouses/{artifactId}/liveTable/edogSessions")]
     [ApiExplorerSettings(IgnoreApi = true)]
