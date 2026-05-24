@@ -2330,14 +2330,16 @@ def _warmup_capacity_route(ws_id: str, lh_id: str, cap_id: str, deploy_id: str) 
                 bearer, ws_id, lh_id, cap_id, workload_type="LiveTable"
             )
 
-            # Phase B: Probe getLatestDag — the first real API the frontend
-            # fires.  This ensures FLT's internal metadata is loaded, not
-            # just that routing works.
+            # Phase B: Lightweight GET through capacity to verify routing.
+            # Intentionally probes a fast EDOG endpoint (not getLatestDag)
+            # so deploy completes quickly.  FLT's heavier DAG init may take
+            # a few more seconds — the client-side _fltFetchWithRetry absorbs
+            # those transient 400s silently.
             probe_url = (
                 f"{host}/webapi/capacities/{cap_id}/workloads/LiveTable"
                 f"/LiveTableService/automatic"
                 f"/v1/workspaces/{ws_id}/lakehouses/{lh_id}"
-                f"/liveTable/getLatestDag?showExtendedLineage=true"
+                f"/devmode/edogSessions/list"
             )
             req = urllib.request.Request(probe_url, method="GET")
             req.add_header("Authorization", f"MwcToken {mwc_token}")
