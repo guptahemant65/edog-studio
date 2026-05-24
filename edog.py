@@ -2116,6 +2116,9 @@ def revert_controllers_config_patch(content):
         r"\n[ ]*\{ typeof\(EdogSessionController\), new\[\] \{ platformAuthProvider\.GetNoAuthenticationAuthenticator\(\) \} \},"
     )
     return re.sub(pattern, "", content)
+
+
+def apply_disable_flt_auth_manifest(content):
     """Set DisableFLTAuth to true in ParametersManifest.json."""
     if '"DisableFLTAuth": true' in content:
         return content, "already_applied"
