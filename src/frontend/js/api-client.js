@@ -867,7 +867,7 @@ class FabricApiClient {
     var method = (fetchOptions.method || 'GET').toUpperCase();
     var isRetryable = method === 'GET';
     var maxRetries = isRetryable ? 3 : 0;
-    var TRANSIENT = new Set([408, 429, 500, 502, 503, 504]);
+    var TRANSIENT = new Set([400, 408, 429, 500, 502, 503, 504]);
     var delays = [1000, 2000, 4000];
 
     for (var attempt = 0; attempt <= maxRetries; attempt++) {
