@@ -99,6 +99,30 @@ namespace Microsoft.LiveTable.Service.DevMode
         }
 
         /// <summary>
+        /// Remove the deploy-time placeholder entry for a given machine+user.
+        /// Called from <see cref="EdogPlaygroundHub.EdogIdentify"/> when the
+        /// real SignalR session supersedes the deploy-time entry.
+        /// </summary>
+        public static void RemoveDeployEntry(string machine, string osUser)
+        {
+            if (string.IsNullOrEmpty(machine) || string.IsNullOrEmpty(osUser))
+            {
+                return;
+            }
+
+            try
+            {
+                var key = $"deploy-{machine}-{osUser}";
+                Sessions.TryRemove(key, out _);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[EDOG] EdogSessionRegistry.RemoveDeployEntry error: {ex.Message}");
+            }
+        }
+
+        /// <summary>
         /// Remove a session entry. Called from <see cref="Hub.OnDisconnectedAsync"/>.
         /// Safe to call for an unknown connectionId.
         /// </summary>

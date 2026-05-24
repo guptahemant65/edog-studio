@@ -1746,10 +1746,12 @@ def apply_log_viewer_files(repo_root):
                 shutil.copy2(src_file, target)
                 created_files.append(f"{target.name} (updated)")
 
-    # Also copy edog-logs.html and edog-flt-components.json to build output dirs
-    # so the server can find them at runtime (AppDomain.CurrentDomain.BaseDirectory)
+    # Also copy edog-logs.html, edog-flt-components.json, and edog-config.json
+    # to build output dirs so the server can find them at runtime
+    # (AppDomain.CurrentDomain.BaseDirectory)
     html_src = src_dir / "edog-logs.html"
     components_src = repo_root / SERVICE_PATH / "DevMode" / "edog-flt-components.json"
+    config_src = Path(__file__).parent / CONFIG_FILE
     entry_point = repo_root / "Service" / "Microsoft.LiveTable.Service.EntryPoint"
     bin_dir = entry_point / "bin"
 
@@ -1761,6 +1763,8 @@ def apply_log_viewer_files(repo_root):
                 shutil.copy2(html_src, out_devmode / "edog-logs.html")
             if components_src.exists():
                 shutil.copy2(components_src, out_devmode / "edog-flt-components.json")
+            if config_src.exists():
+                shutil.copy2(config_src, out_devmode / "edog-config.json")
 
     if created_files:
         return "applied", created_files

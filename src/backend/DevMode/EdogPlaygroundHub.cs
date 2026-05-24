@@ -574,6 +574,10 @@ namespace Microsoft.LiveTable.Service.DevMode
         {
             try
             {
+                // Remove the deploy-time placeholder entry for this user so
+                // the probe doesn't show a duplicate (deploy + SignalR).
+                EdogSessionRegistry.RemoveDeployEntry(machine, osUser);
+
                 EdogSessionRegistry.Register(
                     Context.ConnectionId,
                     machine,
