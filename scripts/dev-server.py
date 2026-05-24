@@ -3073,6 +3073,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 f"/LiveTableService/automatic/publicUnprotected/edog/sessions"
             )
             req = urllib.request.Request(target_url, method="GET")
+            req.add_header("Authorization", f"MwcToken {mwc_token}")
+            req.add_header("x-ms-workload-resource-moniker", art_id)
             req.add_header("Accept", "application/json")
 
             ctx = ssl.create_default_context()
