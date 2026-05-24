@@ -3356,44 +3356,79 @@ class WorkspaceExplorer {
     if (!this._contentEl) return;
 
     const envLabel = this._getEnvironmentLabel(ws);
-    const health = this._getHealthStatus(ws);
-    const lastMod = lh.lastUpdatedDate ? this._formatDate(lh.lastUpdatedDate) : null;
+    const capacityId = ws.capacityId || '';
+    const capName = ws._capacityDisplayName || '';
+    const capSku = ws._capacitySku || '';
+    const capRegion = ws._region || '';
 
-    // V2 Header — icon + name + status pill + meta row
-    let html = '<div class="ws-lh-header">';
-    html += '<div class="ws-lh-header-icon">';
-    html += '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>';
-    html += '</div>';
-    html += '<div class="ws-lh-header-info">';
-    html += '<div class="ws-lh-name-row">';
-    html += `<div class="ws-content-name">${this._esc(lh.displayName)}</div>`;
+    // ── Hero card (transplanted from workspace view pattern) ──
+    let html = '<div class="ws-hero">';
+    html += '<div class="ws-hero-top">';
+    html += '<div class="ws-hero-identity">';
+    html += `<div class="ws-hero-name">${this._esc(lh.displayName)}</div>`;
+    html += '<div class="ws-hero-idrow">';
+    html += `<span class="ws-guid" title="Click to copy" data-copy-id="${this._esc(lh.id)}">`;
+    html += '<svg class="ws-guid-copy" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+    html += `<span class="ws-guid-text">${this._esc(lh.id)}</span>`;
+    html += '</span>';
+    if (envLabel) {
+      html += `<span class="ws-env-pill ws-env-${this._esc(envLabel.toLowerCase())}">${this._esc(envLabel)}</span>`;
+    }
     html += '<span class="ws-status-pill ws-pill-hidden" id="ws-status-pill"></span>';
-    html += '</div>';
-    html += '<div class="ws-content-meta">';
-    html += `<span class="ws-guid" data-copy-id="${this._esc(lh.id)}" title="Click to copy full ID: ${this._esc(lh.id)}">${this._esc(lh.id)}</span>`;
-    html += `<span class="ws-badge ws-badge-env">${this._esc(envLabel)}</span>`;
-    if (ws._region) {
-      html += `<span class="ws-badge ws-badge-region">${this._esc(ws._region)}</span>`;
-    }
-    if (lastMod) {
-      html += `<span class="ws-modified">Modified ${lastMod}</span>`;
-    }
-    html += '<span id="ws-ts-lakehouse" class="ws-timestamp ws-timestamp--loading" title="Loading creation date\u2026">' +
-      '<span class="ws-timestamp-label">Created:</span>' +
-      '<span class="ws-timestamp-value ws-timestamp-shimmer">\u2026</span>' +
-      '</span>';
-    html += '</div>';
     html += '</div></div>';
 
-    // V2 Action Bar — primary left, secondary right
+    // Icon actions in hero top-right
+    html += '<div class="ws-hero-actions">';
+    html += '<button class="ws-icon-btn" data-action="rename-lh" title="Rename lakehouse" aria-label="Rename lakehouse">';
+    html += '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>';
+    html += '</button>';
+    html += '<button class="ws-icon-btn" data-action="open-fabric-lh" title="Open in Fabric" aria-label="Open in Fabric">';
+    html += '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
+    html += '</button>';
+    html += '<button class="ws-icon-btn" data-action="clone-env" title="Clone environment" aria-label="Clone environment">';
+    html += '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+    html += '</button>';
+    html += '</div>'; // /hero-actions
+    html += '</div>'; // /hero-top
+
+    // Capacity sub-card
+    if (capacityId) {
+      html += '<div class="ws-capacity-card">';
+      html += '<div class="ws-capacity-card-icon" aria-hidden="true">';
+      html += '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="8" rx="2"/><rect x="2" y="13" width="20" height="8" rx="2"/><circle cx="6" cy="7" r="1"/><circle cx="6" cy="17" r="1"/></svg>';
+      html += '</div>';
+      html += '<div class="ws-capacity-card-body">';
+      html += '<div class="ws-capacity-card-row1">';
+      html += `<span class="ws-capacity-card-name">${this._esc(capName || 'Capacity')}</span>`;
+      if (capSku) html += `<span class="ws-capacity-card-sku">${this._esc(capSku)}</span>`;
+      html += '</div>';
+      html += `<div class="ws-capacity-card-id">${this._esc(capacityId)}</div>`;
+      if (capRegion) html += `<div class="ws-capacity-card-region"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>${this._esc(capRegion)}</div>`;
+      html += '</div></div>';
+    }
+
+    // Activity timestamp
+    html += '<div class="ws-hero-activity">';
+    html += '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+    html += '<span id="ws-ts-lakehouse" class="ws-timestamp ws-timestamp--loading" title="Loading creation date\u2026">';
+    html += '<span class="ws-timestamp-label">Created:</span>';
+    html += '<span class="ws-timestamp-value ws-timestamp-shimmer">\u2026</span>';
+    html += '</span>';
+    html += '</div>';
+    html += '</div>'; // /ws-hero
+
+    // ── Overview stats strip (shimmer initially) ──
+    html += '<div class="ws-lh-stats-grid" id="ws-lh-stats">';
+    html += this._renderStatsStrip(null);
+    html += '</div>';
+
+    // ── Action bar ──
     html += '<div class="ws-v2-actions" id="ws-content-actions">';
     html += '<div class="ws-v2-actions-left">';
     html += '<button class="ws-btn-primary" id="ws-deploy-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21"/></svg> Deploy</button>';
     html += '</div>';
     html += '<div class="ws-v2-actions-right">';
-    html += '<button class="ws-btn-ghost" data-action="open-fabric-lh"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Open in Fabric</button>';
-    html += '<button class="ws-btn-ghost" data-action="rename-lh"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>Rename</button>';
-    html += '<button class="ws-btn-ghost" data-action="clone-env"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Clone</button>';
+    html += '<button class="ws-btn-ghost" data-action="open-fabric-lh"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/><line x1="14" y1="4" x2="10" y2="20"/></svg>API Explorer</button>';
     html += '</div></div>';
 
     // Deploy progress container
@@ -3408,21 +3443,6 @@ class WorkspaceExplorer {
     // Lazy-fetch OneLake creation date for this lakehouse.
     this._populateTimestamp('ws-ts-lakehouse', ws.id, lh.id, 'lakehouseCreatedAt', 'Created');
 
-    // Bind GUID click-to-copy
-    const guidEl = this._contentEl.querySelector('.ws-guid[data-copy-id]');
-    if (guidEl) {
-      guidEl.addEventListener('click', () => {
-        const fullId = guidEl.dataset.copyId;
-        if (navigator.clipboard) {
-          navigator.clipboard.writeText(fullId).then(() => {
-            guidEl.classList.add('copied');
-            this._toast('ID copied to clipboard', 'success');
-            setTimeout(() => guidEl.classList.remove('copied'), 2000);
-          });
-        }
-      });
-    }
-
     // Sync deploy button state from studio status
     this._syncDeployButtons(lh, ws);
 
@@ -3432,6 +3452,9 @@ class WorkspaceExplorer {
       deployBtn.addEventListener('click', () => this._deployToLakehouse(lh, ws));
     }
     this._bindContentActions(ws);
+
+    // Track currently open detail drawer
+    this._openDrawerTableKey = null;
 
     // Load tables — show shimmer while fetching
     try {
@@ -3456,9 +3479,12 @@ class WorkspaceExplorer {
       if (tables.length === 0 && schemas.length === 0) {
         tablesEl.innerHTML =
           '<div class="ws-empty-state ws-empty-inline">' +
-          '<div class="ws-empty-title">No tables</div>' +
-          '<div class="ws-empty-desc">Tables appear after data is written to this lakehouse</div>' +
+          '<svg class="ws-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>' +
+          '<div class="ws-empty-title">No tables yet</div>' +
+          '<div class="ws-empty-desc">Deploy your workload to create tables in this lakehouse, or check that the lakehouse has data loaded.</div>' +
           '</div>';
+        // Update stats strip with zeros
+        this._updateStatsStrip([], []);
         return;
       }
 
@@ -3466,9 +3492,7 @@ class WorkspaceExplorer {
       this._tableSort = { col: 'name', dir: 'asc' };
       this._tableSortOriginalRows = null;
 
-      // Store tables for enrichment merging — normalize field names. Each row keeps
-      // its `schemaName` (server-annotated) so the inspector + enrichment can
-      // disambiguate same-named tables in different schemas.
+      // Store tables for enrichment merging
       this._currentTables = tables.map(t => ({
         ...t,
         type: t.tableType || t.type || '',
@@ -3476,10 +3500,10 @@ class WorkspaceExplorer {
         schemaName: t.schemaName || 'dbo',
       }));
 
-      // Build the schema sections: one collapsible card per schema with its own
-      // table inside. For non-schemas-enabled lakehouses (public REST path) the
-      // backend returns no `schemas` array; we synthesize a single implicit "dbo"
-      // section so the renderer is uniform.
+      // Update stats strip with table count + schema count (rows/size come from enrichment)
+      this._updateStatsStrip(this._currentTables, schemas);
+
+      // Build the schema sections
       this._renderTablesBySchema(tablesEl, this._currentTables, schemas, errors, ws.id, lh.id);
 
       // Insert table filter bar above the schema container
@@ -3490,24 +3514,30 @@ class WorkspaceExplorer {
         th.addEventListener('click', () => this._sortTable(th.dataset.col, tablesEl));
       });
 
-      // Bind table row clicks → inspector. Rows now carry both data-table-name
-      // and data-schema-name so we look up by the (name, schema) pair.
+      // Bind table row clicks → inline detail drawer (replaces inspector)
       tablesEl.querySelectorAll('.ws-table-row[data-table-name]').forEach(row => {
         row.addEventListener('click', () => {
-          tablesEl.querySelectorAll('.ws-table-row').forEach(r => r.classList.remove('selected'));
-          row.classList.add('selected');
           const src = this._currentTables || tables;
           const tbl = src.find(x =>
             x.name === row.dataset.tableName &&
             (x.schemaName || 'dbo') === (row.dataset.schemaName || 'dbo'),
           );
-          if (tbl) this._showTableInspector(tbl);
+          if (tbl) this._toggleTableDrawer(row, tbl);
+        });
+        row.addEventListener('keydown', (ev) => {
+          if (ev.key === 'Enter' || ev.key === ' ') {
+            ev.preventDefault();
+            const src = this._currentTables || tables;
+            const tbl = src.find(x =>
+              x.name === row.dataset.tableName &&
+              (x.schemaName || 'dbo') === (row.dataset.schemaName || 'dbo'),
+            );
+            if (tbl) this._toggleTableDrawer(row, tbl);
+          }
         });
       });
 
-      // Auto-enrich: fetch detailed metadata (type, schema, rowCount, size) in
-      // background. We MUST pass (name, schema) per table — schemas-enabled
-      // lakehouses route batchGetTableDetails through `/schemas/{name}/...`.
+      // Auto-enrich: fetch detailed metadata in background
       if (ws.capacityId && tables.length > 0) {
         const enrichList = this._currentTables.map(t => ({
           name: t.name,
@@ -3518,8 +3548,6 @@ class WorkspaceExplorer {
           .catch(() => this._clearTableShimmer());
 
         // Fetch row count + size for each table via OneLake delta log.
-        // OneLake paths include the schema (`Tables/{schema}/{name}/_delta_log`),
-        // so we MUST pass the schema for non-dbo tables or the backend 502s.
         for (const t of this._currentTables) {
           const schemaName = t.schemaName || 'dbo';
           this._api.getTableStats(ws.id, lh.id, t.name, schemaName)
@@ -3540,8 +3568,8 @@ class WorkspaceExplorer {
                 `.ws-table-row[data-table-name="${CSS.escape(t.name)}"][data-schema-name="${CSS.escape(schemaName)}"]`,
               );
               if (row) {
-                const rowsCell = row.children[3];
-                const sizeCell = row.children[4];
+                const rowsCell = row.querySelector('[data-col="rows"]');
+                const sizeCell = row.querySelector('[data-col="size"]');
                 if (rowsCell && hasRows) {
                   rowsCell.className = 'num';
                   rowsCell.textContent = this._numFmt.format(stats.rowCount);
@@ -3551,8 +3579,10 @@ class WorkspaceExplorer {
                   sizeCell.textContent = this._formatSize(stats.sizeBytes);
                 }
               }
+              // Update stats strip with latest enriched data
+              this._updateStatsStrip(this._currentTables, null);
             })
-            .catch(() => {}); // silently degrade — enrichTableRows already set dashes
+            .catch(() => {}); // silently degrade
         }
       }
     } catch (err) {
@@ -3691,6 +3721,7 @@ class WorkspaceExplorer {
         parts.push('<div class="ws-schema-empty">No tables in this schema</div>');
       } else if (s.tables.length > 0) {
         parts.push('<table class="ws-table"><thead><tr>');
+        parts.push('<th class="ws-th-expand"></th>');
         parts.push('<th class="sortable sorted" data-col="name">Name <span class="sort-icon">\u25B2</span></th>');
         parts.push('<th class="sortable" data-col="type">Type <span class="sort-icon">\u25B2\u25BC</span></th>');
         parts.push('<th class="sortable" data-col="format">Format <span class="sort-icon">\u25B2\u25BC</span></th>');
@@ -3703,12 +3734,13 @@ class WorkspaceExplorer {
           const iconCls = this._tableIconClass(tType);
           const iconChar = this._tableIconChar(tType);
           parts.push(
-            `<tr class="ws-table-row" data-table-name="${this._esc(t.name)}" data-schema-name="${safeName}">` +
+            `<tr class="ws-table-row" data-table-name="${this._esc(t.name)}" data-schema-name="${safeName}" tabindex="0" role="button">` +
+            '<td class="ws-th-expand"><span class="ws-expand-chevron">\u25B8</span></td>' +
             `<td class="ws-table-name"><span class="ws-table-icon ${iconCls}">${iconChar}</span>${this._esc(t.name)}</td>` +
             `<td><span class="ws-type-badge ${iconCls}">${this._esc(this._tableTypeBadge(tType))}</span></td>` +
             `<td>${this._esc(tFormat)}</td>` +
-            '<td class="num">\u2014</td>' +
-            '<td class="num">\u2014</td>' +
+            '<td class="num" data-col="rows">\u2014</td>' +
+            '<td class="num" data-col="size">\u2014</td>' +
             '</tr>',
           );
         }
@@ -3765,6 +3797,195 @@ class WorkspaceExplorer {
   }
 
   // ────────────────────────────────────────────
+  // Lakehouse stats strip + detail drawer
+  // ────────────────────────────────────────────
+
+  /**
+   * Render shimmer or initial stats strip HTML.
+   * @param {Array|null} tables - null = shimmer, [] = zeros
+   * @returns {string} HTML for 4 stat cards
+   */
+  _renderStatsStrip(tables) {
+    const shimmer = tables === null;
+    const numTables = shimmer ? null : tables.length;
+    const schemas = shimmer ? null : new Set(tables.map(t => t.schemaName || 'dbo')).size;
+    const rows = shimmer ? null : tables.reduce((a, t) => a + (t.rowCount || 0), 0);
+    const size = shimmer ? null : tables.reduce((a, t) => a + (t.sizeInBytes || 0), 0);
+
+    const card = (num, label, id) => {
+      const val = num === null
+        ? '<span class="ws-timestamp-shimmer" style="display:inline-block;width:40px;height:18px"></span>'
+        : `<span>${num}</span>`;
+      return `<div class="ws-lh-stat"><div class="ws-lh-stat-num" id="${id}">${val}</div><div class="ws-lh-stat-label">${label}</div></div>`;
+    };
+
+    return card(numTables != null ? numTables : null, 'Tables', 'ws-lh-stat-tables') +
+      card(schemas != null ? schemas : null, 'Schemas', 'ws-lh-stat-schemas') +
+      card(rows != null ? this._numFmt.format(rows) : null, 'Total Rows', 'ws-lh-stat-rows') +
+      card(size != null ? this._formatSize(size) : null, 'Total Size', 'ws-lh-stat-size');
+  }
+
+  /**
+   * Update stats strip with latest data. Called after initial load and after enrichment.
+   * @param {Array} tables - current tables array
+   * @param {Array|null} schemas - schema names array or null to skip updating schemas count
+   */
+  _updateStatsStrip(tables, schemas) {
+    const el = (id) => document.getElementById(id);
+    const tEl = el('ws-lh-stat-tables');
+    const sEl = el('ws-lh-stat-schemas');
+    const rEl = el('ws-lh-stat-rows');
+    const szEl = el('ws-lh-stat-size');
+
+    if (tEl) tEl.textContent = tables.length;
+    if (sEl && schemas !== null) sEl.textContent = new Set(tables.map(t => t.schemaName || 'dbo')).size || schemas.length;
+
+    const totalRows = tables.reduce((a, t) => a + (t.rowCount || 0), 0);
+    const totalSize = tables.reduce((a, t) => a + (t.sizeInBytes || 0), 0);
+    const hasEnriched = tables.some(t => t.rowCount != null || t.sizeInBytes != null);
+
+    if (rEl) {
+      if (hasEnriched) rEl.textContent = this._numFmt.format(totalRows);
+      else rEl.innerHTML = '<span class="ws-timestamp-shimmer" style="display:inline-block;width:40px;height:18px"></span>';
+    }
+    if (szEl) {
+      if (hasEnriched) szEl.textContent = this._formatSize(totalSize);
+      else szEl.innerHTML = '<span class="ws-timestamp-shimmer" style="display:inline-block;width:40px;height:18px"></span>';
+    }
+  }
+
+  /**
+   * Toggle inline detail drawer below a table row.
+   * Only one drawer open at a time. Clicking the same row closes its drawer.
+   * @param {HTMLElement} row - the ws-table-row element
+   * @param {object} table - the table data object
+   */
+  _toggleTableDrawer(row, table) {
+    const key = `${table.schemaName || 'dbo'}::${table.name}`;
+    const existing = row.parentElement?.querySelector('.ws-lh-detail-drawer');
+
+    // Remove any existing open drawer across ALL tables
+    const tablesEl = document.getElementById('ws-tables-list');
+    if (tablesEl) {
+      tablesEl.querySelectorAll('.ws-lh-detail-drawer').forEach(d => d.remove());
+      tablesEl.querySelectorAll('.ws-table-row.expanded').forEach(r => r.classList.remove('expanded'));
+    }
+
+    // If clicking the same row that was open, just close
+    if (this._openDrawerTableKey === key) {
+      this._openDrawerTableKey = null;
+      return;
+    }
+
+    // Mark row as expanded
+    row.classList.add('expanded');
+    this._openDrawerTableKey = key;
+
+    // Create drawer row spanning all columns
+    const drawerTr = document.createElement('tr');
+    drawerTr.className = 'ws-lh-detail-drawer';
+    const colCount = row.children.length;
+    const drawerTd = document.createElement('td');
+    drawerTd.colSpan = colCount;
+
+    // Show shimmer while loading schema
+    const hasSchema = table.schema && table.schema.length > 0;
+    if (!hasSchema) {
+      drawerTd.innerHTML = '<div class="ws-lh-detail-shimmer"><span class="ws-timestamp-shimmer" style="display:inline-block;width:80%;height:14px;margin-bottom:8px"></span><span class="ws-timestamp-shimmer" style="display:inline-block;width:60%;height:14px"></span></div>';
+      drawerTd.innerHTML += this._buildDrawerFooter(table);
+    } else {
+      drawerTd.innerHTML = this._buildDrawerContent(table);
+    }
+
+    drawerTr.appendChild(drawerTd);
+    row.after(drawerTr);
+
+    // If schema not loaded, try to fetch it from enrichment data
+    if (!hasSchema && this._currentTables) {
+      // Schema may arrive later from enrichment; set up a one-shot observer
+      const stored = this._currentTables.find(t =>
+        t.name === table.name && (t.schemaName || 'dbo') === (table.schemaName || 'dbo'));
+      if (stored && stored.schema && stored.schema.length > 0) {
+        drawerTd.innerHTML = this._buildDrawerContent(stored);
+      }
+      // Otherwise it will be populated when enrichment completes
+    }
+  }
+
+  /**
+   * Build the drawer content HTML (table info + column chips).
+   * @param {object} table
+   * @returns {string}
+   */
+  _buildDrawerContent(table) {
+    const tType = table.tableType || table.type || table._enrichedType || '';
+    const tFormat = table.format || table.tableFormat || 'delta';
+    const schemaName = table.schemaName || 'dbo';
+    const location = table.location || '\u2014';
+    const modified = table.lastUpdatedDate ? this._formatDate(table.lastUpdatedDate) : '\u2014';
+
+    let html = '<div class="ws-lh-detail-content">';
+
+    // Left column: Table Info KV
+    html += '<div class="ws-lh-detail-meta">';
+    html += '<div class="ws-lh-detail-meta-title">Table Info</div>';
+    html += '<dl class="ws-lh-detail-kv">';
+    html += `<dt>Name</dt><dd>${this._esc(table.name)}</dd>`;
+    html += `<dt>Type</dt><dd>${this._esc(this._tableTypeBadge(tType))}</dd>`;
+    html += `<dt>Format</dt><dd>${this._esc(tFormat)}</dd>`;
+    html += `<dt>Schema</dt><dd>${this._esc(schemaName)}</dd>`;
+    if (location !== '\u2014') html += `<dt>Location</dt><dd>${this._esc(location)}</dd>`;
+    html += `<dt>Modified</dt><dd>${this._esc(modified)}</dd>`;
+    if (table.rowCount != null) html += `<dt>Rows</dt><dd>${this._numFmt.format(table.rowCount)}</dd>`;
+    if (table.sizeInBytes != null) html += `<dt>Size</dt><dd>${this._formatSize(table.sizeInBytes)}</dd>`;
+    html += '</dl></div>';
+
+    // Right column: Column chips
+    html += '<div class="ws-lh-detail-schema">';
+    const cols = table.schema || [];
+    html += `<div class="ws-lh-detail-schema-title">Columns <span>(${cols.length})</span></div>`;
+    if (cols.length > 0) {
+      html += '<div class="ws-lh-col-grid">';
+      for (const col of cols) {
+        const colName = col.name || col.Name || '';
+        const colType = col.type || col.Type || '';
+        const nullable = col.nullable !== false;
+        html += '<div class="ws-lh-col-chip">';
+        html += `<span class="ws-lh-col-chip-name">${this._esc(colName)}</span>`;
+        html += `<span class="ws-lh-col-chip-type">${this._esc(colType)}</span>`;
+        if (nullable) html += '<span class="ws-lh-col-chip-null" title="Nullable">?</span>';
+        html += '</div>';
+      }
+      html += '</div>';
+    } else {
+      html += '<div style="font-size:var(--text-xs);color:var(--text-muted)">Schema not yet loaded</div>';
+    }
+    html += '</div>';
+
+    html += '</div>'; // /ws-lh-detail-content
+
+    html += this._buildDrawerFooter(table);
+    return html;
+  }
+
+  /**
+   * Build the drawer footer with action buttons.
+   * @param {object} table
+   * @returns {string}
+   */
+  _buildDrawerFooter(table) {
+    const schemaName = table.schemaName || 'dbo';
+    let html = '<div class="ws-lh-detail-footer">';
+    html += `<button class="ws-lh-detail-action" data-action="drawer-ddl" data-table="${this._esc(table.name)}" data-schema="${this._esc(schemaName)}">View DDL</button>`;
+    html += '<span class="ws-lh-detail-sep"></span>';
+    html += `<button class="ws-lh-detail-action" data-action="drawer-sample" data-table="${this._esc(table.name)}" data-schema="${this._esc(schemaName)}">Sample Rows</button>`;
+    html += '<span class="ws-lh-detail-sep"></span>';
+    html += `<button class="ws-lh-detail-action" data-action="drawer-copy-path" data-table="${this._esc(table.name)}" data-schema="${this._esc(schemaName)}">Copy Path</button>`;
+    html += '</div>';
+    return html;
+  }
+
+  // ────────────────────────────────────────────
   // Table sorting (DOM-only, no re-fetch)
   // ────────────────────────────────────────────
 
@@ -3783,7 +4004,7 @@ class WorkspaceExplorer {
       this._tableSortOriginalRows = new Map();
       tables.forEach(tbl => {
         const tb = tbl.querySelector('tbody');
-        if (tb) this._tableSortOriginalRows.set(tb, Array.from(tb.querySelectorAll('tr')));
+        if (tb) this._tableSortOriginalRows.set(tb, Array.from(tb.querySelectorAll('tr.ws-table-row')));
       });
     }
 
@@ -3799,7 +4020,7 @@ class WorkspaceExplorer {
 
     this._tableSort = { col: nextDir ? column : null, dir: nextDir };
 
-    const colIndex = { name: 0, type: 1, format: 2, rows: 3, size: 4 }[column] ?? 0;
+    const colIndex = { name: 1, type: 2, format: 3, rows: 4, size: 5 }[column] ?? 1;
     const isNumeric = column === 'rows' || column === 'size';
 
     // Apply sort to every section's tbody independently.
@@ -3811,7 +4032,7 @@ class WorkspaceExplorer {
         for (const row of snap) tbody.appendChild(row);
         return;
       }
-      const rows = Array.from(tbody.querySelectorAll('tr'));
+      const rows = Array.from(tbody.querySelectorAll('tr.ws-table-row'));
       const mult = nextDir === 'asc' ? 1 : -1;
       rows.sort((a, b) => {
         const aText = (a.children[colIndex]?.textContent || '').trim();
@@ -3951,11 +4172,11 @@ class WorkspaceExplorer {
       const schema = row.dataset.schemaName || 'dbo';
       const detail = detailMap.get(keyOf(schema, name));
 
-      const rowsCell = row.children[3];
-      const sizeCell = row.children[4];
+      const rowsCell = row.querySelector('[data-col="rows"]');
+      const sizeCell = row.querySelector('[data-col="size"]');
 
       if (detail && detail.result) {
-        const typeBadge = row.children[1]?.querySelector('.ws-type-badge');
+        const typeBadge = row.querySelector('.ws-type-badge');
         if (typeBadge && detail.result.type) {
           typeBadge.textContent = this._tableTypeBadge(detail.result.type);
         }
@@ -3970,13 +4191,18 @@ class WorkspaceExplorer {
       }
     });
 
-    // If inspector is showing a table that just got enriched, refresh it
-    const inspNameEl = this._inspectorEl?.querySelector('.ws-insp-kv dd');
-    if (inspNameEl && this._currentTables) {
-      const inspName = inspNameEl.textContent;
-      const enrichedTable = this._currentTables.find(t => t.name === inspName);
+    // Update stats strip with enriched totals
+    if (this._currentTables) {
+      this._updateStatsStrip(this._currentTables, null);
+    }
+
+    // If an inline detail drawer is open, refresh its content with enriched data
+    if (this._openDrawerTableKey && this._currentTables) {
+      const enrichedTable = this._currentTables.find(t =>
+        `${t.schemaName || 'dbo'}::${t.name}` === this._openDrawerTableKey);
       if (enrichedTable && enrichedTable.schema && enrichedTable.schema.length > 0) {
-        this._showTableInspector(enrichedTable);
+        const drawer = tablesEl.querySelector('.ws-lh-detail-drawer td');
+        if (drawer) drawer.innerHTML = this._buildDrawerContent(enrichedTable);
       }
     }
   }
