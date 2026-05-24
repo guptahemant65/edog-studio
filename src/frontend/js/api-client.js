@@ -783,7 +783,7 @@ class FabricApiClient {
     try {
       var url = '/api/flt-proxy' + path;
       var headers = { 'Content-Type': 'application/json' };
-      var resp = await fetch(url, { ...options, headers: headers });
+      var resp = await this._fltFetchWithRetry(url, { ...options, headers: headers });
       if (!resp.ok) {
         console.warn('FLT API error:', resp.status, path);
         return null;
@@ -816,7 +816,7 @@ class FabricApiClient {
       'Content-Type': 'application/json',
       ...options.headers,
     };
-    var resp = await fetch(url, { ...options, headers: headers });
+    var resp = await this._fltFetchWithRetry(url, { ...options, headers: headers });
     if (!resp.ok) {
       var err2 = new Error('FLT API error: ' + resp.status + ' ' + path);
       err2.status = resp.status;
@@ -845,12 +845,41 @@ class FabricApiClient {
     }
     var url = '/api/flt-proxy' + path;
     var headers = { 'Content-Type': 'application/json' };
-    var resp = await fetch(url, { ...options, headers: headers });
+    var resp = await this._fltFetchWithRetry(url, { ...options, headers: headers });
     if (!resp.ok) {
       var err2 = new Error('FLT API error: ' + resp.status + ' ' + path);
       err2.status = resp.status;
       err2.path = path;
       throw err2;
+    }
+    return resp;
+  }
+
+  /**
+   * Shared retry wrapper for FLT proxy calls. Only retries GET requests
+   * on transient HTTP status codes (server errors, rate limits, timeouts).
+   * Non-GET requests and non-transient errors pass through immediately.
+   * @param {string} url - Full URL to fetch.
+   * @param {object} fetchOptions - Options passed to fetch().
+   * @returns {Promise<Response>} The fetch Response (may be non-ok).
+   */
+  async _fltFetchWithRetry(url, fetchOptions) {
+    var method = (fetchOptions.method || 'GET').toUpperCase();
+    var isRetryable = method === 'GET';
+    var maxRetries = isRetryable ? 3 : 0;
+    var TRANSIENT = new Set([408, 429, 500, 502, 503, 504]);
+    var delays = [1000, 2000, 4000];
+
+    for (var attempt = 0; attempt <= maxRetries; attempt++) {
+      var resp = await fetch(url, fetchOptions);
+      if (resp.ok || !TRANSIENT.has(resp.status) || attempt === maxRetries) {
+        return resp;
+      }
+      console.warn(
+        'FLT retry ' + (attempt + 1) + '/' + maxRetries +
+        ' (' + resp.status + ') ' + url.replace('/api/flt-proxy', '')
+      );
+      await new Promise(function(r) { setTimeout(r, delays[attempt]); });
     }
     return resp;
   }

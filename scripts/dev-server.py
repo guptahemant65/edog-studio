@@ -87,6 +87,12 @@ ONELAKE_RESOURCE = "https://storage.azure.com"
 TOKEN_HELPER_CLIENT_ID = "ea0616ba-638b-4df5-95b9-636659ae5121"
 TOKEN_HELPER_AUTHORITY = "https://login.windows-ppe.net/organizations"
 
+
+class CapacityRoutingError(Exception):
+    """Raised when the capacity routing layer is not ready (e.g. LiveTable
+    workload not yet registered, MWC endpoint returns 404).  The deploy
+    warmup loop and proxy handler treat this as a retryable condition."""
+
 # Lock for bearer mint — prevent N parallel mints racing on expiry
 _bearer_mint_lock = threading.Lock()
 # Lock for OneLake bearer mint — prevent N parallel mints racing on cold start
@@ -1104,8 +1110,25 @@ def _get_mwc_token(bearer: str, ws_id: str, artifact_id: str, cap_id: str, workl
     )
 
     ctx = ssl.create_default_context()
-    with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
-        resp_data = json.loads(resp.read())
+    try:
+        with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
+            resp_data = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        err_body = ""
+        with contextlib.suppress(Exception):
+            err_body = e.read().decode("utf-8", errors="replace")[:500]
+        if e.code == 404:
+            raise CapacityRoutingError(
+                f"LiveTable workload not registered on capacity {cap_id}. "
+                f"MWC token endpoint returned 404 EndpointNotFound."
+            ) from e
+        if e.code in (401, 403):
+            raise urllib.error.HTTPError(
+                e.url, e.code,
+                f"Bearer token rejected (HTTP {e.code}) — re-authenticate. {err_body}",
+                e.headers, None,
+            ) from e
+        raise
 
     if not resp_data.get("Token"):
         raise ValueError(f"MWC response missing Token. Keys: {list(resp_data.keys())}")
@@ -2266,6 +2289,82 @@ def _cleanup_devmode_token():
         _deploy_log(f"Token cleanup failed: {e}", "warn")
 
 
+def _warmup_capacity_route(ws_id: str, lh_id: str, cap_id: str, deploy_id: str) -> bool:
+    """Probe the capacity routing layer until LiveTable APIs are reachable.
+
+    After FLT's DevConnection fires, the capacity routing table may take
+    10-60 s to propagate.  This function retries MWC token generation +
+    a lightweight GET through the capacity path, blocking the deploy
+    pipeline until the end-to-end path works (or timeout).
+
+    Returns True if routing was confirmed, False if timeout expired.
+    """
+    deadline = time.time() + 60
+    backoff_seq = [2, 3, 5, 8]  # then 8, 8, 8... until deadline
+    attempt = 0
+
+    while time.time() < deadline:
+        # Bail if deploy was cancelled
+        if _deploy_cancel.is_set():
+            _deploy_log("Warmup cancelled", "warn")
+            return False
+
+        # Bail if FLT process died
+        if _flt_process and _flt_process.poll() is not None:
+            _deploy_log(f"FLT process exited during warmup (code {_flt_process.returncode})", "error")
+            return False
+
+        try:
+            bearer = _ensure_bearer()
+            if not bearer:
+                _deploy_log("Warmup: no bearer token", "warn")
+                break
+
+            # Phase A: MWC token generation (fails with 404 during routing lag)
+            mwc_token, host = _get_mwc_token(
+                bearer, ws_id, lh_id, cap_id, workload_type="LiveTable"
+            )
+
+            # Phase B: Lightweight GET through capacity to verify routing
+            probe_url = (
+                f"{host}/webapi/capacities/{cap_id}/workloads/LiveTable"
+                f"/LiveTableService/automatic"
+                f"/v1/workspaces/{ws_id}/lakehouses/{lh_id}"
+                f"/devmode/edogSessions/list"
+            )
+            req = urllib.request.Request(probe_url, method="GET")
+            req.add_header("Authorization", f"MwcToken {mwc_token}")
+            req.add_header("x-ms-workload-resource-moniker", lh_id)
+            ctx = ssl.create_default_context()
+            with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
+                resp.read()
+
+            _deploy_log(
+                f"Capacity routing confirmed (attempt {attempt + 1})",
+                "success",
+            )
+            return True
+
+        except CapacityRoutingError:
+            phase = "MWC token"
+        except urllib.error.HTTPError as e:
+            phase = f"probe HTTP {e.code}"
+        except Exception as e:
+            phase = str(e)[:80]
+
+        attempt += 1
+        delay = backoff_seq[min(attempt - 1, len(backoff_seq) - 1)]
+        remaining = int(deadline - time.time())
+        _deploy_log(
+            f"Warmup attempt {attempt} failed ({phase}), retrying in {delay}s... ({remaining}s left)",
+            "dim",
+        )
+        time.sleep(delay)
+
+    _deploy_log("Warmup timeout — capacity routing not confirmed within 60s", "warn")
+    return False
+
+
 def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
     """Real deploy pipeline. Runs on background thread."""
     global _flt_process
@@ -2575,6 +2674,14 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
 
         _deploy_log("DevConnection started — service fully deployed!", "success")
 
+        # Step 5: Warmup — verify capacity routing is propagated before
+        # declaring "running". Without this, the frontend fires API calls
+        # into a routing gap (MWC 404 / capacity 400) for 10-60s.
+        if not _deploy_step(5, "Verifying capacity routing...", deploy_id):
+            return
+
+        warmup_ok = _warmup_capacity_route(ws_id, lh_id, cap_id, deploy_id)
+
         # Capture FLT repo git HEAD for the Connected strip (issue: commit info
         # was never populated, so commit SHA/message never showed up in UI).
         git_info = None
@@ -2594,15 +2701,20 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
             target = _studio_state.get("deployTarget") or {}
             if git_info:
                 target.update(git_info)
-            _studio_state.update(
-                {
-                    "phase": "running",
-                    "deployStep": 5,
-                    "deployMessage": "Deploy complete",
-                    "deployTarget": target,
-                }
-            )
-        _deploy_log("Deploy complete!", "success")
+            state_update = {
+                "phase": "running",
+                "deployStep": 6,
+                "deployMessage": "Deploy complete",
+                "deployTarget": target,
+            }
+            if not warmup_ok:
+                state_update["warmupIncomplete"] = True
+                state_update["warmupMessage"] = (
+                    "Capacity route not fully propagated yet. "
+                    "Some FLT APIs may take a few seconds to start working."
+                )
+            _studio_state.update(state_update)
+        _deploy_log("Deploy complete!" + ("" if warmup_ok else " (warmup incomplete)"), "success")
 
         # Start file change detection after successful deploy
         try:
@@ -4049,6 +4161,16 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             # FLT V1 authenticator validates workloadType == "LiveTable" strictly.
             # Using default "Lakehouse" causes 401 on LiveTable controller endpoints.
             mwc_token, host = _get_mwc_token(bearer, ws_id, art_id, cap_id, workload_type="LiveTable")
+        except CapacityRoutingError as e:
+            self._json_response(
+                503,
+                {
+                    "error": "capacity_routing_not_ready",
+                    "retryable": True,
+                    "message": str(e),
+                },
+            )
+            return
         except Exception as e:
             self._json_response(502, {"error": "mwc_token_error", "message": str(e)})
             return
@@ -4090,7 +4212,28 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             err_body = ""
             with contextlib.suppress(Exception):
                 err_body = e.read().decode("utf-8", errors="replace")[:500]
-            self._json_response(e.code, {"error": "flt_proxy_error", "message": str(e), "detail": err_body})
+            # Normalize capacity routing-lag errors to retryable 503.
+            # During the first 10-60s after deploy, the capacity may return
+            # 400/404 with routing-related messages while propagation completes.
+            routing_lag = False
+            if e.code in (400, 404):
+                probe = (err_body + str(e)).lower()
+                routing_lag = any(
+                    s in probe
+                    for s in ("endpointnotfound", "route not found", "workload not registered", "not found")
+                )
+            if routing_lag:
+                self._json_response(
+                    503,
+                    {
+                        "error": "capacity_routing_not_ready",
+                        "retryable": True,
+                        "message": f"Capacity routing not propagated yet (upstream {e.code})",
+                        "detail": err_body,
+                    },
+                )
+            else:
+                self._json_response(e.code, {"error": "flt_proxy_error", "message": str(e), "detail": err_body})
         except Exception as e:
             self._json_response(502, {"error": "flt_proxy_error", "message": str(e)})
 

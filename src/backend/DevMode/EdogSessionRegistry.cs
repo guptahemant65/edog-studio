@@ -64,10 +64,46 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// </summary>
         public static void SetDeploymentContext(string workspaceId, string artifactId)
         {
+            var ws = Sanitize(workspaceId);
+            var art = Sanitize(artifactId);
+
             lock (ContextLock)
             {
-                deployWorkspaceId = Sanitize(workspaceId);
-                deployArtifactId = Sanitize(artifactId);
+                deployWorkspaceId = ws;
+                deployArtifactId = art;
+            }
+
+            // Backfill: any session registered before this call may have
+            // null/empty IDs (race: SignalR connects before RegisterAll).
+            // Atomic replacement — snapshot existing, create new entry.
+            if (string.IsNullOrEmpty(ws) && string.IsNullOrEmpty(art))
+            {
+                return;
+            }
+
+            foreach (var kvp in Sessions)
+            {
+                var old = kvp.Value;
+                var needsWs = string.IsNullOrEmpty(old.WorkspaceId) && !string.IsNullOrEmpty(ws);
+                var needsArt = string.IsNullOrEmpty(old.LakehouseId) && !string.IsNullOrEmpty(art);
+                if (!needsWs && !needsArt)
+                {
+                    continue;
+                }
+
+                var updated = new EdogSessionEntry
+                {
+                    ConnectionId = old.ConnectionId,
+                    Machine = old.Machine,
+                    OsUser = old.OsUser,
+                    LakehouseId = needsArt ? art : old.LakehouseId,
+                    LakehouseName = old.LakehouseName,
+                    WorkspaceId = needsWs ? ws : old.WorkspaceId,
+                    WorkspaceName = old.WorkspaceName,
+                    ConnectedSince = old.ConnectedSince,
+                    LastActivity = old.LastActivity,
+                };
+                Sessions.TryUpdate(kvp.Key, updated, old);
             }
         }
 
