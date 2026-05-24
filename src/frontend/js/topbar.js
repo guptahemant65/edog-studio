@@ -475,13 +475,18 @@ class TopBar {
     var countEl = document.getElementById('ti-count');
     if (countEl) countEl.textContent = this._inspectorTokens.length || '';
 
-    if (!this._inspectorTokens.length) {
+    if (!this._inspectorTokens.length && !(this._inspectorView === 'decode' && this._decodeTarget)) {
       body.innerHTML = this._renderEmptyState();
       return;
     }
 
     if (this._inspectorView === 'decode' && this._decodeTarget) {
       this._renderDecodeView(body);
+      return;
+    }
+
+    if (!this._inspectorTokens.length) {
+      body.innerHTML = this._renderEmptyState();
       return;
     }
 
@@ -543,7 +548,10 @@ class TopBar {
 
   _renderDecodeView(body) {
     var tok = this._decodeTarget;
-    if (!tok) return;
+    if (!tok) {
+      body.innerHTML = '<div class="ti-decode"><div style="color:var(--text-muted);padding:24px;text-align:center">No token selected</div></div>';
+      return;
+    }
 
     var html = '<div class="ti-decode">';
 
