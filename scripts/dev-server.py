@@ -3067,12 +3067,12 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
 
             # Hit the capacity host via the FLT unprotected controller route.
             # EdogSessionController is registered at publicUnprotected/edog/sessions.
+            # publicUnprotected routes do NOT need MWC auth — remove the token.
             target_url = (
                 f"{host}/webapi/capacities/{cap_id}/workloads/LiveTable"
                 f"/LiveTableService/automatic/publicUnprotected/edog/sessions"
             )
             req = urllib.request.Request(target_url, method="GET")
-            req.add_header("Authorization", f"MwcToken {mwc_token}")
             req.add_header("Accept", "application/json")
 
             ctx = ssl.create_default_context()
