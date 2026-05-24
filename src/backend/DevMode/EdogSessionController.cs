@@ -24,7 +24,7 @@ namespace Microsoft.LiveTable.Service.Controllers
     [AuthenticationEngine]
     [EnableCors(PolicyName = CorsPolicies.AllowAllCorsPolicyName)]
     [InitializeCapacityContext]
-    [Route("v1/workspaces/{workspaceId}/lakehouses/{artifactId}/liveTable/edogSessions")]
+    [Route("devmode/edogSessions")]
     [ApiExplorerSettings(IgnoreApi = true)]
     public sealed class EdogSessionController : BaseApiController
     {

@@ -3075,7 +3075,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         try:
             # Probe via flt-proxy — goes through the capacity host with proper
             # MWC auth + moniker headers, same path as all FLT API calls.
-            # Controller route: v1/workspaces/{ws}/lakehouses/{art}/liveTable/edogSessions/list
+            # Controller route: devmode/edogSessions/list
             # flt-proxy auto-prepends the workspace/lakehouse path.
             cfg = {}
             with contextlib.suppress(Exception):
@@ -3105,7 +3105,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             target_url = (
                 f"{host}/webapi/capacities/{cap_id}/workloads/LiveTable"
                 f"/LiveTableService/automatic"
-                f"/v1/workspaces/{ws_id}/lakehouses/{art_id}/liveTable/edogSessions/list"
+                f"/devmode/edogSessions/list"
             )
             req = urllib.request.Request(target_url, method="GET")
             req.add_header("Authorization", f"MwcToken {mwc_token}")
