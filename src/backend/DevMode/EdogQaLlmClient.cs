@@ -117,7 +117,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <summary>Stable cache key for the Analyst's system+schema prefix. The Analyst is the
         /// first pass of the 2-step Analyst→Architect pipeline; its prompt is intentionally
         /// short and observation-only so the prefix caches cleanly across every zone.</summary>
-        internal const string PromptCacheKeyAnalyst = "edog-qa-analyst-v5";
+        internal const string PromptCacheKeyAnalyst = "edog-qa-analyst-v6";
 
         /// <summary>Architect budget. Reasoning tokens are charged against this. 192K is the
         /// T4-D-followup bump — 128K returned status=incomplete on PR-879735 (326KB diff
@@ -2388,6 +2388,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             + "(6) stimuliRequired: the inputs/triggers needed to exercise each codePath. "
             + "Each gets an id ('st-1', 'st-2', ...), a kind (e.g. 'HttpRequest', 'SignalRBroadcast', 'DagTrigger', 'FileEvent', 'TimerTick', 'DiInvocation'), a description, and a toolingHint (concrete shape suggestion the Editor can adapt). "
             + "STIMULUS KIND PREFERENCE: prefer HttpRequest over DiInvocation when the changed code implements an interface that is called by HTTP controllers. Consult available_stimulus_types_from_catalog in ZONE_SUMMARY — if HttpRequest routes exist that exercise the changed service (matching the service name, interface name, or related query/insights endpoints), pick HttpRequest with the concrete API path from the catalog as the toolingHint. DiInvocation is the stimulus of LAST RESORT, used only when no HTTP, SignalR, DAG, or other entry point reaches the changed code. "
+            + "DI INVOCATION SERVICE TYPE: when DiInvocation is necessary, use the INTERFACE name (e.g. 'IQueryService', 'IInsightsQueryService') NOT the concrete class name (e.g. 'SqlEndpointQueryService'). DI containers register services by interface — concrete class names are not directly resolvable. Check the diff's constructor injection sites or DI registrations to find the registered interface. "
             + "(7) observableSignals: the response fields, log lines, telemetry events, SignalR broadcasts, or column projections that prove a behaviour fired. "
             + "Each gets an id ('os-1', 'os-2', ...), a kind (e.g. 'response.field', 'log.entry', 'telemetry.event', 'signalr.broadcast', 'sql.projection'), a description, and a source (the topic/field/event name a matcher would target). "
             + "(8) externalDependencyFailures: I/O dependency failure modes the diff cares about — bad-network, throttled, timeout, partial-response, missing-permission, dependency-down. "

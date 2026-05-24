@@ -1169,14 +1169,60 @@ namespace Microsoft.LiveTable.Service.DevMode
                     };
                 }
 
-                var service = _serviceProvider.GetRequiredService(serviceType);
+                // Try resolving the type directly. If that fails and the
+                // resolved type is a concrete class, try its interfaces —
+                // DI containers register interfaces, but the LLM cites
+                // concrete class names (they're what appear in the diff).
+                object service = null;
+                Type resolvedServiceType = serviceType;
+                try
+                {
+                    service = _serviceProvider.GetRequiredService(serviceType);
+                }
+                catch (InvalidOperationException) when (!serviceType.IsInterface && !serviceType.IsAbstract)
+                {
+                    // Concrete class not registered — try its interfaces
+                    foreach (var iface in serviceType.GetInterfaces())
+                    {
+                        try
+                        {
+                            service = _serviceProvider.GetRequiredService(iface);
+                            resolvedServiceType = iface;
+                            _logger?.LogDebug(
+                                "[QA] DiInvocation: resolved '{Concrete}' via interface '{Interface}'",
+                                spec.ServiceType, iface.Name);
+                            break;
+                        }
+                        catch (InvalidOperationException) { /* try next interface */ }
+                    }
+                }
 
-                // Find the method — handle overloads by matching parameter count
-                var methods = serviceType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
-                    .Where(m => m.Name == spec.Method)
-                    .ToArray();
+                if (service == null)
+                {
+                    return new StimulusResult
+                    {
+                        Success = false,
+                        Error = $"No service for type '{spec.ServiceType}' has been registered.",
+                    };
+                }
 
-                if (methods.Length == 0)
+                // Find the method — search both the resolved service type
+                // (may be an interface) and the actual implementation type.
+                // The LLM cites method names from the diff (concrete class),
+                // but the DI resolution may have landed on an interface.
+                var searchTypes = resolvedServiceType == serviceType
+                    ? new[] { serviceType }
+                    : new[] { resolvedServiceType, serviceType, service.GetType() };
+                MethodInfo[] methods = null;
+                foreach (var st in searchTypes)
+                {
+                    methods = st.GetMethods(BindingFlags.Public | BindingFlags.Instance)
+                        .Where(m => m.Name == spec.Method)
+                        .ToArray();
+                    if (methods.Length > 0) break;
+                }
+
+                if (methods == null || methods.Length == 0)
                 {
                     return new StimulusResult
                     {

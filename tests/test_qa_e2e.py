@@ -713,7 +713,7 @@ def test_qa_llm_client_architect_editor_split_present() -> None:
         "Architect and Editor must declare distinct prompt_cache_key constants "
         "so cache hits are reported per-role (spec §3.4)."
     )
-    assert 'PromptCacheKeyAnalyst = "edog-qa-analyst-v5"' in src, (
+    assert 'PromptCacheKeyAnalyst = "edog-qa-analyst-v6"' in src, (
         "Analyst cache key must bump for the boundary-detail prompt change"
     )
     assert 'PromptCacheKeyArchitect = "edog-qa-architect-v15"' in src, (
