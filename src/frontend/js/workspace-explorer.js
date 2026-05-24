@@ -6416,7 +6416,15 @@ class WorkspaceExplorer {
       workspaceName: target.workspaceName || '',
     };
     try {
-      ws.connection.invoke('EdogIdentify', payload).catch(() => { /* server may not implement yet */ });
+      ws.connection.invoke(
+        'EdogIdentify',
+        payload.machine,
+        payload.osUser,
+        payload.lakehouseId,
+        payload.lakehouseName,
+        payload.workspaceId,
+        payload.workspaceName
+      ).catch(() => { /* server may not implement yet */ });
     } catch (_e) { /* hub method optional */ }
   }
 
