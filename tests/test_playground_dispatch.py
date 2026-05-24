@@ -74,6 +74,7 @@ def patched_environment(srv, *, bearer="fake-bearer", config=None, mwc=("fake-mw
     fake_config_path.read_text.return_value = json.dumps(config)
     with (
         patch.object(srv, "_read_cache", return_value=(bearer, 9999999999)),
+        patch.object(srv, "_ensure_bearer", return_value=(bearer or None)),
         patch.object(srv, "_get_mwc_token", return_value=mwc),
         patch.object(srv, "CONFIG_PATH", fake_config_path),
     ):

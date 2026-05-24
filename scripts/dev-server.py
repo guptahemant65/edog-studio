@@ -1984,17 +1984,57 @@ def _kill_port_listeners(port: int) -> list[int]:
     return killed
 
 
+def _wait_for_port_free(port: int, timeout: float = 10) -> bool:
+    """Poll until no process is LISTENING on ``port``, or timeout.
+
+    Returns True if the port is free, False if timeout elapsed with the
+    port still occupied.  Uses a short polling interval so we proceed as
+    soon as the kernel releases the socket instead of sleeping a fixed
+    arbitrary duration.
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            if sys.platform == "win32":
+                result = subprocess.run(
+                    ["netstat", "-ano", "-p", "TCP"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                listening = any(
+                    parts[3] == "LISTENING" and parts[1].endswith(f":{port}")
+                    for line in result.stdout.splitlines()
+                    if len(parts := line.split()) >= 4 and parts[0] == "TCP"
+                )
+            else:
+                result = subprocess.run(
+                    ["lsof", "-ti", f"tcp:{port}", "-sTCP:LISTEN"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                listening = bool(result.stdout.strip())
+            if not listening:
+                return True
+        except Exception:
+            return True  # Can't check — proceed optimistically
+        time.sleep(0.3)
+    print(f"[port-guard] Port :{port} still occupied after {timeout}s", file=sys.stderr)
+    return False
+
+
 def _drain_flt_stdout(proc, deploy_id):
     """Read FLT process stdout continuously to prevent pipe buffer blocking.
 
     Also captures output as deploy log entries and sets _flt_ready_event
     when the service is fully deployed (DevConnection started).
+
+    Reads until EOF (not until poll() flips) so crash stack traces that
+    are still buffered in the pipe after the process exits are captured.
     """
     try:
-        while proc.poll() is None:
-            line = proc.stdout.readline()
-            if not line:
-                break
+        for line in proc.stdout:
             line = line.rstrip()
             if line:
                 _deploy_log("[FLT] " + line, "info")
@@ -2395,10 +2435,18 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
 
             # Sweep any stale FLT processes from prior dev-server runs or crashes
             # (our own _flt_process tracking only catches FLTs we spawned in this session)
-            stale_killed = _kill_stale_flt_processes(deploy_id=deploy_id)
-            if stale_killed:
-                # Give Windows a moment to release the port handles
-                time.sleep(1)
+            _kill_stale_flt_processes(deploy_id=deploy_id)
+
+            # Always ensure port 5557 is free before launching — even if our
+            # own terminate() handled the old process, the kernel may not have
+            # released the socket yet.  _kill_port_listeners handles that and
+            # sleeps 0.5 s if it kills anything.
+            _kill_port_listeners(FLT_INTERNAL_PORT)
+
+            # Condition-based wait: poll until nothing is LISTENING on the port
+            # (replaces the old arbitrary 1s sleep that was skipped when
+            # stale_killed was empty).
+            _wait_for_port_free(FLT_INTERNAL_PORT, timeout=10)
 
             config = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
             flt_repo = config.get("flt_repo_path", "")
@@ -2465,6 +2513,11 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
                 _studio_state["fltPid"] = _flt_process.pid
                 _studio_state["fltPort"] = FLT_INTERNAL_PORT
 
+            # Clear ready-event BEFORE starting the drain thread — if FLT
+            # boots fast the drain thread may see "DevConnection started" and
+            # set() the event; clearing AFTER would erase that signal (race).
+            _flt_ready_event.clear()
+
             # Drain stdout in background (prevents pipe buffer blocking)
             threading.Thread(target=_drain_flt_stdout, args=(_flt_process, deploy_id), daemon=True).start()
 
@@ -2486,7 +2539,7 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
         # (captured by _drain_flt_stdout which sets _flt_ready_event)
         if not _deploy_step(4, "Waiting for DevMode connection...", deploy_id):
             return
-        _flt_ready_event.clear()
+        # _flt_ready_event was cleared before the drain thread started (above)
         healthy = _flt_ready_event.wait(timeout=180)  # 3 min max
 
         # Check if cancelled or process died while waiting

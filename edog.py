@@ -1953,13 +1953,20 @@ def apply_log_viewer_registration_workloadapp_cs(content):
         replacement_b = (
             "// EDOG DevMode - Re-set Tracer test logger after platform init\n"
             "            // (must run here, after InitializeAsync, so it survives PlatformLogger configuration)\n"
-            "            Microsoft.ServicePlatform.Telemetry.Tracer.SetStructuredTestLogger(\n"
-            "                new Microsoft.LiveTable.Service.DevMode.EdogLogInterceptor(\n"
-            "                    WireUp.Resolve<Microsoft.LiveTable.Service.DevMode.EdogLogServer>()));\n"
+            "            try\n"
+            "            {\n"
+            "                Microsoft.ServicePlatform.Telemetry.Tracer.SetStructuredTestLogger(\n"
+            "                    new Microsoft.LiveTable.Service.DevMode.EdogLogInterceptor(\n"
+            "                        WireUp.Resolve<Microsoft.LiveTable.Service.DevMode.EdogLogServer>()));\n"
             "\n"
-            "            // EDOG DevMode - Register all runtime interceptors (Phase 2)\n"
-            "            // MWC platform services are now resolvable (InitializeAsync just completed).\n"
-            "            Microsoft.LiveTable.Service.DevMode.EdogDevModeRegistrar.RegisterAll();\n"
+            "                // EDOG DevMode - Register all runtime interceptors (Phase 2)\n"
+            "                // MWC platform services are now resolvable (InitializeAsync just completed).\n"
+            "                Microsoft.LiveTable.Service.DevMode.EdogDevModeRegistrar.RegisterAll();\n"
+            "            }\n"
+            "            catch (System.Exception edogEx)\n"
+            "            {\n"
+            "                System.Console.WriteLine($\"[EDOG] DevMode post-init failed (non-fatal): {edogEx.Message}\");\n"
+            "            }\n"
             "\n"
             "            DependencyHandler.Resolve<IReliableOperationsManager>();"
         )
@@ -1996,11 +2003,32 @@ def revert_log_viewer_registration_workloadapp_cs(content):
     constructor anchor) and the current split-anchor format (telemetry at
     constructor anchor, Tracer reset + RegisterAll at the
     post-InitializeAsync anchor) so reverts work on any deployed checkout.
+    Also handles the try/catch wrapped variant introduced to prevent
+    unhandled crash on partial-patch scenarios.
     """
-    # First remove the RegisterAll() block (Phase 2 interceptor registration).
-    # The optional second comment line was added when the patch split moved
-    # this block past WorkloadContextInitializer.InitializeAsync — match it
-    # only when present so legacy single-anchor checkouts still revert.
+    # Try/catch wrapped format (new): remove the entire try/catch block
+    # that wraps SetStructuredTestLogger + RegisterAll.
+    trycatch_pattern = (
+        r"\n\s*// EDOG DevMode - Re-set Tracer test logger after platform init\n"
+        r"\s*//.*\n"
+        r"\s*try\n"
+        r"\s*\{\n"
+        r"\s*Microsoft\.ServicePlatform\.Telemetry\.Tracer\.SetStructuredTestLogger\(\n"
+        r"\s*new Microsoft\.LiveTable\.Service\.DevMode\.EdogLogInterceptor\(\n"
+        r"\s*WireUp\.Resolve<Microsoft\.LiveTable\.Service\.DevMode\.EdogLogServer>\(\)\)\);\n"
+        r"\n?"
+        r"\s*// EDOG DevMode - Register all runtime interceptors \(Phase 2\)\n"
+        r"(?:\s*//.*\n)?"
+        r"\s*Microsoft\.LiveTable\.Service\.DevMode\.EdogDevModeRegistrar\.RegisterAll\(\);\n"
+        r"\s*\}\n"
+        r"\s*catch \(System\.Exception edogEx\)\n"
+        r"\s*\{\n"
+        r"\s*System\.Console\.WriteLine\(\$.*?\);\n"
+        r"\s*\}\n?"
+    )
+    content = re.sub(trycatch_pattern, "\n", content)
+
+    # Legacy bare format: remove RegisterAll block
     registrar_pattern = (
         r"\n\s*// EDOG DevMode - Register all runtime interceptors \(Phase 2\)\n"
         r"(?:\s*//.*\n)?"
@@ -2008,7 +2036,7 @@ def revert_log_viewer_registration_workloadapp_cs(content):
     )
     content = re.sub(registrar_pattern, "", content)
 
-    # Remove the Tracer re-set block (added alongside telemetry interceptor).
+    # Legacy bare format: remove Tracer re-set block
     tracer_pattern = (
         r"\n\s*// EDOG DevMode - Re-set Tracer test logger after platform init\n"
         r"\s*//.*\n"
@@ -2582,11 +2610,13 @@ def apply_all_changes(token, repo_root):
 
     # 4. Register log viewer interceptors (modify Program.cs and WorkloadApp.cs)
     # Program.cs registration
+    program_cs_status = "skipped"
     rel_path = FILES["Program"]
     filepath = repo_root / rel_path
     content = read_file(filepath)
     if content:
         new_content, status = apply_log_viewer_registration_program_cs(content)
+        program_cs_status = status
         if status == "applied":
             original_contents[rel_path] = content
             write_file(filepath, new_content)
@@ -2604,11 +2634,13 @@ def apply_all_changes(token, repo_root):
             warnings.append("⚠️  Log viewer server registration: pattern not found")
 
     # WorkloadApp.cs registration
+    workloadapp_cs_status = "skipped"
     rel_path = FILES["WorkloadApp"]
     filepath = repo_root / rel_path
     content = read_file(filepath)
     if content:
         new_content, status, partial_warnings = apply_log_viewer_registration_workloadapp_cs(content)
+        workloadapp_cs_status = status
         if status == "applied":
             if rel_path not in original_contents:
                 original_contents[rel_path] = content
@@ -2637,6 +2669,18 @@ def apply_all_changes(token, repo_root):
                     warnings.append(w)
             else:
                 warnings.append("⚠️  Log viewer telemetry interceptor: pattern not found")
+
+    # Consistency check: WorkloadApp.cs resolves EdogLogServer which is only
+    # registered by Program.cs. If WorkloadApp was patched but Program.cs
+    # wasn't, FLT will crash at startup with an unhandled resolve failure.
+    program_ok = program_cs_status in ("applied", "already_applied")
+    workloadapp_ok = workloadapp_cs_status in ("applied", "already_applied")
+    if workloadapp_ok and not program_ok:
+        raise RuntimeError(
+            "FATAL: WorkloadApp.cs was patched but Program.cs was not. "
+            "EdogLogServer would not be registered, causing an unhandled "
+            "crash at startup. Aborting deploy — revert and investigate."
+        )
 
     # 4b. Patch DagExecutionHandlerV2.cs to register EDOG DAG hook
     rel_path = FILES["DagExecutionHandlerV2"]
