@@ -11,26 +11,16 @@ namespace Microsoft.LiveTable.Service.DevMode
     using Microsoft.AspNetCore.Cors;
     using Microsoft.AspNetCore.Mvc;
     using Microsoft.Fabric.Platform.AccessProtection.WebApi.Attributes;
-    using Microsoft.LiveTable.Service.SecurityAuditing;
     using Microsoft.MWC.Workload.Client.Library.Controllers;
     using Microsoft.MWC.Workload.Client.Library.Http;
     using Microsoft.ServicePlatform.WebApi.Authentication;
 
     /// <summary>
     /// DevMode-only controller exposing EDOG session registry over the
-    /// capacity host HTTP pipeline. Accessible from any machine that can
-    /// reach the capacity host — enables cross-machine session probing
-    /// for the Session Guard feature (deploy collision detection).
-    ///
-    /// Route: v1/workspaces/{ws}/lakehouses/{art}/edogSessions/list
-    /// Auth: MWC token (standard FLT auth pipeline)
+    /// capacity host HTTP pipeline for cross-machine session probing.
     /// </summary>
     [AuthenticationEngine]
     [EnableCors(PolicyName = CorsPolicies.AllowAllCorsPolicyName)]
-    [SecurityAuditContext(MWCTokenVersion.V1)]
-    [EmitSecurityAuditEventOnException]
-    [ValidateModel]
-    [ResolveTenantIdForFabricAccessProtection]
     [Route("v1/workspaces/{workspaceId}/lakehouses/{artifactId}/edogSessions")]
     [ApiExplorerSettings(IgnoreApi = true)]
     public sealed class EdogSessionController : BaseApiController
