@@ -3072,6 +3072,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 f"{host}/webapi/capacities/{cap_id}/workloads/LiveTable"
                 f"/LiveTableService/automatic/publicUnprotected/edog/sessions"
             )
+            sys.stderr.write(f"[EDOG] session-probe URL: {target_url}\n")
             req = urllib.request.Request(target_url, method="GET")
             req.add_header("Authorization", f"MwcToken {mwc_token}")
             req.add_header("x-ms-workload-resource-moniker", art_id)
