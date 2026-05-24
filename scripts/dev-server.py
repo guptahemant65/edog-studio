@@ -3987,6 +3987,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             if ct:
                 req.add_header("Content-Type", ct)
             req.add_header("Authorization", f"MwcToken {mwc_token}")
+            req.add_header("x-ms-workload-resource-moniker", art_id)
 
             ctx = ssl.create_default_context()
             with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
