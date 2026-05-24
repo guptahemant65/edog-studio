@@ -2647,6 +2647,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_git_diff()
         elif self.path.startswith("/api/edog/git-blame"):
             self._serve_git_blame()
+        elif self.path == "/api/edog/coverage":
+            self._serve_coverage_get()
         elif self.path == "/api/identity":
             self._serve_identity()
         elif self.path.startswith("/api/edog/session-probe"):
@@ -2779,6 +2781,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_auth()
         elif self.path == "/api/edog/repo-scan":
             self._serve_repo_scan()
+        elif self.path == "/api/edog/coverage/run":
+            self._serve_coverage_run()
         elif self.path == "/api/edog/repo-set":
             self._serve_repo_set()
         elif self.path == "/api/edog/feature-flags/overrides":
@@ -3071,7 +3075,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         try:
             # Probe via flt-proxy — goes through the capacity host with proper
             # MWC auth + moniker headers, same path as all FLT API calls.
-            # Controller route: v1/workspaces/{ws}/lakehouses/{art}/edogSessions/list
+            # Controller route: v1/workspaces/{ws}/lakehouses/{art}/liveTable/edogSessions/list
             # flt-proxy auto-prepends the workspace/lakehouse path.
             cfg = {}
             with contextlib.suppress(Exception):
@@ -3101,7 +3105,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             target_url = (
                 f"{host}/webapi/capacities/{cap_id}/workloads/LiveTable"
                 f"/LiveTableService/automatic"
-                f"/v1/workspaces/{ws_id}/lakehouses/{art_id}/edogSessions/list"
+                f"/v1/workspaces/{ws_id}/lakehouses/{art_id}/liveTable/edogSessions/list"
             )
             req = urllib.request.Request(target_url, method="GET")
             req.add_header("Authorization", f"MwcToken {mwc_token}")
@@ -5526,6 +5530,209 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 # Out-of-band line; advance.
                 i += 1
         return out
+
+    # ── Test coverage ────────────────────────────────────────────
+
+    def _find_latest_cobertura(self, repo_root: Path) -> Path | None:
+        results_dir = repo_root / "TestResults"
+        if not results_dir.is_dir():
+            return None
+        latest = None
+        latest_mtime = -1.0
+        for p in results_dir.rglob("coverage.cobertura.xml"):
+            try:
+                m = p.stat().st_mtime
+            except OSError:
+                continue
+            if m > latest_mtime:
+                latest_mtime = m
+                latest = p
+        return latest
+
+    @staticmethod
+    def _parse_cobertura(xml_path: Path, repo_root: Path) -> dict:
+        """Parse a cobertura XML into the diff-modal coverage shape."""
+        import xml.etree.ElementTree as ET
+        tree = ET.parse(xml_path)
+        root = tree.getroot()
+
+        # <sources><source>...</source></sources> — strip these to get repo-relative paths.
+        sources = []
+        for src in root.findall(".//sources/source"):
+            if src.text:
+                s = src.text.replace("\\", "/").rstrip("/")
+                sources.append(s)
+        repo_norm = str(repo_root).replace("\\", "/").rstrip("/")
+        if repo_norm not in sources:
+            sources.append(repo_norm)
+
+        def _to_repo_rel(fname: str) -> str:
+            if not fname:
+                return ""
+            n = fname.replace("\\", "/")
+            for s in sources:
+                if n.lower().startswith(s.lower() + "/"):
+                    return n[len(s) + 1:]
+            # Already relative? Return as-is.
+            if not (len(n) > 1 and n[1] == ":") and not n.startswith("/"):
+                return n
+            return n.rsplit("/", 1)[-1]
+
+        files: dict[str, dict] = {}
+        for cls in root.findall(".//class"):
+            fname = cls.get("filename") or ""
+            rel = _to_repo_rel(fname)
+            if not rel:
+                continue
+            entry = files.setdefault(rel, {"lines": {}, "covered": 0, "total": 0, "pct": 0.0})
+            for line in cls.findall("./lines/line"):
+                num = line.get("number")
+                hits_attr = line.get("hits") or "0"
+                if not num:
+                    continue
+                try:
+                    hits = int(hits_attr)
+                except ValueError:
+                    hits = 0
+                covered = hits > 0
+                prev = entry["lines"].get(num)
+                # If the same line is reported by multiple classes (partials),
+                # collapse to covered if any hits it.
+                if prev is None:
+                    entry["lines"][num] = covered
+                    entry["total"] += 1
+                    if covered:
+                        entry["covered"] += 1
+                elif covered and not prev:
+                    entry["lines"][num] = True
+                    entry["covered"] += 1
+
+        total_covered = 0
+        total_lines = 0
+        for f in files.values():
+            f["pct"] = round((f["covered"] / f["total"]) * 100.0, 1) if f["total"] else 0.0
+            total_covered += f["covered"]
+            total_lines += f["total"]
+        summary = {
+            "covered": total_covered,
+            "total": total_lines,
+            "pct": round((total_covered / total_lines) * 100.0, 1) if total_lines else 0.0,
+        }
+
+        # Index by basename too as a fallback for paths that don't share a sources prefix.
+        basenames: dict[str, str] = {}
+        for path in files:
+            bn = path.rsplit("/", 1)[-1]
+            # Only record unambiguous basenames.
+            if bn in basenames:
+                basenames[bn] = ""
+            else:
+                basenames[bn] = path
+        basenames = {k: v for k, v in basenames.items() if v}
+
+        return {"files": files, "summary": summary, "basenameIndex": basenames}
+
+    def _serve_coverage_get(self):
+        """GET /api/edog/coverage — return latest parsed cobertura coverage (cached)."""
+        cfg = {}
+        with contextlib.suppress(Exception):
+            cfg = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
+        repo_info = get_configured_repo(cfg)
+        if not repo_info or not repo_info.get("valid"):
+            self._json_response(200, {"valid": False, "reason": "no_repo"})
+            return
+        repo_root = Path(repo_info["path"])
+        cobertura = self._find_latest_cobertura(repo_root)
+        if not cobertura:
+            self._json_response(200, {"valid": True, "available": False, "reason": "no_results"})
+            return
+        try:
+            mtime = cobertura.stat().st_mtime
+        except OSError:
+            self._json_response(200, {"valid": True, "available": False, "reason": "stat_failed"})
+            return
+        cache = getattr(self.__class__, "_COV_CACHE", None)
+        if cache is None:
+            cache = {}
+            self.__class__._COV_CACHE = cache
+        key = (str(repo_root), str(cobertura))
+        entry = cache.get(key)
+        if entry and entry.get("mtime") == mtime:
+            data = entry["data"]
+        else:
+            try:
+                data = self._parse_cobertura(cobertura, repo_root)
+            except Exception as e:
+                self._json_response(200, {"valid": True, "available": False, "reason": f"parse_failed:{e}"})
+                return
+            cache[key] = {"mtime": mtime, "data": data}
+        self._json_response(200, {
+            "valid": True,
+            "available": True,
+            "source": str(cobertura.relative_to(repo_root)) if cobertura.is_relative_to(repo_root) else str(cobertura),
+            "generatedAt": int(mtime),
+            "files": data["files"],
+            "summary": data["summary"],
+            "basenameIndex": data.get("basenameIndex", {}),
+        })
+
+    def _serve_coverage_run(self):
+        """POST /api/edog/coverage/run — synchronously run `dotnet test` with coverage."""
+        cfg = {}
+        with contextlib.suppress(Exception):
+            cfg = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
+        repo_info = get_configured_repo(cfg)
+        if not repo_info or not repo_info.get("valid"):
+            self._json_response(200, {"ok": False, "reason": "no_repo"})
+            return
+        repo_root = Path(repo_info["path"])
+        test_proj = repo_root / "test" / "Microsoft.LiveTable.Service.UnitTests"
+        if not test_proj.is_dir():
+            self._json_response(200, {"ok": False, "reason": "test_project_missing", "path": str(test_proj)})
+            return
+        results_dir = repo_root / "TestResults"
+        results_dir.mkdir(exist_ok=True)
+        started = time.time()
+        try:
+            proc = subprocess.run(
+                [
+                    "dotnet", "test",
+                    str(test_proj),
+                    "--collect:XPlat Code Coverage",
+                    "--results-directory", str(results_dir),
+                    "--no-build",
+                    "-q",
+                ],
+                cwd=str(repo_root),
+                capture_output=True,
+                text=True,
+                timeout=600,
+                check=False,
+                encoding="utf-8",
+                errors="replace",
+            )
+        except subprocess.TimeoutExpired:
+            self._json_response(200, {"ok": False, "reason": "timeout", "elapsedSec": round(time.time() - started, 1)})
+            return
+        except (FileNotFoundError, OSError) as e:
+            self._json_response(200, {"ok": False, "reason": f"dotnet_unavailable:{e}"})
+            return
+        elapsed = round(time.time() - started, 1)
+        if proc.returncode != 0:
+            self._json_response(200, {
+                "ok": False,
+                "reason": "test_failed",
+                "exitCode": proc.returncode,
+                "elapsedSec": elapsed,
+                "stderr": (proc.stderr or "")[-2000:],
+                "stdout": (proc.stdout or "")[-2000:],
+            })
+            return
+        # Invalidate cache so the next GET re-parses.
+        cache = getattr(self.__class__, "_COV_CACHE", None)
+        if cache is not None:
+            cache.clear()
+        self._json_response(200, {"ok": True, "elapsedSec": elapsed})
 
     def _serve_repo_scan(self):
         """POST /api/edog/repo-scan — auto-detect FLT repos on disk."""

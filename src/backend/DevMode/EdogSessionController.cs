@@ -34,7 +34,7 @@ namespace Microsoft.LiveTable.Service.Controllers
         itemIdKey: "artifactId",
         TenantIdSource = ContextValueSource.RequestProperties)]
     [InitializeCapacityContext]
-    [Route("v1/workspaces/{workspaceId}/lakehouses/{artifactId}/edogSessions")]
+    [Route("v1/workspaces/{workspaceId}/lakehouses/{artifactId}/liveTable/edogSessions")]
     [ApiExplorerSettings(IgnoreApi = true)]
     public sealed class EdogSessionController : BaseApiController
     {
