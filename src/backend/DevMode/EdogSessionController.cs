@@ -11,6 +11,7 @@ namespace Microsoft.LiveTable.Service.Controllers
     using Microsoft.AspNetCore.Cors;
     using Microsoft.AspNetCore.Mvc;
     using Microsoft.Fabric.Platform.AccessProtection.WebApi.Attributes;
+    using Microsoft.LiveTable.Service.Common.Annotations;
     using Microsoft.LiveTable.Service.DevMode;
     using Microsoft.MWC.Workload.Client.Library.Controllers;
     using Microsoft.MWC.Workload.Client.Library.Http;
@@ -22,6 +23,7 @@ namespace Microsoft.LiveTable.Service.Controllers
     /// </summary>
     [AuthenticationEngine]
     [EnableCors(PolicyName = CorsPolicies.AllowAllCorsPolicyName)]
+    [InitializeCapacityContext]
     [Route("v1/workspaces/{workspaceId}/lakehouses/{artifactId}/edogSessions")]
     [ApiExplorerSettings(IgnoreApi = true)]
     public sealed class EdogSessionController : BaseApiController
