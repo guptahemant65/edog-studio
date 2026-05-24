@@ -1,7 +1,7 @@
 {
   "_meta": {
-    "schemaVersion": 1,
-    "description": "Trusted harness vocabulary catalog mapping topic fields to their known value sets. Injected into the Editor prompt so matchers reference concrete literals (e.g. \"DirectAAD\") instead of placeholder strings like \"string\". Extend additively — never remove entries, since older scenarios may reference them by hash.",
+    "schemaVersion": 2,
+    "description": "Supplemental known-value sets for topic fields. Field names are sourced from EdogQaLlmClient.TopicFieldRegistry (the canonical source of truth). This file adds value enumeration for eval scoring and prompt enrichment. Legacy telemetry.* entries retained for backward compatibility with older scenarios.",
     "owner": "edog-qa"
   },
   "topics": {
@@ -13,41 +13,77 @@
       "type": "string",
       "knownValues": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
     },
-    "telemetry.auth.scheme": {
+    "token.scheme": {
       "type": "string",
       "knownValues": ["obo", "legacy", "DirectAAD", "WSPL"]
     },
-    "telemetry.auth.failureReason": {
+    "token.tokenType": {
       "type": "string",
-      "knownValues": ["OboTokenExpired", "OboClaimsMissing", "OboProviderError", "TokenExtractionFailed", "WSPLUnavailable", "DirectAADRejected"]
+      "knownValues": ["Bearer", "MWC", "S2S"]
+    },
+    "log.level": {
+      "type": "string",
+      "knownValues": ["Trace", "Debug", "Information", "Warning", "Error", "Critical"]
     },
     "log.authMode": {
       "type": "string",
       "knownValues": ["OBO", "DirectAAD", "WSPL"]
     },
+    "flag.result": {
+      "type": "string",
+      "knownValues": ["true", "false", "on", "off"]
+    },
+    "retry.reason": {
+      "type": "string",
+      "knownValues": ["Throttle", "Transient", "ServerError", "Timeout"]
+    },
+    "di.lifetime": {
+      "type": "string",
+      "knownValues": ["Singleton", "Scoped", "Transient"]
+    },
+    "cache.operation": {
+      "type": "string",
+      "knownValues": ["Get", "Set", "Remove", "Expire"]
+    },
+    "telemetry.auth.scheme": {
+      "type": "string",
+      "knownValues": ["obo", "legacy", "DirectAAD", "WSPL"],
+      "_legacy": true
+    },
+    "telemetry.auth.failureReason": {
+      "type": "string",
+      "knownValues": ["OboTokenExpired", "OboClaimsMissing", "OboProviderError", "TokenExtractionFailed", "WSPLUnavailable", "DirectAADRejected"],
+      "_legacy": true
+    },
     "telemetry.obo.tokenAcquired": {
       "type": "boolean",
-      "knownValues": [true, false]
+      "knownValues": [true, false],
+      "_legacy": true
     },
     "telemetry.obo.cacheHit": {
       "type": "boolean",
-      "knownValues": [true, false]
+      "knownValues": [true, false],
+      "_legacy": true
     },
     "telemetry.sqlEndpoint.connectionEstablished": {
       "type": "boolean",
-      "knownValues": [true, false]
+      "knownValues": [true, false],
+      "_legacy": true
     },
     "telemetry.insights.queryKind": {
       "type": "string",
-      "knownValues": ["summary", "table", "dataQualityReport"]
+      "knownValues": ["summary", "table", "dataQualityReport"],
+      "_legacy": true
     },
     "telemetry.flag.evaluated": {
       "type": "boolean",
-      "knownValues": [true, false]
+      "knownValues": [true, false],
+      "_legacy": true
     },
     "telemetry.flag.value": {
       "type": "string",
-      "knownValues": ["true", "false", "on", "off"]
+      "knownValues": ["true", "false", "on", "off"],
+      "_legacy": true
     }
   }
 }

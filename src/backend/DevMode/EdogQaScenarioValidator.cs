@@ -846,6 +846,23 @@ namespace Microsoft.LiveTable.Service.DevMode
                         });
                     }
 
+                    // Field-level validation: check full topicField against canonical registry
+                    if (!string.IsNullOrWhiteSpace(matcher.TopicField)
+                        && !EdogQaLlmClient.AllValidTopicFields.Contains(matcher.TopicField))
+                    {
+                        var fieldTopic = ExtractMatcherTopic(matcher.TopicField);
+                        if (EdogQaLlmClient.WellModeledTopics.Contains(fieldTopic))
+                        {
+                            sink.Add(new QuarantineReason
+                            {
+                                Code = CodeTopicUnknown,
+                                Message = $"Matcher topicField '{matcher.TopicField}' is not a valid field for topic '{fieldTopic}'. Valid fields: {string.Join(", ", EdogQaLlmClient.TopicFieldRegistry.GetValueOrDefault(fieldTopic, Array.Empty<string>()))}.",
+                                FieldPath = $"{pathPrefix}.topicField",
+                            });
+                        }
+                        // else: under-modeled topic — skip field validation (catalog incomplete)
+                    }
+
                     if (hasGroundingClaim && (matcherTopicHashes == null || matcherTopicHashes.Count == 0))
                     {
                         sink.Add(new QuarantineReason
