@@ -113,6 +113,9 @@ namespace Microsoft.LiveTable.Service.DevMode
                         }
                     }
 
+                    // Seed deployment context so ALL Register() calls auto-fill IDs
+                    EdogSessionRegistry.SetDeploymentContext(workspaceId, artifactId);
+
                     // Seed capacity info so probe response includes it
                     if (!string.IsNullOrEmpty(capacityId))
                     {

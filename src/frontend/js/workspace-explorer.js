@@ -6401,41 +6401,23 @@ class WorkspaceExplorer {
   /**
    * Invoke the EdogIdentify hub RPC so the server registers this session
    * (osUser, machine, lakehouseId, etc.) for collision detection.
-   * Falls back to /api/flt/config for workspace/lakehouse IDs when
-   * deployTarget isn't populated yet.
+   * Sends whatever the client knows — the server auto-fills empty IDs
+   * from its own deployment context (edog-config.json).
    */
-  async _sendEdogIdentify() {
+  _sendEdogIdentify() {
     const ws = window.edogWs;
     if (!ws || !ws.connection) return;
     const ident = this._edogIdentity || {};
     const target = (window.edogStudioStatus && window.edogStudioStatus.deployTarget) || {};
-
-    let workspaceId = target.workspaceId || '';
-    let artifactId = target.artifactId || '';
-    let lakehouseName = target.lakehouseName || '';
-    let workspaceName = target.workspaceName || '';
-
-    // Fallback: read from /api/flt/config if deployTarget is empty
-    if (!workspaceId || !artifactId) {
-      try {
-        const resp = await fetch('/api/flt/config');
-        if (resp.ok) {
-          const cfg = await resp.json();
-          workspaceId = workspaceId || cfg.workspaceId || '';
-          artifactId = artifactId || cfg.artifactId || '';
-        }
-      } catch (_e) { /* config endpoint optional */ }
-    }
-
     try {
       ws.connection.invoke(
         'EdogIdentify',
         ident.machine || '',
         ident.osUser || '',
-        artifactId,
-        lakehouseName,
-        workspaceId,
-        workspaceName
+        target.artifactId || '',
+        target.lakehouseName || '',
+        target.workspaceId || '',
+        target.workspaceName || ''
       ).catch(() => { /* server may not implement yet */ });
     } catch (_e) { /* hub method optional */ }
   }

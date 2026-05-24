@@ -38,7 +38,9 @@ namespace Microsoft.LiveTable.Service.DevMode
         private static string capacityId;
         private static string capacityName;
         private static string capacitySku;
-        private static readonly object CapacityLock = new object();
+        private static string deployWorkspaceId;
+        private static string deployArtifactId;
+        private static readonly object ContextLock = new object();
 
         /// <summary>
         /// Set once at host startup (or lazily by the API handler) with the
@@ -46,11 +48,26 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// </summary>
         public static void SetCapacityInfo(string id, string name, string sku)
         {
-            lock (CapacityLock)
+            lock (ContextLock)
             {
                 capacityId = Sanitize(id);
                 capacityName = Sanitize(name);
                 capacitySku = Sanitize(sku);
+            }
+        }
+
+        /// <summary>
+        /// Store the deployment context (workspace + artifact) so that every
+        /// <see cref="Register"/> call can auto-fill empty IDs. Called once
+        /// from <see cref="EdogDevModeRegistrar.RegisterAll"/> after reading
+        /// edog-config.json. Safe to call multiple times — last write wins.
+        /// </summary>
+        public static void SetDeploymentContext(string workspaceId, string artifactId)
+        {
+            lock (ContextLock)
+            {
+                deployWorkspaceId = Sanitize(workspaceId);
+                deployArtifactId = Sanitize(artifactId);
             }
         }
 
@@ -75,6 +92,16 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             try
             {
+                // Auto-fill empty workspace/artifact from deployment context
+                // so callers don't need to know about the config source.
+                string fillWs;
+                string fillArt;
+                lock (ContextLock)
+                {
+                    fillWs = deployWorkspaceId;
+                    fillArt = deployArtifactId;
+                }
+
                 var now = DateTime.UtcNow;
                 var existing = Sessions.TryGetValue(connectionId, out var prior) ? prior : null;
                 var entry = new EdogSessionEntry
@@ -82,9 +109,9 @@ namespace Microsoft.LiveTable.Service.DevMode
                     ConnectionId = connectionId,
                     Machine = Sanitize(machine),
                     OsUser = Sanitize(osUser),
-                    LakehouseId = Sanitize(lakehouseId),
+                    LakehouseId = string.IsNullOrEmpty(lakehouseId) ? fillArt : Sanitize(lakehouseId),
                     LakehouseName = Sanitize(lakehouseName),
-                    WorkspaceId = Sanitize(workspaceId),
+                    WorkspaceId = string.IsNullOrEmpty(workspaceId) ? fillWs : Sanitize(workspaceId),
                     WorkspaceName = Sanitize(workspaceName),
                     ConnectedSince = existing?.ConnectedSince ?? now,
                     LastActivity = now,
@@ -181,7 +208,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 string id;
                 string name;
                 string sku;
-                lock (CapacityLock)
+                lock (ContextLock)
                 {
                     id = capacityId;
                     name = capacityName;
