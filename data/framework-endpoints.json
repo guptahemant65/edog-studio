@@ -61,7 +61,8 @@
         "MitmResumeBreakpoint",
         "MitmClearAll",
         "MitmToggleInterception",
-        "MitmSendToPlayground"
+        "MitmSendToPlayground",
+        "SubscribeToTopic"
       ]
     }
   ]

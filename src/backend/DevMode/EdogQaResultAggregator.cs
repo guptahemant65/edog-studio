@@ -412,7 +412,8 @@ namespace Microsoft.LiveTable.Service.DevMode
         {
             var failures = result.Scenarios
                 .Where(s => s.Verdict != ScenarioVerdict.Passed
-                         && s.Verdict != ScenarioVerdict.Skipped)
+                         && s.Verdict != ScenarioVerdict.Skipped
+                         && s.Verdict != ScenarioVerdict.Inconclusive)
                 .OrderBy(s => s.Verdict switch
                 {
                     ScenarioVerdict.Crashed  => 0,
@@ -463,7 +464,12 @@ namespace Microsoft.LiveTable.Service.DevMode
             sb.AppendLine("**What failed:**");
             foreach (var exp in scenario.Expectations)
             {
-                var icon = exp.Status == ExpectationStatus.Passed ? "●" : "✕";
+                var icon = exp.Status switch
+                {
+                    ExpectationStatus.Passed       => "●",
+                    ExpectationStatus.Inconclusive => "◆",
+                    _                              => "✕"
+                };
                 sb.AppendLine($"- {icon} {exp.ExpectationId}: {EscapeMarkdown(exp.Description)}");
                 if (exp.Status == ExpectationStatus.Failed)
                 {
@@ -485,7 +491,12 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             foreach (var exp in scenario.Expectations)
             {
-                var icon = exp.Status == ExpectationStatus.Passed ? "● PASS" : "● UNMATCHED";
+                var icon = exp.Status switch
+                {
+                    ExpectationStatus.Passed       => "● PASS",
+                    ExpectationStatus.Inconclusive => "◆ INCONCLUSIVE",
+                    _                              => "● UNMATCHED"
+                };
                 sb.AppendLine($"- {exp.ExpectationId}: {icon} — {EscapeMarkdown(exp.Description)}");
             }
             sb.AppendLine();
@@ -545,7 +556,8 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             var failures = result.Scenarios
                 .Where(s => s.Verdict != ScenarioVerdict.Passed
-                         && s.Verdict != ScenarioVerdict.Skipped)
+                         && s.Verdict != ScenarioVerdict.Skipped
+                         && s.Verdict != ScenarioVerdict.Inconclusive)
                 .Take(5)
                 .ToList();
 
@@ -666,8 +678,9 @@ namespace Microsoft.LiveTable.Service.DevMode
             ScenarioVerdict.TimedOut  => "● TIMEOUT",
             ScenarioVerdict.Partial   => "● PARTIAL",
             ScenarioVerdict.Crashed   => "● CRASH",
-            ScenarioVerdict.Skipped   => "● SKIP",
-            _                         => "● UNKNOWN"
+            ScenarioVerdict.Skipped       => "● SKIP",
+            ScenarioVerdict.Inconclusive  => "◆ INCONCLUSIVE",
+            _                             => "● UNKNOWN"
         };
 
         private static string FormatDuration(long ms)
