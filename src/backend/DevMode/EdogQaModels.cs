@@ -152,7 +152,8 @@ namespace Microsoft.LiveTable.Service.DevMode
         Passed,
         Failed,
         Unmatched,
-        Skipped
+        Skipped,
+        Inconclusive
     }
 
     /// <summary>
@@ -716,6 +717,14 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         /// <summary>Human-readable description of what this expectation verifies.</summary>
         public string Description { get; set; }
+
+        /// <summary>
+        /// True when the legacy matcher was produced from typed matchers but all
+        /// assertions were unsupported (ContainsAll/OneOf/Length/NotEquals), resulting
+        /// in an all-null LegacyMatcher that would match everything. The execution
+        /// engine short-circuits these to Inconclusive instead of evaluating them.
+        /// </summary>
+        public bool VacuousLegacy { get; set; }
     }
 
     /// <summary>
