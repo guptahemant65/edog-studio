@@ -112,7 +112,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         internal const string PromptCacheKeyArchitect = "edog-qa-architect-v15";
 
         /// <summary>Stable cache key for the Editor's system+schema prefix. Bumped to v14 alongside the structural-fixes drop (kind/literal matcher schema, featureFlagOverrides field, topic-vocabulary injection). v16: adds required stimulusId field + STIMULUS ASSIGNMENT prompt block so scenarios mechanically pick distinct stimuli from testingGuidance.stimuliRequired (LNT009 fix).</summary>
-        internal const string PromptCacheKeyEditor = "edog-qa-editor-v21";
+        internal const string PromptCacheKeyEditor = "edog-qa-editor-v22";
 
         /// <summary>Stable cache key for the Analyst's system+schema prefix. The Analyst is the
         /// first pass of the 2-step Analyst→Architect pipeline; its prompt is intentionally
@@ -2507,6 +2507,10 @@ namespace Microsoft.LiveTable.Service.DevMode
             + "{\"kind\":\"length_bound\",\"min\":1,\"max\":null} for Length. "
             + "The `literal` / `items` / `expected` / `min` / `max` fields ARE the concrete payload. NEVER put the variant name in the payload slot — emitting `{\"kind\":\"string_literal\",\"literal\":\"string\"}` is the placeholder failure mode this schema redesign exists to prevent. Use the TOPIC VOCABULARY block above to pick concrete literals (e.g. `\"DirectAAD\"`, not `\"string\"`; `200`, not `\"integer\"`). "
             + "MATCHER LITERAL HYGIENE (LNT011): matcher string literals must be atomic contract values — identifiers, enum names, status codes. NEVER use log message fragments (e.g. 'direct token (no OBO)'), regex patterns (e.g. '.*auth.*'), or format templates (e.g. '{0} seconds'). If the observable signal is a log line, match on the structured field value (e.g. 'DirectAAD'), not the human-readable message text. "
+            + "TOPIC FIELD GROUNDING (HARD REQUIREMENT — the assertion engine resolves topicField paths against captured event data): "
+            + "the user message contains a TOPIC FIELD SCHEMA block listing every field each topic interceptor publishes. Your matcher topicField MUST be '<topic>.<fieldName>' where fieldName is from that schema. "
+            + "DO NOT invent field names — 'token.oboAcquired' does not exist; use 'token.tokenType' or 'token.audience'. 'http.authMode' does not exist; use 'http.statusCode' or 'http.url'. "
+            + "For log-based assertions, use 'log.message' with a ContainsAll or Equals matcher on a substring of the expected log line. "
             + "WORKED MATCHER EXAMPLE — for an OBO-token acquisition assertion, emit: expectations=[{\"type\":\"EventPresent\",\"topic\":\"token\",\"matcherSpec\":\"{\\\"topicField\\\":\\\"token.oboAcquired\\\",\\\"assertion\\\":\\\"Exists\\\",\\\"value\\\":{\\\"kind\\\":\\\"exists\\\",\\\"expected\\\":true}}\",\"rationale\":\"OBO token acquired on the new flag-on branch\"}] AND matchers=[{\"topicField\":\"token.oboAcquired\",\"assertion\":\"Exists\",\"value\":{\"kind\":\"exists\",\"expected\":true}}]. Note: matchers[] is populated, matcherSpec parses as JSON, and the two are byte-equivalent. "
             + "CRITICAL: stimulusSpec and matcherSpec use DOUBLE QUOTES for JSON. Single quotes are invalid JSON and will be rejected by the projector. "
             + "VERB SELECTION GUIDE (the validator's match key is (category, verb, line-overlap); a wrong verb produces a false-negative match against curator-graded gold-corpus expectations). "
@@ -2720,6 +2724,21 @@ namespace Microsoft.LiveTable.Service.DevMode
                 sb.AppendLine("Cite the inv-* IDs in each scenario's invariantsAddressed array when the scenario exercises that boundary/error/constant.");
                 sb.AppendLine("---END CODE INVARIANTS---");
             }
+
+            // Topic field schema: tells the Editor what fields actually exist
+            // on each interceptor's published events, so matcher topicField
+            // paths resolve at execution time instead of hallucinating fields.
+            sb.AppendLine("---BEGIN TOPIC FIELD SCHEMA (trusted harness context — use ONLY these fields in matcher topicField)---");
+            sb.AppendLine("http: method, url, statusCode, durationMs, requestHeaders, responseHeaders, responseBodyPreview, requestBodyPreview, requestSizeBytes, responseSizeBytes, httpClientName, correlationId");
+            sb.AppendLine("token: tokenType, scheme, audience, expiryUtc, issuedUtc, httpClientName, endpoint, claims");
+            sb.AppendLine("retry: endpoint, statusCode, retryAttempt, totalAttempts, waitDurationMs, strategyName, reason, isThrottle, retryAfterMs, iterationId");
+            sb.AppendLine("log: message, level, category, exception, timestamp, iterationId, correlationId (structured log entries — field names match the FLT logger output)");
+            sb.AppendLine("flag: flagName, tenantId, capacityId, workspaceId, result, durationMs, overridden, caller");
+            sb.AppendLine("di: serviceType, implementationType, lifetime, isIntercepted");
+            sb.AppendLine("perf: marker, durationMs, caller, context");
+            sb.AppendLine("cache: key, operation, hit, sizeBytes, ttlMs");
+            sb.AppendLine("RULE: matcher topicField MUST be '<topic>.<field>' where <field> is one of the fields listed above. Example: http.statusCode, token.tokenType, retry.retryAttempt, log.message, flag.result. Do NOT invent fields — if the assertion cannot be expressed with these fields, use the Exists assertion on the topic root.");
+            sb.AppendLine("---END TOPIC FIELD SCHEMA---");
 
             // F27 P11: the testingGuidance projections now live on the Analyst payload,
             // not on the Architect plan. Surface them to the Editor verbatim so the

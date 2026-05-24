@@ -719,7 +719,7 @@ def test_qa_llm_client_architect_editor_split_present() -> None:
     assert 'PromptCacheKeyArchitect = "edog-qa-architect-v15"' in src, (
         "Architect cache key must bump for DIFF_FILES + sketch-ref contract changes"
     )
-    assert 'PromptCacheKeyEditor = "edog-qa-editor-v21"' in src, (
+    assert 'PromptCacheKeyEditor = "edog-qa-editor-v22"' in src, (
         "Editor cache key must bump for the semantic-contract + stimulus-uniqueness guidance"
     )
     assert 'ArchitectReasoningEffort = "high"' in src, "Architect must default to reasoning.effort=high (spec §3.1)."
