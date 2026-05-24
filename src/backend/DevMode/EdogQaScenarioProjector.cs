@@ -646,7 +646,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             List<EdogQaScenarioValidator.QuarantineReason> reasons)
         {
             var spec = new HttpRequestSpec();
-            if (TryGetString(root, "path", out var path)) spec.Path = path;
+            if (TryGetString(root, "path", out var path)) spec.Path = NormalizeHttpPath(path);
             else
             {
                 reasons.Add(MakeReason(CodeStimulusSpecMissingField, "stimulusSpec.path", null,
@@ -664,10 +664,54 @@ namespace Microsoft.LiveTable.Service.DevMode
                 foreach (var h in headers.EnumerateObject())
                 {
                     if (h.Value.ValueKind == JsonValueKind.String)
+                    {
+                        // Strip fake auth headers the LLM generates —
+                        // the flt-proxy handles real authentication.
+                        if (string.Equals(h.Name, "Authorization", StringComparison.OrdinalIgnoreCase))
+                            continue;
                         spec.Headers[h.Name] = h.Value.GetString();
+                    }
                 }
             }
             return spec;
+        }
+
+        /// <summary>
+        /// Normalizes LLM-generated HTTP paths to controller-relative form.
+        /// Strips /v1/workspaces/{id}/lakehouses/{id} prefixes, zero-GUIDs,
+        /// placeholder GUIDs (11111111-..., 22222222-...), and template vars.
+        /// Output: /liveTable/insights/summary (what the flt-proxy expects).
+        /// </summary>
+        private static string NormalizeHttpPath(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return path;
+
+            // Fast path: already controller-relative
+            var controllerPrefixes = new[] { "/liveTable", "/liveTableSchedule", "/liveTableMaintanance" };
+            if (path.StartsWith("/liveTable", StringComparison.OrdinalIgnoreCase))
+                return path;
+
+            // Strip /v1/workspaces/{id}/lakehouses/{id} prefix by finding
+            // the first known controller segment
+            foreach (var prefix in controllerPrefixes)
+            {
+                var idx = path.IndexOf(prefix, StringComparison.OrdinalIgnoreCase);
+                if (idx >= 0)
+                    return path.Substring(idx);
+            }
+
+            // Fallback: strip /v1/workspaces/.../lakehouses/.../ generically
+            var lakehouseIdx = path.IndexOf("/lakehouses/", StringComparison.OrdinalIgnoreCase);
+            if (lakehouseIdx >= 0)
+            {
+                // Skip past /lakehouses/{guid-or-template}/
+                var afterLh = lakehouseIdx + 12; // "/lakehouses/"
+                var nextSlash = path.IndexOf('/', afterLh);
+                if (nextSlash > 0)
+                    return path.Substring(nextSlash);
+            }
+
+            return path;
         }
 
         private static SignalRBroadcastSpec ProjectSignalRBroadcast(
