@@ -167,7 +167,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// </summary>
         public static bool Satisfies(JsonElement root, LegacyMatcher matcher)
         {
-            if (matcher == null) return true;
+            if (matcher == null) return false;
 
             if (matcher.Exact != null)
             {
@@ -242,7 +242,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             LegacyMatcher matcher,
             IReadOnlyDictionary<string, Regex> regexCache)
         {
-            if (matcher == null) return true;
+            if (matcher == null) return false;
 
             if (matcher.Exact != null)
             {
@@ -358,7 +358,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// </summary>
         public static string[] IdentifyFailedPredicates(JsonElement root, LegacyMatcher matcher)
         {
-            if (matcher == null) return Array.Empty<string>();
+            if (matcher == null) return new[] { "vacuous: matcher is null — no assertions to evaluate" };
             var failed = new List<string>();
 
             if (matcher.Exact != null)
@@ -544,7 +544,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 }
             }
 
-            return totalPredicates == 0 ? 1.0 : totalScore / totalPredicates;
+            return totalPredicates == 0 ? 0.0 : totalScore / totalPredicates;
         }
     }
 
@@ -638,7 +638,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <summary>Describe a matcher in human-readable form.</summary>
         public static string DescribeMatcher(LegacyMatcher m)
         {
-            if (m == null) return "(any event)";
+            if (m == null) return "(vacuous — no assertions)";
             var parts = new List<string>();
 
             if (m.Exact != null)
@@ -661,7 +661,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 foreach (var f in m.Exists)
                     parts.Add($"{f} exists");
 
-            return parts.Count > 0 ? string.Join(" AND ", parts) : "(any event)";
+            return parts.Count > 0 ? string.Join(" AND ", parts) : "(vacuous — no assertions)";
         }
 
         private static string DescribeMatchedFields(TopicEvent evt, LegacyMatcher matcher)
@@ -682,7 +682,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 parts.Add(resolved != null ? $"{field}={resolved.Value}" : $"{field}=(missing)");
             }
 
-            return parts.Count > 0 ? string.Join(", ", parts) : "(empty matcher)";
+            return parts.Count > 0 ? string.Join(", ", parts) : "(vacuous — no assertions)";
         }
 
         private static string FormatCount(CountSpec c)
