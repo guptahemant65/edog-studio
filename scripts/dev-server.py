@@ -3089,7 +3089,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 self._json_response(200, {"available": True, "sessions": [], "reason": "no_config"})
                 return
 
-            bearer, _ = _read_cache(BEARER_CACHE)
+            bearer = _ensure_bearer()
             if not bearer:
                 self._json_response(200, {"available": True, "sessions": [], "reason": "no_bearer"})
                 return
@@ -3114,7 +3114,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
 
             ctx = ssl.create_default_context()
             try:
-                with urllib.request.urlopen(req, timeout=3.0, context=ctx) as resp:
+                with urllib.request.urlopen(req, timeout=8.0, context=ctx) as resp:
                     body = resp.read(65536)
                     try:
                         payload = json.loads(body.decode("utf-8", errors="replace"))
