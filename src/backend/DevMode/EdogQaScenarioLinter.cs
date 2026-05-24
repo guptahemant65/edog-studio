@@ -616,7 +616,17 @@ namespace Microsoft.LiveTable.Service.DevMode
                 case StimulusType.DiInvocation:
                     var di = stim.DiInvocation;
                     if (di?.Method == null) return null;
-                    return $"direct|{di.ServiceType}|{di.Method}|{ShortHash(JsonSerialize(di.Args))}{flagSuffix}";
+                    // DiInvocation is a unit-test entry point: multiple scenarios
+                    // exercise the same method with different mock states. Include
+                    // the Analyst-assigned stimulusId (st-N) in the key so
+                    // scenarios using different declared stimuli are distinct,
+                    // while scenarios sharing a stimulusId (same entry point,
+                    // different error modes via mocking) are also distinguished
+                    // by their stimulus ID assignment.
+                    var stimIdSuffix = !string.IsNullOrEmpty(scenario.StimulusId)
+                        ? $"|sid:{scenario.StimulusId}"
+                        : string.Empty;
+                    return $"direct|{di.ServiceType}|{di.Method}|{ShortHash(JsonSerialize(di.Args))}{flagSuffix}{stimIdSuffix}";
                 default:
                     return null;
             }

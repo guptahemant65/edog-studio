@@ -616,7 +616,9 @@ namespace Microsoft.LiveTable.Service.DevMode
                     GeneratedAt = DateTimeOffset.UtcNow,
                 },
                 GroundingEvidence = grounding,
-                InvariantsAddressed = new List<string>(),
+                InvariantsAddressed = src.InvariantsAddressed != null && src.InvariantsAddressed.Count > 0
+                    ? new List<string>(src.InvariantsAddressed)
+                    : new List<string>(),
                 FeatureFlagOverrides = flagOverridesProjected,
                 StimulusId = src.StimulusId,
             };

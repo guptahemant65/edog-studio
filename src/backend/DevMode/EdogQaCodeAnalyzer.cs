@@ -1732,6 +1732,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 FewShotExemplarsText = fewShotText,
                 CatalogReferenceJson = catalogRefJson,
                 Catalog = catalogSnapshot,
+                InvariantsSummary = BuildInvariantsSummary(prContext?.Invariants),
             }).ToArray();
 
             var result = await orchestrator.RunAsync(inputs, config, progress: null, cancellationToken).ConfigureAwait(false);
@@ -1963,6 +1964,22 @@ namespace Microsoft.LiveTable.Service.DevMode
                     if (title.Length > 200) title = title.Substring(0, 200) + "…";
                     sb.Append("  - AB#").Append(wi.Id).Append(": ").AppendLine(title);
                 }
+            }
+            return sb.ToString().TrimEnd();
+        }
+
+        /// <summary>Render a compact invariant list for the Editor context.
+        /// One line per invariant: "inv-ID (kind symbol)". Capped at 80
+        /// entries to keep prompt size bounded.</summary>
+        internal static string BuildInvariantsSummary(List<CodeInvariant> invariants)
+        {
+            if (invariants == null || invariants.Count == 0) return string.Empty;
+            var sb = new System.Text.StringBuilder();
+            foreach (var inv in invariants.Take(80))
+            {
+                if (inv == null || string.IsNullOrEmpty(inv.Id)) continue;
+                var symbol = inv.Symbol ?? inv.Predicate ?? string.Empty;
+                sb.Append(inv.Id).Append(" (").Append(inv.Kind).Append(' ').Append(symbol).AppendLine(")");
             }
             return sb.ToString().TrimEnd();
         }

@@ -112,7 +112,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         internal const string PromptCacheKeyArchitect = "edog-qa-architect-v15";
 
         /// <summary>Stable cache key for the Editor's system+schema prefix. Bumped to v14 alongside the structural-fixes drop (kind/literal matcher schema, featureFlagOverrides field, topic-vocabulary injection). v16: adds required stimulusId field + STIMULUS ASSIGNMENT prompt block so scenarios mechanically pick distinct stimuli from testingGuidance.stimuliRequired (LNT009 fix).</summary>
-        internal const string PromptCacheKeyEditor = "edog-qa-editor-v19";
+        internal const string PromptCacheKeyEditor = "edog-qa-editor-v20";
 
         /// <summary>Stable cache key for the Analyst's system+schema prefix. The Analyst is the
         /// first pass of the 2-step Analyst→Architect pipeline; its prompt is intentionally
@@ -268,6 +268,11 @@ namespace Microsoft.LiveTable.Service.DevMode
             /// contains catalogSnapshotId, filtered slots (slotId, kind, slotHash, purpose),
             /// and topicFieldHashes so the Editor can emit valid catalogHashes.</summary>
             public string CatalogReferenceJson { get; set; }
+
+            /// <summary>Compact invariant list injected into the Editor context so
+            /// scenarios can cite invariant IDs in invariantsAddressed. Format:
+            /// one line per invariant: "inv-ID (kind symbol)".</summary>
+            public string InvariantsSummary { get; set; }
         }
 
         /// <summary>
@@ -499,6 +504,11 @@ namespace Microsoft.LiveTable.Service.DevMode
             /// in the run — not just described in the title.
             /// </summary>
             public List<FlagOverride> FeatureFlagOverrides { get; set; } = new();
+
+            /// <summary>Invariant IDs (inv-*) from the CODE INVARIANTS block that
+            /// this scenario covers. Populated by the Editor when invariant context
+            /// is present; consumed by the linter (LNT002) via the projector.</summary>
+            public List<string> InvariantsAddressed { get; set; } = new();
         }
 
         /// <summary>Editor-emitted feature flag override entry (structural-fix #2). Schema-strict: both fields required, both strings.</summary>
@@ -1421,7 +1431,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     "stimulusId",
                     "expectations", "matchers", "timeoutMs",
                     "catalogHashes", "groundingEvidenceRefs", "confidence", "originalIndex",
-                    "sketchId", "featureFlagOverrides",
+                    "sketchId", "featureFlagOverrides", "invariantsAddressed",
                 },
                 ["properties"] = new Dictionary<string, object>
                 {
@@ -1521,6 +1531,12 @@ namespace Microsoft.LiveTable.Service.DevMode
                                 ["value"] = new Dictionary<string, object> { ["type"] = "string" },
                             },
                         },
+                    },
+                    ["invariantsAddressed"] = new Dictionary<string, object>
+                    {
+                        ["type"] = "array",
+                        ["items"] = new Dictionary<string, object> { ["type"] = "string" },
+                        ["description"] = "Invariant IDs (inv-*) from the CODE INVARIANTS block that this scenario covers. Include every invariant whose boundary/error/constant this scenario exercises.",
                     },
                 },
             };
@@ -2519,6 +2535,10 @@ namespace Microsoft.LiveTable.Service.DevMode
             + "Performance = latency/throughput/memory bound assertion. "
             + "CATEGORY SEMANTIC CONTRACTS (the linter enforces these; violations become warnings): "
             + "Counterfactual technique → MUST include ≥1 EventAbsent expectation. A counterfactual proves something does NOT happen; without EventAbsent it is meaningless (LNT007). "
+            + "WORKED COUNTERFACTUAL EXAMPLE — sketch says 'WSPL precedence overrides OBO selection' (Counterfactual): "
+            + "emit expectations=[{\"type\":\"EventAbsent\",\"topic\":\"token\",\"matcherSpec\":\"{\\\"topicField\\\":\\\"token.oboConsumed\\\",\\\"assertion\\\":\\\"Exists\\\",\\\"value\\\":{\\\"kind\\\":\\\"exists\\\",\\\"expected\\\":true}}\",\"rationale\":\"OBO token must NOT be consumed when WSPL is active\"}] "
+            + "AND matchers=[{\"topicField\":\"token.oboConsumed\",\"assertion\":\"Exists\",\"value\":{\"kind\":\"exists\",\"expected\":true}}]. "
+            + "The EventAbsent verb is what makes this a counterfactual — it asserts the OBO path does NOT fire. Without EventAbsent, this would just be another happy-path check, defeating the counterfactual intent. "
             + "BoundaryTriplet technique → the batch should contain ≥3 scenarios sharing a boundary invariant: at-boundary, below-boundary, above-boundary (LNT006). "
             + "TruthTable technique → cover all flag/parameter combinations from the Architect's featureFlagMatrix rows (LNT010). "
             + "STIMULUS UNIQUENESS RULE (LNT009 — the linter hashes method+path+body+featureFlagOverrides to detect duplicates): "
@@ -2549,7 +2569,14 @@ namespace Microsoft.LiveTable.Service.DevMode
             + "TESTING-GUIDANCE TEXT IS DIAGNOSTIC CONTEXT, NOT MATCHER COPY: descriptive sentences inside testingGuidance (codePaths[].description, observableSignals[].description, etc.) are guidance for picking the right typed matcher — they are NEVER copied verbatim into matcherSpec or matchers[]. Always structure them as typed matchers per the MATCHERS CONTRACT above. "
             + "CATALOG HASHES: the projector fills catalogHashes automatically from the runtime catalog. "
             + "Leave catalogSnapshotId as an empty string and matcherTopicHashes as an empty array — "
-            + "the projector will populate them after projection.";
+            + "the projector will populate them after projection."
+            + " "
+            + "INVARIANTS ADDRESSED: if a CODE INVARIANTS block is present in the user message, populate "
+            + "each scenario's invariantsAddressed array with the inv-* IDs the scenario exercises. "
+            + "A scenario that tests a comparison predicate (e.g. seconds <= 0) cites the matching inv-comparison_predicate-* ID. "
+            + "A scenario that tests a numeric constant boundary (e.g. DefaultMaxRetryAttempts) cites the matching inv-numeric_constant-* ID. "
+            + "A scenario that triggers an explicit error (e.g. UnauthorizedAccessException) cites the matching inv-explicit_error-* ID. "
+            + "Empty array when no invariants block is present or no invariants match.";
 
         private static string BuildAnalystUserMessage(ZoneContext zone)
         {
@@ -2680,6 +2707,17 @@ namespace Microsoft.LiveTable.Service.DevMode
                 sb.AppendLine("---BEGIN TOPIC VOCABULARY (trusted harness context)---");
                 sb.AppendLine(topicVocabularyJson);
                 sb.AppendLine("---END TOPIC VOCABULARY---");
+            }
+
+            // Inject invariant IDs so the Editor can populate invariantsAddressed.
+            // Without this, LNT002 finds all invariants uncovered because the LLM
+            // never sees the inv-* IDs it needs to cite.
+            if (!string.IsNullOrWhiteSpace(zone.InvariantsSummary))
+            {
+                sb.AppendLine("---BEGIN CODE INVARIANTS (trusted harness context)---");
+                sb.AppendLine(zone.InvariantsSummary);
+                sb.AppendLine("Cite the inv-* IDs in each scenario's invariantsAddressed array when the scenario exercises that boundary/error/constant.");
+                sb.AppendLine("---END CODE INVARIANTS---");
             }
 
             // F27 P11: the testingGuidance projections now live on the Analyst payload,

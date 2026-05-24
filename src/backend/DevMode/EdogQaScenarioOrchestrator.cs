@@ -276,6 +276,10 @@ namespace Microsoft.LiveTable.Service.DevMode
             /// harness fixture).
             /// </summary>
             public string PrIntentSummary { get; set; }
+
+            /// <summary>Compact invariant list for the Editor so it can populate
+            /// invariantsAddressed. One line per invariant: "inv-ID (kind symbol)".</summary>
+            public string InvariantsSummary { get; set; }
         }
 
         // ── Output ─────────────────────────────────────────────────────
@@ -976,6 +980,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     CatalogReferenceJson = zoneInput.CatalogReferenceJson ?? string.Empty,
                     TestDiff = zoneInput.TestDiff ?? string.Empty,
                     PrIntentSummary = zoneInput.PrIntentSummary ?? string.Empty,
+                    InvariantsSummary = zoneInput.InvariantsSummary ?? string.Empty,
                 };
 
                 // ── Step 1: Analyst (observation only, non-fatal on failure) ──
@@ -1679,10 +1684,16 @@ namespace Microsoft.LiveTable.Service.DevMode
                     }
                 }
 
+                // ── Branch C: lint-triggered repair ─────────────────
+                // Separate budget from validator repair: lint repair fires
+                // even if validator repair already consumed RepairAttempts.
+                // Capped at 1 lint repair pass to avoid cost blow-up.
+                var alreadyLintRepaired = zr.RepairBranch != null
+                    && zr.RepairBranch.Contains("lint_findings");
                 if (config.EnableRepairLoop
                     && zr.Accepted.Count > 0
-                    && zr.RepairAttempts < ComputeMaxRepairPasses(config.ReachableSlotCount)
                     && !isBudgetTripped()
+                    && !alreadyLintRepaired
                     && (config.EditorRepairOverride != null || config.Editor != null))
                 {
                     var lintRepairItems = QuickLintAccepted(zr.Accepted);
@@ -2093,7 +2104,12 @@ namespace Microsoft.LiveTable.Service.DevMode
                         var diArgsHash = root.TryGetProperty("args", out var diArgs)
                             ? ShortHash(CanonicalJson(diArgs))
                             : ShortHash(string.Empty);
-                        return $"direct|{serviceType}|{diMethod}|{diArgsHash}{flagSuffix}";
+                        // Include stimulusId so different st-N assignments
+                        // make DiInvocation scenarios distinct
+                        var stimIdTag = !string.IsNullOrEmpty(scenario.StimulusId)
+                            ? $"|sid:{scenario.StimulusId}"
+                            : string.Empty;
+                        return $"direct|{serviceType}|{diMethod}|{diArgsHash}{flagSuffix}{stimIdTag}";
                     default:
                         return null;
                 }
