@@ -954,10 +954,19 @@ class TopBar {
                 '<span class="gd-branch-name">\u2014</span>' +
               '</span>' +
               '<span class="gd-stats" id="gd-stats">' +
-                '<span class="gd-stat-files"><span id="gd-stat-files-n">0</span> files</span>' +
-                '<span class="gd-stat-sep">\u00B7</span>' +
-                '<span class="gd-stat-add">+<span id="gd-stat-add-n">0</span></span>' +
-                '<span class="gd-stat-del">\u2212<span id="gd-stat-del-n">0</span></span>' +
+                '<span class="gd-stat-your" id="gd-stat-your">' +
+                  '<span class="gd-stat-your-label">Your</span>' +
+                  '<span class="gd-stat-your-files"><span id="gd-stat-your-files-n">0</span> files</span>' +
+                  '<span class="gd-stat-sep">\u00B7</span>' +
+                  '<span class="gd-stat-add">+<span id="gd-stat-your-add-n">0</span></span>' +
+                  '<span class="gd-stat-del">\u2212<span id="gd-stat-your-del-n">0</span></span>' +
+                '</span>' +
+                '<span class="gd-stat-divider" id="gd-stat-divider">\u2502</span>' +
+                '<span class="gd-stat-edog" id="gd-stat-edog">' +
+                  '<span class="gd-stat-edog-label">EDOG</span>' +
+                  '<span class="gd-stat-edog-files"><span id="gd-stat-edog-files-n">0</span> files</span>' +
+                  '<span class="gd-stat-edog-vis" id="gd-stat-edog-vis">(hidden)</span>' +
+                '</span>' +
               '</span>' +
             '</div>' +
           '</div>' +
@@ -968,17 +977,48 @@ class TopBar {
             '<input type="search" id="gd-search-input" class="gd-search-input" placeholder="Search diff\u2026" spellcheck="false" autocomplete="off" />' +
             '<span class="gd-search-count" id="gd-search-count"></span>' +
           '</div>' +
+          '<button class="gd-btn gd-btn-toggle" id="gd-toggle-edog" title="Toggle EDOG patch visibility (e)" aria-pressed="false">' +
+            '<svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8s-2.5 4.5-6.5 4.5S1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/></svg>' +
+            '<span class="gd-btn-label" id="gd-toggle-edog-label">Show EDOG</span>' +
+          '</button>' +
+          '<button class="gd-btn gd-btn-toggle" id="gd-toggle-split" title="Toggle split / unified view (s)" aria-pressed="false">' +
+            '<svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M8 2.5v11"/></svg>' +
+            '<span class="gd-btn-label" id="gd-toggle-split-label">Split</span>' +
+          '</button>' +
+          '<button class="gd-btn" id="gd-copy-clean-btn" title="Copy diff with EDOG patches stripped">' +
+            '<svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 3l10 10M13 3L3 13"/></svg>' +
+            '<span class="gd-btn-label">Copy Clean</span>' +
+          '</button>' +
+          '<button class="gd-btn" id="gd-save-patch-btn" title="Download as .patch file">' +
+            '<svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 1.5v9M4.5 7L8 10.5 11.5 7M2.5 13.5h11"/></svg>' +
+            '<span class="gd-btn-label">Save .patch</span>' +
+          '</button>' +
           '<button class="gd-btn" id="gd-copy-btn" title="Copy full unified diff">' +
             '<svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4.5" y="4.5" width="9" height="9" rx="1.5"/><path d="M11.5 4.5V3a1.5 1.5 0 00-1.5-1.5H3A1.5 1.5 0 001.5 3v7A1.5 1.5 0 003 11.5h1.5"/></svg>' +
             '<span class="gd-btn-label">Copy diff</span>' +
           '</button>' +
+          '<button class="gd-btn gd-btn-icon" id="gd-help-btn" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">?</button>' +
           '<button class="gd-close" id="gd-close-btn" aria-label="Close" title="Close (Esc)">\u2715</button>' +
         '</div>' +
       '</div>' +
       '<div class="gd-content">' +
         '<aside class="gd-sidebar" id="gd-sidebar">' +
-          '<div class="gd-sidebar-title">Files</div>' +
-          '<div class="gd-sidebar-list" id="gd-sidebar-list"></div>' +
+          '<div class="gd-sidebar-section gd-sidebar-section-your" id="gd-side-your">' +
+            '<div class="gd-sidebar-title">' +
+              '<span class="gd-side-caret">\u25BE</span>' +
+              '<span>Your Changes</span>' +
+              '<span class="gd-side-count" id="gd-side-your-count">0</span>' +
+            '</div>' +
+            '<div class="gd-sidebar-list" id="gd-sidebar-list-your"></div>' +
+          '</div>' +
+          '<div class="gd-sidebar-section gd-sidebar-section-edog collapsed" id="gd-side-edog" hidden>' +
+            '<div class="gd-sidebar-title gd-sidebar-title-edog">' +
+              '<span class="gd-side-caret">\u25B8</span>' +
+              '<span>EDOG Patches</span>' +
+              '<span class="gd-side-count" id="gd-side-edog-count">0</span>' +
+            '</div>' +
+            '<div class="gd-sidebar-list" id="gd-sidebar-list-edog"></div>' +
+          '</div>' +
         '</aside>' +
         '<main class="gd-main" id="gd-main">' +
           '<div class="gd-empty">Loading\u2026</div>' +
@@ -991,11 +1031,30 @@ class TopBar {
     this._gitDiffData = null;
     this._gitDiffParsed = null;
     this._gitDiffSearchTerm = '';
+    this._gitDiffShowEdog = false;
+    this._gitDiffSplitView = false;
+    this._gitDiffActiveIdx = 0;
+    this._gitDiffActiveHunkIdx = 0;
 
     var self = this;
     overlay.addEventListener('click', function() { self._closeGitDiff(); });
     el.querySelector('#gd-close-btn').addEventListener('click', function() { self._closeGitDiff(); });
     el.querySelector('#gd-copy-btn').addEventListener('click', function() { self._copyGitDiff(); });
+    el.querySelector('#gd-copy-clean-btn').addEventListener('click', function() { self._copyCleanGitDiff(); });
+    el.querySelector('#gd-save-patch-btn').addEventListener('click', function() { self._saveGitDiffPatch(); });
+    el.querySelector('#gd-toggle-edog').addEventListener('click', function() { self._toggleEdogVisibility(); });
+    el.querySelector('#gd-toggle-split').addEventListener('click', function() { self._toggleSplitView(); });
+    el.querySelector('#gd-help-btn').addEventListener('click', function() { self._toggleGdHelp(); });
+
+    // Sidebar section header collapse (Your/EDOG)
+    el.querySelectorAll('.gd-sidebar-section .gd-sidebar-title').forEach(function(title) {
+      title.addEventListener('click', function() {
+        var section = title.parentElement;
+        section.classList.toggle('collapsed');
+        var caret = title.querySelector('.gd-side-caret');
+        if (caret) caret.textContent = section.classList.contains('collapsed') ? '\u25B8' : '\u25BE';
+      });
+    });
 
     var searchInput = el.querySelector('#gd-search-input');
     searchInput.addEventListener('input', function() {
@@ -1005,19 +1064,37 @@ class TopBar {
 
     this._gitDiffEscHandler = function(e) {
       if (!self._gitDiffEl || !self._gitDiffEl.classList.contains('open')) return;
+      // Don't intercept shortcuts when typing in the search box (except Esc).
+      var inSearch = (document.activeElement === searchInput);
       if (e.key === 'Escape') {
-        // If search has focus and has text, clear it first; otherwise close.
-        if (document.activeElement === searchInput && searchInput.value) {
+        // If help overlay is open, close it first.
+        if (self._gitDiffHelpOpen) { self._toggleGdHelp(false); return; }
+        if (inSearch && searchInput.value) {
           searchInput.value = '';
           self._gitDiffSearchTerm = '';
           self._applyGitDiffSearch();
         } else {
           self._closeGitDiff();
         }
-      } else if ((e.key === 'f' || e.key === 'F') && (e.ctrlKey || e.metaKey)) {
+        return;
+      }
+      if ((e.key === 'f' || e.key === 'F') && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         searchInput.focus();
         searchInput.select();
+        return;
+      }
+      if (inSearch) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      switch (e.key) {
+        case 'j': e.preventDefault(); self._gdNavFile(1); break;
+        case 'k': e.preventDefault(); self._gdNavFile(-1); break;
+        case 'n': e.preventDefault(); self._gdNavHunk(1); break;
+        case 'p': e.preventDefault(); self._gdNavHunk(-1); break;
+        case 'c': e.preventDefault(); self._gdToggleCurrentFile(); break;
+        case 'e': e.preventDefault(); self._toggleEdogVisibility(); break;
+        case 's': e.preventDefault(); self._toggleSplitView(); break;
+        case '?': e.preventDefault(); self._toggleGdHelp(); break;
       }
     };
     document.addEventListener('keydown', this._gitDiffEscHandler);
@@ -1041,9 +1118,11 @@ class TopBar {
     this._gitDiffEl.classList.add('open');
     this._gitDiffOverlay.classList.add('open');
     var main = document.getElementById('gd-main');
-    var sidebarList = document.getElementById('gd-sidebar-list');
+    var listYour = document.getElementById('gd-sidebar-list-your');
+    var listEdog = document.getElementById('gd-sidebar-list-edog');
     if (main) main.innerHTML = '<div class="gd-empty">' + this._gdSpinner() + '<div>Loading git changes\u2026</div></div>';
-    if (sidebarList) sidebarList.innerHTML = '';
+    if (listYour) listYour.innerHTML = '';
+    if (listEdog) listEdog.innerHTML = '';
     try {
       var resp = await fetch('/api/edog/git-diff');
       if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -1163,16 +1242,18 @@ class TopBar {
 
   _renderGitDiff(data) {
     var main = document.getElementById('gd-main');
-    var sidebarList = document.getElementById('gd-sidebar-list');
+    var listYour = document.getElementById('gd-sidebar-list-your');
+    var listEdog = document.getElementById('gd-sidebar-list-edog');
     var branchChip = document.getElementById('gd-branch');
     var branchName = branchChip ? branchChip.querySelector('.gd-branch-name') : null;
-    if (!main || !sidebarList) return;
+    if (!main || !listYour || !listEdog) return;
 
     if (!data || !data.valid) {
       if (branchName) branchName.textContent = '\u2014';
-      this._updateStatsBar(0, 0, 0);
+      this._updateStatsBar(0, 0, 0, 0);
       main.innerHTML = this._renderEmptyClean('No FLT repo configured.');
-      sidebarList.innerHTML = '';
+      listYour.innerHTML = '';
+      listEdog.innerHTML = '';
       return;
     }
 
@@ -1180,11 +1261,29 @@ class TopBar {
 
     var stagedFiles = this._parseUnifiedDiff(data.stagedDiff || '', 'staged');
     var unstagedFiles = this._parseUnifiedDiff(data.diff || '', 'unstaged');
-
-    // Merge: if a path appears in both, show two entries (staged + unstaged) — git semantics.
     var diffFiles = unstagedFiles.concat(stagedFiles);
 
-    // Add untracked files from porcelain that have no diff entry.
+    // Build the EDOG-path set from the backend (preferred) plus a regex fallback.
+    var edogSet = {};
+    if (Array.isArray(data.edogFiles)) {
+      data.edogFiles.forEach(function(p) { edogSet[p] = true; });
+    }
+    var edogBasenames = {
+      'GTSBasedSparkClient.cs': 1, 'Program.cs': 1, 'WorkloadApp.cs': 1,
+      'DagExecutionHandlerV2.cs': 1, 'ParametersManifest.json': 1, 'Test.json': 1,
+      'LiveTableController.cs': 1, 'LiveTableSchedulerRunController.cs': 1,
+      'CustomLiveTableTelemetryReporter.cs': 1,
+    };
+    var isEdogPath = function(p) {
+      if (!p) return false;
+      var norm = p.replace(/\\/g, '/');
+      if (edogSet[p] || edogSet[norm]) return true;
+      if (norm.indexOf('/DevMode/') !== -1 || norm.indexOf('DevMode/') === 0) return true;
+      var base = norm.split('/').pop();
+      return !!edogBasenames[base];
+    };
+
+    // Untracked from porcelain
     var porcelain = Array.isArray(data.files) ? data.files : [];
     var seen = {};
     diffFiles.forEach(function(f) { seen[f.path] = true; });
@@ -1192,66 +1291,92 @@ class TopBar {
     porcelain.forEach(function(p) {
       if (p.status === '?' && !seen[p.path]) {
         untracked.push({
-          source: 'untracked',
-          path: p.path,
-          oldPath: p.path,
-          newPath: p.path,
-          isNew: true,
-          isDeleted: false,
-          isBinary: false,
-          additions: 0,
-          deletions: 0,
-          hunks: [],
+          source: 'untracked', path: p.path, oldPath: p.path, newPath: p.path,
+          isNew: true, isDeleted: false, isBinary: false,
+          additions: 0, deletions: 0, hunks: [],
         });
       }
     });
     var allFiles = diffFiles.concat(untracked);
+    allFiles.forEach(function(f) { f.isEdog = isEdogPath(f.path); });
 
-    var totalAdd = 0, totalDel = 0;
-    allFiles.forEach(function(f) { totalAdd += f.additions; totalDel += f.deletions; });
-    this._updateStatsBar(allFiles.length, totalAdd, totalDel);
+    var yourFiles = allFiles.filter(function(f) { return !f.isEdog; });
+    var edogFiles = allFiles.filter(function(f) { return f.isEdog; });
+
+    var yourAdd = 0, yourDel = 0;
+    yourFiles.forEach(function(f) { yourAdd += f.additions; yourDel += f.deletions; });
+    this._updateStatsBar(yourFiles.length, yourAdd, yourDel, edogFiles.length);
 
     this._gitDiffParsed = allFiles;
+    this._gitDiffYourFiles = yourFiles;
+    this._gitDiffEdogFiles = edogFiles;
 
     if (!allFiles.length) {
       main.innerHTML = this._renderEmptyClean('Working tree clean');
-      sidebarList.innerHTML = '';
+      listYour.innerHTML = '';
+      listEdog.innerHTML = '';
+      this._updateEdogSectionVisibility();
       return;
     }
 
-    // Sidebar: file cards
-    var sidebarHtml = '';
-    for (var i = 0; i < allFiles.length; i++) {
-      sidebarHtml += this._renderFileCard(allFiles[i], i);
+    // Sidebar: build per-section markup. Index passed is the global index in allFiles.
+    var youHtml = '';
+    for (var yi = 0; yi < yourFiles.length; yi++) {
+      var gIdx = allFiles.indexOf(yourFiles[yi]);
+      youHtml += this._renderFileCard(yourFiles[yi], gIdx);
     }
-    sidebarList.innerHTML = sidebarHtml;
+    listYour.innerHTML = youHtml || '<div class="gd-side-empty">No non-EDOG changes</div>';
+    var sideYourCount = document.getElementById('gd-side-your-count');
+    if (sideYourCount) sideYourCount.textContent = yourFiles.length;
 
-    // Main: per-file diff sections
-    var mainHtml = '';
-    for (var j = 0; j < allFiles.length; j++) {
-      mainHtml += this._renderFileDiffSection(allFiles[j], j);
+    var edogHtml = '';
+    for (var ei = 0; ei < edogFiles.length; ei++) {
+      var gIdx2 = allFiles.indexOf(edogFiles[ei]);
+      edogHtml += this._renderFileCard(edogFiles[ei], gIdx2);
     }
+    listEdog.innerHTML = edogHtml;
+    var sideEdogCount = document.getElementById('gd-side-edog-count');
+    if (sideEdogCount) sideEdogCount.textContent = edogFiles.length;
+
+    // Main: per-file diff sections — render in two groups too so EDOG sections can be hidden as a block.
+    var mainHtml = '<div class="gd-main-group gd-main-group-your" id="gd-main-your">';
+    for (var j = 0; j < yourFiles.length; j++) {
+      var gj = allFiles.indexOf(yourFiles[j]);
+      mainHtml += this._renderFileDiffSection(yourFiles[j], gj);
+    }
+    mainHtml += '</div>';
+    mainHtml += '<div class="gd-main-group gd-main-group-edog" id="gd-main-edog">';
+    if (edogFiles.length) {
+      mainHtml += '<div class="gd-edog-banner">EDOG-owned patches \u2014 these files implement EDOG itself. Use "Copy Clean" to exclude them from a shareable diff.</div>';
+    }
+    for (var k = 0; k < edogFiles.length; k++) {
+      var gk = allFiles.indexOf(edogFiles[k]);
+      mainHtml += this._renderFileDiffSection(edogFiles[k], gk);
+    }
+    mainHtml += '</div>';
     main.innerHTML = mainHtml;
 
     var self = this;
 
-    // File card click → scroll to section + select
-    sidebarList.querySelectorAll('.gd-file-card').forEach(function(card) {
+    // File card click → scroll + select
+    var allCards = this._gitDiffEl.querySelectorAll('.gd-file-card');
+    allCards.forEach(function(card) {
       card.addEventListener('click', function() {
         var idx = card.getAttribute('data-idx');
-        sidebarList.querySelectorAll('.gd-file-card').forEach(function(c) { c.classList.remove('selected'); });
+        allCards.forEach(function(c) { c.classList.remove('selected'); });
         card.classList.add('selected');
         var target = main.querySelector('.gd-file-section[data-idx="' + idx + '"]');
         if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        self._gitDiffActiveIdx = parseInt(idx, 10);
+        self._gitDiffActiveHunkIdx = 0;
       });
     });
 
-    // Collapse/expand on file section header click
+    // Collapse/expand sections
     main.querySelectorAll('.gd-file-section').forEach(function(section) {
       var hdr = section.querySelector('.gd-file-section-header');
       var caret = hdr.querySelector('.gd-caret');
       hdr.addEventListener('click', function(e) {
-        // Don't toggle when clicking the copy button
         if (e.target.closest('.gd-file-copy-btn')) return;
         section.classList.toggle('collapsed');
         if (caret) caret.textContent = section.classList.contains('collapsed') ? '\u25B8' : '\u25BE';
@@ -1266,16 +1391,18 @@ class TopBar {
       }
     });
 
-    // IntersectionObserver: highlight active card while scrolling
+    // IntersectionObserver for scrolling
     if ('IntersectionObserver' in window) {
+      if (this._gitDiffObserver) { try { this._gitDiffObserver.disconnect(); } catch (_e) {} }
       var sections = main.querySelectorAll('.gd-file-section');
       var io = new IntersectionObserver(function(entries) {
         entries.forEach(function(entry) {
           if (entry.isIntersecting && entry.intersectionRatio > 0.25) {
             var idx = entry.target.getAttribute('data-idx');
-            sidebarList.querySelectorAll('.gd-file-card').forEach(function(c) {
+            self._gitDiffEl.querySelectorAll('.gd-file-card').forEach(function(c) {
               c.classList.toggle('active', c.getAttribute('data-idx') === idx);
             });
+            self._gitDiffActiveIdx = parseInt(idx, 10);
           }
         });
       }, { root: main, threshold: [0.25, 0.6] });
@@ -1283,17 +1410,240 @@ class TopBar {
       this._gitDiffObserver = io;
     }
 
-    // Re-apply any search filter
+    this._updateEdogSectionVisibility();
+    if (this._gitDiffSplitView) this._applySplitViewClass();
     if (this._gitDiffSearchTerm) this._applyGitDiffSearch();
+    this._installBlameHover(main);
   }
 
-  _updateStatsBar(files, adds, dels) {
-    var f = document.getElementById('gd-stat-files-n');
-    var a = document.getElementById('gd-stat-add-n');
-    var d = document.getElementById('gd-stat-del-n');
-    if (f) f.textContent = files;
-    if (a) a.textContent = adds;
-    if (d) d.textContent = dels;
+  // ── Blame on hover ───────────────────────────────────────────
+  _installBlameHover(main) {
+    if (!main) return;
+    var self = this;
+    if (this._blameHoverInstalled === main) return;
+    this._blameHoverInstalled = main;
+    this._blameCache = this._blameCache || {};
+    this._blameInflight = this._blameInflight || {};
+
+    var ensureTooltip = function() {
+      var tip = document.getElementById('gd-blame-tip');
+      if (tip) return tip;
+      tip = document.createElement('div');
+      tip.id = 'gd-blame-tip';
+      tip.className = 'gd-blame-tip';
+      tip.setAttribute('role', 'tooltip');
+      tip.innerHTML =
+        '<span class="gd-blame-author"></span>' +
+        '<span class="gd-blame-sep">\u00B7</span>' +
+        '<span class="gd-blame-time"></span>' +
+        '<span class="gd-blame-sep">\u00B7</span>' +
+        '<span class="gd-blame-hash"></span>' +
+        '<span class="gd-blame-sep">\u00B7</span>' +
+        '<span class="gd-blame-msg"></span>';
+      self._gitDiffEl.appendChild(tip);
+      return tip;
+    };
+
+    var hideTip = function() {
+      var tip = document.getElementById('gd-blame-tip');
+      if (tip) tip.classList.remove('show');
+    };
+
+    var showTipFor = function(row, info) {
+      if (!info) return;
+      var tip = ensureTooltip();
+      tip.querySelector('.gd-blame-author').textContent = info.author || 'unknown';
+      tip.querySelector('.gd-blame-time').textContent = info.timeAgo || '';
+      tip.querySelector('.gd-blame-hash').textContent = info.hash || '';
+      var msg = info.summary || '';
+      if (msg.length > 60) msg = msg.slice(0, 57) + '\u2026';
+      tip.querySelector('.gd-blame-msg').textContent = msg ? '"' + msg + '"' : '';
+      // Position above the row, clamped to modal bounds.
+      var rowRect = row.getBoundingClientRect();
+      var modalRect = self._gitDiffEl.getBoundingClientRect();
+      tip.style.visibility = 'hidden';
+      tip.classList.add('show');
+      var tipRect = tip.getBoundingClientRect();
+      var top = rowRect.top - modalRect.top - tipRect.height - 6;
+      if (top < 6) top = rowRect.bottom - modalRect.top + 6;
+      var left = rowRect.left - modalRect.left + 24;
+      var maxLeft = modalRect.width - tipRect.width - 12;
+      if (left > maxLeft) left = Math.max(8, maxLeft);
+      tip.style.top = top + 'px';
+      tip.style.left = left + 'px';
+      tip.style.visibility = '';
+    };
+
+    var fetchBlame = async function(filePath, lineNum, row) {
+      var cacheKey = filePath + '\u0000' + lineNum;
+      if (self._blameCache[cacheKey]) {
+        if (self._blameHoverRow === row) showTipFor(row, self._blameCache[cacheKey]);
+        return;
+      }
+      var fileKey = 'F:' + filePath;
+      if (!self._blameInflight[fileKey]) {
+        self._blameInflight[fileKey] = (async function() {
+          try {
+            var resp = await fetch('/api/edog/git-blame?file=' + encodeURIComponent(filePath));
+            if (!resp.ok) return {};
+            var data = await resp.json();
+            return (data && data.lines) || {};
+          } catch (_e) { return {}; }
+        })();
+      }
+      var lines = await self._blameInflight[fileKey];
+      // Cache per line for fast subsequent hovers.
+      Object.keys(lines).forEach(function(k) {
+        self._blameCache[filePath + '\u0000' + k] = lines[k];
+      });
+      delete self._blameInflight[fileKey];
+      var info = self._blameCache[cacheKey];
+      if (info && self._blameHoverRow === row) showTipFor(row, info);
+    };
+
+    var onEnter = function(e) {
+      var row = e.target.closest('[data-newnum]');
+      if (!row || !main.contains(row)) return;
+      var section = row.closest('.gd-file-section');
+      if (!section) return;
+      var filePath = section.getAttribute('data-path');
+      // Untracked / new files have no committed blame yet.
+      if (section.querySelector('.gd-source-untracked')) return;
+      var lineNum = parseInt(row.getAttribute('data-newnum'), 10);
+      if (!filePath || !lineNum) return;
+      self._blameHoverRow = row;
+      if (self._blameHoverTimer) clearTimeout(self._blameHoverTimer);
+      self._blameHoverTimer = setTimeout(function() {
+        if (self._blameHoverRow !== row) return;
+        fetchBlame(filePath, lineNum, row);
+      }, 300);
+    };
+
+    var onLeave = function(e) {
+      var row = e.target.closest('[data-newnum]');
+      if (!row) return;
+      // Only hide if leaving to outside the row.
+      var to = e.relatedTarget;
+      if (to && row.contains(to)) return;
+      if (self._blameHoverRow === row) self._blameHoverRow = null;
+      if (self._blameHoverTimer) { clearTimeout(self._blameHoverTimer); self._blameHoverTimer = null; }
+      hideTip();
+    };
+
+    main.addEventListener('mouseover', onEnter);
+    main.addEventListener('mouseout', onLeave);
+    main.addEventListener('scroll', hideTip, { passive: true });
+  }
+
+  // ── Save .patch download ─────────────────────────────────────
+  async _saveGitDiffPatch() {
+    var data = this._gitDiffData;
+    if (!data || !data.valid) {
+      this._gdToast('No diff to export');
+      return;
+    }
+    var parts = [];
+    if ((data.stagedDiff || '').trim()) parts.push(data.stagedDiff);
+    if ((data.diff || '').trim()) parts.push(data.diff);
+    var diffBody = parts.join('\n');
+    if (!diffBody.trim()) {
+      this._gdToast('Working tree clean \u2014 nothing to export');
+      return;
+    }
+
+    // Fetch identity for the From: header (best-effort).
+    var identity = { machine: '', osUser: '' };
+    try {
+      var r = await fetch('/api/identity');
+      if (r.ok) identity = await r.json();
+    } catch (_e) { /* ignore */ }
+
+    var branch = data.branch || 'detached';
+    var dateObj = new Date();
+    var iso = dateObj.toISOString();
+    var dateStamp = iso.slice(0, 10);
+    var rfc = dateObj.toUTCString();
+    var author = (identity.osUser || 'edog') + '@' + (identity.machine || 'localhost');
+    var subject = 'EDOG Studio diff export from ' + branch;
+
+    // Construct a git-mailbox-style patch that `git apply` and `git am` both accept.
+    var header =
+      'From 0000000000000000000000000000000000000000 ' + rfc + '\n' +
+      'From: ' + author + '\n' +
+      'Date: ' + rfc + '\n' +
+      'Subject: [PATCH] ' + subject + '\n' +
+      '\n' +
+      'Generated by EDOG Studio on ' + iso + '\n' +
+      'Branch: ' + branch + '\n' +
+      '---\n\n';
+
+    var patch = header + diffBody;
+    if (!patch.endsWith('\n')) patch += '\n';
+
+    var safeBranch = branch.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'branch';
+    var filename = 'edog-changes-' + safeBranch + '-' + dateStamp + '.patch';
+
+    try {
+      var blob = new Blob([patch], { type: 'text/x-patch;charset=utf-8' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function() {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 0);
+      this._gdToast('Saved ' + filename);
+    } catch (e) {
+      this._gdToast('Save failed: ' + (e && e.message || e));
+    }
+  }
+
+  _updateStatsBar(yourFiles, yourAdds, yourDels, edogCount) {
+    var f = document.getElementById('gd-stat-your-files-n');
+    var a = document.getElementById('gd-stat-your-add-n');
+    var d = document.getElementById('gd-stat-your-del-n');
+    var ef = document.getElementById('gd-stat-edog-files-n');
+    var vis = document.getElementById('gd-stat-edog-vis');
+    var divider = document.getElementById('gd-stat-divider');
+    var edogWrap = document.getElementById('gd-stat-edog');
+    if (f) f.textContent = yourFiles;
+    if (a) a.textContent = yourAdds;
+    if (d) d.textContent = yourDels;
+    if (ef) ef.textContent = edogCount || 0;
+    if (vis) vis.textContent = this._gitDiffShowEdog ? '(shown)' : '(hidden)';
+    var hasEdog = (edogCount || 0) > 0;
+    if (edogWrap) edogWrap.style.display = hasEdog ? '' : 'none';
+    if (divider) divider.style.display = hasEdog ? '' : 'none';
+  }
+
+  _updateEdogSectionVisibility() {
+    var show = !!this._gitDiffShowEdog;
+    var sideEdog = document.getElementById('gd-side-edog');
+    var mainEdog = document.getElementById('gd-main-edog');
+    var hasEdog = (this._gitDiffEdogFiles && this._gitDiffEdogFiles.length) > 0;
+    if (sideEdog) {
+      if (!hasEdog) { sideEdog.hidden = true; }
+      else { sideEdog.hidden = !show; }
+    }
+    if (mainEdog) mainEdog.style.display = (show && hasEdog) ? '' : 'none';
+    var btn = document.getElementById('gd-toggle-edog');
+    var label = document.getElementById('gd-toggle-edog-label');
+    if (btn) {
+      btn.setAttribute('aria-pressed', show ? 'true' : 'false');
+      btn.classList.toggle('active', show);
+    }
+    if (label) label.textContent = show ? 'Hide EDOG' : 'Show EDOG';
+    var vis = document.getElementById('gd-stat-edog-vis');
+    if (vis) vis.textContent = show ? '(shown)' : '(hidden)';
+  }
+
+  _toggleEdogVisibility() {
+    this._gitDiffShowEdog = !this._gitDiffShowEdog;
+    this._updateEdogSectionVisibility();
   }
 
   _renderFileCard(file, idx) {
@@ -1307,6 +1657,7 @@ class TopBar {
           ? '<span class="gd-src-chip gd-src-untracked" title="Untracked">U</span>'
           : '');
     var binary = file.isBinary ? '<span class="gd-binary-tag">binary</span>' : '';
+    var edogTag = file.isEdog ? '<span class="gd-card-edog-tag" title="EDOG-owned patch">EDOG</span>' : '';
 
     var hasNumbers = (file.additions + file.deletions) > 0;
     var addPct = hasNumbers ? Math.round((file.additions / (file.additions + file.deletions)) * 100) : 0;
@@ -1315,13 +1666,18 @@ class TopBar {
       ? '<div class="gd-card-bar"><span class="gd-bar-add" style="width:' + addPct + '%"></span><span class="gd-bar-del" style="width:' + delPct + '%"></span></div>'
       : '<div class="gd-card-bar gd-card-bar-empty"></div>';
 
+    // Heatmap: 14 blocks, proportional to add/del counts (clamped). Visual at-a-glance churn.
+    var heat = this._renderCardHeatmap(file.additions, file.deletions);
+
     var delay = Math.min(idx, 14) * 28;
-    return '<button class="gd-file-card" data-idx="' + idx + '" data-path="' + this._escTip(file.path) + '" style="animation-delay:' + delay + 'ms">' +
+    var cls = 'gd-file-card' + (file.isEdog ? ' gd-file-card-edog' : '');
+    return '<button class="' + cls + '" data-idx="' + idx + '" data-path="' + this._escTip(file.path) + '" style="animation-delay:' + delay + 'ms">' +
       '<span class="gd-status gd-status-' + statusInfo.cls + '" title="' + statusInfo.label + '">' + statusInfo.glyph + '</span>' +
       '<span class="gd-card-text">' +
-        '<span class="gd-card-name">' + this._escTip(name) + (binary ? ' ' + binary : '') + '</span>' +
+        '<span class="gd-card-name">' + this._escTip(name) + (binary ? ' ' + binary : '') + edogTag + '</span>' +
         (dir ? '<span class="gd-card-dir">' + this._escTip(dir) + '</span>' : '') +
         bar +
+        heat +
       '</span>' +
       '<span class="gd-card-meta">' +
         srcChip +
@@ -1331,6 +1687,24 @@ class TopBar {
     '</button>';
   }
 
+  _renderCardHeatmap(adds, dels) {
+    var total = adds + dels;
+    if (!total) return '<div class="gd-heatmap gd-heatmap-empty" aria-hidden="true"></div>';
+    var slots = 14;
+    var addBlocks = Math.max(adds > 0 ? 1 : 0, Math.round((adds / total) * slots));
+    var delBlocks = Math.max(dels > 0 ? 1 : 0, slots - addBlocks);
+    // Re-normalize if we over-allocated
+    if (addBlocks + delBlocks > slots) {
+      if (adds >= dels) delBlocks = slots - addBlocks;
+      else addBlocks = slots - delBlocks;
+    }
+    var html = '<div class="gd-heatmap" title="' + adds + ' added, ' + dels + ' removed" aria-hidden="true">';
+    for (var i = 0; i < addBlocks; i++) html += '<span class="gd-heat-add"></span>';
+    for (var j = 0; j < delBlocks; j++) html += '<span class="gd-heat-del"></span>';
+    html += '</div>';
+    return html;
+  }
+
   _renderFileDiffSection(file, idx) {
     var statusInfo = this._fileStatusInfo(file);
     var sourceTag = file.source === 'staged'
@@ -1338,6 +1712,9 @@ class TopBar {
       : (file.source === 'untracked'
           ? '<span class="gd-source-tag gd-source-untracked">UNTRACKED</span>'
           : '<span class="gd-source-tag gd-source-unstaged">UNSTAGED</span>');
+    var edogTag = file.isEdog
+      ? '<span class="gd-source-tag gd-source-edog" title="EDOG-owned patch">EDOG</span>'
+      : '';
 
     var headerCounts = '';
     if (file.additions) headerCounts += '<span class="gd-h-add">+' + file.additions + '</span>';
@@ -1352,15 +1729,18 @@ class TopBar {
       } else {
         body = '<div class="gd-binary-note">No content changes (mode/rename only).</div>';
       }
+    } else if (this._gitDiffSplitView) {
+      body = this._renderSplitDiff(file);
     } else {
       var hunksHtml = '';
       for (var i = 0; i < file.hunks.length; i++) {
-        hunksHtml += this._renderHunk(file.hunks[i]);
+        hunksHtml += this._renderHunk(file.hunks[i], file);
       }
       body = '<div class="gd-hunks">' + hunksHtml + '</div>';
     }
 
-    return '<section class="gd-file-section" data-idx="' + idx + '" data-path="' + this._escTip(file.path) + '">' +
+    var sectionCls = 'gd-file-section' + (file.isEdog ? ' gd-file-section-edog' : '');
+    return '<section class="' + sectionCls + '" data-idx="' + idx + '" data-path="' + this._escTip(file.path) + '"' + (file.isEdog ? ' data-edog="1"' : '') + '>' +
       '<header class="gd-file-section-header">' +
         '<span class="gd-caret">\u25BE</span>' +
         '<span class="gd-status gd-status-' + statusInfo.cls + '">' + statusInfo.glyph + '</span>' +
@@ -1368,6 +1748,7 @@ class TopBar {
           '<svg class="gd-file-icon" width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 1.5h6l4 4V14a.5.5 0 01-.5.5H3A.5.5 0 012.5 14V2A.5.5 0 013 1.5z"/><path d="M9 1.5V5a.5.5 0 00.5.5H13"/></svg>' +
           '<span class="gd-file-path-text">' + this._escTip(file.path) + '</span>' +
         '</span>' +
+        edogTag +
         sourceTag +
         '<span class="gd-h-counts">' + headerCounts + '</span>' +
         '<button class="gd-file-copy-btn" title="Copy this file\'s diff">' +
@@ -1378,7 +1759,39 @@ class TopBar {
     '</section>';
   }
 
-  _renderHunk(hunk) {
+  // ── EDOG annotation pattern map ──────────────────────────────
+  _edogAnnotations() {
+    return [
+      { rx: /EdogDevModeRegistrar\.?RegisterAll/, label: 'DevMode registration' },
+      { rx: /EdogDevModeRegistrar/, label: 'DevMode registrar' },
+      { rx: /EdogLogServer/, label: 'Log server startup' },
+      { rx: /MapHub.*EdogPlayground|EdogPlaygroundHub/, label: 'SignalR hub' },
+      { rx: /DisableFLTAuth|DisableAuth/, label: 'Auth bypass' },
+      { rx: /EdogDagExecutionHook|EdogDagExecution/, label: 'DAG execution hook' },
+      { rx: /EdogSparkClientWrapper|EdogSparkSession/, label: 'Spark client wrapper' },
+      { rx: /EdogTokenInterceptor|EdogTokenLifecycle/, label: 'Token interceptor' },
+      { rx: /EdogHttpPipelineHandler|EdogHttpFault/, label: 'HTTP pipeline' },
+      { rx: /EdogFeatureFlighter|EdogFeatureOverride/, label: 'Feature flag override' },
+      { rx: /EdogTelemetryInterceptor/, label: 'Telemetry interceptor' },
+      { rx: /EdogFileSystemInterceptor/, label: 'Filesystem interceptor' },
+      { rx: /EdogRetryInterceptor|EdogCacheInterceptor/, label: 'Retry/cache' },
+      { rx: /EdogQa[A-Z]\w+/, label: 'QA harness' },
+      { rx: /\[EDOG\]|\/\/\s*EDOG:/, label: 'EDOG marker' },
+      { rx: /DevMode/, label: 'DevMode hook' },
+    ];
+  }
+
+  _edogLabelFor(text) {
+    if (!text) return '';
+    var patterns = this._edogAnnotationsCached || (this._edogAnnotationsCached = this._edogAnnotations());
+    for (var i = 0; i < patterns.length; i++) {
+      if (patterns[i].rx.test(text)) return patterns[i].label;
+    }
+    return '';
+  }
+
+  _renderHunk(hunk, file) {
+    var annotateEdog = !!(file && file.isEdog);
     var ctx = hunk.context ? '<span class="gd-hunk-ctx">' + this._escTip(hunk.context) + '</span>' : '';
     var rows = '';
     for (var i = 0; i < hunk.lines.length; i++) {
@@ -1391,12 +1804,18 @@ class TopBar {
 
       var oldN = ln.oldNum != null ? ln.oldNum : '';
       var newN = ln.newNum != null ? ln.newNum : '';
+      var annot = '';
+      if (annotateEdog && (ln.type === '+' || ln.type === '-')) {
+        var label = this._edogLabelFor(ln.text);
+        if (label) annot = '<span class="gd-edog-label" title="EDOG: ' + this._escTip(label) + '">\u2190 EDOG: ' + this._escTip(label) + '</span>';
+      }
+      var blameAttr = (ln.newNum != null && ln.type !== '\\') ? ' data-newnum="' + ln.newNum + '"' : '';
       rows +=
-        '<div class="' + cls + '">' +
+        '<div class="' + cls + '"' + blameAttr + '>' +
           '<span class="gd-gutter gd-gutter-old">' + oldN + '</span>' +
           '<span class="gd-gutter gd-gutter-new">' + newN + '</span>' +
           '<span class="gd-sign">' + sign + '</span>' +
-          '<span class="gd-code">' + this._escTip(ln.text) + '</span>' +
+          '<span class="gd-code">' + this._escTip(ln.text) + annot + '</span>' +
         '</div>';
     }
     return '<div class="gd-hunk">' +
@@ -1406,6 +1825,95 @@ class TopBar {
       '</div>' +
       '<div class="gd-hunk-body">' + rows + '</div>' +
     '</div>';
+  }
+
+  // ── Split view rendering ─────────────────────────────────────
+  _renderSplitDiff(file) {
+    var self = this;
+    var html = '<div class="gd-hunks gd-hunks-split">';
+    for (var h = 0; h < file.hunks.length; h++) {
+      var hunk = file.hunks[h];
+      html += '<div class="gd-hunk gd-hunk-split">' +
+        '<div class="gd-hunk-header">' +
+          '<span class="gd-hunk-range">@@ \u2212' + hunk.oldStart + ' +' + hunk.newStart + ' @@</span>' +
+          (hunk.context ? '<span class="gd-hunk-ctx">' + this._escTip(hunk.context) + '</span>' : '') +
+        '</div>' +
+        '<div class="gd-hunk-body gd-split-body">';
+      // Pair lines: walk through, batching consecutive del/add pairs.
+      var lines = hunk.lines;
+      var i = 0;
+      while (i < lines.length) {
+        var ln = lines[i];
+        if (ln.type === ' ' || ln.type === '\\') {
+          html += self._renderSplitRow(ln, ln, file);
+          i++;
+          continue;
+        }
+        // Collect a chunk of consecutive '-' followed by '+'
+        var dels = [];
+        var adds = [];
+        while (i < lines.length && lines[i].type === '-') { dels.push(lines[i]); i++; }
+        while (i < lines.length && lines[i].type === '+') { adds.push(lines[i]); i++; }
+        var maxLen = Math.max(dels.length, adds.length);
+        for (var k = 0; k < maxLen; k++) {
+          html += self._renderSplitRow(dels[k] || null, adds[k] || null, file);
+        }
+      }
+      html += '</div></div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  _renderSplitRow(left, right, file) {
+    var annotateEdog = !!(file && file.isEdog);
+    var renderSide = function(self, ln, side) {
+      if (!ln) {
+        return '<div class="gd-split-cell gd-split-empty">' +
+          '<span class="gd-gutter"></span><span class="gd-sign"></span><span class="gd-code"></span>' +
+          '</div>';
+      }
+      var cls = 'gd-split-cell';
+      var sign = '';
+      var num = '';
+      if (ln.type === '+') { cls += ' gd-row-add'; sign = '+'; num = ln.newNum != null ? ln.newNum : ''; }
+      else if (ln.type === '-') { cls += ' gd-row-del'; sign = '\u2212'; num = ln.oldNum != null ? ln.oldNum : ''; }
+      else if (ln.type === '\\') { cls += ' gd-row-meta'; sign = ''; num = ''; }
+      else { cls += ' gd-row-ctx'; sign = ''; num = side === 'L' ? (ln.oldNum != null ? ln.oldNum : '') : (ln.newNum != null ? ln.newNum : ''); }
+      var annot = '';
+      if (annotateEdog && (ln.type === '+' || ln.type === '-')) {
+        var label = self._edogLabelFor(ln.text);
+        if (label) annot = '<span class="gd-edog-label" title="EDOG: ' + self._escTip(label) + '">\u2190 ' + self._escTip(label) + '</span>';
+      }
+      return '<div class="' + cls + '">' +
+        '<span class="gd-gutter">' + num + '</span>' +
+        '<span class="gd-sign">' + sign + '</span>' +
+        '<span class="gd-code">' + self._escTip(ln.text) + annot + '</span>' +
+        '</div>';
+    };
+    return '<div class="gd-split-row"' + (right && right.newNum != null ? ' data-newnum="' + right.newNum + '"' : '') + '>' +
+      renderSide(this, left, 'L') +
+      renderSide(this, right, 'R') +
+      '</div>';
+  }
+
+  _applySplitViewClass() {
+    if (!this._gitDiffEl) return;
+    this._gitDiffEl.classList.toggle('gd-split-mode', !!this._gitDiffSplitView);
+    var btn = document.getElementById('gd-toggle-split');
+    var label = document.getElementById('gd-toggle-split-label');
+    if (btn) {
+      btn.setAttribute('aria-pressed', this._gitDiffSplitView ? 'true' : 'false');
+      btn.classList.toggle('active', !!this._gitDiffSplitView);
+    }
+    if (label) label.textContent = this._gitDiffSplitView ? 'Unified' : 'Split';
+  }
+
+  _toggleSplitView() {
+    this._gitDiffSplitView = !this._gitDiffSplitView;
+    // Re-render the diff body of all sections so split/unified switches.
+    if (this._gitDiffData) this._renderGitDiff(this._gitDiffData);
+    this._applySplitViewClass();
   }
 
   _fileStatusInfo(file) {
@@ -1539,6 +2047,155 @@ class TopBar {
         setTimeout(function() { btn.classList.remove('copied'); }, 1200);
       }
     } catch (_e) { /* ignore */ }
+  }
+
+  // ── Keyboard navigation ──────────────────────────────────────
+  _visibleSectionList() {
+    if (!this._gitDiffEl) return [];
+    var sections = this._gitDiffEl.querySelectorAll('.gd-file-section');
+    var out = [];
+    sections.forEach(function(s) {
+      var parent = s.closest('.gd-main-group');
+      if (parent && parent.style.display === 'none') return;
+      out.push(s);
+    });
+    return out;
+  }
+
+  _gdNavFile(delta) {
+    var sections = this._visibleSectionList();
+    if (!sections.length) return;
+    var indices = sections.map(function(s) { return parseInt(s.getAttribute('data-idx'), 10); });
+    var current = this._gitDiffActiveIdx;
+    var pos = indices.indexOf(current);
+    if (pos < 0) pos = 0;
+    var next = Math.max(0, Math.min(indices.length - 1, pos + delta));
+    var nextIdx = indices[next];
+    var section = sections[next];
+    if (section) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    this._gitDiffActiveIdx = nextIdx;
+    this._gitDiffActiveHunkIdx = 0;
+    this._gitDiffEl.querySelectorAll('.gd-file-card').forEach(function(c) {
+      c.classList.toggle('selected', parseInt(c.getAttribute('data-idx'), 10) === nextIdx);
+    });
+  }
+
+  _gdNavHunk(delta) {
+    if (!this._gitDiffEl) return;
+    var section = this._gitDiffEl.querySelector('.gd-file-section[data-idx="' + this._gitDiffActiveIdx + '"]');
+    if (!section) return;
+    var hunks = section.querySelectorAll('.gd-hunk');
+    if (!hunks.length) return;
+    var idx = (this._gitDiffActiveHunkIdx || 0) + delta;
+    idx = Math.max(0, Math.min(hunks.length - 1, idx));
+    this._gitDiffActiveHunkIdx = idx;
+    hunks[idx].scrollIntoView({ behavior: 'smooth', block: 'start' });
+    hunks.forEach(function(h, i) { h.classList.toggle('gd-hunk-focus', i === idx); });
+  }
+
+  _gdToggleCurrentFile() {
+    if (!this._gitDiffEl) return;
+    var section = this._gitDiffEl.querySelector('.gd-file-section[data-idx="' + this._gitDiffActiveIdx + '"]');
+    if (!section) return;
+    section.classList.toggle('collapsed');
+    var caret = section.querySelector('.gd-caret');
+    if (caret) caret.textContent = section.classList.contains('collapsed') ? '\u25B8' : '\u25BE';
+  }
+
+  // ── Help overlay ─────────────────────────────────────────────
+  _toggleGdHelp(force) {
+    var open = (typeof force === 'boolean') ? force : !this._gitDiffHelpOpen;
+    this._gitDiffHelpOpen = open;
+    var existing = document.getElementById('gd-help-overlay');
+    if (!open) {
+      if (existing) existing.remove();
+      return;
+    }
+    if (existing) return;
+    var rows = [
+      ['j / k', 'Next / previous file'],
+      ['n / p', 'Next / previous hunk'],
+      ['c',     'Collapse / expand current file'],
+      ['e',     'Toggle EDOG visibility'],
+      ['s',     'Toggle split / unified'],
+      ['\u2318/Ctrl + F', 'Focus search'],
+      ['?',     'Show this help'],
+      ['Esc',   'Close modal / clear search / close help'],
+    ];
+    var rowsHtml = rows.map(function(r) {
+      return '<div class="gd-help-row"><kbd class="gd-kbd">' + r[0] + '</kbd><span class="gd-help-desc">' + r[1] + '</span></div>';
+    }).join('');
+    var ov = document.createElement('div');
+    ov.id = 'gd-help-overlay';
+    ov.className = 'gd-help-overlay';
+    ov.innerHTML =
+      '<div class="gd-help-card" role="dialog" aria-label="Keyboard shortcuts">' +
+        '<div class="gd-help-header">' +
+          '<span class="gd-help-title">Keyboard Shortcuts</span>' +
+          '<button class="gd-help-close" aria-label="Close">\u2715</button>' +
+        '</div>' +
+        '<div class="gd-help-body">' + rowsHtml + '</div>' +
+      '</div>';
+    this._gitDiffEl.appendChild(ov);
+    var self = this;
+    ov.addEventListener('click', function(e) {
+      if (e.target === ov || e.target.classList.contains('gd-help-close')) {
+        self._toggleGdHelp(false);
+      }
+    });
+  }
+
+  // ── Toast ────────────────────────────────────────────────────
+  _gdToast(message) {
+    if (!this._gitDiffEl) return;
+    var t = document.createElement('div');
+    t.className = 'gd-toast';
+    t.textContent = message;
+    this._gitDiffEl.appendChild(t);
+    requestAnimationFrame(function() { t.classList.add('show'); });
+    setTimeout(function() {
+      t.classList.remove('show');
+      setTimeout(function() { if (t.parentNode) t.parentNode.removeChild(t); }, 240);
+    }, 1800);
+  }
+
+  // ── Copy clean (EDOG-stripped) diff ──────────────────────────
+  async _copyCleanGitDiff() {
+    var files = (this._gitDiffYourFiles || []).filter(function(f) {
+      return f.source !== 'untracked' && f.hunks && f.hunks.length;
+    });
+    if (!files.length) {
+      this._gdToast('No non-EDOG diff content to copy');
+      return;
+    }
+    var out = [];
+    for (var i = 0; i < files.length; i++) {
+      var file = files[i];
+      out.push('diff --git a/' + file.oldPath + ' b/' + file.newPath);
+      if (file.isNew) out.push('new file');
+      if (file.isDeleted) out.push('deleted file');
+      out.push('--- ' + (file.isNew ? '/dev/null' : 'a/' + file.oldPath));
+      out.push('+++ ' + (file.isDeleted ? '/dev/null' : 'b/' + file.newPath));
+      for (var h = 0; h < file.hunks.length; h++) {
+        var hunk = file.hunks[h];
+        out.push(hunk.header);
+        for (var k = 0; k < hunk.lines.length; k++) {
+          var l = hunk.lines[k];
+          if (l.type === '\\') out.push(l.text);
+          else if (l.type === ' ') out.push(' ' + l.text);
+          else out.push(l.type + l.text);
+        }
+      }
+    }
+    var text = out.join('\n') + '\n';
+    var edogCount = (this._gitDiffEdogFiles || []).length;
+    try {
+      await navigator.clipboard.writeText(text);
+      this._gdToast('Copied clean diff (' + files.length + ' file' + (files.length === 1 ? '' : 's') +
+        (edogCount ? ', ' + edogCount + ' EDOG patch' + (edogCount === 1 ? '' : 'es') + ' excluded' : '') + ')');
+    } catch (_e) {
+      this._gdToast('Copy failed');
+    }
   }
 
   destroy() {

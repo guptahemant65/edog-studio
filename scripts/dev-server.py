@@ -57,6 +57,30 @@ HTML_PATH = PROJECT_DIR / "src" / "edog-logs.html"
 
 logger = logging.getLogger(__name__)
 
+
+def _time_ago(epoch: int) -> str:
+    """Return a coarse human-readable relative time (e.g. '3 days ago')."""
+    if not epoch:
+        return ""
+    import time as _t
+    delta = max(0, int(_t.time()) - int(epoch))
+    if delta < 60:
+        return "just now"
+    if delta < 3600:
+        m = delta // 60
+        return f"{m} minute{'s' if m != 1 else ''} ago"
+    if delta < 86400:
+        h = delta // 3600
+        return f"{h} hour{'s' if h != 1 else ''} ago"
+    if delta < 86400 * 30:
+        d = delta // 86400
+        return f"{d} day{'s' if d != 1 else ''} ago"
+    if delta < 86400 * 365:
+        mo = delta // (86400 * 30)
+        return f"{mo} month{'s' if mo != 1 else ''} ago"
+    y = delta // (86400 * 365)
+    return f"{y} year{'s' if y != 1 else ''} ago"
+
 REDIRECT_HOST = "https://biazure-int-edog-redirect.analysis-df.windows.net"
 ONELAKE_HOST = "https://onelake-int-edog.dfs.pbidedicated.windows-int.net"
 ONELAKE_RESOURCE = "https://storage.azure.com"
@@ -2621,6 +2645,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_health()
         elif self.path == "/api/edog/git-diff":
             self._serve_git_diff()
+        elif self.path.startswith("/api/edog/git-blame"):
+            self._serve_git_blame()
         elif self.path == "/api/identity":
             self._serve_identity()
         elif self.path.startswith("/api/edog/session-probe"):
@@ -5313,8 +5339,33 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
                 return ""
 
+        # EDOG ownership detection: a file is "EDOG" if its path contains
+        # /DevMode/ (newly created EDOG infra) OR its basename matches one
+        # of the known FLT files that EDOG patches in place.
+        edog_patched_basenames = {
+            "GTSBasedSparkClient.cs",
+            "Program.cs",
+            "WorkloadApp.cs",
+            "DagExecutionHandlerV2.cs",
+            "ParametersManifest.json",
+            "Test.json",
+            "LiveTableController.cs",
+            "LiveTableSchedulerRunController.cs",
+            "CustomLiveTableTelemetryReporter.cs",
+        }
+
+        def _is_edog_path(p: str) -> bool:
+            if not p:
+                return False
+            norm = p.replace("\\", "/")
+            if "/DevMode/" in norm or norm.startswith("DevMode/"):
+                return True
+            base = norm.rsplit("/", 1)[-1]
+            return base in edog_patched_basenames
+
         porcelain = _run_git(["status", "--porcelain"])
         files = []
+        edog_files = []
         for raw_line in porcelain.splitlines():
             if len(raw_line) < 4:
                 continue
@@ -5323,7 +5374,10 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             path = raw_line[3:].strip()
             # Prefer the working-tree status; fall back to index status; '?' for untracked.
             status = xy[1].strip() or xy[0].strip() or "?"
-            files.append({"status": status, "path": path, "xy": xy})
+            is_edog = _is_edog_path(path)
+            files.append({"status": status, "path": path, "xy": xy, "isEdog": is_edog})
+            if is_edog:
+                edog_files.append(path)
 
         diff = _run_git(["diff", "--no-color"])
         staged_diff = _run_git(["diff", "--cached", "--no-color"])
@@ -5335,10 +5389,143 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 "valid": True,
                 "branch": branch,
                 "files": files,
+                "edogFiles": edog_files,
                 "diff": diff,
                 "stagedDiff": staged_diff,
             },
         )
+
+    def _serve_git_blame(self):
+        """GET /api/edog/git-blame?file={path} — return per-line blame for a file.
+
+        Caches the parsed porcelain output per (repo, file, mtime) so subsequent
+        per-line hover lookups in the diff modal are free. The cache is bounded
+        to ~32 files to cap memory.
+        """
+        parsed = urllib.parse.urlparse(self.path)
+        qs = urllib.parse.parse_qs(parsed.query)
+        file_path = (qs.get("file") or [""])[0].strip()
+        if not file_path:
+            self._json_response(400, {"error": "missing_file"})
+            return
+        # Reject path traversal / absolute paths / Windows drive letters.
+        norm = file_path.replace("\\", "/")
+        if norm.startswith("/") or norm.startswith("../") or "/../" in norm or ":" in norm:
+            self._json_response(400, {"error": "invalid_path"})
+            return
+
+        cfg = {}
+        with contextlib.suppress(Exception):
+            cfg = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
+        repo_info = get_configured_repo(cfg)
+        if not repo_info or not repo_info.get("valid"):
+            self._json_response(200, {"valid": False, "lines": {}})
+            return
+
+        repo_path = repo_info["path"]
+        full = Path(repo_path) / norm
+        try:
+            mtime = full.stat().st_mtime
+        except OSError:
+            self._json_response(200, {"valid": True, "lines": {}, "reason": "file_missing"})
+            return
+
+        cache_key = (str(repo_path), norm)
+        cache = getattr(self.__class__, "_BLAME_CACHE", None)
+        if cache is None:
+            cache = {}
+            self.__class__._BLAME_CACHE = cache
+        entry = cache.get(cache_key)
+        if entry and entry.get("mtime") == mtime:
+            self._json_response(200, {"valid": True, "lines": entry["lines"]})
+            return
+
+        try:
+            result = subprocess.run(
+                ["git", "blame", "--porcelain", "--", norm],
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+                timeout=20,
+                check=False,
+                encoding="utf-8",
+                errors="replace",
+            )
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
+            self._json_response(200, {"valid": True, "lines": {}, "reason": f"git_failed:{e}"})
+            return
+        if result.returncode != 0:
+            self._json_response(200, {"valid": True, "lines": {}, "reason": "blame_failed"})
+            return
+
+        lines = self._parse_blame_porcelain(result.stdout)
+
+        # LRU-ish: cap to 32 entries.
+        if len(cache) >= 32:
+            try:
+                cache.pop(next(iter(cache)))
+            except StopIteration:
+                pass
+        cache[cache_key] = {"mtime": mtime, "lines": lines}
+
+        self._json_response(200, {"valid": True, "lines": lines})
+
+    @staticmethod
+    def _parse_blame_porcelain(text: str) -> dict:
+        """Parse `git blame --porcelain` output into {line_no_str: {...}}."""
+        if not text:
+            return {}
+        out: dict[str, dict] = {}
+        commits: dict[str, dict] = {}
+        i = 0
+        lines = text.split("\n")
+        current_commit = ""
+        current_final_line = 0
+        meta: dict = {}
+        while i < len(lines):
+            raw = lines[i]
+            if not raw:
+                i += 1
+                continue
+            # Block header: "<sha> <orig> <final> [num_lines]"
+            parts = raw.split(" ")
+            if len(parts) >= 3 and len(parts[0]) == 40 and all(c in "0123456789abcdef" for c in parts[0]):
+                current_commit = parts[0]
+                try:
+                    current_final_line = int(parts[2])
+                except ValueError:
+                    current_final_line = 0
+                meta = commits.setdefault(current_commit, {})
+                i += 1
+                # Read sub-headers until tab-prefixed content line.
+                while i < len(lines) and not lines[i].startswith("\t"):
+                    sub = lines[i]
+                    if sub.startswith("author "):
+                        meta["author"] = sub[len("author "):]
+                    elif sub.startswith("author-time "):
+                        try:
+                            meta["authorTime"] = int(sub[len("author-time "):])
+                        except ValueError:
+                            pass
+                    elif sub.startswith("summary "):
+                        meta["summary"] = sub[len("summary "):]
+                    i += 1
+                # Skip the tab-prefixed content line itself.
+                if i < len(lines) and lines[i].startswith("\t"):
+                    i += 1
+                # Record this line.
+                if current_final_line > 0:
+                    out[str(current_final_line)] = {
+                        "hash": current_commit[:7],
+                        "author": meta.get("author", ""),
+                        "authorTime": meta.get("authorTime", 0),
+                        "summary": meta.get("summary", ""),
+                        "timeAgo": _time_ago(meta.get("authorTime", 0)),
+                    }
+            else:
+                # Out-of-band line; advance.
+                i += 1
+        return out
 
     def _serve_repo_scan(self):
         """POST /api/edog/repo-scan — auto-detect FLT repos on disk."""
