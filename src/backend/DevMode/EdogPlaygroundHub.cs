@@ -2589,7 +2589,9 @@ namespace Microsoft.LiveTable.Service.DevMode
                         Matchers = submitted?.Matchers != null
                             ? submitted.Matchers.Cast<object>().ToList()
                             : new List<object>(),
-                        CatalogHashes = submitted?.CatalogHashes,
+                        CatalogHashes = submitted?.CatalogHashes.HasValue == true
+                            ? (object)submitted.CatalogHashes.Value
+                            : null,
                         Lifecycle = (submitted?.Lifecycle ?? ScenarioLifecycle.Completed).ToString(),
                     });
 

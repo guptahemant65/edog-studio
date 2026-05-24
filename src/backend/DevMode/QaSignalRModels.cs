@@ -147,8 +147,10 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// The execution path re-parses these in ConvertSubmittedToEngineScenario.</summary>
         public List<System.Text.Json.JsonElement> Matchers { get; set; } = new();
 
-        /// <summary>Catalog hash envelope grounding the submitted scenario.</summary>
-        public CatalogHashes CatalogHashes { get; set; }
+        /// <summary>Catalog hash envelope grounding the submitted scenario.
+        /// Deserialized as opaque JSON because the wire format uses array-of-pairs
+        /// for matcherTopicHashes while the engine model uses Dictionary.</summary>
+        public System.Text.Json.JsonElement? CatalogHashes { get; set; }
 
         /// <summary>Lifecycle state supplied by the curation pipeline.</summary>
         public ScenarioLifecycle Lifecycle { get; set; } = ScenarioLifecycle.Generated;
@@ -702,8 +704,10 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// System.Text.Json without a custom converter.</summary>
         public List<object> Matchers { get; set; } = new();
 
-        /// <summary>CatalogHashes captured alongside the scenario for p10 grounding checks.</summary>
-        public CatalogHashes CatalogHashes { get; set; }
+        /// <summary>CatalogHashes captured alongside the scenario for p10 grounding checks.
+        /// Stored as opaque object because the wire format uses array-of-pairs
+        /// for matcherTopicHashes while the engine uses Dictionary.</summary>
+        public object CatalogHashes { get; set; }
 
         /// <summary>Lifecycle snapshot captured when the scenario completed.</summary>
         public string Lifecycle { get; set; }
