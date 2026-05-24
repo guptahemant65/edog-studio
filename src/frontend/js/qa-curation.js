@@ -485,6 +485,12 @@ class QaCuration {
         };
         return conn.invoke('QaStartRun', runRequest);
       }
+      if (result && result.validationErrors) {
+        console.error('[QA-DIAG] Validation errors:', result.validationErrors);
+        result.validationErrors.forEach(function (e) {
+          console.error('[QA-DIAG]   ' + (e.scenarioId || '?') + '.' + (e.field || '?') + ': ' + (e.message || ''));
+        });
+      }
       throw new Error((result && result.message) || 'Submission failed');
     }).then(function (runResult) {
       if (runResult && runResult.success) {

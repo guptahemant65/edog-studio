@@ -650,8 +650,10 @@ namespace Microsoft.LiveTable.Service.DevMode
         // ═══════════════════════════════════════════════════════════════════
 
         // Validation constants
-        private static readonly Regex ScenarioIdRegex = new(@"^scn-[a-z0-9-]+$", RegexOptions.Compiled);
-        private static readonly Regex ExpectationIdRegex = new(@"^exp-[0-9]+$", RegexOptions.Compiled);
+        // ID format regexes removed — DevMode pipeline generates IDs with
+        // varying prefixes; format validation added no safety and broke
+        // whenever the Editor changed ID conventions. Only emptiness and
+        // duplicates are validated now.
         private static readonly HashSet<string> ValidCategories = new(StringComparer.OrdinalIgnoreCase)
         {
             "happy_path", "error_path", "edge_case", "regression", "performance",
@@ -2995,9 +2997,11 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             foreach (var s in scenarios)
             {
-                // ID format
-                if (string.IsNullOrEmpty(s.Id) || !ScenarioIdRegex.IsMatch(s.Id))
-                    errors.Add(new QaValidationError { ScenarioId = s.Id, Field = "id", Message = "Must match ^scn-[a-z0-9-]+$" });
+                // ID: must be non-empty. Format is not enforced — the pipeline
+                // generates IDs with varying prefixes (scn-, sk-, sc-) and the
+                // curation UI may edit them. Only emptiness is a real error.
+                if (string.IsNullOrEmpty(s.Id))
+                    errors.Add(new QaValidationError { ScenarioId = s.Id, Field = "id", Message = "Scenario ID is required" });
 
                 // Duplicate ID
                 if (!string.IsNullOrEmpty(s.Id) && !seenIds.Add(s.Id))
@@ -3022,8 +3026,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                 {
                     foreach (var exp in s.Expectations)
                     {
-                        if (string.IsNullOrEmpty(exp.Id) || !ExpectationIdRegex.IsMatch(exp.Id))
-                            errors.Add(new QaValidationError { ScenarioId = s.Id, Field = $"expectations[{exp.Id}].id", Message = "Must match ^exp-[0-9]+$" });
+                        if (string.IsNullOrEmpty(exp.Id))
+                            errors.Add(new QaValidationError { ScenarioId = s.Id, Field = $"expectations[{exp.Id}].id", Message = "Expectation ID is required" });
 
                         if (!string.IsNullOrEmpty(exp.Type) && !ValidExpectationTypes.Contains(exp.Type))
                             errors.Add(new QaValidationError { ScenarioId = s.Id, Field = $"expectations[{exp.Id}].type", Message = $"Invalid type: {exp.Type}" });
