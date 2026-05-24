@@ -2325,16 +2325,10 @@ def _warmup_capacity_route(ws_id: str, lh_id: str, cap_id: str, deploy_id: str) 
                 _deploy_log("Warmup: no bearer token", "warn")
                 break
 
-            # Phase A: MWC token generation (fails with 404 during routing lag)
+            # Single probe: MWC token + GET through capacity in one shot.
             mwc_token, host = _get_mwc_token(
                 bearer, ws_id, lh_id, cap_id, workload_type="LiveTable"
             )
-
-            # Phase B: Lightweight GET through capacity to verify routing.
-            # Intentionally probes a fast EDOG endpoint (not getLatestDag)
-            # so deploy completes quickly.  FLT's heavier DAG init may take
-            # a few more seconds — the client-side _fltFetchWithRetry absorbs
-            # those transient 400s silently.
             probe_url = (
                 f"{host}/webapi/capacities/{cap_id}/workloads/LiveTable"
                 f"/LiveTableService/automatic"
@@ -2354,10 +2348,6 @@ def _warmup_capacity_route(ws_id: str, lh_id: str, cap_id: str, deploy_id: str) 
             )
             return True
 
-        except CapacityRoutingError:
-            phase = "MWC token"
-        except urllib.error.HTTPError as e:
-            phase = f"probe HTTP {e.code}"
         except Exception as e:
             phase = str(e)[:80]
 
