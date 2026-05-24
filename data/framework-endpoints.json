@@ -34,5 +34,35 @@
       "kind": "ui",
       "source": "framework"
     }
+  ],
+  "hubs": [
+    {
+      "name": "EdogPlaygroundHub",
+      "route": "/hub/playground",
+      "source": "framework",
+      "methods": [
+        "Subscribe",
+        "Unsubscribe",
+        "EdogIdentify",
+        "QaStartCodeAnalysis",
+        "QaCancelAnalysis",
+        "QaSubmitCuratedScenarios",
+        "QaStartRun",
+        "QaCancelRun",
+        "QaGetRunHistory",
+        "QaGetRunDetail",
+        "QaGetTelemetry",
+        "QaGetCapabilities",
+        "QaCompareRuns",
+        "MitmGetCapabilities",
+        "MitmCreateRule",
+        "MitmDeleteRule",
+        "MitmListRules",
+        "MitmResumeBreakpoint",
+        "MitmClearAll",
+        "MitmToggleInterception",
+        "MitmSendToPlayground"
+      ]
+    }
   ]
 }
