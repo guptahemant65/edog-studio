@@ -496,8 +496,30 @@ namespace Microsoft.LiveTable.Service.DevMode
                 _logger.LogDebug("[QA] {Id} Phase 6: EVALUATE", scenario.Id);
 
                 var allEvents = session.GetAllCapturedEvents();
-                var hasLegacyExpectations = scenario.Expectations != null && scenario.Expectations.Count > 0;
+                // A legacy expectation with all-null matcher fields
+                // (exact/contains/regex/range/exists all null) matches
+                // EVERY event — producing false positives. When contract
+                // matchers exist, they carry the real assertions; skip
+                // vacuous legacy expectations to avoid inflating the
+                // pass count.
                 var hasContractMatchers = scenario.Matchers != null && scenario.Matchers.Count > 0;
+                var hasLegacyExpectations = scenario.Expectations != null && scenario.Expectations.Count > 0;
+                if (hasLegacyExpectations && hasContractMatchers)
+                {
+                    // Check if ALL legacy expectations have empty matchers
+                    var allVacuous = scenario.Expectations.All(e =>
+                        e.Matcher == null
+                        || (e.Matcher.Exact == null
+                            && e.Matcher.Contains == null
+                            && e.Matcher.Regex == null
+                            && e.Matcher.Range == null
+                            && e.Matcher.Exists == null));
+                    if (allVacuous)
+                    {
+                        // Contract matchers are the sole assertion surface
+                        hasLegacyExpectations = false;
+                    }
+                }
                 var expectationResults = new List<ExpectationResult>();
                 AssertionVerdict verdict = null;
 
