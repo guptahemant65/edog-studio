@@ -539,9 +539,22 @@ namespace Microsoft.LiveTable.Service.DevMode
                     llmProvider,
                     diRegistryProvider);
 
-                // Minimal service provider for engines that require IServiceProvider
-                var serviceProvider = new ServiceCollection()
-                    .BuildServiceProvider();
+                // Service provider that delegates to the FLT's real DI container
+                // (WireUp.Resolve<T>) so DiInvocation stimuli can resolve
+                // IQueryService, IInsightsQueryService, etc. The minimal
+                // empty ServiceCollection was the root cause of all
+                // DiInvocation "No service registered" failures.
+                IServiceProvider serviceProvider;
+                try
+                {
+                    serviceProvider = new WireUpServiceProviderAdapter();
+                    Console.WriteLine("[EDOG] ✓ QA service provider: WireUp adapter (real DI container)");
+                }
+                catch
+                {
+                    serviceProvider = new ServiceCollection().BuildServiceProvider();
+                    Console.WriteLine("[EDOG] ✗ QA service provider: empty fallback (WireUp not available)");
+                }
 
                 // Resolve IHttpClientFactory if already registered, otherwise null
                 System.Net.Http.IHttpClientFactory httpClientFactory = null;
@@ -637,6 +650,35 @@ namespace Microsoft.LiveTable.Service.DevMode
         // so the Null* stubs are dead weight. Removed in P4 along with
         // the silent synthetic fallback. The Stub* providers in
         // EdogQaCodeAnalyzer.cs remain as test-only utilities.
+    }
+
+    /// <summary>
+    /// IServiceProvider adapter that delegates to the FLT platform's
+    /// WireUp DI container. This gives the QA stimulus dispatcher access
+    /// to real FLT services (IQueryService, IInsightsQueryService, etc.)
+    /// instead of the empty ServiceCollection that caused every
+    /// DiInvocation stimulus to fail with "No service registered".
+    /// </summary>
+    internal sealed class WireUpServiceProviderAdapter : IServiceProvider
+    {
+        public object GetService(Type serviceType)
+        {
+            if (serviceType == null) return null;
+            try
+            {
+                // WireUp.Resolve is the FLT platform's service locator.
+                // It throws if the type isn't registered, so catch and
+                // return null (IServiceProvider contract: null = not found).
+                var resolveMethod = typeof(Microsoft.PowerBI.ServicePlatform.WireUp.WireUp)
+                    .GetMethod("Resolve", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
+                    ?.MakeGenericMethod(serviceType);
+                return resolveMethod?.Invoke(null, null);
+            }
+            catch
+            {
+                return null;
+            }
+        }
     }
 
     // EdogQaServiceLocator is defined in EdogPlaygroundHub.cs

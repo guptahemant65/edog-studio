@@ -799,9 +799,11 @@ namespace Microsoft.LiveTable.Service.DevMode
         // ── Session-context rewriting helpers ──────────────────────────
 
         /// <summary>
-        /// Rewrites zero-GUID placeholders in the path with real workspace/
-        /// lakehouse IDs from the active EdogSessionRegistry. The LLM uses
-        /// 00000000-... GUIDs because it doesn't know the live session context.
+        /// Rewrites placeholder workspace/lakehouse IDs in the path with real
+        /// values from the active EdogSessionRegistry. Handles both patterns
+        /// the LLM generates:
+        ///   - Zero-GUIDs: /workspaces/00000000-0000-0000-0000-000000000002/...
+        ///   - Template vars: /workspaces/{workspaceId}/lakehouses/{artifactId}/...
         /// </summary>
         private static string RewritePathPlaceholders(string path)
         {
@@ -813,27 +815,42 @@ namespace Microsoft.LiveTable.Service.DevMode
                 var session = snapshot?.Sessions?.Count > 0 ? snapshot.Sessions[0] : null;
                 if (session == null) return path;
 
-                // Replace zero-GUID workspace/lakehouse IDs with real ones
+                if (string.IsNullOrEmpty(session.WorkspaceId) || string.IsNullOrEmpty(session.LakehouseId))
+                    return path;
+
+                // Pattern 1: curly-brace template variables
+                // {workspaceId}, {workspace_id}, {wsId} → real workspace
+                // {artifactId}, {artifact_id}, {lakehouseId}, {lakehouse_id}, {lhId} → real lakehouse
+                path = System.Text.RegularExpressions.Regex.Replace(
+                    path,
+                    @"\{(?:workspaceId|workspace_id|wsId)\}",
+                    session.WorkspaceId,
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                path = System.Text.RegularExpressions.Regex.Replace(
+                    path,
+                    @"\{(?:artifactId|artifact_id|lakehouseId|lakehouse_id|lhId)\}",
+                    session.LakehouseId,
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+                // Pattern 2: zero-GUID placeholders
                 var zeroGuid = "00000000-0000-0000-0000-000000000";
-                if (path.Contains(zeroGuid) && !string.IsNullOrEmpty(session.WorkspaceId) && !string.IsNullOrEmpty(session.LakehouseId))
+                if (path.Contains(zeroGuid))
                 {
-                    // Path format: /v1/workspaces/{wsId}/lakehouses/{lhId}/...
-                    // Replace sequentially — first 0-GUID = workspace, second = lakehouse
                     var idx1 = path.IndexOf(zeroGuid, StringComparison.Ordinal);
                     if (idx1 >= 0)
                     {
                         var end1 = path.IndexOf('/', idx1 + 36);
                         if (end1 < 0) end1 = path.Length;
-                        var placeholder1 = path.Substring(idx1, Math.Min(36, end1 - idx1));
-                        path = path.Substring(0, idx1) + session.WorkspaceId + path.Substring(idx1 + placeholder1.Length);
+                        var len1 = Math.Min(36, end1 - idx1);
+                        path = path.Substring(0, idx1) + session.WorkspaceId + path.Substring(idx1 + len1);
 
                         var idx2 = path.IndexOf(zeroGuid, idx1 + session.WorkspaceId.Length, StringComparison.Ordinal);
                         if (idx2 >= 0)
                         {
                             var end2 = path.IndexOf('/', idx2 + 36);
                             if (end2 < 0) end2 = path.Length;
-                            var placeholder2 = path.Substring(idx2, Math.Min(36, end2 - idx2));
-                            path = path.Substring(0, idx2) + session.LakehouseId + path.Substring(idx2 + placeholder2.Length);
+                            var len2 = Math.Min(36, end2 - idx2);
+                            path = path.Substring(0, idx2) + session.LakehouseId + path.Substring(idx2 + len2);
                         }
                     }
                 }
@@ -847,10 +864,9 @@ namespace Microsoft.LiveTable.Service.DevMode
         }
 
         /// <summary>
-        /// Injects the real FLT control-token header for authentication.
-        /// The LLM generates 'Authorization: Bearer valid-mwc-token' as a
-        /// placeholder — the FLT API needs the actual EDOG control token
-        /// used by the API proxy.
+        /// Ensures the request has a valid auth header. The LLM may generate
+        /// fake tokens, empty headers, or no auth at all. Always inject the
+        /// real EDOG control token from the session registry.
         /// </summary>
         private static void RewriteAuthHeader(Dictionary<string, string> headers)
         {
