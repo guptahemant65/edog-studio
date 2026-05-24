@@ -26,7 +26,7 @@ namespace Microsoft.LiveTable.Service.DevMode
     /// </summary>
     [AuthenticationEngine]
     [EnableCors(PolicyName = CorsPolicies.AllowAllCorsPolicyName)]
-    [Route("publicUnprotected/edog")]
+    [Route("v1/workspaces/{workspaceId}/lakehouses/{artifactId}/edogSessions")]
     [ApiExplorerSettings(IgnoreApi = true)]
     public sealed class EdogSessionController : BaseApiController
     {
@@ -37,7 +37,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// </summary>
         /// <returns>JSON with capacity info and session list.</returns>
         [HttpGet]
-        [Route("sessions")]
+        [Route("list")]
         [SkipNetworkAccessFilteringForOutOfScopeApi]
         public IActionResult GetSessions()
         {

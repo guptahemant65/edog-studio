@@ -3041,10 +3041,14 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             failure never blocks a deploy.
         """
         try:
+            # Probe via flt-proxy — goes through the capacity host with proper
+            # MWC auth + moniker headers, same path as all FLT API calls.
+            # Controller route: v1/workspaces/{ws}/lakehouses/{art}/edogSessions/list
+            # flt-proxy auto-prepends the workspace/lakehouse path.
             cfg = {}
             with contextlib.suppress(Exception):
                 if CONFIG_PATH.exists():
-                    cfg = json.loads(CONFIG_PATH.read_text())
+                    cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
 
             ws_id = cfg.get("workspace_id", "")
             art_id = cfg.get("artifact_id", "")
@@ -3065,14 +3069,12 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 self._json_response(200, {"available": True, "sessions": [], "reason": "mwc_failed"})
                 return
 
-            # Hit the capacity host via the FLT unprotected controller route.
-            # EdogSessionController is registered at publicUnprotected/edog/sessions.
-            # publicUnprotected routes do NOT need MWC auth — remove the token.
+            # Build capacity host URL with standard FLT controller path
             target_url = (
                 f"{host}/webapi/capacities/{cap_id}/workloads/LiveTable"
-                f"/LiveTableService/automatic/publicUnprotected/edog/sessions"
+                f"/LiveTableService/automatic"
+                f"/v1/workspaces/{ws_id}/lakehouses/{art_id}/edogSessions/list"
             )
-            sys.stderr.write(f"[EDOG] session-probe URL: {target_url}\n")
             req = urllib.request.Request(target_url, method="GET")
             req.add_header("Authorization", f"MwcToken {mwc_token}")
             req.add_header("x-ms-workload-resource-moniker", art_id)
