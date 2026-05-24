@@ -10,36 +10,19 @@ namespace Microsoft.LiveTable.Service.Controllers
     using System;
     using Microsoft.AspNetCore.Cors;
     using Microsoft.AspNetCore.Mvc;
-    using Microsoft.Fabric.Platform.AccessProtection.Context;
     using Microsoft.Fabric.Platform.AccessProtection.WebApi.Attributes;
-    using Microsoft.LiveTable.Service.Authorization;
-    using Microsoft.LiveTable.Service.Common;
     using Microsoft.LiveTable.Service.Common.Annotations;
     using Microsoft.LiveTable.Service.DevMode;
-    using Microsoft.LiveTable.Service.SecurityAuditing;
     using Microsoft.MWC.Workload.Client.Library.Controllers;
     using Microsoft.MWC.Workload.Client.Library.Http;
-    using Microsoft.ServicePlatform.WebApi.AspNetCore.Filters;
     using Microsoft.ServicePlatform.WebApi.Authentication;
 
     /// <summary>
     /// DevMode-only controller exposing EDOG session registry over the
     /// capacity host HTTP pipeline for cross-machine session probing.
-    /// Attributes match LiveTableInsightsController — the MWC platform
-    /// requires the full attribute set for tenant/security context resolution.
     /// </summary>
     [AuthenticationEngine]
     [EnableCors(PolicyName = CorsPolicies.AllowAllCorsPolicyName)]
-    [SecurityAuditContext(MWCTokenVersion.V1)]
-    [EmitSecurityAuditEventOnException]
-    [ValidateModel]
-    [ResolveTenantIdForFabricAccessProtection]
-    [FabricTenantSingleWorkspaceItemResource(
-        itemType: FabricItemType.Unknown,
-        tenantIdKey: HttpConstants.WorkspaceTenantID,
-        workspaceIdKey: "workspaceId",
-        itemIdKey: "artifactId",
-        TenantIdSource = ContextValueSource.RequestProperties)]
     [InitializeCapacityContext]
     [Route("v1/workspaces/{workspaceId}/lakehouses/{artifactId}/edogSessions")]
     [ApiExplorerSettings(IgnoreApi = true)]
