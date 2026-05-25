@@ -2070,7 +2070,11 @@ def _drain_flt_stdout(proc, deploy_id):
         for line in proc.stdout:
             line = line.rstrip()
             if line:
-                _deploy_log("[FLT] " + line, "info")
+                # Elevate EDOG-side fatals (e.g., EdogLogServer bind failures)
+                # so they surface as errors in the studio deploy log instead
+                # of being lost in the info stream.
+                lvl = "error" if "[EDOG][FATAL]" in line else "info"
+                _deploy_log("[FLT] " + line, lvl)
                 # Check for deployment success markers
                 if "DevConnection started" in line or "Dev Connection established" in line:
                     _flt_ready_event.set()

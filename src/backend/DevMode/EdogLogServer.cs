@@ -47,6 +47,19 @@ namespace Microsoft.LiveTable.Service.DevMode
     private bool disposed;
     private EdogApiProxy apiProxy;
 
+    // Start-time diagnostics — visible to other DevMode code even if the
+    // Kestrel server failed to bind (the /api/edog/interceptors/status route
+    // is hosted on this same server, so it cannot self-report a bind failure).
+    // Read these from EdogDevModeRegistrar or future diagnostics surfaces.
+    private static volatile bool startSucceeded;
+    private static volatile string startErrorMessage;
+
+    /// <summary>Gets a value indicating whether the most recent Start() attempt successfully bound Kestrel and entered RunAsync.</summary>
+    public static bool StartSucceeded => startSucceeded;
+
+    /// <summary>Gets the last Start()/RunAsync exception message, or null if no failure recorded.</summary>
+    public static string StartErrorMessage => startErrorMessage;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="EdogLogServer"/> class.
     /// </summary>
@@ -129,16 +142,39 @@ namespace Microsoft.LiveTable.Service.DevMode
                 try
                 {
                     await app.RunAsync();
+                    // Clean shutdown via Stop() — leave startSucceeded as set by the sync path.
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"EdogLogServer error: {ex}");
+                    // Async bind / runtime failure (e.g., port already in use,
+                    // socket revoked, Kestrel internal crash). This is the
+                    // common silent-failure path: the log viewer goes dark,
+                    // SignalR streams never connect, but FLT keeps running.
+                    // Mark loudly so dev-server's _drain_flt_stdout surfaces
+                    // it in the deploy log, and flip the static flag so any
+                    // diagnostic surface (e.g., a future health probe) can
+                    // report it without depending on this dead server.
+                    startSucceeded = false;
+                    startErrorMessage = $"RunAsync: {ex.GetType().Name}: {ex.Message}";
+                    Console.WriteLine($"[EDOG][FATAL] EdogLogServer host crashed on port {port} — log viewer + SignalR will be unavailable. FLT itself continues. Error: {ex}");
                 }
             });
+
+            // Sync path reached RunAsync without throwing — the actual bind
+            // happens async inside the Task above, but we've successfully
+            // built the host. Any later RunAsync failure will flip this back.
+            startSucceeded = true;
+            startErrorMessage = null;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Failed to start EdogLogServer: {ex}");
+            // Sync configure/build failure — invalid options, port already
+            // owned at WebHost.Build time, missing dependency. Don't FailFast
+            // (FLT must keep running even with the log viewer down) but make
+            // the failure impossible to miss.
+            startSucceeded = false;
+            startErrorMessage = $"Start: {ex.GetType().Name}: {ex.Message}";
+            Console.WriteLine($"[EDOG][FATAL] EdogLogServer.Start() failed on port {port} — log viewer + SignalR will be unavailable. FLT itself continues. Error: {ex}");
         }
     }
 
