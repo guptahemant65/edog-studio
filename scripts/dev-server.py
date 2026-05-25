@@ -63,6 +63,7 @@ def _time_ago(epoch: int) -> str:
     if not epoch:
         return ""
     import time as _t
+
     delta = max(0, int(_t.time()) - int(epoch))
     if delta < 60:
         return "just now"
@@ -81,6 +82,7 @@ def _time_ago(epoch: int) -> str:
     y = delta // (86400 * 365)
     return f"{y} year{'s' if y != 1 else ''} ago"
 
+
 REDIRECT_HOST = "https://biazure-int-edog-redirect.analysis-df.windows.net"
 ONELAKE_HOST = "https://onelake-int-edog.dfs.pbidedicated.windows-int.net"
 ONELAKE_RESOURCE = "https://storage.azure.com"
@@ -92,6 +94,7 @@ class CapacityRoutingError(Exception):
     """Raised when the capacity routing layer is not ready (e.g. LiveTable
     workload not yet registered, MWC endpoint returns 404).  The deploy
     warmup loop and proxy handler treat this as a retryable condition."""
+
 
 # Lock for bearer mint — prevent N parallel mints racing on expiry
 _bearer_mint_lock = threading.Lock()
@@ -1124,9 +1127,11 @@ def _get_mwc_token(bearer: str, ws_id: str, artifact_id: str, cap_id: str, workl
             ) from e
         if e.code in (401, 403):
             raise urllib.error.HTTPError(
-                e.url, e.code,
+                e.url,
+                e.code,
                 f"Bearer token rejected (HTTP {e.code}) — re-authenticate. {err_body}",
-                e.headers, None,
+                e.headers,
+                None,
             ) from e
         raise
 
@@ -2326,9 +2331,7 @@ def _warmup_capacity_route(ws_id: str, lh_id: str, cap_id: str, deploy_id: str) 
                 break
 
             # Single probe: MWC token + GET through capacity in one shot.
-            mwc_token, host = _get_mwc_token(
-                bearer, ws_id, lh_id, cap_id, workload_type="LiveTable"
-            )
+            mwc_token, host = _get_mwc_token(bearer, ws_id, lh_id, cap_id, workload_type="LiveTable")
             probe_url = (
                 f"{host}/webapi/capacities/{cap_id}/workloads/LiveTable"
                 f"/LiveTableService/automatic"
@@ -2709,8 +2712,7 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
             if not warmup_ok:
                 state_update["warmupIncomplete"] = True
                 state_update["warmupMessage"] = (
-                    "Capacity route not fully propagated yet. "
-                    "Some FLT APIs may take a few seconds to start working."
+                    "Capacity route not fully propagated yet. Some FLT APIs may take a few seconds to start working."
                 )
             _studio_state.update(state_update)
         _deploy_log("Deploy complete!" + ("" if warmup_ok else " (warmup incomplete)"), "success")
@@ -3210,6 +3212,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         """
         try:
             import platform
+
             machine = platform.node() or ""
             try:
                 os_user = os.getlogin()
@@ -3227,10 +3230,12 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
     # Allowlisted audiences for the S2S token bypass — only these resources
     # can be minted via CBA. Keeps the endpoint from becoming an arbitrary
     # token oracle.
-    _S2S_ALLOWED_AUDIENCES = frozenset({
-        "https://storage.azure.com",              # OneLake / TridentLake
-        "https://analysis.windows.net/powerbi/api",  # PBI Shared
-    })
+    _S2S_ALLOWED_AUDIENCES = frozenset(
+        {
+            "https://storage.azure.com",  # OneLake / TridentLake
+            "https://analysis.windows.net/powerbi/api",  # PBI Shared
+        }
+    )
 
     def _serve_s2s_token(self):
         """GET /api/edog/s2s-token?resource=<audience> — Mint CBA token for S2S bypass.
@@ -3252,18 +3257,24 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         resource = qs.get("resource", [None])[0]
 
         if not resource:
-            self._json_response(400, {
-                "error": "missing_param",
-                "message": "resource query parameter required",
-            })
+            self._json_response(
+                400,
+                {
+                    "error": "missing_param",
+                    "message": "resource query parameter required",
+                },
+            )
             return
 
         if resource not in self._S2S_ALLOWED_AUDIENCES:
-            self._json_response(400, {
-                "error": "audience_not_allowed",
-                "message": f"Resource '{resource}' not in S2S bypass allowlist",
-                "allowed": list(self._S2S_ALLOWED_AUDIENCES),
-            })
+            self._json_response(
+                400,
+                {
+                    "error": "audience_not_allowed",
+                    "message": f"Resource '{resource}' not in S2S bypass allowlist",
+                    "allowed": list(self._S2S_ALLOWED_AUDIENCES),
+                },
+            )
             return
 
         try:
@@ -3274,22 +3285,27 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             else:
                 token, expiry = _mint_token_for_resource(resource)
 
-            print(f"  [S2S Bypass] Minted CBA token for {resource} "
-                  f"(expires in {int((expiry - time.time()) / 60)} min)")
-            self._json_response(200, {
-                "token": token,
-                "expiresOn": int(expiry),
-                "tokenType": "Bearer",
-                "resource": resource,
-                "source": "cba_bypass",
-            })
+            print(f"  [S2S Bypass] Minted CBA token for {resource} (expires in {int((expiry - time.time()) / 60)} min)")
+            self._json_response(
+                200,
+                {
+                    "token": token,
+                    "expiresOn": int(expiry),
+                    "tokenType": "Bearer",
+                    "resource": resource,
+                    "source": "cba_bypass",
+                },
+            )
         except Exception as e:
             print(f"  [S2S Bypass] Failed for {resource}: {e}")
-            self._json_response(500, {
-                "error": "token_mint_failed",
-                "message": str(e),
-                "resource": resource,
-            })
+            self._json_response(
+                500,
+                {
+                    "error": "token_mint_failed",
+                    "message": str(e),
+                    "resource": resource,
+                },
+            )
 
     def _probe_capacity_sessions(self):
         """GET /api/edog/session-probe — Session Guard pre-deploy collision check.
@@ -3373,7 +3389,9 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 except Exception:
                     pass
                 sys.stderr.write(f"[EDOG] session-probe HTTP {e.code}: {e.reason} body={err_body[:500]}\n")
-                self._json_response(200, {"available": True, "sessions": [], "reason": f"http_{e.code}", "debug": err_body[:500]})
+                self._json_response(
+                    200, {"available": True, "sessions": [], "reason": f"http_{e.code}", "debug": err_body[:500]}
+                )
                 return
             except (urllib.error.URLError, TimeoutError) as e:
                 sys.stderr.write(f"[EDOG] session-probe network: {e}\n")
@@ -4289,8 +4307,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             if e.code in (400, 404):
                 probe = (err_body + str(e)).lower()
                 routing_lag = any(
-                    s in probe
-                    for s in ("endpointnotfound", "route not found", "workload not registered", "not found")
+                    s in probe for s in ("endpointnotfound", "route not found", "workload not registered", "not found")
                 )
 
             if routing_lag:
@@ -5766,14 +5783,14 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 while i < len(lines) and not lines[i].startswith("\t"):
                     sub = lines[i]
                     if sub.startswith("author "):
-                        meta["author"] = sub[len("author "):]
+                        meta["author"] = sub[len("author ") :]
                     elif sub.startswith("author-time "):
                         try:
-                            meta["authorTime"] = int(sub[len("author-time "):])
+                            meta["authorTime"] = int(sub[len("author-time ") :])
                         except ValueError:
                             pass
                     elif sub.startswith("summary "):
-                        meta["summary"] = sub[len("summary "):]
+                        meta["summary"] = sub[len("summary ") :]
                     i += 1
                 # Skip the tab-prefixed content line itself.
                 if i < len(lines) and lines[i].startswith("\t"):
@@ -5814,6 +5831,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
     def _parse_cobertura(xml_path: Path, repo_root: Path) -> dict:
         """Parse a cobertura XML into the diff-modal coverage shape."""
         import xml.etree.ElementTree as ET
+
         tree = ET.parse(xml_path)
         root = tree.getroot()
 
@@ -5833,7 +5851,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             n = fname.replace("\\", "/")
             for s in sources:
                 if n.lower().startswith(s.lower() + "/"):
-                    return n[len(s) + 1:]
+                    return n[len(s) + 1 :]
             # Already relative? Return as-is.
             if not (len(n) > 1 and n[1] == ":") and not n.startswith("/"):
                 return n
@@ -5927,15 +5945,20 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 self._json_response(200, {"valid": True, "available": False, "reason": f"parse_failed:{e}"})
                 return
             cache[key] = {"mtime": mtime, "data": data}
-        self._json_response(200, {
-            "valid": True,
-            "available": True,
-            "source": str(cobertura.relative_to(repo_root)) if cobertura.is_relative_to(repo_root) else str(cobertura),
-            "generatedAt": int(mtime),
-            "files": data["files"],
-            "summary": data["summary"],
-            "basenameIndex": data.get("basenameIndex", {}),
-        })
+        self._json_response(
+            200,
+            {
+                "valid": True,
+                "available": True,
+                "source": str(cobertura.relative_to(repo_root))
+                if cobertura.is_relative_to(repo_root)
+                else str(cobertura),
+                "generatedAt": int(mtime),
+                "files": data["files"],
+                "summary": data["summary"],
+                "basenameIndex": data.get("basenameIndex", {}),
+            },
+        )
 
     def _serve_coverage_run(self):
         """POST /api/edog/coverage/run — synchronously run `dotnet test` with coverage."""
@@ -5957,10 +5980,12 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         try:
             proc = subprocess.run(
                 [
-                    "dotnet", "test",
+                    "dotnet",
+                    "test",
                     str(test_proj),
                     "--collect:XPlat Code Coverage",
-                    "--results-directory", str(results_dir),
+                    "--results-directory",
+                    str(results_dir),
                     "--no-build",
                     "-q",
                 ],
@@ -5980,14 +6005,17 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             return
         elapsed = round(time.time() - started, 1)
         if proc.returncode != 0:
-            self._json_response(200, {
-                "ok": False,
-                "reason": "test_failed",
-                "exitCode": proc.returncode,
-                "elapsedSec": elapsed,
-                "stderr": (proc.stderr or "")[-2000:],
-                "stdout": (proc.stdout or "")[-2000:],
-            })
+            self._json_response(
+                200,
+                {
+                    "ok": False,
+                    "reason": "test_failed",
+                    "exitCode": proc.returncode,
+                    "elapsedSec": elapsed,
+                    "stderr": (proc.stderr or "")[-2000:],
+                    "stdout": (proc.stdout or "")[-2000:],
+                },
+            )
             return
         # Invalidate cache so the next GET re-parses.
         cache = getattr(self.__class__, "_COV_CACHE", None)
