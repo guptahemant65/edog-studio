@@ -22,6 +22,16 @@ namespace Microsoft.LiveTable.Service.DevMode
     {
         private static bool _registered;
         private static bool _httpClientFactoryWrapped;
+        private static bool _unobservedHandlerInstalled;
+        private static int _unobservedExceptionCount;
+
+        /// <summary>
+        /// Gets the count of unobserved Task exceptions intercepted since
+        /// the handler was installed. Useful as a diagnostic signal —
+        /// a steadily climbing number means some fire-and-forget code path
+        /// is leaking failures into the runtime.
+        /// </summary>
+        public static int UnobservedTaskExceptionCount => _unobservedExceptionCount;
 
         /// <summary>
         /// Registers all EDOG DevMode interceptors. Idempotent.
@@ -30,6 +40,16 @@ namespace Microsoft.LiveTable.Service.DevMode
         public static void RegisterAll()
         {
             if (_registered) return;
+
+            // Install the unobserved-task-exception trap FIRST, before any
+            // Register* method (some kick fire-and-forget Task.Run). On
+            // legacy .NET Framework an unobserved fault terminates the
+            // process at GC time; on modern .NET it's a silent log. Either
+            // way, we want one place to (a) mark the exception observed,
+            // (b) surface it with the [EDOG][FATAL] marker so dev-server's
+            // _drain_flt_stdout elevates it to an error in the studio
+            // deploy log, and (c) bump a counter for diagnostics.
+            InstallUnobservedTaskExceptionHandler();
 
             try
             {
@@ -224,6 +244,52 @@ namespace Microsoft.LiveTable.Service.DevMode
                 "FeatureFlighter",
                 inner => inner is EdogFeatureFlighterWrapper,
                 inner => new EdogFeatureFlighterWrapper(inner));
+        }
+
+        /// <summary>
+        /// Installs a process-wide <see cref="System.Threading.Tasks.TaskScheduler.UnobservedTaskException"/>
+        /// handler. Idempotent — guarded by a static flag so repeat
+        /// RegisterAll() calls don't stack handlers. The handler marks every
+        /// unobserved fault observed (preventing process termination on
+        /// legacy .NET Framework) and surfaces it loudly via stdout with the
+        /// [EDOG][FATAL] marker so the studio deploy log shows it as an error.
+        /// Covers the fire-and-forget Task.Run sites in EdogNexusAggregator,
+        /// EdogPlaygroundHub, EdogRateLimiterCacheObserver, EdogRetryInterceptor,
+        /// and any future _ = Task.Run(...) introduced by interceptors.
+        /// </summary>
+        private static void InstallUnobservedTaskExceptionHandler()
+        {
+            if (_unobservedHandlerInstalled) return;
+            try
+            {
+                System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (sender, args) =>
+                {
+                    System.Threading.Interlocked.Increment(ref _unobservedExceptionCount);
+                    try
+                    {
+                        var baseEx = args.Exception?.GetBaseException();
+                        var typeName = baseEx?.GetType().Name ?? "Unknown";
+                        var message = baseEx?.Message ?? "<no message>";
+                        Console.WriteLine($"[EDOG][FATAL] Unobserved Task exception #{_unobservedExceptionCount} ({typeName}): {message}");
+                    }
+                    catch
+                    {
+                        // Never let the handler itself throw — that would
+                        // re-enter UnobservedTaskException and loop.
+                    }
+                    finally
+                    {
+                        // Always observe so we don't terminate the host on
+                        // legacy frameworks. The fault is logged; FLT lives.
+                        args.SetObserved();
+                    }
+                };
+                _unobservedHandlerInstalled = true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[EDOG] ✗ UnobservedTaskException handler install failed (non-fatal): {ex.Message}");
+            }
         }
 
         private static void RegisterPerfMarkerCallback()
