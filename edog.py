@@ -145,6 +145,7 @@ DEVMODE_FILES = {
     "MitmRuleStore": SERVICE_PATH / "DevMode/MitmRuleStore.cs",
     "MitmCoordinator": SERVICE_PATH / "DevMode/MitmCoordinator.cs",
     "MitmDecision": SERVICE_PATH / "DevMode/MitmDecision.cs",
+    "EdogS2STokenBypass": SERVICE_PATH / "DevMode/EdogS2STokenBypass.cs",
     "EdogLogsHtml": SERVICE_PATH / "DevMode/edog-logs.html",
     "EditorConfig": SERVICE_PATH / "DevMode/.editorconfig",
 }

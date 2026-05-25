@@ -49,6 +49,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 RegisterTokenLifecycleInterceptor();
                 RegisterCatalogInterceptor();
                 RegisterFltOpsInterceptors();
+                RegisterS2STokenBypass();
 
                 // DAG execution hook (EdogDagExecutionHook) is wired via edog.py
                 // patch to DagExecutionHandlerV2.cs — adds our hook to the inline hook list.
@@ -533,6 +534,14 @@ namespace Microsoft.LiveTable.Service.DevMode
                 "TableMaintenance",
                 inner => inner is EdogTableMaintenanceFactoryWrapper,
                 inner => new EdogTableMaintenanceFactoryWrapper(inner));
+        }
+
+        private static void RegisterS2STokenBypass()
+        {
+            TryWrap<Microsoft.LiveTable.Service.TridentIntegration.PartnerAuthorization.IS2STokenProvider>(
+                "S2STokenBypass",
+                inner => inner is EdogS2STokenBypass,
+                inner => new EdogS2STokenBypass(inner));
         }
 
         private static void StartNexusAggregator()
