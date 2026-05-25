@@ -18,7 +18,7 @@ class DeployFlow {
     this._copyToast = 0;
     this._logs = [];
     this._startTime = null;
-    this._state = { step: 0, total: 5, status: 'idle', message: '', error: null, fltPort: null };
+    this._state = { step: 0, total: 5, status: 'idle', message: '', error: null, errorKind: null, errorDetail: null, fltPort: null };
     this._elapsedTimer = null;
 
     /** Callback: onUpdate({step, total, status, message, error, fltPort}) */
@@ -55,7 +55,7 @@ class DeployFlow {
     this._active = true;
     this._startTime = Date.now();
     this._logs = [];
-    this._state = { step: 0, total: 5, status: 'deploying', message: 'Initiating deploy...', error: null, fltPort: null };
+    this._state = { step: 0, total: 5, status: 'deploying', message: 'Initiating deploy...', error: null, errorKind: null, errorDetail: null, fltPort: null };
     this._render();
     this._startElapsedTimer();
 
@@ -97,6 +97,8 @@ class DeployFlow {
       status: state.phase === 'deploying' ? 'deploying' : state.phase,
       message: state.deployMessage || '',
       error: state.deployError || null,
+      errorKind: state.deployErrorKind || null,
+      errorDetail: state.deployErrorDetail || null,
       fltPort: state.fltPort || null,
     };
     this._el.style.display = 'block';
@@ -142,6 +144,8 @@ class DeployFlow {
         this._state.status = data.status === 'deploying' ? 'deploying' : data.status;
         this._state.message = data.message || '';
         this._state.error = data.error != null ? data.error : null;
+        this._state.errorKind = data.errorKind != null ? data.errorKind : null;
+        this._state.errorDetail = data.errorDetail != null ? data.errorDetail : null;
         this._state.fltPort = data.fltPort != null ? data.fltPort : this._state.fltPort;
 
         if (data.log) {
@@ -167,6 +171,8 @@ class DeployFlow {
         this._state.status = data.status;
         this._state.message = data.message || '';
         this._state.error = data.error != null ? data.error : null;
+        this._state.errorKind = data.errorKind != null ? data.errorKind : null;
+        this._state.errorDetail = data.errorDetail != null ? data.errorDetail : null;
         this._state.fltPort = data.fltPort != null ? data.fltPort : null;
       } catch { /* ignore */ }
 
@@ -215,7 +221,7 @@ class DeployFlow {
   // ── Render ──────────────────────────────────
 
   _render() {
-    const { step, total, status, message, error, fltPort } = this._state;
+    const { step, total, status, message, error, errorKind, errorDetail, fltPort } = this._state;
     const elapsed = this._startTime ? Math.floor((Date.now() - this._startTime) / 1000) : 0;
     const pct = status === 'running' ? 100 : status === 'stopped' && !error ? 0 : Math.min(((step + (status === 'deploying' ? 0.5 : 0)) / total) * 100, 100);
 
@@ -344,14 +350,19 @@ class DeployFlow {
     html += '</button>';
     html += '</div>';
 
-    // Error banner (V2 dramatic style)
+    // Error banner — pick rich card when we have a known failure kind,
+    // otherwise fall back to the generic banner.
     if (status === 'stopped' && error) {
-      html += '<div class="deploy-error-banner" style="margin-top:var(--space-3);">';
-      html += '<span class="deploy-error-icon-wrap"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="9" x2="12" y2="13"/><circle cx="12" cy="17" r="0.5" fill="currentColor"/></svg></span>';
-      html += '<div class="deploy-error-content">';
-      html += '<div class="deploy-error-title">Deploy failed at step ' + (step + 1) + '</div>';
-      html += '<div class="deploy-error-detail">' + this._esc(error) + '</div>';
-      html += '</div></div>';
+      if (errorKind === 'mwc_registration') {
+        html += this._renderMwcFailureCard(errorDetail || {}, step);
+      } else {
+        html += '<div class="deploy-error-banner" style="margin-top:var(--space-3);">';
+        html += '<span class="deploy-error-icon-wrap"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="9" x2="12" y2="13"/><circle cx="12" cy="17" r="0.5" fill="currentColor"/></svg></span>';
+        html += '<div class="deploy-error-content">';
+        html += '<div class="deploy-error-title">Deploy failed at step ' + (step + 1) + '</div>';
+        html += '<div class="deploy-error-detail">' + this._esc(error) + '</div>';
+        html += '</div></div>';
+      }
     }
 
     // Success banner
@@ -374,6 +385,68 @@ class DeployFlow {
       if (term) term.scrollTop = term.scrollHeight;
     }
     this._updateJumpBadge();
+  }
+
+  _renderMwcFailureCard(detail, step) {
+    // Rich error card for DevInstanceRegistrationFailedException — gives the
+    // engineer something to act on instead of a generic "deploy failed" line.
+    // Shows the actual MWC-side identifiers (capacity GUID, root activity ID,
+    // cluster DNS) plus the four mitigation steps in priority order.
+    const cap = detail.capacityGuid || '\u2014';
+    const aid = detail.rootActivityId || '\u2014';
+    const cluster = detail.clusterDns || '\u2014';
+    const httpStatus = detail.httpStatus || 'InternalServerError';
+
+    let h = '<div class="deploy-mwc-failure" role="alert" aria-live="polite" style="margin-top:var(--space-3);">';
+
+    // Header
+    h += '<div class="deploy-mwc-failure-header">';
+    h += '<span class="deploy-mwc-failure-icon" aria-hidden="true">';
+    h += '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+    h += '</span>';
+    h += '<div class="deploy-mwc-failure-titles">';
+    h += '<div class="deploy-mwc-failure-title">Dev instance registration failed</div>';
+    h += '<div class="deploy-mwc-failure-subtitle">MWC dev-relay returned ' + this._esc(httpStatus) + ' \u2014 not a workload bug</div>';
+    h += '</div></div>';
+
+    // What happened
+    h += '<div class="deploy-mwc-failure-explain">';
+    h += 'FLT booted and called MWC to register itself as a dev instance for your capacity. MWC accepted the call, attempted its own downstream call to the analysis-services frontend, and that downstream call failed. The registration itself is fine \u2014 the cluster is unhealthy or the routing entry is stale.';
+    h += '</div>';
+
+    // Mitigations
+    h += '<ol class="deploy-mwc-failure-steps">';
+    h += '<li><span class="deploy-mwc-step-num">1</span><div class="deploy-mwc-step-body"><strong>Retry the deploy.</strong> This error class is overwhelmingly transient \u2014 MWC\u2019s downstream call is the flakiest link and usually self-heals within seconds.</div></li>';
+    h += '<li><span class="deploy-mwc-step-num">2</span><div class="deploy-mwc-step-body"><strong>Check for a colliding session.</strong> If another machine has registered a dev instance against this capacity, MWC won\u2019t let two register at once. The session-guard probe runs pre-deploy \u2014 check its output above.</div></li>';
+    h += '<li><span class="deploy-mwc-step-num">3</span><div class="deploy-mwc-step-body"><strong>Pause &amp; resume the capacity.</strong> If retries keep failing, go to the Fabric admin portal, pause this capacity, wait for it to fully stop, then resume. This forces MWC to rebuild its routing entries.</div></li>';
+    h += '<li><span class="deploy-mwc-step-num">4</span><div class="deploy-mwc-step-body"><strong>Verify outbound network.</strong> If you just changed VPN or network, the workload may not reach the cluster. Run <code>Test-NetConnection ' + this._esc(cluster) + ' -Port 443</code> in PowerShell to confirm.</div></li>';
+    h += '</ol>';
+
+    // Telemetry block
+    h += '<div class="deploy-mwc-failure-telemetry">';
+    h += '<div class="deploy-mwc-telemetry-title">For escalation, share these identifiers with MWC support:</div>';
+    h += '<div class="deploy-mwc-telemetry-rows">';
+    h += this._renderTelemetryRow('Capacity GUID', cap, 'mwc-copy-cap');
+    h += this._renderTelemetryRow('MWC ActivityId', aid, 'mwc-copy-aid');
+    h += this._renderTelemetryRow('Cluster DNS', cluster, 'mwc-copy-cluster');
+    h += '</div>';
+    h += '<span class="deploy-mwc-copy-toast" id="deploy-mwc-toast">Copied</span>';
+    h += '</div>';
+
+    h += '</div>';
+    return h;
+  }
+
+  _renderTelemetryRow(label, value, btnId) {
+    const safe = this._esc(value);
+    let h = '<div class="deploy-mwc-telemetry-row">';
+    h += '<span class="deploy-mwc-telemetry-label">' + this._esc(label) + '</span>';
+    h += '<code class="deploy-mwc-telemetry-value">' + safe + '</code>';
+    h += '<button type="button" class="deploy-mwc-telemetry-copy" id="' + btnId + '" data-copy="' + safe + '" aria-label="Copy ' + this._esc(label) + '">';
+    h += '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+    h += '</button>';
+    h += '</div>';
+    return h;
   }
 
   _bindEvents() {
@@ -432,6 +505,26 @@ class DeployFlow {
 
     const copy = document.getElementById('deploy-term-copy');
     if (copy) copy.addEventListener('click', () => this._copyLogs());
+
+    // MWC failure card — copy buttons for capacity GUID / activity ID / cluster
+    const mwcCopyBtns = this._el.querySelectorAll('.deploy-mwc-telemetry-copy');
+    mwcCopyBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const val = btn.getAttribute('data-copy') || '';
+        if (!val || val === '\u2014') return;
+        const copyFn = navigator.clipboard?.writeText
+          ? navigator.clipboard.writeText(val)
+          : Promise.reject(new Error('clipboard unavailable'));
+        Promise.resolve(copyFn).then(() => {
+          const toast = document.getElementById('deploy-mwc-toast');
+          if (toast) {
+            toast.classList.add('show');
+            clearTimeout(this._mwcToastTimer);
+            this._mwcToastTimer = setTimeout(() => toast.classList.remove('show'), 1500);
+          }
+        }).catch(() => { /* clipboard blocked — silently ignore */ });
+      });
+    });
 
     const wrap = document.getElementById('deploy-term-wrap');
     if (wrap) wrap.addEventListener('click', () => {
@@ -734,7 +827,7 @@ class DeployFlow {
     this._closeSSE();
     this._stopElapsedTimer();
     this._active = false;
-    this._state = { step: 0, total: 5, status: 'idle', message: '', error: null, fltPort: null };
+    this._state = { step: 0, total: 5, status: 'idle', message: '', error: null, errorKind: null, errorDetail: null, fltPort: null };
     this._el.innerHTML = '';
     this._el.style.display = 'none';
     if (this.onUpdate) this.onUpdate({ status: 'idle' });

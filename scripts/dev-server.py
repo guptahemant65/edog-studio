@@ -284,6 +284,11 @@ _studio_state = {
     "deployTotal": 5,
     "deployMessage": "",
     "deployError": None,
+    # Structured failure classification. When set, the frontend renders a
+    # rich error card with mitigation steps instead of the generic banner.
+    # Known kinds: "mwc_registration" (DevInstanceRegistrationFailedException).
+    "deployErrorKind": None,
+    "deployErrorDetail": None,
     "deployLogs": [],
     "deployTarget": None,
     "deployStartTime": None,
@@ -1878,6 +1883,11 @@ def _deploy_step(step, message, deploy_id):
 # Event set when FLT stdout shows "DevConnection started" (service fully ready)
 _flt_ready_event = threading.Event()
 
+# Event set when FLT stdout shows DevInstanceRegistrationFailedException.
+# Lets the deploy waiter fail fast (with structured detail) instead of timing
+# out 180s on a failure MWC has already told us about.
+_flt_registration_failed_event = threading.Event()
+
 # Timestamp when the most recent FLT deploy completed (routing confirmed).
 # Used by the proxy to apply a post-deploy grace window: 400s from FLT during
 # this window are treated as transient (FLT internal state not yet ready).
@@ -2057,11 +2067,44 @@ def _wait_for_port_free(port: int, timeout: float = 10) -> bool:
     return False
 
 
+def _parse_registration_failure(line):
+    """Extract structured detail from a DevInstanceRegistrationFailedException line.
+
+    The exception message embeds the registration request struct and the MWC
+    error response JSON on a single output line. We pull out:
+      - capacityGuid (from CapacityGuid = <guid>)
+      - rootActivityId (from "code":"RootActivityId","message":"<guid>")
+      - clusterDns (from "code":"ClusterDNS","message":"<host>")
+      - httpStatusCode (from HTTP status code: <name>)
+
+    Returns dict with whatever was found, or None if this isn't the marker line.
+    """
+    if "DevInstanceRegistrationFailedException" not in line:
+        return None
+    detail = {}
+    m = re.search(r"CapacityGuid\s*=\s*([0-9a-fA-F-]{36})", line)
+    if m:
+        detail["capacityGuid"] = m.group(1)
+    m = re.search(r'"code":"RootActivityId","message":"([^"]+)"', line)
+    if m:
+        detail["rootActivityId"] = m.group(1)
+    m = re.search(r'"code":"ClusterDNS","message":"([^"]+)"', line)
+    if m:
+        detail["clusterDns"] = m.group(1)
+    m = re.search(r"HTTP status code:\s*([A-Za-z]+)", line)
+    if m:
+        detail["httpStatus"] = m.group(1)
+    return detail
+
+
 def _drain_flt_stdout(proc, deploy_id):
     """Read FLT process stdout continuously to prevent pipe buffer blocking.
 
     Also captures output as deploy log entries and sets _flt_ready_event
-    when the service is fully deployed (DevConnection started).
+    when the service is fully deployed (DevConnection started). Detects
+    known-fatal exception markers (DevInstanceRegistrationFailedException)
+    and sets _flt_registration_failed_event with structured detail so the
+    deploy waiter can fail fast instead of timing out at 180s.
 
     Reads until EOF (not until poll() flips) so crash stack traces that
     are still buffered in the pipe after the process exits are captured.
@@ -2078,6 +2121,14 @@ def _drain_flt_stdout(proc, deploy_id):
                 # Check for deployment success markers
                 if "DevConnection started" in line or "Dev Connection established" in line:
                     _flt_ready_event.set()
+                # Check for known-fatal markers — fail fast rather than
+                # waiting for the 180s healthy-timeout to elapse.
+                if "DevInstanceRegistrationFailedException" in line and not _flt_registration_failed_event.is_set():
+                    detail = _parse_registration_failure(line) or {}
+                    with _studio_lock:
+                        _studio_state["deployErrorKind"] = "mwc_registration"
+                        _studio_state["deployErrorDetail"] = detail
+                    _flt_registration_failed_event.set()
     except Exception:
         pass
 
@@ -2636,10 +2687,16 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
                 _studio_state["fltPid"] = _flt_process.pid
                 _studio_state["fltPort"] = FLT_INTERNAL_PORT
 
-            # Clear ready-event BEFORE starting the drain thread — if FLT
-            # boots fast the drain thread may see "DevConnection started" and
-            # set() the event; clearing AFTER would erase that signal (race).
+            # Clear ready/failure events BEFORE starting the drain thread — if
+            # FLT boots fast the drain thread may see "DevConnection started"
+            # (or the failure marker) and set() the event; clearing AFTER would
+            # erase that signal (race). Also reset structured-error fields so a
+            # prior failure doesn't bleed into this deploy's UI.
             _flt_ready_event.clear()
+            _flt_registration_failed_event.clear()
+            with _studio_lock:
+                _studio_state["deployErrorKind"] = None
+                _studio_state["deployErrorDetail"] = None
 
             # Drain stdout in background (prevents pipe buffer blocking)
             threading.Thread(target=_drain_flt_stdout, args=(_flt_process, deploy_id), daemon=True).start()
@@ -2659,17 +2716,58 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
 
         # Step 4: Wait for FLT to be fully deployed
         # The real indicator is "DevConnection started" in FLT stdout
-        # (captured by _drain_flt_stdout which sets _flt_ready_event)
+        # (captured by _drain_flt_stdout which sets _flt_ready_event).
+        # We also race against _flt_registration_failed_event so that when
+        # MWC rejects the dev-instance registration we surface a clean
+        # structured error in ~1s instead of waiting 180s.
         if not _deploy_step(4, "Waiting for DevMode connection...", deploy_id):
             return
         # _flt_ready_event was cleared before the drain thread started (above)
-        healthy = _flt_ready_event.wait(timeout=180)  # 3 min max
+        healthy = False
+        wait_deadline = time.time() + 180  # 3 min max
+        while time.time() < wait_deadline:
+            if _flt_ready_event.is_set():
+                healthy = True
+                break
+            if _flt_registration_failed_event.is_set():
+                # Known-fatal MWC-side failure already surfaced by the drain
+                # thread (deployErrorKind/Detail already populated).
+                break
+            if _deploy_cancel.is_set():
+                break
+            if _flt_process.poll() is not None:
+                break
+            time.sleep(0.5)
 
         # Check if cancelled or process died while waiting
         if _deploy_cancel.is_set():
             _flt_process.terminate()
             with _studio_lock:
                 _studio_state.update({"phase": "stopped", "deployMessage": "Cancelled"})
+            return
+
+        # Known-fatal: MWC rejected the dev-instance registration. The drain
+        # thread already populated deployErrorKind/Detail; surface a clean
+        # message and stop the workload so the user can act on the mitigation
+        # steps the UI renders without waiting for the 180s timeout.
+        if _flt_registration_failed_event.is_set():
+            with _studio_lock:
+                detail = _studio_state.get("deployErrorDetail") or {}
+            cap = detail.get("capacityGuid") or "unknown"
+            _deploy_log(
+                f"MWC dev-instance registration failed for capacity {cap} — see error card for mitigation steps",
+                "error",
+            )
+            with contextlib.suppress(Exception):
+                _flt_process.terminate()
+            with _studio_lock:
+                _studio_state.update(
+                    {
+                        "phase": "stopped",
+                        "deployError": "MWC rejected dev-instance registration",
+                        "deployMessage": "Deploy failed — MWC dev-relay returned 500",
+                    }
+                )
             return
 
         if _flt_process.poll() is not None:
@@ -4038,6 +4136,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                     "deployTotal": 5,
                     "deployMessage": "Starting deploy...",
                     "deployError": None,
+                    "deployErrorKind": None,
+                    "deployErrorDetail": None,
                     "deployLogs": [],
                     "deployTarget": {
                         "workspaceId": ws_id,
@@ -4117,6 +4217,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                     "deployStep": 0,
                     "deployMessage": "",
                     "deployError": None,
+                    "deployErrorKind": None,
+                    "deployErrorDetail": None,
                     "deployLogs": [],
                     "deployTarget": None,
                     "deployStartTime": None,
@@ -4148,6 +4250,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 total = _studio_state["deployTotal"]
                 msg = _studio_state["deployMessage"]
                 err = _studio_state["deployError"]
+                err_kind = _studio_state.get("deployErrorKind")
+                err_detail = _studio_state.get("deployErrorDetail")
                 flt_port = _studio_state["fltPort"]
 
             for i, log_entry in enumerate(logs):
@@ -4162,6 +4266,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                         "status": phase,
                         "message": msg,
                         "error": err,
+                        "errorKind": err_kind,
+                        "errorDetail": err_detail,
                         "log": log_entry,
                         "fltPort": flt_port,
                     }
@@ -4181,6 +4287,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                         "status": phase,
                         "message": msg,
                         "error": err,
+                        "errorKind": err_kind,
+                        "errorDetail": err_detail,
                         "fltPort": flt_port,
                     }
                 )

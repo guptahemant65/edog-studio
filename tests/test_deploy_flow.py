@@ -1,7 +1,9 @@
 """Tests for F02 Deploy to Lakehouse flow."""
 
+import importlib.util
 import json
 import os
+import sys
 import tempfile
 from pathlib import Path
 
@@ -398,3 +400,135 @@ class TestDeployTargetCarriesWorkspaceName:
         assert "target.update(git_info)" in src, (
             "Captured git_info must be merged into deployTarget on successful deploy"
         )
+
+
+# ============================================================================
+# DevInstanceRegistrationFailedException detection (MWC dev-relay failure UX)
+# ============================================================================
+
+
+def _load_dev_server():
+    project_dir = Path(__file__).resolve().parents[1]
+    dev_server = project_dir / "scripts" / "dev-server.py"
+    spec = importlib.util.spec_from_file_location("edog_dev_server_mwc", dev_server)
+    mod = importlib.util.module_from_spec(spec)
+    sys.path.insert(0, str(dev_server.parent))
+    try:
+        spec.loader.exec_module(mod)
+    finally:
+        sys.path.pop(0)
+    return mod
+
+
+class TestMwcRegistrationFailureParser:
+    """_parse_registration_failure extracts MWC-side identifiers so the UI
+    can render a rich error card instead of dumping the raw stack trace."""
+
+    SAMPLE_LINE = (
+        "Failed to establish Dev Connection due to error "
+        "Microsoft.Fabric.Relay.Connections.Services.Exceptions.DevInstanceRegistrationFailedException: "
+        "Dev instance registration call DevInstanceRegistrationRequest[ "
+        "CapacityGuid = 3e65fd15-ef05-43cf-a07b-2a74788a6cbd, RealmGuid = , "
+        "WorkloadId = LiveTable, ExtensionManifestProvided = True ] was not "
+        "successful, HTTP status code: InternalServerError, reason: Internal "
+        'Server Error, response: {"code":"InternalError","subCode":0,"message":'
+        '"An internal error occurred.","timeStamp":"2026-05-25T11:33:16.428394Z",'
+        '"httpStatusCode":500,"hresult":-2147467259,"details":['
+        '{"code":"RootActivityId","message":"cbf3aeff-8c24-4d56-9703-1b94e9000b91"},'
+        '{"code":"ClusterDNS","message":"pbipedogwcus2-edog.pbidedicated.windows-int.net"},'
+        '{"code":"ApplicationName","message":"fabric:/analysisserver.frontend"},'
+        '{"code":"NodeName","message":"_fe2_2"},'
+        '{"code":"NodeType","message":"FrontEnd"},'
+        '{"code":"ProcessId","message":"20612"},'
+        '{"code":"Param1","message":"An error occurred while sending the request."}]}'
+    )
+
+    def test_returns_none_when_marker_absent(self):
+        srv = _load_dev_server()
+        assert srv._parse_registration_failure("just some random log line") is None
+
+    def test_extracts_capacity_guid(self):
+        srv = _load_dev_server()
+        result = srv._parse_registration_failure(self.SAMPLE_LINE)
+        assert result is not None
+        assert result["capacityGuid"] == "3e65fd15-ef05-43cf-a07b-2a74788a6cbd"
+
+    def test_extracts_root_activity_id(self):
+        srv = _load_dev_server()
+        result = srv._parse_registration_failure(self.SAMPLE_LINE)
+        assert result["rootActivityId"] == "cbf3aeff-8c24-4d56-9703-1b94e9000b91"
+
+    def test_extracts_cluster_dns(self):
+        srv = _load_dev_server()
+        result = srv._parse_registration_failure(self.SAMPLE_LINE)
+        assert result["clusterDns"] == "pbipedogwcus2-edog.pbidedicated.windows-int.net"
+
+    def test_extracts_http_status(self):
+        srv = _load_dev_server()
+        result = srv._parse_registration_failure(self.SAMPLE_LINE)
+        assert result["httpStatus"] == "InternalServerError"
+
+    def test_returns_partial_when_fields_missing(self):
+        srv = _load_dev_server()
+        sparse = "DevInstanceRegistrationFailedException: something happened, no detail"
+        result = srv._parse_registration_failure(sparse)
+        assert result == {}
+
+    def test_studio_state_carries_new_fields(self):
+        srv = _load_dev_server()
+        # The structured failure fields must exist on the initial state dict
+        # so /api/studio/status responses always include them (resume path
+        # depends on them being present, even if null).
+        assert "deployErrorKind" in srv._studio_state
+        assert "deployErrorDetail" in srv._studio_state
+        assert srv._studio_state["deployErrorKind"] is None
+        assert srv._studio_state["deployErrorDetail"] is None
+
+    def test_registration_failed_event_exists(self):
+        srv = _load_dev_server()
+        # The wait-for-ready loop races this event against _flt_ready_event;
+        # if it disappears the loop will fall back to the 180s timeout.
+        assert hasattr(srv, "_flt_registration_failed_event")
+        assert not srv._flt_registration_failed_event.is_set()
+
+
+class TestMwcFailureCardRendering:
+    """Frontend renders the rich card only when errorKind === mwc_registration."""
+
+    _DEPLOY_JS_PATH = Path(__file__).resolve().parents[1] / "src" / "frontend" / "js" / "deploy-flow.js"
+    _DEPLOY_CSS_PATH = Path(__file__).resolve().parents[1] / "src" / "frontend" / "css" / "deploy.css"
+
+    def test_render_branches_on_errorKind(self):
+        src = self._DEPLOY_JS_PATH.read_text(encoding="utf-8")
+        assert "errorKind === 'mwc_registration'" in src
+        assert "_renderMwcFailureCard" in src
+
+    def test_render_card_includes_telemetry_rows(self):
+        src = self._DEPLOY_JS_PATH.read_text(encoding="utf-8")
+        # The four mitigation steps + telemetry IDs must all be present so
+        # the engineer sees actionable detail rather than the raw exception.
+        assert "Capacity GUID" in src
+        assert "MWC ActivityId" in src
+        assert "Cluster DNS" in src
+        assert "Pause &amp; resume the capacity" in src
+        assert "Test-NetConnection" in src
+
+    def test_state_carries_errorKind_and_errorDetail(self):
+        src = self._DEPLOY_JS_PATH.read_text(encoding="utf-8")
+        # Both fields must travel through state / SSE / resume so the card
+        # survives a page reload mid-failure.
+        assert "errorKind: null" in src
+        assert "errorDetail: null" in src
+        assert "data.errorKind" in src
+        assert "data.errorDetail" in src
+        assert "state.deployErrorKind" in src
+        assert "state.deployErrorDetail" in src
+
+    def test_css_includes_failure_card_styles(self):
+        src = self._DEPLOY_CSS_PATH.read_text(encoding="utf-8")
+        # The card needs its own scoped block so it can't accidentally
+        # inherit the basic .deploy-error-banner layout.
+        assert ".deploy-mwc-failure" in src
+        assert ".deploy-mwc-failure-steps" in src
+        assert ".deploy-mwc-telemetry-row" in src
+        assert ".deploy-mwc-telemetry-copy" in src
