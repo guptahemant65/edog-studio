@@ -1510,8 +1510,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                 // SYSTEMIC-QUARANTINE SHORT-CIRCUIT: if >=80% of the
                 // quarantined scenarios share the SAME failure code AND
                 // there are at least 5 of them, the failure is a
-                // systemic Editor-output problem (e.g. empty matchers[],
-                // descriptive matcherSpec). Asking the Editor to repair
+                // systemic Editor-output problem (e.g. empty matchers,
+                // null stimulus). Asking the Editor to repair
                 // its own output one more time in the same format will
                 // burn budget without recovering — the fix has to land
                 // in the Editor prompt / schema, not in another repair
@@ -1873,9 +1873,9 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// the largest plurality of quarantined scenarios, plus its
         /// count. Used by the Branch B short-circuit to avoid spending
         /// repair budget when the failure is uniform across the batch
-        /// (e.g. every scenario emitted an empty matchers[] array, or
-        /// every matcherSpec is descriptive text). Caller decides the
-        /// dominance threshold; this helper just returns the tally.
+        /// (e.g. every scenario has null stimulus or null matcher).
+        /// Caller decides the dominance threshold; this helper just
+        /// returns the tally.
         /// </summary>
         private static (string Code, int Count) ComputeDominantQuarantineCode(
             List<EdogQaScenarioValidator.QuarantinedScenario> quarantined)
@@ -2079,7 +2079,7 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         private static string GeneratedScenarioStimulusKey(EdogQaLlmClient.GeneratedScenario scenario)
         {
-            if (scenario == null || string.IsNullOrWhiteSpace(scenario.StimulusSpec))
+            if (scenario == null || scenario.Stimulus == null)
             {
                 return null;
             }
@@ -2098,60 +2098,39 @@ namespace Microsoft.LiveTable.Service.DevMode
                 }
             }
 
-            try
+            switch (scenario.Stimulus)
             {
-                using var doc = JsonDocument.Parse(scenario.StimulusSpec);
-                var root = doc.RootElement;
-                var stimulusType = scenario.StimulusType ?? string.Empty;
-                switch (stimulusType)
-                {
-                    case "HttpRequest":
-                        var path = GetJsonString(root, "path");
-                        if (string.IsNullOrEmpty(path)) return null;
-                        var method = GetJsonString(root, "method") ?? "GET";
-                        var bodyHash = root.TryGetProperty("body", out var body)
-                            ? ShortHash(CanonicalJson(body))
-                            : ShortHash(string.Empty);
-                        return $"http|{method.ToUpperInvariant()}|{path}|{bodyHash}{flagSuffix}";
-                    case "SignalRBroadcast":
-                        var signalMethod = GetJsonString(root, "method");
-                        if (string.IsNullOrEmpty(signalMethod)) return null;
-                        var hub = GetJsonString(root, "hub");
-                        var argsHash = root.TryGetProperty("args", out var args)
-                            ? ShortHash(CanonicalJson(args))
-                            : ShortHash(string.Empty);
-                        return $"signalr|{hub}|{signalMethod}|{argsHash}{flagSuffix}";
-                    case "DagTrigger":
-                        var iterationId = GetJsonString(root, "iterationId");
-                        var nodeFilter = GetNodeFilterKey(root);
-                        return $"dag|{iterationId}|{nodeFilter}{flagSuffix}";
-                    case "FileEvent":
-                        var filePath = GetJsonString(root, "path");
-                        return string.IsNullOrEmpty(filePath) ? null : $"file|{filePath}{flagSuffix}";
-                    case "TimerTick":
-                        var tickSource = GetJsonString(root, "tickSource");
-                        var topic = GetJsonString(root, "topic");
-                        return $"timer|{tickSource}|{topic}{flagSuffix}";
-                    case "DiInvocation":
-                        var diMethod = GetJsonString(root, "method");
-                        if (string.IsNullOrEmpty(diMethod)) return null;
-                        var serviceType = GetJsonString(root, "serviceType");
-                        var diArgsHash = root.TryGetProperty("args", out var diArgs)
-                            ? ShortHash(CanonicalJson(diArgs))
-                            : ShortHash(string.Empty);
-                        // Include stimulusId so different st-N assignments
-                        // make DiInvocation scenarios distinct
-                        var stimIdTag = !string.IsNullOrEmpty(scenario.StimulusId)
-                            ? $"|sid:{scenario.StimulusId}"
-                            : string.Empty;
-                        return $"direct|{serviceType}|{diMethod}|{diArgsHash}{flagSuffix}{stimIdTag}";
-                    default:
-                        return null;
-                }
-            }
-            catch (JsonException)
-            {
-                return $"{scenario.StimulusType}|{scenario.StimulusSpec}{flagSuffix}";
+                case EdogQaLlmClient.HttpRequestStimulus http:
+                    if (string.IsNullOrEmpty(http.Path)) return null;
+                    var method = http.Method ?? "GET";
+                    var bodyHash = ShortHash(http.Body ?? string.Empty);
+                    return $"http|{method.ToUpperInvariant()}|{http.Path}|{bodyHash}{flagSuffix}";
+                case EdogQaLlmClient.SignalRBroadcastStimulus signalr:
+                    if (string.IsNullOrEmpty(signalr.Method)) return null;
+                    var argsHash = signalr.Args != null
+                        ? ShortHash(string.Join(",", signalr.Args.Select(a => a?.ToString() ?? "")))
+                        : ShortHash(string.Empty);
+                    return $"signalr|{signalr.Hub}|{signalr.Method}|{argsHash}{flagSuffix}";
+                case EdogQaLlmClient.DagTriggerStimulus dag:
+                    var nodeFilter = dag.NodeFilter != null
+                        ? string.Join(",", dag.NodeFilter.OrderBy(n => n, StringComparer.Ordinal))
+                        : string.Empty;
+                    return $"dag|{dag.IterationId}|{nodeFilter}{flagSuffix}";
+                case EdogQaLlmClient.FileEventStimulus file:
+                    return string.IsNullOrEmpty(file.Path) ? null : $"file|{file.Path}{flagSuffix}";
+                case EdogQaLlmClient.TimerTickStimulus timer:
+                    return $"timer|{timer.TickSource}|{timer.Topic}{flagSuffix}";
+                case EdogQaLlmClient.DiInvocationStimulus di:
+                    if (string.IsNullOrEmpty(di.Method)) return null;
+                    var diArgsHash = di.Args != null
+                        ? ShortHash(string.Join(",", di.Args.Select(a => a?.ToString() ?? "")))
+                        : ShortHash(string.Empty);
+                    var stimIdTag = !string.IsNullOrEmpty(scenario.StimulusId)
+                        ? $"|sid:{scenario.StimulusId}"
+                        : string.Empty;
+                    return $"direct|{di.ServiceType}|{di.Method}|{diArgsHash}{flagSuffix}{stimIdTag}";
+                default:
+                    return null;
             }
         }
 

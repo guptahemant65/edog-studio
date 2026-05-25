@@ -323,14 +323,24 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                 ImpactZone = "zone-001",
                 Technique = "EquivalencePartition",
                 StimulusType = "DiInvocation",
-                StimulusSpec = "{\"serviceType\":\"IFoo\",\"method\":\"Baz\",\"args\":[]}",
+                Stimulus = new EdogQaLlmClient.DiInvocationStimulus
+                {
+                    ServiceType = "IFoo",
+                    Method = "Baz",
+                    Args = new(),
+                },
                 Expectations = new List<EdogQaLlmClient.GeneratedExpectation>
                 {
                     new EdogQaLlmClient.GeneratedExpectation
                     {
                         Type = "FieldMatch",
                         Topic = "log",
-                        MatcherSpec = "{\"exact\":{\"returnValue\":3}}",
+                        Matcher = new EdogQaLlmClient.GeneratedMatcher
+                        {
+                            TopicField = "log.returnValue",
+                            Assertion = "Equals",
+                            Value = System.Text.Json.JsonDocument.Parse("{\"kind\":\"integer_literal\",\"literal\":3}").RootElement,
+                        },
                         Rationale = "Direct return value must be 3.",
                     },
                 },

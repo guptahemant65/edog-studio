@@ -55,64 +55,99 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
         private static object RunHappyHttpRequest() =>
             RunCase("happy_http_request",
                 stimulusType: "HttpRequest",
-                stimulusSpec: "{\"method\":\"POST\",\"path\":\"/api/insights\",\"contentType\":\"application/json\",\"body\":{\"days\":7},\"headers\":{\"X-Trace\":\"abc\"}}",
-                matcherSpec: "{\"exact\":{\"statusCode\":200}}");
+                stimulus: new EdogQaLlmClient.HttpRequestStimulus
+                {
+                    Method = "POST", Path = "/api/insights",
+                    ContentType = "application/json",
+                    Body = "{\"days\":7}",
+                    Headers = new() { new() { Name = "X-Trace", Value = "abc" } },
+                },
+                matcher: MakeMatcher("http.statusCode", "Equals", 200));
 
         private static object RunHappySignalRBroadcast() =>
             RunCase("happy_signalr_broadcast",
                 stimulusType: "SignalRBroadcast",
-                stimulusSpec: "{\"hub\":\"playground\",\"method\":\"Ping\",\"args\":[\"hello\",42]}",
-                matcherSpec: "{\"exists\":[\"connectionId\"]}");
+                stimulus: new EdogQaLlmClient.SignalRBroadcastStimulus
+                {
+                    Hub = "playground", Method = "Ping",
+                    Args = new() { "hello", 42 },
+                },
+                matcher: MakeMatcher("log.message", "Exists", true));
 
         private static object RunHappyDagTrigger() =>
             RunCase("happy_dag_trigger",
                 stimulusType: "DagTrigger",
-                stimulusSpec: "{\"iterationId\":\"current\",\"nodeFilter\":[\"node-1\",\"node-2\"]}",
-                matcherSpec: "{\"contains\":{\"phase\":\"complete\"}}");
+                stimulus: new EdogQaLlmClient.DagTriggerStimulus
+                {
+                    IterationId = "current",
+                    NodeFilter = new() { "node-1", "node-2" },
+                },
+                matcher: MakeMatcher("dag.nodeId", "ContainsAll", "node-1"));
 
         private static object RunHappyFileEvent() =>
             RunCase("happy_file_event",
                 stimulusType: "FileEvent",
-                stimulusSpec: "{\"path\":\"/lake/foo.parquet\",\"content\":\"hello\",\"encoding\":\"utf8\",\"cleanup\":true}",
-                matcherSpec: "{\"regex\":{\"path\":\"^/lake/.+\\\\.parquet$\"}}");
+                stimulus: new EdogQaLlmClient.FileEventStimulus
+                {
+                    Path = "/lake/foo.parquet", Content = "hello",
+                    Encoding = "utf8", Cleanup = true,
+                },
+                matcher: MakeMatcher("fileop.path", "ContainsAll", "/lake/"));
 
         private static object RunHappyTimerTick() =>
             RunCase("happy_timer_tick",
                 stimulusType: "TimerTick",
-                stimulusSpec: "{\"tickSource\":\"EvictionManager\",\"topic\":\"perf\",\"maxWaitMs\":15000}",
-                matcherSpec: "{\"range\":{\"latencyMs\":{\"min\":0,\"max\":100}}}");
+                stimulus: new EdogQaLlmClient.TimerTickStimulus
+                {
+                    TickSource = "EvictionManager", Topic = "perf", MaxWaitMs = 15000,
+                },
+                matcher: MakeMatcher("perf.durationMs", "InRange", new { min = 0, max = 100 }));
 
         private static object RunHappyDiInvocation() =>
             RunCase("happy_di_invocation",
                 stimulusType: "DiInvocation",
-                stimulusSpec: "{\"serviceType\":\"IOneLakeWriter\",\"method\":\"WriteFileAsync\",\"args\":[\"path\",\"content\"]}",
-                matcherSpec: "{\"exact\":{\"returnedTrue\":true}}");
+                stimulus: new EdogQaLlmClient.DiInvocationStimulus
+                {
+                    ServiceType = "IOneLakeWriter", Method = "WriteFileAsync",
+                    Args = new() { "path", "content" },
+                },
+                matcher: MakeMatcher("di.serviceType", "Equals", "IOneLakeWriter"));
 
         // ─── Failure cases ───────────────────────────────────────────
 
         private static object RunStimulusSpecMalformed() =>
             RunCase("stimulus_spec_malformed",
                 stimulusType: "HttpRequest",
-                stimulusSpec: "{this is not json",
-                matcherSpec: "{\"exact\":{\"statusCode\":200}}");
+                stimulus: null,  // null stimulus → stub
+                matcher: MakeMatcher("http.statusCode", "Equals", 200));
 
         private static object RunStimulusSpecMissingField() =>
             RunCase("stimulus_spec_missing_field",
                 stimulusType: "HttpRequest",
-                stimulusSpec: "{\"method\":\"GET\"}",  // path missing
-                matcherSpec: "{\"exact\":{\"statusCode\":200}}");
+                stimulus: new EdogQaLlmClient.HttpRequestStimulus
+                {
+                    Method = "GET",
+                    // path deliberately null → auto-normalized to /api/unknown
+                },
+                matcher: MakeMatcher("http.statusCode", "Equals", 200));
 
         private static object RunMatcherSpecMalformed() =>
             RunCase("matcher_spec_malformed",
                 stimulusType: "DiInvocation",
-                stimulusSpec: "{\"serviceType\":\"IFoo\",\"method\":\"Bar\"}",
-                matcherSpec: "{not even json");
+                stimulus: new EdogQaLlmClient.DiInvocationStimulus
+                {
+                    ServiceType = "IFoo", Method = "Bar",
+                },
+                matcher: null);  // null matcher → vacuous
 
         private static object RunMatcherSpecEmpty() =>
             RunCase("matcher_spec_empty",
                 stimulusType: "DiInvocation",
-                stimulusSpec: "{\"serviceType\":\"IFoo\",\"method\":\"Bar\"}",
-                matcherSpec: "{}");
+                stimulus: new EdogQaLlmClient.DiInvocationStimulus
+                {
+                    ServiceType = "IFoo", Method = "Bar",
+                },
+                matcher: new EdogQaLlmClient.GeneratedMatcher());  // empty → vacuous
 
         // ─── Audit-trail forward-carry ───────────────────────────────
 
@@ -121,8 +156,8 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
             var plan = BuildPlan(
                 Evidence("ev-trail-1", "src/Foo.cs", "right", 12, "added Baz() => 3"));
             var accepted = BuildAccepted("sk-1", "DiInvocation",
-                "{\"serviceType\":\"IFoo\",\"method\":\"Baz\"}",
-                "{\"exact\":{\"returnedTrue\":true}}",
+                new EdogQaLlmClient.DiInvocationStimulus { ServiceType = "IFoo", Method = "Baz" },
+                MakeMatcher("di.serviceType", "Equals", "IFoo"),
                 refs: new List<string> { "ev-trail-1" });
 
             var result = EdogQaScenarioProjector.Project(plan, new[] { accepted });
@@ -148,11 +183,11 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
             var plan = BuildPlan(
                 Evidence("ev-1", "src/Foo.cs", "right", 12, "valid"));
             var ok = BuildAccepted("sk-ok", "DiInvocation",
-                "{\"serviceType\":\"IFoo\",\"method\":\"Bar\"}",
-                "{\"exact\":{\"v\":1}}", refs: new List<string> { "ev-1" });
-            var bad = BuildAccepted("sk-bad", "HttpRequest",
-                "{\"method\":\"GET\"}",  // missing path
-                "{\"exact\":{\"v\":1}}", refs: new List<string> { "ev-1" });
+                new EdogQaLlmClient.DiInvocationStimulus { ServiceType = "IFoo", Method = "Bar" },
+                MakeMatcher("di.serviceType", "Equals", "IFoo"), refs: new List<string> { "ev-1" });
+            var bad = BuildAccepted("sk-bad", "SignalRBroadcast",
+                new EdogQaLlmClient.SignalRBroadcastStimulus { Hub = null, Method = "Send" },  // missing hub → rejected
+                MakeMatcher("log.message", "Exists", true), refs: new List<string> { "ev-1" });
 
             var result = EdogQaScenarioProjector.Project(plan, new[] { ok, bad });
             return new
@@ -170,11 +205,13 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
         // ─── Single-scenario harness driver ──────────────────────────
 
         private static object RunCase(
-            string caseId, string stimulusType, string stimulusSpec, string matcherSpec)
+            string caseId, string stimulusType,
+            EdogQaLlmClient.GeneratedStimulus stimulus,
+            EdogQaLlmClient.GeneratedMatcher matcher)
         {
             var plan = BuildPlan(
                 Evidence("ev-1", "src/Foo.cs", "right", 12, "added"));
-            var accepted = BuildAccepted("sk-1", stimulusType, stimulusSpec, matcherSpec,
+            var accepted = BuildAccepted("sk-1", stimulusType, stimulus, matcher,
                 refs: new List<string> { "ev-1" });
 
             var result = EdogQaScenarioProjector.Project(plan, new[] { accepted });
@@ -238,9 +275,13 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
         }
 
         private static EdogQaScenarioValidator.AcceptedScenario BuildAccepted(
-            string sketchId, string stimulusType, string stimulusSpec, string matcherSpec,
+            string sketchId, string stimulusType,
+            EdogQaLlmClient.GeneratedStimulus stimulus,
+            EdogQaLlmClient.GeneratedMatcher matcher,
             List<string> refs)
         {
+            // Derive topic from topicField (e.g. "http.statusCode" → "http")
+            var topic = matcher?.TopicField?.Split('.')[0] ?? "log";
             var src = new EdogQaLlmClient.GeneratedScenario
             {
                 Id = sketchId,
@@ -251,14 +292,14 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                 ImpactZone = "zone-001",
                 Technique = "EquivalencePartition",
                 StimulusType = stimulusType,
-                StimulusSpec = stimulusSpec,
+                Stimulus = stimulus,
                 Expectations = new List<EdogQaLlmClient.GeneratedExpectation>
                 {
                     new EdogQaLlmClient.GeneratedExpectation
                     {
                         Type = "FieldMatch",
-                        Topic = "log",
-                        MatcherSpec = matcherSpec,
+                        Topic = topic,
+                        Matcher = matcher,
                         Rationale = "Test.",
                     },
                 },
@@ -272,6 +313,64 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                 SemanticHash = "deadbeef",
                 CalibratedConfidence = 0.85,
                 InformationalReasons = new(),
+            };
+        }
+
+        private static EdogQaLlmClient.GeneratedMatcher MakeMatcher(
+            string topicField, string assertion, object value)
+        {
+            // Build a value JSON element with the appropriate `kind`
+            // discriminator that the projector's ReadMatcherValueKind expects.
+            string valueJson;
+            switch (assertion)
+            {
+                case "Equals":
+                case "NotEquals":
+                    if (value is int intVal)
+                        valueJson = $"{{\"kind\":\"integer_literal\",\"literal\":{intVal}}}";
+                    else if (value is bool boolVal)
+                        valueJson = $"{{\"kind\":\"boolean_literal\",\"literal\":{(boolVal ? "true" : "false")}}}";
+                    else
+                        valueJson = $"{{\"kind\":\"string_literal\",\"literal\":{JsonSerializer.Serialize(value)}}}";
+                    break;
+                case "Exists":
+                {
+                    var exp = value is bool b ? b : true;
+                    valueJson = $"{{\"kind\":\"exists\",\"expected\":{(exp ? "true" : "false")}}}";
+                    break;
+                }
+                case "Contains":
+                case "ContainsAll":
+                {
+                    var item = value is string s ? s : JsonSerializer.Serialize(value);
+                    valueJson = $"{{\"kind\":\"array_literal\",\"items\":[{JsonSerializer.Serialize(item)}]}}";
+                    break;
+                }
+                case "Matches":
+                {
+                    valueJson = $"{{\"kind\":\"string_literal\",\"literal\":{JsonSerializer.Serialize(value)}}}";
+                    break;
+                }
+                case "Range":
+                case "InRange":
+                {
+                    var rangeJson = JsonSerializer.Serialize(value);
+                    var rangeDoc = JsonDocument.Parse(rangeJson);
+                    var min = rangeDoc.RootElement.TryGetProperty("min", out var minEl) ? minEl.GetRawText() : "null";
+                    var max = rangeDoc.RootElement.TryGetProperty("max", out var maxEl) ? maxEl.GetRawText() : "null";
+                    valueJson = $"{{\"kind\":\"range\",\"min\":{min},\"max\":{max},\"minInclusive\":true,\"maxInclusive\":true}}";
+                    break;
+                }
+                default:
+                    valueJson = JsonSerializer.Serialize(new { kind = "string_literal", literal = value?.ToString() ?? "" });
+                    break;
+            }
+
+            return new EdogQaLlmClient.GeneratedMatcher
+            {
+                TopicField = topicField,
+                Assertion = assertion,
+                Value = JsonDocument.Parse(valueJson).RootElement,
             };
         }
 

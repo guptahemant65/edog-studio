@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 // F27 P9 T1c-a-2 — V2 → Engine DTO Projector.
 //
-// Bridges the LLM client's generation-only DTOs (which carry opaque
-// `StimulusSpec` / `MatcherSpec` JSON strings) to the engine's typed
+// Bridges the LLM client's generation DTOs (typed Stimulus objects and
+// typed Matcher objects on each expectation) to the engine's typed
 // `Scenario` shape that EdogQaExecutionEngine + downstream
 // stations consume. This is the LAST station before scenarios are
 // either curated, executed, or shadow-compared.
@@ -358,103 +358,126 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             // Stimulus payload — discriminated union, exactly one typed
             // payload non-null on the resulting Stimulus.
-            // P10/P11: stimulusSpec may be descriptive text rather than JSON.
-            // When it fails JSON parsing, build a minimal stub from stimulusType
-            // so the scenario can still be projected and curated.
+            // Post-prompt-rewrite: src.Stimulus is a typed DTO. Convert
+            // directly to the projector's internal model. Fall back to
+            // stub when the LLM emits a null stimulus (shouldn't happen
+            // with strict schema but defense-in-depth).
             var stimulus = new Stimulus { Type = stimulusType };
-            using (var stimulusDoc = TryParseJson(src.StimulusSpec, out var stimulusParseFail))
+            if (src.Stimulus != null)
             {
-                if (stimulusParseFail != null)
+                switch (src.Stimulus)
                 {
-                    // StimulusSpec is not JSON — build a stub from stimulusType.
-                    // The curator can fill in the concrete details. Log the
-                    // degradation but don't reject the scenario.
-                    var specSnippet = (src.StimulusSpec?.Length > 80 ? src.StimulusSpec.Substring(0, 80) + "..." : src.StimulusSpec ?? "(null)");
-                    var diagMsg = $"Projector: stimulusSpec not JSON for '{src.Id}' — "
-                        + $"building stub {stimulusType} stimulus. Spec was: " + specSnippet;
-                    Console.WriteLine($"[QA-DIAG] {diagMsg}");
-                    diagnostics?.Add(diagMsg);
-
-                    // LNT009 defense-in-depth: if the scenario references a
-                    // stimulusId from the Architect's stimuliRequired and that
-                    // entry's toolingHint contains a JSON snippet describing
-                    // the concrete shape, parse it and use those values to
-                    // populate the stub. This stops every fallback scenario
-                    // collapsing onto the same {GET /api/unknown} skeleton.
-                    JsonElement? guidanceShape = null;
-                    if (!string.IsNullOrWhiteSpace(src.StimulusId)
-                        && stimuliById != null
-                        && stimuliById.TryGetValue(src.StimulusId, out var stimReq)
-                        && !string.IsNullOrWhiteSpace(stimReq?.ToolingHint))
-                    {
-                        using var hintDoc = TryParseJson(stimReq.ToolingHint, out var hintFail);
-                        if (hintFail == null && hintDoc.RootElement.ValueKind == JsonValueKind.Object)
+                    case EdogQaLlmClient.HttpRequestStimulus http:
+                        var httpSpec = new HttpRequestSpec();
+                        httpSpec.Path = NormalizeHttpPath(http.Path ?? "/api/unknown");
+                        if (!string.IsNullOrWhiteSpace(http.Method)) httpSpec.Method = http.Method;
+                        if (!string.IsNullOrWhiteSpace(http.ContentType)) httpSpec.ContentType = http.ContentType;
+                        if (http.Body != null)
                         {
-                            guidanceShape = hintDoc.RootElement.Clone();
-                            diagnostics?.Add(
-                                $"Projector: stimulusSpec stub for '{src.Id}' enriched from stimuliRequired '{src.StimulusId}'.");
+                            try { httpSpec.Body = System.Text.Json.JsonSerializer.Deserialize<object>(http.Body); }
+                            catch { httpSpec.Body = http.Body; }
                         }
-                    }
-
-                    switch (stimulusType)
-                    {
-                        case StimulusType.HttpRequest:
-                            stimulus.HttpRequest = BuildHttpStubFromGuidance(guidanceShape);
-                            break;
-                        case StimulusType.SignalRBroadcast:
-                            stimulus.SignalRBroadcast = BuildSignalRStubFromGuidance(guidanceShape);
-                            break;
-                        case StimulusType.DagTrigger:
-                            stimulus.DagTrigger = BuildDagStubFromGuidance(guidanceShape);
-                            break;
-                        case StimulusType.FileEvent:
-                            stimulus.FileEvent = BuildFileStubFromGuidance(guidanceShape);
-                            break;
-                        case StimulusType.TimerTick:
-                            stimulus.TimerTick = BuildTimerStubFromGuidance(guidanceShape);
-                            break;
-                        case StimulusType.DiInvocation:
-                            stimulus.DiInvocation = BuildDiStubFromGuidance(guidanceShape);
-                            break;
-                    }
+                        if (http.Headers != null)
+                        {
+                            foreach (var h in http.Headers)
+                            {
+                                if (h == null || string.IsNullOrEmpty(h.Name)) continue;
+                                if (string.Equals(h.Name, "Authorization", StringComparison.OrdinalIgnoreCase)) continue;
+                                httpSpec.Headers[h.Name] = h.Value ?? string.Empty;
+                            }
+                        }
+                        stimulus.HttpRequest = httpSpec;
+                        break;
+                    case EdogQaLlmClient.SignalRBroadcastStimulus signalr:
+                        var sigSpec = new SignalRBroadcastSpec();
+                        if (string.IsNullOrEmpty(signalr.Hub))
+                        {
+                            reasons.Add(MakeReason(CodeStimulusSpecMissingField, "stimulus.hub", null,
+                                "SignalRBroadcast stimulus requires a 'hub' field."));
+                            return null;
+                        }
+                        if (string.IsNullOrEmpty(signalr.Method))
+                        {
+                            reasons.Add(MakeReason(CodeStimulusSpecMissingField, "stimulus.method", null,
+                                "SignalRBroadcast stimulus requires a 'method' field."));
+                            return null;
+                        }
+                        sigSpec.Hub = signalr.Hub;
+                        sigSpec.Method = signalr.Method;
+                        if (signalr.Args != null)
+                            foreach (var a in signalr.Args) sigSpec.Args.Add(a);
+                        stimulus.SignalRBroadcast = sigSpec;
+                        break;
+                    case EdogQaLlmClient.DagTriggerStimulus dag:
+                        var dagSpec = new DagTriggerSpec();
+                        dagSpec.IterationId = !string.IsNullOrEmpty(dag.IterationId) ? dag.IterationId : "current";
+                        if (dag.NodeFilter != null) dagSpec.NodeFilter = new List<string>(dag.NodeFilter);
+                        stimulus.DagTrigger = dagSpec;
+                        break;
+                    case EdogQaLlmClient.FileEventStimulus file:
+                        if (string.IsNullOrEmpty(file.Path))
+                        {
+                            reasons.Add(MakeReason(CodeStimulusSpecMissingField, "stimulus.path", null,
+                                "FileEvent stimulus requires a 'path' field."));
+                            return null;
+                        }
+                        var fileSpec = new FileEventSpec { Path = file.Path };
+                        if (!string.IsNullOrEmpty(file.Content)) fileSpec.Content = file.Content;
+                        if (!string.IsNullOrEmpty(file.Encoding)) fileSpec.Encoding = file.Encoding;
+                        fileSpec.Cleanup = file.Cleanup;
+                        stimulus.FileEvent = fileSpec;
+                        break;
+                    case EdogQaLlmClient.TimerTickStimulus timer:
+                        if (string.IsNullOrEmpty(timer.TickSource))
+                        {
+                            reasons.Add(MakeReason(CodeStimulusSpecMissingField, "stimulus.tickSource", null,
+                                "TimerTick stimulus requires a 'tickSource' field."));
+                            return null;
+                        }
+                        var timerSpec = new TimerTickSpec { TickSource = timer.TickSource };
+                        if (!string.IsNullOrEmpty(timer.Topic)) timerSpec.Topic = timer.Topic;
+                        if (timer.MaxWaitMs > 0) timerSpec.MaxWaitMs = timer.MaxWaitMs;
+                        stimulus.TimerTick = timerSpec;
+                        break;
+                    case EdogQaLlmClient.DiInvocationStimulus di:
+                        if (string.IsNullOrEmpty(di.ServiceType))
+                        {
+                            reasons.Add(MakeReason(CodeStimulusSpecMissingField, "stimulus.serviceType", null,
+                                "DiInvocation stimulus requires a 'serviceType' field."));
+                            return null;
+                        }
+                        if (string.IsNullOrEmpty(di.Method))
+                        {
+                            reasons.Add(MakeReason(CodeStimulusSpecMissingField, "stimulus.method", null,
+                                "DiInvocation stimulus requires a 'method' field."));
+                            return null;
+                        }
+                        var diSpec = new DiInvocationSpec { ServiceType = di.ServiceType, Method = di.Method };
+                        if (di.Args != null)
+                            foreach (var a in di.Args) diSpec.Args.Add(a);
+                        stimulus.DiInvocation = diSpec;
+                        break;
+                    default:
+                        // Unknown stimulus type — build stub
+                        BuildStimulusStub(stimulusType, stimulus, null);
+                        break;
                 }
-                else
-                {
-                    var root = stimulusDoc.RootElement;
-                    switch (stimulusType)
-                    {
-                        case StimulusType.HttpRequest:
-                            stimulus.HttpRequest = ProjectHttpRequest(root, reasons);
-                            break;
-                        case StimulusType.SignalRBroadcast:
-                            stimulus.SignalRBroadcast = ProjectSignalRBroadcast(root, reasons);
-                            break;
-                        case StimulusType.DagTrigger:
-                            stimulus.DagTrigger = ProjectDagTrigger(root, reasons);
-                            break;
-                        case StimulusType.FileEvent:
-                            stimulus.FileEvent = ProjectFileEvent(root, reasons);
-                            break;
-                        case StimulusType.TimerTick:
-                            stimulus.TimerTick = ProjectTimerTick(root, reasons);
-                            break;
-                        case StimulusType.DiInvocation:
-                            stimulus.DiInvocation = ProjectDiInvocation(root, reasons);
-                            break;
-                    }
-                }
+            }
+            else
+            {
+                // Null stimulus — build stub from stimulusType
+                var diagMsg = $"Projector: stimulus is null for '{src.Id}' — building stub {stimulusType} stimulus.";
+                Console.WriteLine($"[QA-DIAG] {diagMsg}");
+                diagnostics?.Add(diagMsg);
+                BuildStimulusStub(stimulusType, stimulus, null);
             }
 
             if (reasons.Count > 0) return null;
 
-            // Expectations — each carries its own MatcherSpec.
-            // When the scenario has typed matchers[], the Editor emits
-            // descriptive text (not JSON) in the legacy expectations[*].matcherSpec
-            // field. Skip the JSON parse in that case — the typed matchers path
-            // below handles matching. When typed matchers are absent (transition
-            // period), parse matcherSpec as the legacy {exact, contains, regex,
-            // range, exists} JSON object.
-            var hasTypedMatchers = src.Matchers != null && src.Matchers.Count > 0;
+            // Expectations — each carries a typed Matcher object.
+            // Post-prompt-rewrite: expSrc.Matcher is a typed DTO, no JSON
+            // parsing needed. Build the projector's internal Matcher directly
+            // from the typed GeneratedMatcher object.
             var expectations = new List<Expectation>();
             for (var i = 0; i < src.Expectations.Count; i++)
             {
@@ -467,12 +490,11 @@ namespace Microsoft.LiveTable.Service.DevMode
                     continue;
                 }
 
-                if (hasTypedMatchers)
+                if (expSrc.Matcher != null)
                 {
-                    // Skip matcherSpec parsing. Build an internal LegacyMatcher
-                    // from the typed matchers array by topic so the assertion
-                    // engine can evaluate them.
-                    var legacyMatcher = BuildLegacyMatcherFromTyped(src.Matchers, expSrc.Topic);
+                    // Build internal matcher from typed DTO
+                    var legacyMatcher = BuildLegacyMatcherFromTyped(
+                        new List<EdogQaLlmClient.GeneratedMatcher> { expSrc.Matcher }, expSrc.Topic);
                     var vacuous = IsVacuous(legacyMatcher);
                     expectations.Add(new Expectation
                     {
@@ -483,31 +505,30 @@ namespace Microsoft.LiveTable.Service.DevMode
                         Description = expSrc.Rationale,
                         VacuousLegacy = vacuous,
                     });
-                    continue;
                 }
-
-                using var matcherDoc = TryParseJson(expSrc.MatcherSpec, out var matcherFail);
-                if (matcherFail != null)
+                else
                 {
-                    reasons.Add(MakeReason(CodeMatcherSpecMalformed,
-                        $"expectations[{i}].matcherSpec", null, matcherFail));
-                    continue;
+                    // Null matcher — mark as vacuous
+                    expectations.Add(new Expectation
+                    {
+                        Id = $"exp-{i + 1}",
+                        Type = expType,
+                        Topic = expSrc.Topic,
+                        Matcher = null,
+                        Description = expSrc.Rationale,
+                        VacuousLegacy = true,
+                    });
                 }
-
-                var matcher = ProjectMatcher(matcherDoc.RootElement, i, reasons);
-                if (matcher == null) continue;
-
-                expectations.Add(new Expectation
-                {
-                    Id = $"exp-{i + 1}",
-                    Type = expType,
-                    Topic = expSrc.Topic,
-                    Matcher = matcher,
-                    Description = expSrc.Rationale,
-                });
             }
 
-            var typedMatchers = ProjectTypedMatchers(src.Matchers, reasons);
+            // Auto-derive matchers from expectations[].matcher (projector
+            // now owns this — LLM no longer emits top-level matchers[]).
+            var allMatchers = new List<EdogQaLlmClient.GeneratedMatcher>();
+            foreach (var exp in src.Expectations)
+            {
+                if (exp?.Matcher != null) allMatchers.Add(exp.Matcher);
+            }
+            var typedMatchers = ProjectTypedMatchers(allMatchers, reasons);
 
             if (reasons.Count > 0) return null;
 
@@ -1345,10 +1366,33 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         // LNT009 defense-in-depth: build stub stimuli from the Architect's
         // testingGuidance.stimuliRequired[*].toolingHint when the Editor's
-        // stimulusSpec failed to parse. Each helper reads the well-known
-        // shape fields (path, method, headers, body, contentType, hub, etc.)
-        // off the guidance object and falls back to "unknown" when absent.
-        // The guidance object is the toolingHint parsed as a JSON object.
+        // stimulus is null. Each helper reads the well-known shape fields.
+
+        /// <summary>Build a stimulus stub based on type (fallback when typed stimulus is null).</summary>
+        private static void BuildStimulusStub(StimulusType stimulusType, Stimulus stimulus, JsonElement? guidanceShape)
+        {
+            switch (stimulusType)
+            {
+                case StimulusType.HttpRequest:
+                    stimulus.HttpRequest = BuildHttpStubFromGuidance(guidanceShape);
+                    break;
+                case StimulusType.SignalRBroadcast:
+                    stimulus.SignalRBroadcast = BuildSignalRStubFromGuidance(guidanceShape);
+                    break;
+                case StimulusType.DagTrigger:
+                    stimulus.DagTrigger = BuildDagStubFromGuidance(guidanceShape);
+                    break;
+                case StimulusType.FileEvent:
+                    stimulus.FileEvent = BuildFileStubFromGuidance(guidanceShape);
+                    break;
+                case StimulusType.TimerTick:
+                    stimulus.TimerTick = BuildTimerStubFromGuidance(guidanceShape);
+                    break;
+                case StimulusType.DiInvocation:
+                    stimulus.DiInvocation = BuildDiStubFromGuidance(guidanceShape);
+                    break;
+            }
+        }
 
         private static HttpRequestSpec BuildHttpStubFromGuidance(JsonElement? guidance)
         {

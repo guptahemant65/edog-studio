@@ -198,7 +198,7 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             /// <summary>Deterministic semantic-hash digest used by the
             /// orchestrator's cross-zone reducer. SHA-256 over
-            /// (StimulusType + canonical(StimulusSpec) +
+            /// (StimulusType + canonical(Stimulus) +
             /// sorted(expectations canonical)). Hex-encoded, lower-case,
             /// 64 chars.</summary>
             public string SemanticHash { get; set; }
@@ -416,13 +416,13 @@ namespace Microsoft.LiveTable.Service.DevMode
                 ValidateEnumMembership(scenario.Technique, ValidTechniques, "technique", reasons);
                 ValidateEnumMembership(scenario.StimulusType, ValidStimulusTypes, "stimulusType", reasons);
 
-                if (string.IsNullOrWhiteSpace(scenario.StimulusSpec))
+                if (scenario.Stimulus == null)
                 {
                     reasons.Add(new QuarantineReason
                     {
                         Code = CodeFieldEmpty,
-                        Message = "stimulusSpec must not be empty.",
-                        FieldPath = "stimulusSpec",
+                        Message = "stimulus must not be null.",
+                        FieldPath = "stimulus",
                     });
                 }
 
@@ -444,13 +444,13 @@ namespace Microsoft.LiveTable.Service.DevMode
 
                         ValidateEnumMembership(exp.Type, ValidExpectationTypes, $"{pathPrefix}.type", reasons);
 
-                        if (string.IsNullOrWhiteSpace(exp.MatcherSpec))
+                        if (exp.Matcher == null)
                         {
                             reasons.Add(new QuarantineReason
                             {
                                 Code = CodeFieldEmpty,
-                                Message = "matcherSpec must not be empty.",
-                                FieldPath = $"{pathPrefix}.matcherSpec",
+                                Message = "matcher must not be null.",
+                                FieldPath = $"{pathPrefix}.matcher",
                             });
                         }
 
@@ -995,7 +995,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         {
             var sb = new StringBuilder();
             sb.Append("stimulus|").Append(scenario.StimulusType ?? string.Empty).Append('|');
-            sb.Append(CanonicalisePayload(scenario.StimulusSpec));
+            sb.Append(CanonicaliseStimulusTyped(scenario.Stimulus));
 
             if (scenario.Expectations != null && scenario.Expectations.Count > 0)
             {
@@ -1006,7 +1006,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                             .Append("exp|")
                             .Append(e.Type ?? string.Empty).Append('|')
                             .Append(e.Topic ?? string.Empty).Append('|')
-                            .Append(CanonicalisePayload(e.MatcherSpec))
+                            .Append(CanonicaliseMatcherTyped(e.Matcher))
                             .ToString())
                     .OrderBy(s => s, StringComparer.Ordinal)
                     .ToList();
@@ -1047,6 +1047,42 @@ namespace Microsoft.LiveTable.Service.DevMode
                 return maybeJson;
             }
         }
+
+        /// <summary>Canonical string for typed stimulus (for semantic hash).</summary>
+        private static string CanonicaliseStimulusTyped(EdogQaLlmClient.GeneratedStimulus stimulus)
+        {
+            if (stimulus == null) return string.Empty;
+            try
+            {
+                var json = System.Text.Json.JsonSerializer.Serialize(stimulus, _canonicalOptions);
+                return CanonicalisePayload(json);
+            }
+            catch
+            {
+                return stimulus.GetType().Name;
+            }
+        }
+
+        /// <summary>Canonical string for typed matcher (for semantic hash).</summary>
+        private static string CanonicaliseMatcherTyped(EdogQaLlmClient.GeneratedMatcher matcher)
+        {
+            if (matcher == null) return string.Empty;
+            try
+            {
+                var json = System.Text.Json.JsonSerializer.Serialize(matcher, _canonicalOptions);
+                return CanonicalisePayload(json);
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private static readonly JsonSerializerOptions _canonicalOptions = new()
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+        };
 
         private static void WriteCanonical(Utf8JsonWriter writer, JsonElement element)
         {

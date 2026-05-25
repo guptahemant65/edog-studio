@@ -140,7 +140,7 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
         private static async Task<object> RunCrossZoneDedup(CancellationToken ct)
         {
             // Both zones produce a scenario with identical (StimulusType +
-            // StimulusSpec + Expectations), so the Validator hash collides
+            // Stimulus + Expectations), so the Validator hash collides
             // and the orchestrator's cross-zone dedup kicks in.
             var z0 = ZoneInput("z-0");
             var z1 = ZoneInput("z-1");
@@ -310,17 +310,17 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
 
         private static async Task<object> RunProjectorRejectsWinner(CancellationToken ct)
         {
-            // Editor produces a scenario whose StimulusSpec is missing the
+            // Editor produces a scenario whose Stimulus is missing the
             // required `path` field for HttpRequest. Validator accepts it
-            // (the validator treats specs as opaque); the Projector
+            // (the validator treats stimulus as opaque); the Projector
             // rejects it.
             var z0 = ZoneInput("z-0");
             EdogQaScenarioOrchestrator.ArchitectStageDelegate architect = (zctx, c) => StubArchitectFor(zctx);
             EdogQaScenarioOrchestrator.EditorStageDelegate editor = (plan, zctx, c) =>
             {
                 var scen = BuildValidScenario(refs: new List<string> { "ev-1" }, sketchId: "sk-bad");
-                scen.StimulusType = "HttpRequest";
-                scen.StimulusSpec = "{\"method\":\"GET\"}"; // missing `path` → projector rejects
+                scen.StimulusType = "SignalRBroadcast";
+                scen.Stimulus = new EdogQaLlmClient.SignalRBroadcastStimulus { Hub = null, Method = "Send" }; // missing hub → projector MISSING_FIELD
                 return Task.FromResult(new EdogQaLlmClient.LlmClientResult
                 {
                     Status = EdogQaLlmClient.LlmClientStatus.Ok,
@@ -934,7 +934,12 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                 flagged.SketchId = "sk-bad";
                 flagged.Technique = "EquivalencePartition";
                 flagged.Title = "Baz emits a distinct assertion over the same stimulus";
-                flagged.Expectations[0].MatcherSpec = "{\"exact\":{\"returnValue\":4}}";
+                flagged.Expectations[0].Matcher = new EdogQaLlmClient.GeneratedMatcher
+                {
+                    TopicField = "di.returnValue",
+                    Assertion = "Equals",
+                    Value = JsonDocument.Parse("4").RootElement,
+                };
                 flagged.Expectations[0].Rationale = "Same stimulus, different asserted contract.";
                 flagged.OriginalIndex = 1;
 
@@ -1143,7 +1148,12 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                 ImpactZone = "zone-001",
                 Technique = "EquivalencePartition",
                 StimulusType = "DiInvocation",
-                StimulusSpec = "{\"serviceType\":\"IFoo\",\"method\":\"" + methodName + "\",\"args\":[]}",
+                Stimulus = new EdogQaLlmClient.DiInvocationStimulus
+                {
+                    ServiceType = "IFoo",
+                    Method = methodName,
+                    Args = new(),
+                },
                 StimulusId = "st-1",
                 SketchId = sketchId,
                 Expectations = new List<EdogQaLlmClient.GeneratedExpectation>
@@ -1152,7 +1162,12 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                     {
                         Type = "FieldMatch",
                         Topic = "log",
-                        MatcherSpec = "{\"exact\":{\"returnValue\":3}}",
+                        Matcher = new EdogQaLlmClient.GeneratedMatcher
+                        {
+                            TopicField = "log.returnValue",
+                            Assertion = "Equals",
+                            Value = JsonDocument.Parse("{\"kind\":\"integer_literal\",\"literal\":3}").RootElement,
+                        },
                         Rationale = "Direct return value must be 3.",
                     },
                 },
