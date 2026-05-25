@@ -83,6 +83,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         public async Task<string> GetS2STokenForTargetAudienceAsync(string targetAudience)
         {
             var canonical = CanonicalizeAudience(targetAudience);
+            Console.WriteLine($"[EDOG] S2S Bypass: GetS2STokenForTargetAudienceAsync called rawAudience='{targetAudience}' canonical='{canonical}' cbaMintable={IsCbaMintable(canonical)}");
             if (IsCbaMintable(canonical))
             {
                 return await GetTokenViaCbaOrFallbackAsync(
@@ -209,6 +210,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             if (_tokenCache.TryGetValue(resource, out var cached) &&
                 DateTime.UtcNow < cached.Expiry.AddMinutes(-CacheBufferMinutes))
             {
+                Console.WriteLine($"[EDOG] S2S Bypass: cache HIT for {resource} (expiresUtc={cached.Expiry:o})");
                 return cached.Token;
             }
             var (token, expiry) = await MintCbaTokenAsync(resource, cancellationToken).ConfigureAwait(false);
