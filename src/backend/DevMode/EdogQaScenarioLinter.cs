@@ -692,8 +692,12 @@ namespace Microsoft.LiveTable.Service.DevMode
             return literal.Contains(".*", StringComparison.Ordinal)
                 || literal.StartsWith("^", StringComparison.Ordinal)
                 || literal.EndsWith("$", StringComparison.Ordinal)
-                || literal.Contains("[", StringComparison.Ordinal)
-                || literal.Contains("(", StringComparison.Ordinal);
+                || literal.Contains("\\d", StringComparison.Ordinal)
+                || literal.Contains("\\w", StringComparison.Ordinal)
+                || literal.Contains("\\s", StringComparison.Ordinal)
+                || System.Text.RegularExpressions.Regex.IsMatch(literal, @"\[\^")       // [^...] negated class
+                || System.Text.RegularExpressions.Regex.IsMatch(literal, @"\[.\-.\]")   // [x-y] character range
+                || System.Text.RegularExpressions.Regex.IsMatch(literal, @"\([^)]*\|[^)]*\)"); // (a|b) alternation
         }
 
         private static bool LooksTemplateLiteral(string literal)

@@ -25,7 +25,7 @@ def test_editor_schema_mentions_plan_and_matchers() -> None:
 
 def test_schema_has_typed_value_defs() -> None:
     src = _read("EdogQaLlmClient.cs")
-    for def_name in ("Value_string", "Value_integer", "Value_range"):
+    for def_name in ("Value_StringLiteral", "Value_IntegerLiteral", "Value_Range"):
         assert def_name in src, f"missing $def: {def_name}"
 
 
