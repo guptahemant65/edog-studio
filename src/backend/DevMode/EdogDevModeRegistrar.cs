@@ -57,6 +57,31 @@ namespace Microsoft.LiveTable.Service.DevMode
                 EdogTopicRouter.Initialize();
 
                 // Phase 2B interceptors — each wraps one FLT interface
+                //
+                // ORDER MATTERS — read before reshuffling.
+                //
+                // Several FLT singletons constructor-inject `IS2STokenProvider`
+                // (CatalogHandler, GTSBasedSparkClientFactory, PBIHttpClientFactory,
+                // OneLakeRestClient, GTSBasedSparkClient). Unity resolves the singleton
+                // graph eagerly: the first time we call `Resolve<ICatalogHandler>()`
+                // or `Resolve<ISparkClientFactory>()` (which TryWrap does), Unity
+                // also constructs the transitively-required `S2STokenProvider` and
+                // freezes that reference into the consumer's `readonly` field.
+                //
+                // If we install the S2S bypass AFTER those wrappers, Unity injects
+                // the unwrapped provider into the consumers. `RegisterInstance` then
+                // swaps the DI binding, but the already-constructed consumers keep
+                // holding the original — every CatalogHandler/SparkClient call
+                // bypasses our bypass and fails with S2SAuthenticationException
+                // when the workload S2S cert is broken (e.g., PPE cert rotation).
+                //
+                // Fix: `RegisterS2STokenBypass()` runs FIRST so the wrapper is the
+                // value Unity has cached when any downstream consumer is constructed.
+                // Wrappers with no S2S dependency (FeatureFlighter, PerfMarker) can
+                // run earlier — they're listed before only as a stylistic
+                // grouping ("non-DI-perturbing first"), not a correctness need.
+                RegisterS2STokenBypass();
+
                 RegisterFeatureFlighterWrapper();
                 RegisterPerfMarkerCallback();
                 RegisterTokenInterceptor();
@@ -69,7 +94,6 @@ namespace Microsoft.LiveTable.Service.DevMode
                 RegisterTokenLifecycleInterceptor();
                 RegisterCatalogInterceptor();
                 RegisterFltOpsInterceptors();
-                RegisterS2STokenBypass();
 
                 // DAG execution hook (EdogDagExecutionHook) is wired via edog.py
                 // patch to DagExecutionHandlerV2.cs — adds our hook to the inline hook list.
