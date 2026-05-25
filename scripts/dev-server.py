@@ -2445,6 +2445,45 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
         # Step 2: Patch + Build (via edog.py --headless-deploy)
         if not _deploy_step(2, "Patching and building...", deploy_id):
             return
+
+        # Stop the previous FLT *before* `dotnet build` runs inside
+        # edog.py --headless-deploy. Otherwise the still-running process
+        # holds file locks on Microsoft.LiveTable.Service.EntryPoint.exe
+        # and MSBuild fails with MSB3027 ("file in use"), leaving the user
+        # in a "patches applied but build failed" half-state. Wrapped in
+        # try/except so a stop failure (rare — terminate is best-effort)
+        # doesn't abort the deploy; if a lock still bites, MSBuild surfaces
+        # the error and revert kicks in.
+        try:
+            if _flt_process and _flt_process.poll() is None:
+                _deploy_log("Stopping previous FLT service before build...", "warn")
+                _flt_process.terminate()
+                try:
+                    _flt_process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    _flt_process.kill()
+
+            # Sweep any stale FLT processes from prior dev-server runs or crashes
+            # (our own _flt_process tracking only catches FLTs we spawned in this session)
+            _kill_stale_flt_processes(deploy_id=deploy_id)
+
+            # Always ensure port 5557 is free before launching — even if our
+            # own terminate() handled the old process, the kernel may not have
+            # released the socket yet.  _kill_port_listeners handles that and
+            # sleeps 0.5 s if it kills anything.
+            _kill_port_listeners(FLT_INTERNAL_PORT)
+
+            # Condition-based wait: poll until nothing is LISTENING on the port
+            # (replaces the old arbitrary 1s sleep that was skipped when
+            # stale_killed was empty).
+            _wait_for_port_free(FLT_INTERNAL_PORT, timeout=10)
+        except Exception as stop_err:
+            _deploy_log(
+                f"Pre-build FLT stop hit an error ({stop_err}); continuing to build "
+                "anyway — MSBuild will surface MSB3027 if file locks remain.",
+                "warn",
+            )
+
         try:
             config = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
             flt_repo = config.get("flt_repo_path", "")
@@ -2523,32 +2562,11 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
             return
 
         # Step 3: Launch FLT (dev-server owns the process)
+        # Note: previous FLT was stopped + port cleared at start of step 2 so
+        # the build could run against a quiescent bin/. No second stop needed.
         if not _deploy_step(3, "Launching service...", deploy_id):
             return
         try:
-            if _flt_process and _flt_process.poll() is None:
-                _deploy_log("Stopping previous FLT service...", "warn")
-                _flt_process.terminate()
-                try:
-                    _flt_process.wait(timeout=10)
-                except subprocess.TimeoutExpired:
-                    _flt_process.kill()
-
-            # Sweep any stale FLT processes from prior dev-server runs or crashes
-            # (our own _flt_process tracking only catches FLTs we spawned in this session)
-            _kill_stale_flt_processes(deploy_id=deploy_id)
-
-            # Always ensure port 5557 is free before launching — even if our
-            # own terminate() handled the old process, the kernel may not have
-            # released the socket yet.  _kill_port_listeners handles that and
-            # sleeps 0.5 s if it kills anything.
-            _kill_port_listeners(FLT_INTERNAL_PORT)
-
-            # Condition-based wait: poll until nothing is LISTENING on the port
-            # (replaces the old arbitrary 1s sleep that was skipped when
-            # stale_killed was empty).
-            _wait_for_port_free(FLT_INTERNAL_PORT, timeout=10)
-
             config = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
             flt_repo = config.get("flt_repo_path", "")
             entrypoint = Path(flt_repo) / "Service" / "Microsoft.LiveTable.Service.EntryPoint"
