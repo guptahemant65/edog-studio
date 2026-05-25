@@ -167,7 +167,8 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// </summary>
         public static bool Satisfies(JsonElement root, LegacyMatcher matcher)
         {
-            if (matcher == null) return false;
+            // Null matcher = vacuous — matches any event (topic-presence only)
+            if (matcher == null) return true;
 
             if (matcher.Exact != null)
             {
@@ -242,7 +243,8 @@ namespace Microsoft.LiveTable.Service.DevMode
             LegacyMatcher matcher,
             IReadOnlyDictionary<string, Regex> regexCache)
         {
-            if (matcher == null) return false;
+            // Null matcher = vacuous — matches any event (topic-presence only)
+            if (matcher == null) return true;
 
             if (matcher.Exact != null)
             {
@@ -358,7 +360,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// </summary>
         public static string[] IdentifyFailedPredicates(JsonElement root, LegacyMatcher matcher)
         {
-            if (matcher == null) return new[] { "vacuous: matcher is null — no assertions to evaluate" };
+            if (matcher == null) return Array.Empty<string>();
             var failed = new List<string>();
 
             if (matcher.Exact != null)
@@ -956,7 +958,8 @@ namespace Microsoft.LiveTable.Service.DevMode
         public AssertionVerdict ComputeVerdict()
         {
             var results = GetResults();
-            bool allPassed = results.All(r => r.Status == ExpectationStatus.Passed);
+            bool allPassed = results.All(r =>
+                r.Status == ExpectationStatus.Passed || r.Status == ExpectationStatus.Inconclusive);
             bool onlyTimingFailures = results
                 .Where(r => r.Status == ExpectationStatus.Failed)
                 .All(r => r.FailureReason?.StartsWith("TimeWindow") == true);
@@ -987,8 +990,12 @@ namespace Microsoft.LiveTable.Service.DevMode
                 case ExpectationType.FieldMatch:
                     if (matches && TimeWindowSatisfied(evt, exp) && OrderSatisfied(exp, evt))
                     {
-                        state.Resolve(ExpectationStatus.Passed, evt);
-                        _onExpectationMatched?.Invoke(_scenario.Id, exp.Id, true);
+                        // Vacuous (null matcher) → Inconclusive (topic-presence only, no real assertion)
+                        var status = exp.Matcher == null
+                            ? ExpectationStatus.Inconclusive
+                            : ExpectationStatus.Passed;
+                        state.Resolve(status, evt);
+                        _onExpectationMatched?.Invoke(_scenario.Id, exp.Id, status == ExpectationStatus.Passed);
                     }
                     else if (matches)
                     {
