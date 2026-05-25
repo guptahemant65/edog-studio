@@ -5679,6 +5679,10 @@ class WorkspaceExplorer {
 
     if (btnEl) btnEl.style.display = 'none';
     progressEl.style.display = 'block';
+    // Fresh deploy — collapse any previous post-deploy logs panel so the
+    // new flow starts clean. (The summary itself is wiped by DeployFlow's
+    // first render, but _summaryExpanded persists on this instance.)
+    this._summaryExpanded = false;
 
     if (!this._deployFlow) {
       this._deployFlow = new DeployFlow(progressEl);
@@ -5768,6 +5772,11 @@ class WorkspaceExplorer {
 
   /**
    * Show the collapsed deploy summary line after successful deploy.
+   * The summary is a real button — click toggles an expandable terminal
+   * panel below it that surfaces the captured deploy logs (read from
+   * the DeployFlow instance's in-memory _logs array). Survives multiple
+   * calls because the expanded state is tracked on the instance and
+   * re-applied on every render.
    */
   _showDeploySummary(state) {
     const progressEl = document.getElementById('ws-deploy-progress');
@@ -5777,13 +5786,107 @@ class WorkspaceExplorer {
       : 0;
     const portStr = state.fltPort ? ' \u00B7 :' + state.fltPort : '';
 
+    const logs = (this._deployFlow && Array.isArray(this._deployFlow._logs)) ? this._deployFlow._logs : [];
+    const expanded = !!this._summaryExpanded;
+
+    let bodyHtml;
+    if (logs.length === 0) {
+      bodyHtml =
+        '<div class="ws-summary-logs-empty">' +
+          'No log history captured in this session. ' +
+          'Logs are kept in-memory by the deploy flow and cleared on page reload \u2014 ' +
+          're-deploy to capture a fresh run.' +
+        '</div>';
+    } else {
+      let lines = '';
+      for (let i = 0; i < logs.length; i++) {
+        const l = logs[i];
+        const lvl = l.level === 'error' ? ' error'
+          : l.level === 'warn' ? ' warn'
+          : l.level === 'success' ? ' success'
+          : l.level === 'dim' ? ' dim' : '';
+        lines += '<div class="deploy-terminal-line' + lvl + '">'
+          + '<span class="term-gutter">' + (i + 1) + '</span>'
+          + '<span class="term-content"><span class="ts">' + this._esc(l.ts || '') + '</span> ' + this._esc(l.msg || '') + '</span>'
+          + '</div>';
+      }
+      bodyHtml = '<div class="ws-summary-logs-body deploy-terminal-body">' + lines + '</div>';
+    }
+
     progressEl.innerHTML =
-      '<div class="ws-deploy-summary" id="ws-deploy-summary">' +
-        '<span class="ws-check-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg></span>' +
-        '<span class="ws-summary-text"><strong>Deployed</strong> ' + elapsed + 's' + portStr + '</span>' +
-        '<span class="ws-expand-hint"><span class="ws-summary-chevron" style="font-size:10px;">\u25B6</span> Logs</span>' +
-      '</div>';
+      '<button class="ws-deploy-summary' + (expanded ? ' expanded' : '') + '" id="ws-deploy-summary" type="button" '
+        + 'aria-expanded="' + (expanded ? 'true' : 'false') + '" aria-controls="ws-summary-logs">'
+        + '<span class="ws-check-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>'
+        + '<span class="ws-summary-text"><strong>Deployed</strong> ' + elapsed + 's' + portStr + '</span>'
+        + '<span class="ws-expand-hint">'
+          + '<span class="ws-summary-logs-count">' + logs.length + ' line' + (logs.length === 1 ? '' : 's') + '</span>'
+          + '<span class="ws-summary-chevron">\u25B6</span>'
+          + '<span>' + (expanded ? 'Hide logs' : 'Show logs') + '</span>'
+        + '</span>'
+      + '</button>'
+      + '<div class="ws-summary-logs' + (expanded ? ' expanded' : '') + '" id="ws-summary-logs"'
+        + (expanded ? '' : ' hidden') + '>'
+        + '<div class="ws-summary-logs-titlebar">'
+          + '<span class="deploy-terminal-dot r"></span>'
+          + '<span class="deploy-terminal-dot y"></span>'
+          + '<span class="deploy-terminal-dot g"></span>'
+          + '<span class="ws-summary-logs-title">deploy logs</span>'
+          + (logs.length > 0
+            ? '<button class="ws-summary-logs-btn" id="ws-summary-logs-copy" type="button" title="Copy logs" aria-label="Copy logs">'
+                + '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
+                + '<span class="ws-summary-logs-toast" id="ws-summary-logs-toast">Copied</span>'
+              + '</button>'
+            : '')
+        + '</div>'
+        + bodyHtml
+      + '</div>';
     progressEl.style.display = 'block';
+
+    const btn = document.getElementById('ws-deploy-summary');
+    const panel = document.getElementById('ws-summary-logs');
+    if (btn && panel) {
+      btn.addEventListener('click', () => {
+        this._summaryExpanded = !this._summaryExpanded;
+        const open = this._summaryExpanded;
+        btn.classList.toggle('expanded', open);
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        panel.classList.toggle('expanded', open);
+        if (open) panel.removeAttribute('hidden'); else panel.setAttribute('hidden', '');
+        const hintLabel = btn.querySelector('.ws-expand-hint span:last-child');
+        if (hintLabel) hintLabel.textContent = open ? 'Hide logs' : 'Show logs';
+        if (open) {
+          const body = panel.querySelector('.ws-summary-logs-body');
+          if (body) body.scrollTop = body.scrollHeight;
+        }
+      });
+    }
+
+    const copyBtn = document.getElementById('ws-summary-logs-copy');
+    if (copyBtn) {
+      copyBtn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const text = logs.map(l => ((l.ts || '') + ' ' + (l.msg || '')).trim()).join('\n');
+        const toast = document.getElementById('ws-summary-logs-toast');
+        const showToast = () => {
+          if (!toast) return;
+          toast.classList.add('visible');
+          setTimeout(() => toast.classList.remove('visible'), 1500);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(showToast).catch(showToast);
+        } else {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          try { document.execCommand('copy'); } catch { /* ignore */ }
+          document.body.removeChild(ta);
+          showToast();
+        }
+      });
+    }
   }
 
   /**
