@@ -42,10 +42,72 @@ namespace Microsoft.LiveTable.Service.DevMode
             _httpClientName = httpClientName ?? string.Empty;
         }
 
+        // FLT services attach this header to OneLake DFS calls carrying a workload S2S
+        // token whose `appid` claim OneLake validates against its trusted-workload
+        // allowlist. Mirrors `Microsoft.LiveTable.Service.Common.HttpConstants.S2SAuthorizationHeaderKey`
+        // — kept as a literal here so this DevMode file stays decoupled from FLT
+        // internal namespaces. If FLT ever renames the header, the regression test
+        // (test_edog_http_strips_s2s_for_onelake.py) will catch the drift.
+        private const string S2SActorAuthorizationHeader = "x-ms-s2s-actor-authorization";
+
+        /// <summary>
+        /// Returns true when the request targets a OneLake DFS endpoint (prod or any
+        /// PPE / int-edog / edog regional variant). The pbidedicated DFS hostname pattern
+        /// is `*.dfs.pbidedicated.windows-int.net` (PPE) or `*.dfs.fabric.microsoft.com`
+        /// (prod); we match on the path segment `.dfs.pbidedicated.` because EDOG only
+        /// targets the PPE/int clusters.
+        /// </summary>
+        private static bool IsOneLakeDfsRequest(Uri requestUri)
+        {
+            if (requestUri == null) return false;
+            var host = requestUri.Host;
+            if (string.IsNullOrEmpty(host)) return false;
+            return host.IndexOf(".dfs.pbidedicated.", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        /// <summary>
+        /// Strips the workload S2S header from OneLake DFS requests in EDOG DevMode.
+        ///
+        /// Why: FLT's OneLakeRestClient (and LakeHouseMetastoreClient, OnelakeBasedFileSystem)
+        /// attach `x-ms-s2s-actor-authorization: Bearer &lt;workload-token&gt;` for PLS
+        /// (Private Link Service) integration. OneLake validates the `appid` claim of that
+        /// token against a trusted-workload allowlist. In production this is the FLT 1P
+        /// workload identity (on the list); in EDOG our S2S bypass mints the token via
+        /// Silent CBA with the dev cert, producing `appid=&lt;dev-server-public-client&gt;`
+        /// (FabricSparkCST, ea0616ba-...) which is NOT on the list. OneLake responds with:
+        ///
+        ///   401 Unauthorized: "Untrusted client ID 'ea0616ba-...' with tenant ID '...' is not allowed"
+        ///
+        /// We cannot mint the token with FLT 1P's client_id because the FLT 1P app
+        /// registration has no native-client redirect URI (Silent CBA fails with AADSTS500113).
+        /// PLS is not enforced in the EDOG cluster, so the S2S header is decorative — OneLake
+        /// authorizes purely on the user `Authorization` header (the user OBO/CBA token,
+        /// audience https://storage.azure.com), which already grants the necessary access.
+        ///
+        /// Stripping is scoped to OneLake DFS hosts only — PBI Shared, GTS, and other
+        /// services that consume `x-ms-s2s-actor-authorization` have their own trust paths
+        /// and are unaffected.
+        /// </summary>
+        private void StripS2SHeaderForOneLakeDfs(HttpRequestMessage request)
+        {
+            if (request == null) return;
+            if (!IsOneLakeDfsRequest(request.RequestUri)) return;
+            if (request.Headers.Remove(S2SActorAuthorizationHeader))
+            {
+                Debug.WriteLine(
+                    $"[EDOG] Stripped {S2SActorAuthorizationHeader} for OneLake DFS request " +
+                    $"(host={request.RequestUri.Host}, path={request.RequestUri.AbsolutePath})");
+            }
+        }
+
         /// <inheritdoc/>
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            // STEP 0: EDOG-specific header surgery. Must run BEFORE the snapshot so the
+            // captured request reflects what actually goes on the wire.
+            StripS2SHeaderForOneLakeDfs(request);
+
             // STEP 1: Snapshot request details BEFORE the call (objects may be disposed later)
             var method = request.Method.Method;
             var url = RedactUrl(request.RequestUri?.ToString());
