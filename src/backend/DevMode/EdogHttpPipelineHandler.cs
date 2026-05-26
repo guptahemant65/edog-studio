@@ -15,6 +15,7 @@ namespace Microsoft.LiveTable.Service.DevMode
     using System.Text.RegularExpressions;
     using System.Threading;
     using System.Threading.Tasks;
+    using Microsoft.ServicePlatform.Telemetry;
 
     /// <summary>
     /// DelegatingHandler that captures the full HTTP request/response cycle for all HttpClient calls.
@@ -91,12 +92,49 @@ namespace Microsoft.LiveTable.Service.DevMode
         private void StripS2SHeaderForOneLakeDfs(HttpRequestMessage request)
         {
             if (request == null) return;
+
+            // DIAGNOSTIC (Phase 2 OneLake 401 investigation, 2026-05-26):
+            // The strip code below was confirmed working for OneLakeRestClient via
+            // e5f5678. A separate code path — OnelakeBasedFileSystem using
+            // Azure.Storage.Files.DataLake.DataLakePathClient — is still 401-ing.
+            // We need ground truth on whether this handler is invoked at all for
+            // that named HttpClient and whether the header is visible to us here
+            // before it goes on the wire. Routed through Tracer.LogSanitizedMessage
+            // so the EdogLogInterceptor forwards it to the EDOG Studio Logs UI.
+            // Messages intentionally do NOT start with '[' — that would set the
+            // component to "EDOG-HTTP-DIAG", which is not in the FLT allowlist and
+            // would be dropped by the noise filter. Untagged messages fall back to
+            // component "Unknown", which the interceptor allowlists as FLT-internal.
+            // Logging is scoped to any `.dfs.` host so we also catch near-misses on
+            // the pbidedicated pattern (e.g. a fabric.microsoft.com variant).
+            //
+            // REMOVE THIS BLOCK after diagnosis (a follow-up revert commit).
+            var host = request.RequestUri?.Host ?? string.Empty;
+            var isDfsHost = host.IndexOf(".dfs.", StringComparison.OrdinalIgnoreCase) >= 0;
+            if (isDfsHost)
+            {
+                var isOneLakeDfs = IsOneLakeDfsRequest(request.RequestUri);
+                var hadHeader = request.Headers.Contains(S2SActorAuthorizationHeader);
+                Tracer.LogSanitizedMessage(
+                    $"EDOG-HTTP-DIAG strip-entry name={_httpClientName} " +
+                    $"host={host} path={request.RequestUri?.AbsolutePath} " +
+                    $"isOneLakeDfs={isOneLakeDfs} hasS2SHeader={hadHeader}");
+            }
+
             if (!IsOneLakeDfsRequest(request.RequestUri)) return;
-            if (request.Headers.Remove(S2SActorAuthorizationHeader))
+
+            var removed = request.Headers.Remove(S2SActorAuthorizationHeader);
+
+            Tracer.LogSanitizedMessage(
+                $"EDOG-HTTP-DIAG strip-result name={_httpClientName} " +
+                $"host={host} removed={removed} " +
+                $"stillHas={request.Headers.Contains(S2SActorAuthorizationHeader)}");
+
+            if (removed)
             {
                 Debug.WriteLine(
                     $"[EDOG] Stripped {S2SActorAuthorizationHeader} for OneLake DFS request " +
-                    $"(host={request.RequestUri.Host}, path={request.RequestUri.AbsolutePath})");
+                    $"(host={host}, path={request.RequestUri.AbsolutePath})");
             }
         }
 
