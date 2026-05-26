@@ -78,8 +78,6 @@ DEVMODE_FILES = {
     "EdogLogServer": SERVICE_PATH / "DevMode/EdogLogServer.cs",
     "EdogPlaygroundHub": SERVICE_PATH / "DevMode/EdogPlaygroundHub.cs",
     "EdogApiProxy": SERVICE_PATH / "DevMode/EdogApiProxy.cs",
-    "EdogSessionRegistry": SERVICE_PATH / "DevMode/EdogSessionRegistry.cs",
-    "EdogSessionController": SERVICE_PATH / "DevMode/EdogSessionController.cs",
     "EdogLogModels": SERVICE_PATH / "DevMode/EdogLogModels.cs",
     "EdogLogInterceptor": SERVICE_PATH / "DevMode/EdogLogInterceptor.cs",
     "EdogTelemetryInterceptor": SERVICE_PATH / "DevMode/EdogTelemetryInterceptor.cs",
@@ -933,7 +931,7 @@ fi
 EDOG_PATCHED="GTSBasedSparkClient.cs Program.cs WorkloadApp.cs ParametersManifest.json Test.json ControllersConfig.cs"
 for file in $EDOG_PATCHED; do
     if echo "$STAGED" | grep -q "$file"; then
-        if git diff --cached -- "*$file" | grep -qE "EDOG DevMode|EdogLogServer|EdogTelemetryInterceptor|DisableFLTAuth.*true|EdogSessionController"; then
+        if git diff --cached -- "*$file" | grep -qE "EDOG DevMode|EdogLogServer|EdogTelemetryInterceptor|DisableFLTAuth.*true"; then
             echo ""
             echo "COMMIT BLOCKED: EDOG DevMode changes in $file!"
             echo ""
@@ -2107,47 +2105,12 @@ def revert_dag_execution_hook_patch(content):
     return re.sub(pattern, "", content)
 
 
-def apply_controllers_config_patch(content):
-    """Register EdogSessionController in the authentication map (ControllersConfig.cs).
-
-    The MWC AuthenticationEngine attribute dispatches by controller name (class
-    name minus "Controller" suffix).  Without a map entry the platform returns
-    500 InternalError Param1:EdogSession.  We register with NoAuth — same as
-    PublicUnprotectedController — since MWC token validation already ran at the
-    gateway layer.
-    """
-    if "EdogSessionController" in content:
-        return content, "already_applied"
-
-    if "controllersTypeToAuthMap" not in content:
-        return content, "pattern_not_found"
-
-    lines = content.split("\n")
-    in_map = False
-    insert_idx = None
-    for i, line in enumerate(lines):
-        if "controllersTypeToAuthMap" in line:
-            in_map = True
-        if in_map and line.strip() == "};":
-            insert_idx = i
-            break
-
-    if insert_idx is None:
-        return content, "pattern_not_found"
-
-    edog_lines = [
-        "",
-        "                // EDOG DevMode - register session probe controller",
-        "                { typeof(EdogSessionController), new[] { platformAuthProvider.GetNoAuthenticationAuthenticator() } },",
-    ]
-    for j, entry in enumerate(edog_lines):
-        lines.insert(insert_idx + j, entry)
-
-    return "\n".join(lines), "applied"
-
-
 def revert_controllers_config_patch(content):
-    """Remove EdogSessionController registration from ControllersConfig.cs."""
+    """Remove EdogSessionController registration from ControllersConfig.cs.
+
+    Retained after the Session Guard removal so existing patched FLT repos
+    get cleaned automatically on the next deploy or --revert.
+    """
     pattern = (
         r"\n\n[ ]*// EDOG DevMode - register session probe controller"
         r"\n[ ]*\{ typeof\(EdogSessionController\), new\[\] \{ platformAuthProvider\.GetNoAuthenticationAuthenticator\(\) \} \},"
@@ -2705,27 +2668,18 @@ def apply_all_changes(token, repo_root):
             modified_contents[rel_path] = content
             warnings.append("⚠️  DAG execution hook: pattern not found in DagExecutionHandlerV2.cs")
 
-    # 4c. Patch ControllersConfig.cs to register EdogSessionController auth
+    # 4c. Clean any stranded EdogSessionController registration from ControllersConfig.cs.
+    # Session Guard was removed; if a prior deploy patched this file, scrub it.
     rel_path = FILES["ControllersConfig"]
     filepath = repo_root / rel_path
     content = read_file(filepath)
     if content:
-        new_content, status = apply_controllers_config_patch(content)
-        if status == "applied":
+        reverted = revert_controllers_config_patch(content)
+        if reverted != content:
             original_contents[rel_path] = content
-            write_file(filepath, new_content)
-            modified_contents[rel_path] = new_content
-            changes_made.append("✅ Session probe controller auth (ControllersConfig.cs)")
-        elif status == "already_applied":
-            reverted = revert_controllers_config_patch(content)
-            if reverted != content:
-                original_contents[rel_path] = reverted
-                modified_contents[rel_path] = content
-            changes_made.append("⏭️  Session probe controller auth (already)")
-        elif status == "pattern_not_found":
-            original_contents[rel_path] = content
-            modified_contents[rel_path] = content
-            warnings.append("⚠️  Session probe controller auth: pattern not found in ControllersConfig.cs")
+            write_file(filepath, reverted)
+            modified_contents[rel_path] = reverted
+            changes_made.append("✅ Cleaned stranded EdogSessionController patch (ControllersConfig.cs)")
 
     # 5. Disable FLT auth for EDOG DevMode (ParametersManifest.json and Test.json)
     for file_key, apply_fn, revert_fn, desc in [
@@ -2944,12 +2898,12 @@ def check_status(repo_root):
         applied = "EdogTelemetryInterceptor" in content
         status.append(("Log viewer telemetry interceptor (WorkloadApp.cs)", applied))
 
-    # Check ControllersConfig.cs session probe auth
+    # Check ControllersConfig.cs is clean of stranded EdogSessionController patch
     filepath = repo_root / FILES["ControllersConfig"]
     content = read_file(filepath)
     if content:
-        applied = "EdogSessionController" in content
-        status.append(("Session probe controller auth (ControllersConfig.cs)", applied))
+        applied = "EdogSessionController" not in content
+        status.append(("ControllersConfig.cs clean of EdogSessionController", applied))
 
     # Check DisableFLTAuth (ParametersManifest.json)
     filepath = repo_root / FILES["ParametersManifest"]

@@ -96,22 +96,6 @@ def test_proxy_to_flt_still_sets_moniker(src: str):
     )
 
 
-def test_warmup_capacity_route_sets_moniker(src: str):
-    # Top-level function, not method — signature differs.
-    body = _slice_function(src, "def _warmup_capacity_route(")
-    assert "x-ms-workload-resource-moniker" in body, (
-        "warmup probe must set moniker so capacity caches the right mapping."
-    )
-
-
-def test_session_probe_sets_moniker(src: str):
-    body = _slice_function(src, "    def _probe_capacity_sessions(self")
-    assert "x-ms-workload-resource-moniker" in body, (
-        "session probe must set moniker — otherwise the probe response "
-        "does not reflect the artifact's actual session state."
-    )
-
-
 def test_all_capacity_calls_share_moniker_invariant(src: str):
     """Every place we POST/GET against /webapi/capacities/{cap}/workloads/LiveTable
     must set the moniker. This is a structural check: count the capacity URLs
@@ -125,8 +109,8 @@ def test_all_capacity_calls_share_moniker_invariant(src: str):
     moniker_re = re.compile(r"x-ms-workload-resource-moniker")
 
     capacity_matches = list(capacity_url_re.finditer(src))
-    assert len(capacity_matches) >= 5, (
-        "Expected at least 5 capacity-URL compositions; check refactor didn't "
+    assert len(capacity_matches) >= 3, (
+        "Expected at least 3 capacity-URL compositions; check refactor didn't "
         "delete callsites."
     )
 

@@ -8,7 +8,7 @@ redeploy, the top bar said "Connected" but the Runtime View stayed
 Two layers of the bug were fixed:
 
   1. Detection failure — SignalR's built-in `withAutomaticReconnect` retry
-     array exhausts in ~48 s while real redeploys take 60–180 s. Nothing in
+     array exhausts in ~48 s while real redeploys take 60-180 s. Nothing in
      the codebase converged "phase=running AND signalr=disconnected → ensure
      connected". Now `ConnectionSupervisor` owns that reconciliation by
      polling `/api/studio/status`.

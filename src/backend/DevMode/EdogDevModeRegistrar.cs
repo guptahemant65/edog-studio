@@ -8,8 +8,6 @@
 namespace Microsoft.LiveTable.Service.DevMode
 {
     using System;
-    using System.IO;
-    using System.Text.Json;
 
     using Microsoft.Extensions.DependencyInjection;
     using Microsoft.Extensions.Logging.Abstractions;
@@ -123,64 +121,6 @@ namespace Microsoft.LiveTable.Service.DevMode
                 // want RegisterAll() to be retryable on the next invocation rather than
                 // silently no-op'ing forever.
                 _registered = true;
-
-                // Auto-register deployer's session so other engineers' probes
-                // see this capacity as occupied even before SignalR connects.
-                try
-                {
-                    var machine = Environment.MachineName;
-                    var osUser = Environment.UserName;
-                    var connectionId = $"deploy-{machine}-{osUser}";
-
-                    string workspaceId = string.Empty;
-                    string artifactId = string.Empty;
-                    string capacityId = null;
-
-                    // Read context from edog-config.json (deployed to build output DevMode dir)
-                    var configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "DevMode", "edog-config.json");
-                    if (File.Exists(configPath))
-                    {
-                        try
-                        {
-                            var json = File.ReadAllText(configPath);
-                            var doc = JsonDocument.Parse(json);
-                            var root = doc.RootElement;
-                            if (root.TryGetProperty("workspace_id", out var wsProp))
-                                workspaceId = wsProp.GetString() ?? string.Empty;
-                            if (root.TryGetProperty("artifact_id", out var artProp))
-                                artifactId = artProp.GetString() ?? string.Empty;
-                            if (root.TryGetProperty("capacity_id", out var capProp))
-                                capacityId = capProp.GetString();
-                        }
-                        catch (Exception parseEx)
-                        {
-                            Console.WriteLine($"[EDOG] Config parse failed (non-fatal): {parseEx.Message}");
-                        }
-                    }
-
-                    // Seed deployment context so ALL Register() calls auto-fill IDs
-                    EdogSessionRegistry.SetDeploymentContext(workspaceId, artifactId);
-
-                    // Seed capacity info so probe response includes it
-                    if (!string.IsNullOrEmpty(capacityId))
-                    {
-                        EdogSessionRegistry.SetCapacityInfo(capacityId, null, null);
-                    }
-
-                    EdogSessionRegistry.Register(
-                        connectionId,
-                        machine,
-                        osUser,
-                        artifactId,
-                        string.Empty,
-                        workspaceId,
-                        string.Empty);
-                    Console.WriteLine($"[EDOG] Session registered: {osUser}@{machine} (ws:{workspaceId}, lh:{artifactId})");
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[EDOG] Session auto-register failed (non-fatal): {ex.Message}");
-                }
 
                 Console.WriteLine("[EDOG] DevMode interceptors registered");
             }

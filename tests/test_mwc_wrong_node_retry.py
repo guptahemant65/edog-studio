@@ -273,25 +273,3 @@ def test_proxy_to_flt_calls_retry_helper(srv):
     assert "urllib.request.urlopen(req, timeout=30, context=ctx)" not in body, (
         "Bare urlopen detected in _proxy_to_flt — should go through _urlopen_with_mwc_retry"
     )
-
-
-def test_session_probe_calls_retry_helper(srv):
-    """Session probe also goes through the capacity gateway and can hit wrong-node."""
-    source = DEV_SERVER.read_text(encoding="utf-8")
-    idx = source.find("def _probe_capacity_sessions")
-    assert idx >= 0
-    next_idx = source.find("\n    def ", idx + 30)
-    body = source[idx:next_idx if next_idx > 0 else None]
-    assert "_urlopen_with_mwc_retry" in body
-
-
-def test_warmup_capacity_route_calls_retry_helper(srv):
-    """Warmup probe must also retry — otherwise warmup falsely reports failure
-    when the first request lands on the wrong pod during deploy."""
-    source = DEV_SERVER.read_text(encoding="utf-8")
-    idx = source.find("def _warmup_capacity_route")
-    assert idx >= 0
-    # top-level function — find next top-level def
-    next_idx = source.find("\ndef ", idx + 30)
-    body = source[idx:next_idx if next_idx > 0 else None]
-    assert "_urlopen_with_mwc_retry" in body

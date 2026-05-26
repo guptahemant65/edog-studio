@@ -112,8 +112,8 @@ MWC_ROUTING_HINT_HEADER = "x-ms-routing-hint"
 
 class CapacityRoutingError(Exception):
     """Raised when the capacity routing layer is not ready (e.g. LiveTable
-    workload not yet registered, MWC endpoint returns 404).  The deploy
-    warmup loop and proxy handler treat this as a retryable condition."""
+    workload not yet registered, MWC endpoint returns 404).  The proxy
+    handler treats this as a retryable condition."""
 
 
 # Lock for bearer mint — prevent N parallel mints racing on expiry
@@ -2439,74 +2439,6 @@ def _cleanup_devmode_token():
         _deploy_log(f"Token cleanup failed: {e}", "warn")
 
 
-def _warmup_capacity_route(ws_id: str, lh_id: str, cap_id: str, deploy_id: str) -> bool:
-    """Probe the capacity routing layer until LiveTable APIs are reachable.
-
-    After FLT's DevConnection fires, the capacity routing table may take
-    10-60 s to propagate.  This function retries MWC token generation +
-    a lightweight GET through the capacity path, blocking the deploy
-    pipeline until the end-to-end path works (or timeout).
-
-    Returns True if routing was confirmed, False if timeout expired.
-    """
-    deadline = time.time() + 60
-    backoff_seq = [2, 3, 5, 8]  # then 8, 8, 8... until deadline
-    attempt = 0
-
-    while time.time() < deadline:
-        # Bail if deploy was cancelled
-        if _deploy_cancel.is_set():
-            _deploy_log("Warmup cancelled", "warn")
-            return False
-
-        # Bail if FLT process died
-        if _flt_process and _flt_process.poll() is not None:
-            _deploy_log(f"FLT process exited during warmup (code {_flt_process.returncode})", "error")
-            return False
-
-        try:
-            bearer = _ensure_bearer()
-            if not bearer:
-                _deploy_log("Warmup: no bearer token", "warn")
-                break
-
-            # Single probe: MWC token + GET through capacity in one shot.
-            mwc_token, host = _get_mwc_token(bearer, ws_id, lh_id, cap_id, workload_type="LiveTable")
-            probe_url = (
-                f"{host}/webapi/capacities/{cap_id}/workloads/LiveTable"
-                f"/LiveTableService/automatic"
-                f"/v1/workspaces/{ws_id}/lakehouses/{lh_id}"
-                f"/devmode/edogSessions/list"
-            )
-            req = urllib.request.Request(probe_url, method="GET")
-            req.add_header("Authorization", f"MwcToken {mwc_token}")
-            req.add_header("x-ms-workload-resource-moniker", lh_id)
-            ctx = ssl.create_default_context()
-            with _urlopen_with_mwc_retry(req, ctx, timeout=15, label="warmup-probe") as resp:
-                resp.read()
-
-            _deploy_log(
-                f"Capacity routing confirmed (attempt {attempt + 1})",
-                "success",
-            )
-            return True
-
-        except Exception as e:
-            phase = str(e)[:80]
-
-        attempt += 1
-        delay = backoff_seq[min(attempt - 1, len(backoff_seq) - 1)]
-        remaining = int(deadline - time.time())
-        _deploy_log(
-            f"Warmup attempt {attempt} failed ({phase}), retrying in {delay}s... ({remaining}s left)",
-            "dim",
-        )
-        time.sleep(delay)
-
-    _deploy_log("Warmup timeout — capacity routing not confirmed within 60s", "warn")
-    return False
-
-
 def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
     """Real deploy pipeline. Runs on background thread."""
     global _flt_process
@@ -2881,14 +2813,6 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
 
         _deploy_log("DevConnection started — service fully deployed!", "success")
 
-        # Step 5: Warmup — verify capacity routing is propagated before
-        # declaring "running". Without this, the frontend fires API calls
-        # into a routing gap (MWC 404 / capacity 400) for 10-60s.
-        if not _deploy_step(5, "Verifying capacity routing...", deploy_id):
-            return
-
-        warmup_ok = _warmup_capacity_route(ws_id, lh_id, cap_id, deploy_id)
-
         # Capture FLT repo git HEAD for the Connected strip (issue: commit info
         # was never populated, so commit SHA/message never showed up in UI).
         git_info = None
@@ -2914,13 +2838,8 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
                 "deployMessage": "Deploy complete",
                 "deployTarget": target,
             }
-            if not warmup_ok:
-                state_update["warmupIncomplete"] = True
-                state_update["warmupMessage"] = (
-                    "Capacity route not fully propagated yet. Some FLT APIs may take a few seconds to start working."
-                )
             _studio_state.update(state_update)
-        _deploy_log("Deploy complete!" + ("" if warmup_ok else " (warmup incomplete)"), "success")
+        _deploy_log("Deploy complete!", "success")
 
         # Start file change detection after successful deploy
         try:
@@ -3024,8 +2943,6 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_identity()
         elif self.path.startswith("/api/edog/s2s-token"):
             self._serve_s2s_token()
-        elif self.path.startswith("/api/edog/session-probe"):
-            self._probe_capacity_sessions()
         elif self.path == "/api/edog/patch-warnings":
             self._serve_patch_warnings()
         elif self.path == "/api/edog/interceptors-status":
@@ -3511,100 +3428,6 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                     "resource": resource,
                 },
             )
-
-    def _probe_capacity_sessions(self):
-        """GET /api/edog/session-probe — Session Guard pre-deploy collision check.
-
-        Calls /api/edog/sessions on the capacity host. Three outcomes:
-          - 200 with sessions → return them so the UI can warn the engineer.
-          - 404 / timeout / connection error → capacity has no DevMode (i.e.
-            no one is connected): return available=true with empty list.
-          - Any other error → also degrade to available=true so a probe
-            failure never blocks a deploy.
-        """
-        try:
-            # Probe via flt-proxy — goes through the capacity host with proper
-            # MWC auth + moniker headers, same path as all FLT API calls.
-            # Controller route: devmode/edogSessions/list
-            # flt-proxy auto-prepends the workspace/lakehouse path.
-            cfg = {}
-            with contextlib.suppress(Exception):
-                if CONFIG_PATH.exists():
-                    cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-
-            ws_id = cfg.get("workspace_id", "")
-            art_id = cfg.get("artifact_id", "")
-            cap_id = cfg.get("capacity_id", "")
-            if not ws_id or not art_id or not cap_id:
-                self._json_response(200, {"available": True, "sessions": [], "reason": "no_config"})
-                return
-
-            bearer = _ensure_bearer()
-            if not bearer:
-                self._json_response(200, {"available": True, "sessions": [], "reason": "no_bearer"})
-                return
-
-            try:
-                mwc_token, host = _get_mwc_token(bearer, ws_id, art_id, cap_id, workload_type="LiveTable")
-            except Exception as e:
-                sys.stderr.write(f"[EDOG] session-probe mwc error: {e}\n")
-                self._json_response(200, {"available": True, "sessions": [], "reason": "mwc_failed"})
-                return
-
-            # Build capacity host URL with standard FLT controller path
-            target_url = (
-                f"{host}/webapi/capacities/{cap_id}/workloads/LiveTable"
-                f"/LiveTableService/automatic"
-                f"/devmode/edogSessions/list"
-            )
-            req = urllib.request.Request(target_url, method="GET")
-            req.add_header("Authorization", f"MwcToken {mwc_token}")
-            req.add_header("x-ms-workload-resource-moniker", art_id)
-            req.add_header("Accept", "application/json")
-
-            ctx = ssl.create_default_context()
-            try:
-                with _urlopen_with_mwc_retry(req, ctx, timeout=8.0, label="session-probe") as resp:
-                    body = resp.read(65536)
-                    try:
-                        payload = json.loads(body.decode("utf-8", errors="replace"))
-                    except Exception:
-                        payload = {"sessions": []}
-                    sessions = payload.get("sessions") or []
-                    self._json_response(
-                        200,
-                        {
-                            "available": len(sessions) == 0,
-                            "sessions": sessions,
-                            "capacityId": payload.get("capacityId"),
-                            "capacityName": payload.get("capacityName"),
-                            "capacitySku": payload.get("capacitySku"),
-                        },
-                    )
-                    return
-            except urllib.error.HTTPError as e:
-                # 404 → capacity isn't running DevMode (no one connected).
-                if e.code == 404:
-                    self._json_response(200, {"available": True, "sessions": [], "reason": "no_devmode"})
-                    return
-                # Capture error body for debugging
-                err_body = ""
-                try:
-                    err_body = e.read(4096).decode("utf-8", errors="replace")
-                except Exception:
-                    pass
-                sys.stderr.write(f"[EDOG] session-probe HTTP {e.code}: {e.reason} body={err_body[:500]}\n")
-                self._json_response(
-                    200, {"available": True, "sessions": [], "reason": f"http_{e.code}", "debug": err_body[:500]}
-                )
-                return
-            except (urllib.error.URLError, TimeoutError) as e:
-                sys.stderr.write(f"[EDOG] session-probe network: {e}\n")
-                self._json_response(200, {"available": True, "sessions": [], "reason": "timeout"})
-                return
-        except Exception as e:
-            sys.stderr.write(f"[EDOG] _probe_capacity_sessions error: {e}\n")
-            self._json_response(200, {"available": True, "sessions": [], "reason": "probe_failed"})
 
     def _json_response(self, code, data):
         body = json.dumps(data).encode()
@@ -5967,10 +5790,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
 
         # LRU-ish: cap to 32 entries.
         if len(cache) >= 32:
-            try:
+            with contextlib.suppress(StopIteration):
                 cache.pop(next(iter(cache)))
-            except StopIteration:
-                pass
         cache[cache_key] = {"mtime": mtime, "lines": lines}
 
         self._json_response(200, {"valid": True, "lines": lines})
@@ -6008,10 +5829,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                     if sub.startswith("author "):
                         meta["author"] = sub[len("author ") :]
                     elif sub.startswith("author-time "):
-                        try:
+                        with contextlib.suppress(ValueError):
                             meta["authorTime"] = int(sub[len("author-time ") :])
-                        except ValueError:
-                            pass
                     elif sub.startswith("summary "):
                         meta["summary"] = sub[len("summary ") :]
                     i += 1
