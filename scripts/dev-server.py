@@ -89,6 +89,26 @@ ONELAKE_RESOURCE = "https://storage.azure.com"
 TOKEN_HELPER_CLIENT_ID = "ea0616ba-638b-4df5-95b9-636659ae5121"
 TOKEN_HELPER_AUTHORITY = "https://login.windows-ppe.net/organizations"
 
+# MWC priority-placement misrouting headers.
+#
+# When a Fabric capacity request lands on the wrong core-service pod, the
+# capacity gateway (ScaleOutRoutingMiddleware in MWC.Workload.Client.Library)
+# returns HTTP 400 with header
+#   x-ms-priority-placement-wrong-node: <core-service-name>
+# and an empty body. The fix is to retry with header
+#   x-ms-routing-hint: <core-service-name>
+# so the gateway routes to the correct pod.
+#
+# Mirrors the canonical handler in ASPaaS
+# (Apps/FrontendService/ASPaaS.FrontEnd.Service/Utility/WorkloadRequestUtility.cs).
+# Constant name on that side: DevXConstants.Headers.PriorityPlacementWrongNode.
+#
+# Verified live 2026-05-26: bare request returned 400 with this header pointing
+# to host002_livetable-003; retry with x-ms-routing-hint=host002_livetable-003
+# returned 200 with full DAG body on the first attempt.
+MWC_PRIORITY_PLACEMENT_WRONG_NODE_HEADER = "x-ms-priority-placement-wrong-node"
+MWC_ROUTING_HINT_HEADER = "x-ms-routing-hint"
+
 
 class CapacityRoutingError(Exception):
     """Raised when the capacity routing layer is not ready (e.g. LiveTable
@@ -1070,6 +1090,71 @@ def _collect_pr_context_extras(token: str, base_url: str, pr_data: dict, change_
         extras["extrasWarnings"].append("catalog_and_prior_tests_skipped: flt_repo_path_not_configured")
 
     return extras
+
+
+def _urlopen_with_mwc_retry(req, ctx, *, timeout=30, max_retries=4, label="capacity"):
+    """urlopen wrapper that retries on MWC priority-placement-wrong-node 400.
+
+    When the Fabric capacity gateway returns HTTP 400 with header
+    ``x-ms-priority-placement-wrong-node: <core-service>``, the request landed
+    on the wrong core service pod. Mirroring ASPaaS's misrouting handler
+    (``Apps/FrontendService/.../WorkloadRequestUtility.cs``), we retry the same
+    request with header ``x-ms-routing-hint: <core-service>`` so the gateway
+    routes to the correct pod.
+
+    Repeat calls to ``Request.add_header`` for the same name overwrite the
+    previous value (verified: ``add_header`` mutates ``self.headers`` via
+    ``key.capitalize()`` dict-assignment), so the routing hint header is
+    refreshed cleanly across retry attempts without duplicating.
+
+    The body of the failed response is drained so urllib's connection pool can
+    release the socket cleanly. The retry is safe even for non-idempotent
+    methods because the routing middleware rejects the request BEFORE it
+    reaches the workload controller — no controller-side side effects can
+    have occurred.
+
+    Args:
+        req: A ``urllib.request.Request`` to execute. The same instance is
+            reused across retries; for body-bearing methods pass ``bytes``
+            data, not a stream.
+        ctx: ``ssl.SSLContext`` to use.
+        timeout: per-attempt timeout, in seconds.
+        max_retries: maximum number of wrong-node retries. The request is
+            attempted up to ``max_retries + 1`` times.
+        label: short tag used in diagnostic stderr output to identify which
+            proxy initiated the call.
+
+    Returns:
+        The ``HTTPResponse`` (``addinfourl``) from the first successful
+        attempt. Caller is responsible for closing it — use a ``with`` block.
+
+    Raises:
+        ``urllib.error.HTTPError`` from the last attempt if the failure is not
+        a wrong-node 400 or if retries are exhausted.
+    """
+    last_err = None
+    for attempt in range(max_retries + 1):
+        try:
+            return urllib.request.urlopen(req, timeout=timeout, context=ctx)
+        except urllib.error.HTTPError as e:
+            last_err = e
+            if e.code != 400 or not e.headers:
+                raise
+            hint = e.headers.get(MWC_PRIORITY_PLACEMENT_WRONG_NODE_HEADER)
+            if not hint or attempt >= max_retries:
+                raise
+            with contextlib.suppress(Exception):
+                e.read()  # drain so urllib can release the socket
+            sys.stderr.write(
+                f"  [MWC-Retry] {label}: wrong-node 400 "
+                f"(attempt {attempt + 1}/{max_retries + 1}) — "
+                f"retrying with {MWC_ROUTING_HINT_HEADER}={hint}\n"
+            )
+            sys.stderr.flush()
+            req.add_header(MWC_ROUTING_HINT_HEADER, hint)
+            time.sleep(0.1 * (attempt + 1))
+    # Unreachable: the loop either returns or raises above.
+    raise last_err  # pragma: no cover
 
 
 def _get_mwc_token(bearer: str, ws_id: str, artifact_id: str, cap_id: str, workload_type: str = "Lakehouse") -> tuple:
@@ -2397,7 +2482,7 @@ def _warmup_capacity_route(ws_id: str, lh_id: str, cap_id: str, deploy_id: str) 
             req.add_header("Authorization", f"MwcToken {mwc_token}")
             req.add_header("x-ms-workload-resource-moniker", lh_id)
             ctx = ssl.create_default_context()
-            with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
+            with _urlopen_with_mwc_retry(req, ctx, timeout=15, label="warmup-probe") as resp:
                 resp.read()
 
             _deploy_log(
@@ -3479,7 +3564,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
 
             ctx = ssl.create_default_context()
             try:
-                with urllib.request.urlopen(req, timeout=8.0, context=ctx) as resp:
+                with _urlopen_with_mwc_retry(req, ctx, timeout=8.0, label="session-probe") as resp:
                     body = resp.read(65536)
                     try:
                         payload = json.loads(body.decode("utf-8", errors="replace"))
@@ -4414,7 +4499,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             req.add_header("x-ms-workload-resource-moniker", art_id)
 
             ctx = ssl.create_default_context()
-            with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
+            with _urlopen_with_mwc_retry(req, ctx, timeout=30, label="flt-proxy") as resp:
                 resp_body = resp.read()
                 self.send_response(resp.status)
                 self.send_header("Content-Type", resp.headers.get("Content-Type", "application/json"))
@@ -5402,6 +5487,14 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             if body is not None and not any(k.lower() == "content-type" for k in sanitized_headers):
                 req.add_header("Content-Type", "application/json")
             req.add_header("Authorization", auth_header_value)
+            # MWC path: scope the request to the artifact's moniker so FLT's
+            # ExecutionContextManager populates CustomerCapacityAsyncLocalContext
+            # correctly (Service/Microsoft.LiveTable.Service/Common/Constants.cs:473,
+            # MoveToWcl/RequestExecution/ExecutionContextManager.cs:95). Without
+            # this header, controllers run with an empty moniker context and the
+            # catalog scan returns empty arrays (nodes: [], edges: []).
+            if token_type == "mwc" and not any(k.lower() == "x-ms-workload-resource-moniker" for k in sanitized_headers):
+                req.add_header("x-ms-workload-resource-moniker", art_id)
         except Exception as e:
             self._json_response(400, {"error": "bad_request", "message": f"failed to build request: {e}"})
             return
@@ -5414,7 +5507,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         upstream_headers_list = []
         upstream_body = b""
         try:
-            with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
+            with _urlopen_with_mwc_retry(req, ctx, timeout=timeout, label=f"playground-{token_type}") as resp:
                 upstream_status = resp.status
                 upstream_reason = resp.reason or ""
                 upstream_headers_list = list(resp.headers.items())
@@ -6467,9 +6560,10 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         try:
             req = urllib.request.Request(target_url, method="GET")
             req.add_header("Authorization", f"MwcToken {mwc_token}")
+            req.add_header("x-ms-workload-resource-moniker", lh_id)
             req.add_header("Content-Type", "application/json")
             ctx = ssl.create_default_context()
-            with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
+            with _urlopen_with_mwc_retry(req, ctx, timeout=30, label="flt-import") as resp:
                 resp_body = resp.read()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
