@@ -112,16 +112,16 @@ class TopBar {
       // T8: Show git/patch meta only when real data exists
       this._updateGitVisibility(health || {});
 
-      // Sync sidebar phase and WebSocket port from studio state
+      // Sync sidebar phase and WebSocket port from studio state.
+      // Note: ConnectionSupervisor owns the SignalR lifecycle now. We only
+      // touch the sidebar pill from here; supervisor handles edogWs.setPort
+      // based on its own /api/studio/status poll.
       if (window.edogSidebar) {
         if (config.studioPhase === 'running') {
           window.edogSidebar.setPhase('connected');
         } else if (config.studioPhase === 'idle' || config.studioPhase === 'stopped') {
           window.edogSidebar.setPhase('disconnected');
         }
-      }
-      if (config.fltPort && config.studioPhase === 'running' && window.edogWs) {
-        window.edogWs.setPort(config.fltPort);
       }
 
       // F1: Update deploy context strip + patch warnings banner + health chip

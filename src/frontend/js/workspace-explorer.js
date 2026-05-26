@@ -5711,7 +5711,14 @@ class WorkspaceExplorer {
     } else if (state.status === 'running') {
       if (window.edogTopBar) window.edogTopBar.setDeployStatus('connected');
       if (window.edogSidebar) window.edogSidebar.setPhase('connected');
-      if (state.fltPort && window.edogWs) window.edogWs.setPort(state.fltPort);
+      if (state.fltPort) {
+        if (window.edogConnectionSupervisor) {
+          window.edogConnectionSupervisor.onDeployComplete(state.fltPort);
+        } else if (window.edogWs) {
+          // Defensive fallback if supervisor isn't initialised yet.
+          window.edogWs.setPort(state.fltPort);
+        }
+      }
       if (window.edogApp && window.edogApp.loadInitialData) window.edogApp.loadInitialData();
       this._toast('Connected to ' + (lh.displayName || lh.id), 'success');
       // Set status pill to running
@@ -6541,9 +6548,12 @@ class WorkspaceExplorer {
   }
 
   /**
-   * Wrap window.edogWs.onStatusChange so we can:
-   *   - send EdogIdentify when SignalR transitions to 'connected'
-   *   - show a disconnect toast on unexpected drop
+   * Subscribe to SignalR status changes so we can:
+   *   - send EdogIdentify when the connection transitions to 'connected'
+   *   - refresh the session probe after a reconnect
+   *
+   * Toast lifecycle for "Session disconnected" is owned by ConnectionSupervisor
+   * (it has the deploy-phase context to suppress the toast during deploys).
    */
   _hookSignalRLifecycle() {
     const ws = window.edogWs;
@@ -6554,15 +6564,17 @@ class WorkspaceExplorer {
     }
     if (ws.__sgHooked) return;
     ws.__sgHooked = true;
-    const existing = ws.onStatusChange;
     const self = this;
-    ws.onStatusChange = function(status) {
-      try {
-        if (existing) existing(status);
-      } finally {
-        self._onSignalRStatus(status);
-      }
-    };
+    if (typeof ws.addStatusListener === 'function') {
+      ws.addStatusListener(function(status) { self._onSignalRStatus(status); });
+    } else {
+      // Defensive fallback for very old SignalRManager instances.
+      const existing = ws.onStatusChange;
+      ws.onStatusChange = function(status) {
+        try { if (existing) existing(status); }
+        finally { self._onSignalRStatus(status); }
+      };
+    }
   }
 
   _onSignalRStatus(status) {
@@ -6574,10 +6586,8 @@ class WorkspaceExplorer {
       }
       this._sgWasConnected = true;
     } else if (status === 'disconnected' || status === 'reconnecting') {
-      if (this._sgWasConnected) {
-        // We had a real connection and now it dropped — surface the toast.
-        this._showDisconnectToast(status);
-      }
+      // No toast here — ConnectionSupervisor owns the user-visible toast,
+      // including the 5s debounce that hides it during deploys.
       this._sgWasConnected = false;
     }
   }
@@ -6604,26 +6614,6 @@ class WorkspaceExplorer {
         target.workspaceName || ''
       ).catch(() => { /* server may not implement yet */ });
     } catch (_e) { /* hub method optional */ }
-  }
-
-  _showDisconnectToast(_reason) {
-    if (typeof window.edogToast !== 'function') return;
-    window.edogToast(
-      'Session disconnected \u2014 FLT runtime stopped or restarted.',
-      'warning',
-      {
-        id: 'sg-disconnect',
-        duration: 0,
-        action: {
-          label: 'Reconnect',
-          onClick: function() {
-            if (window.edogWs && typeof window.edogWs.connect === 'function') {
-              window.edogWs.connect();
-            }
-          },
-        },
-      }
-    );
   }
 
   _sgFormatTime(iso) {

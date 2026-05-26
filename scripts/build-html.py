@@ -83,6 +83,7 @@ JS_MODULES = [
     "js/state.js",
     "js/toast.js",
     "js/signalr-manager.js",
+    "js/connection-supervisor.js",
     "js/api-client.js",
     "js/notebook-parser.js",
     "js/notebook-view.js",

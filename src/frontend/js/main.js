@@ -200,8 +200,12 @@ class EdogLogViewer {
       }
     };
     
-    // Set up WebSocket callbacks
-    this.ws.onStatusChange = this.updateConnectionStatus;
+    // Set up WebSocket callbacks.
+    // Use addStatusListener (multi-subscriber) instead of the legacy
+    // onStatusChange property — workspace-explorer + ConnectionSupervisor
+    // also register listeners; the old single-slot property used to be
+    // wrapped by callers, which was fragile.
+    this.ws.addStatusListener(this.updateConnectionStatus);
     this.ws.onBatch = this.handleWebSocketBatch;
     this.ws.onSummary = this.handleWebSocketSummary;
 
@@ -258,10 +262,11 @@ class EdogLogViewer {
         this.renderer.flush();
         this.renderer.scheduleRender();
 
-        // Ensure SignalR is connected (covers edge case where page loaded
-        // before FLT started and user navigated to logs tab later)
-        if (this.ws && this.ws.status !== 'connected' && this.ws._port) {
-          this.ws.connect();
+        // Phase-aware reconnect fallback (covers edge case where page loaded
+        // before FLT started and user navigated to logs tab later). The
+        // supervisor checks phase so this is safe during deploy.
+        if (this.connectionSupervisor && this.ws && this.ws.status !== 'connected') {
+          this.connectionSupervisor.requestReconnect('logs-tab-activate');
         }
       },
       deactivate: () => { /* Logs stay in buffer, just stop rendering */ }
@@ -303,6 +308,15 @@ class EdogLogViewer {
     window.edogSidebar = this.sidebar;
     window.edogWs = this.ws;
     window.edogApp = this;
+
+    // Start the ConnectionSupervisor — single source of truth that watches
+    // /api/studio/status, reconciles to ensureConnected, owns the toast
+    // lifecycle, and gates retries during deploy/stopped/crashed phases.
+    // Other modules (topbar, workspace-explorer, deploy flow) no longer
+    // call ws.setPort / ws.connect directly.
+    this.connectionSupervisor = new ConnectionSupervisor(this.ws);
+    window.edogConnectionSupervisor = this.connectionSupervisor;
+    this.connectionSupervisor.start();
 
     // Set phase based on token availability
     const phase = this.apiClient.getPhase();
@@ -365,8 +379,8 @@ class EdogLogViewer {
                 this.sidebar.setPhase('connected');
                 if (this.runtimeView) this.runtimeView.setPhase('connected');
                 if (this.qaPanel) this.qaPanel.setPhase('connected');
-                if (s.fltPort && this.ws) {
-                  this.ws.setPort(s.fltPort);
+                if (s.fltPort && this.connectionSupervisor) {
+                  this.connectionSupervisor.onDeployComplete(s.fltPort);
                   if (this.runtimeView) this.runtimeView.setPort(s.fltPort);
                 }
                 this.loadInitialData();
@@ -387,7 +401,11 @@ class EdogLogViewer {
         if (this.qaPanel) this.qaPanel.setPhase('connected');
         this.topbar.setDeployStatus('connected');
         if (state.fltPort) {
-          this.ws.setPort(state.fltPort);
+          if (this.connectionSupervisor) {
+            this.connectionSupervisor.onDeployComplete(state.fltPort);
+          } else {
+            this.ws.setPort(state.fltPort);
+          }
           if (this.runtimeView) this.runtimeView.setPort(state.fltPort);
         }
         this.loadInitialData();
@@ -751,6 +769,11 @@ class EdogLogViewer {
       this.state.logBuffer.clear();
       this.state.filterIndex.clear();
       this.state.telemetryBuffer.clear();
+      // Reset sequence high-water marks: FLT restart resets topic sequence
+      // IDs to 1, so retaining the old high-water (e.g. 500) would silently
+      // drop the entire fresh snapshot. setStatus dedupes, so this only runs
+      // on genuine reconnects.
+      this._topicHighWater = {};
       this.renderer.scheduleRender();
     }
   }
