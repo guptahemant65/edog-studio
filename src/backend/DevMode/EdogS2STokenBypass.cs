@@ -20,22 +20,27 @@ namespace Microsoft.LiveTable.Service.DevMode
     using Microsoft.MWC.Workload.Client.Library.Utils.WebApi;
 
     /// <summary>
-    /// DevMode bypass for IS2STokenProvider when the workload S2S certificate
-    /// has expired. Intercepts every public method that requests a token for
-    /// a CBA-mintable resource (currently storage.azure.com and PBI Shared)
-    /// and serves it from the dev-server CBA endpoint instead of the broken
-    /// AME cert path. Resources NOT in the bypass allowlist still delegate
-    /// to the real provider so non-affected paths keep working untouched.
+    /// DevMode safety net for IS2STokenProvider that handles the case where
+    /// the workload S2S certificate is expired or otherwise broken. For each
+    /// CBA-mintable resource (currently storage.azure.com and PBI Shared),
+    /// the bypass calls the real provider FIRST: a working FLT 1P cert mints
+    /// a token with the trusted appid that OneLake's trusted-workload allowlist
+    /// requires. Only if the real provider throws does the bypass fall back to
+    /// the dev-server CBA endpoint. This keeps non-dev-mode behavior intact
+    /// when the cert is healthy and only diverges when it must.
     ///
-    /// Why this matters: the OneLake bypass alone (GetS2STokenForOneLakeAsync)
-    /// is not enough — CatalogHandler.GetCatalogObjectsAsync (called on every
-    /// LiveTableController.GetLatestDagAsync poll, which the studio hits every
-    /// few seconds) calls GetS2STokenForTargetAudienceAsync(storage.azure.com)
-    /// through the same provider. Without intercepting that method, every DAG
-    /// refresh after deploy fails with S2SAuthenticationException.
+    /// History: the bypass originally called CBA FIRST, on the assumption that
+    /// CBA tokens were functionally equivalent for dev-mode storage reads. They
+    /// are not — CBA mints carry the dev-server's appid (FabricSparkCST,
+    /// ea0616ba-...) which OneLake rejects with 401 "Untrusted client ID" when
+    /// the trusted-workload allowlist is enforced. Once the AME cert was
+    /// renewed in the EDOG cluster, the always-on CBA path started poisoning
+    /// every DAG refresh (FLT swallows the 401 silently and reports empty
+    /// catalogs). Inner-first restores correctness in the healthy-cert case
+    /// while preserving the expired-cert safety net.
     ///
-    /// When the expired cert is eventually renewed, the bypass is harmless —
-    /// CBA tokens are functionally equivalent for dev-mode storage reads.
+    /// Resources NOT in the bypass allowlist still delegate to the real
+    /// provider unchanged.
     /// </summary>
     internal sealed class EdogS2STokenBypass : IS2STokenProvider
     {
@@ -123,19 +128,27 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// </summary>
         public async Task<AuthenticationHeaderValue> GetS2STokenForPbiSharedAsync()
         {
+            // Inner-first: a valid FLT 1P cert mints a token with the trusted
+            // appid. CBA mint is only the safety net for the expired-cert case.
             try
             {
-                var token = await GetCachedOrMintAsync(PbiSharedResource, CancellationToken.None).ConfigureAwait(false);
-                if (!string.IsNullOrEmpty(token))
+                var innerResult = await _inner.GetS2STokenForPbiSharedAsync().ConfigureAwait(false);
+                if (innerResult != null)
                 {
-                    return new AuthenticationHeaderValue("Bearer", token);
+                    return innerResult;
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[EDOG] S2S Bypass: PBI Shared CBA failed ({ex.Message}), falling back to inner");
+                Console.WriteLine($"[EDOG] S2S Bypass: PBI Shared inner failed ({ex.Message}), falling back to CBA mint");
             }
-            return await _inner.GetS2STokenForPbiSharedAsync().ConfigureAwait(false);
+
+            var token = await GetCachedOrMintAsync(PbiSharedResource, CancellationToken.None).ConfigureAwait(false);
+            if (!string.IsNullOrEmpty(token))
+            {
+                return new AuthenticationHeaderValue("Bearer", token);
+            }
+            return null;
         }
 
         // ── Methods delegated unchanged (no CBA-mintable resource involved) ──
@@ -188,21 +201,36 @@ namespace Microsoft.LiveTable.Service.DevMode
             Func<Task<string>> innerCall,
             CancellationToken cancellationToken)
         {
+            // Inner-first contract:
+            //   1. Call the real provider. If it returns a non-empty token,
+            //      use that — it carries the FLT 1P appid that OneLake's
+            //      trusted-workload allowlist requires.
+            //   2. If the real provider throws (e.g. S2SAuthenticationException
+            //      when the AME cert is expired), fall back to the dev-server
+            //      CBA mint. CBA tokens carry the dev-server appid which OneLake
+            //      rejects (Untrusted client ID), but this still preserves the
+            //      original cert-expired use case for other consumers (e.g.
+            //      OneLakeRestClient where the strip handler removes the bad
+            //      header before the wire).
+            //   3. If the real provider returns null/empty, propagate that —
+            //      FLT call sites with an IsNullOrEmpty check (e.g.
+            //      OnelakeBasedFileSystem) will skip adding the header.
             try
             {
-                var token = await GetCachedOrMintAsync(resource, cancellationToken).ConfigureAwait(false);
-                if (!string.IsNullOrEmpty(token))
+                var innerToken = await innerCall().ConfigureAwait(false);
+                if (!string.IsNullOrEmpty(innerToken))
                 {
-                    return token;
+                    return innerToken;
                 }
+                Console.WriteLine($"[EDOG] S2S Bypass: inner returned empty for {resource}, passing through");
+                return innerToken;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[EDOG] S2S Bypass: CBA failed for {resource} ({ex.Message}), falling back to inner");
+                Console.WriteLine($"[EDOG] S2S Bypass: inner failed for {resource} ({ex.Message}), falling back to CBA mint");
             }
-            // Fallback to the real provider — will likely fail if cert is expired,
-            // but at least the error surface stays consistent with non-dev mode.
-            return await innerCall().ConfigureAwait(false);
+
+            return await GetCachedOrMintAsync(resource, cancellationToken).ConfigureAwait(false);
         }
 
         private async Task<string> GetCachedOrMintAsync(string resource, CancellationToken cancellationToken)
