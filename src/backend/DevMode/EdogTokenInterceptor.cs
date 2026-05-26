@@ -15,6 +15,7 @@ namespace Microsoft.LiveTable.Service.DevMode
     using System.Text.Json;
     using System.Threading;
     using System.Threading.Tasks;
+    using Microsoft.ServicePlatform.Telemetry;
 
     /// <summary>
     /// DelegatingHandler that captures authentication header metadata from all HTTP requests.
@@ -223,12 +224,25 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <returns>An HttpClient with EDOG handlers in the pipeline.</returns>
         public HttpClient CreateClient(string name)
         {
+            // DIAGNOSTIC (Phase 2b OneLake 401 investigation, 2026-05-26):
+            // Strip handler fires for OneLakeRestClient but never for DatalakeDirectoryClient.
+            // Trace every CreateClient call + handler-extraction outcome via Tracer so
+            // EdogLogServer surfaces it. Untagged messages (no leading '[') fall back
+            // to component "Unknown" which the EdogLogInterceptor allowlists.
+            // REMOVE after diagnosis (follow-up revert commit).
             var originalClient = _inner.CreateClient(name);
 
             try
             {
                 var innerHandler = s_handlerField?.GetValue(originalClient) as HttpMessageHandler;
-                if (innerHandler == null) return originalClient;
+                if (innerHandler == null)
+                {
+                    Tracer.LogSanitizedMessage(
+                        $"EDOG-WRAP-DIAG createclient name={name} " +
+                        $"fieldNull={s_handlerField == null} innerNull=true " +
+                        $"outcome=fallback-unwrapped");
+                    return originalClient;
+                }
 
                 // Build EDOG handler chain: Token → HTTP Pipeline → original pipeline
                 var httpPipeline = new EdogHttpPipelineHandler(name) { InnerHandler = innerHandler };
@@ -241,11 +255,15 @@ namespace Microsoft.LiveTable.Service.DevMode
                     client.BaseAddress = originalClient.BaseAddress;
                 client.Timeout = originalClient.Timeout;
 
+                Tracer.LogSanitizedMessage(
+                    $"EDOG-WRAP-DIAG createclient name={name} outcome=wrapped");
                 return client;
             }
             catch (Exception ex)
             {
-                // Never break FLT — return original unwrapped client on failure
+                Tracer.LogSanitizedMessage(
+                    $"EDOG-WRAP-DIAG createclient name={name} outcome=catch-fallback " +
+                    $"exType={ex.GetType().Name} exMsg={ex.Message}");
                 System.Diagnostics.Debug.WriteLine(
                     $"[EDOG] HttpClientFactoryWrapper.CreateClient failed for '{name}': {ex.Message}");
                 return originalClient;
