@@ -311,6 +311,18 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <summary>
         /// Checks if a component is a known FLT component based on the dynamic allowlist.
         /// Returns true if no allowlist is loaded (allow-all fallback).
+        ///
+        /// Special case for "Unknown" component (post-mortem 2026-05-26):
+        ///   The allowlist exists to filter logs from *explicitly tagged* third-party
+        ///   components ("WCL-PlatformRelay", "Security-Audit", etc.). When a log
+        ///   has no bracket prefix AND no useful MonitoredScope (so component=="Unknown"),
+        ///   it's overwhelmingly an FLT internal call (WorkloadApp.cs, FeatureFlighter.cs,
+        ///   etc., which use bare `Tracer.LogSanitizedMessage(...)` without a tag).
+        ///   Treating Unknown as not-FLT here was hard-dropping every untagged internal
+        ///   log the moment the allowlist file was generated. Restore the pre-allowlist
+        ///   behavior for the Unknown bucket: allow it through. The dedup-and-error-storm
+        ///   protection below still applies, so genuine third-party Unknown errors don't
+        ///   flood the UI.
         /// </summary>
         private bool IsFltComponent(string component)
         {
@@ -319,9 +331,15 @@ namespace Microsoft.LiveTable.Service.DevMode
                 return true; // No allowlist = allow all
             }
 
-            if (string.IsNullOrEmpty(component) || component == "Unknown")
+            if (string.IsNullOrEmpty(component))
             {
                 return false;
+            }
+
+            if (component == "Unknown")
+            {
+                // See doc comment above — Unknown is treated as FLT-internal in DevMode.
+                return true;
             }
 
             foreach (var prefix in this.fltComponentPrefixes)
