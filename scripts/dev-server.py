@@ -51,11 +51,6 @@ PROJECT_DIR = Path(__file__).parent.parent
 CONFIG_PATH = PROJECT_DIR / "edog-config.json"
 BEARER_CACHE = PROJECT_DIR / ".edog-bearer-cache"
 ONELAKE_BEARER_CACHE = PROJECT_DIR / ".edog-onelake-bearer-cache"
-# Separate cache for S2S-bypass OneLake tokens — minted with FLT 1P client_id so
-# the resulting `appid` claim is on OneLake DFS's trusted-workload allowlist. Kept
-# distinct from `ONELAKE_BEARER_CACHE` (which serves UI-side filesystem calls with
-# the FabricSparkCST client_id) to avoid coupling the two trust paths.
-ONELAKE_S2S_CACHE = PROJECT_DIR / ".edog-onelake-s2s-cache"
 MWC_CACHE = PROJECT_DIR / ".edog-token-cache"
 SESSION_FILE = PROJECT_DIR / ".edog-session.json"
 HTML_PATH = PROJECT_DIR / "src" / "edog-logs.html"
@@ -93,23 +88,6 @@ ONELAKE_HOST = "https://onelake-int-edog.dfs.pbidedicated.windows-int.net"
 ONELAKE_RESOURCE = "https://storage.azure.com"
 TOKEN_HELPER_CLIENT_ID = "ea0616ba-638b-4df5-95b9-636659ae5121"
 TOKEN_HELPER_AUTHORITY = "https://login.windows-ppe.net/organizations"
-
-# FLT 1P workload app — the client_id used when minting tokens that will be presented
-# to services that enforce an `appid` allowlist (OneLake DFS, PBI Shared S2S endpoints).
-#
-# OneLake DFS at `onelake-int-edog.dfs.pbidedicated.windows-int.net` rejects tokens
-# whose `appid` claim is not on its trusted-workload list. The FabricSparkCST client
-# ID (`TOKEN_HELPER_CLIENT_ID` above) is trusted by Power BI APIs but NOT by OneLake.
-# The FLT 1P workload app — which OneLake already trusts because the FLT service
-# normally talks to OneLake with it via S2S — IS on that list, and is multi-tenant
-# so we can mint user-delegated tokens against it via Silent CBA.
-#
-# Source of truth: `FirstPartyApplicationId` in
-# `workload-fabriclivetable/Service/Microsoft.LiveTable.Service.EntryPoint/WorkloadParameters/ParametersManifest.json`
-# (and `Rollouts/Test.json` — both list `f10a234d-...`).
-#
-# Only used by the S2S bypass mint path. Do NOT use for the main UI bearer.
-FLT_FIRSTPARTY_CLIENT_ID = "f10a234d-51d4-434e-9324-0553112ff091"
 
 
 class CapacityRoutingError(Exception):
@@ -1213,32 +1191,11 @@ def _parse_jwt_expiry(jwt: str) -> float:
         return time.time() + 3600
 
 
-def _jwt_appid(jwt: str) -> str | None:
-    """Extract the `appid` claim (OAuth client_id that requested the token) from a JWT.
-
-    Returns None if the token can't be decoded. Used to invalidate cached tokens
-    that were minted with the wrong client_id (e.g. before the FLT 1P switch).
-    """
-    try:
-        parts = jwt.split(".")
-        if len(parts) != 3:
-            return None
-        payload_b64 = parts[1] + "=" * (4 - len(parts[1]) % 4)
-        claims = json.loads(base64.urlsafe_b64decode(payload_b64).decode("utf-8", "replace"))
-        return claims.get("appid")
-    except Exception:
-        return None
-
-
-def _mint_token_for_resource(resource: str, client_id: str | None = None) -> tuple[str, float]:
+def _mint_token_for_resource(resource: str) -> tuple[str, float]:
     """Mint a CBA token for a specific resource audience using the cached cert + username.
 
     Args:
         resource: Audience URI (e.g. "https://storage.azure.com" for OneLake DFS).
-        client_id: Optional OAuth client_id (becomes the `appid` claim in the
-            issued JWT). Defaults to `TOKEN_HELPER_CLIENT_ID` (FabricSparkCST).
-            Callers presenting the token to an appid-allowlisting service
-            (e.g. OneLake DFS) should pass `FLT_FIRSTPARTY_CLIENT_ID`.
 
     Returns:
         Tuple of (jwt, expiry_unix_seconds).
@@ -1294,10 +1251,9 @@ def _mint_token_for_resource(resource: str, client_id: str | None = None) -> tup
         raise RuntimeError(f"No CBA cert matching {cert_cn} in current-user store")
 
     # Mint the token with the requested resource audience.
-    effective_client_id = client_id or TOKEN_HELPER_CLIENT_ID
     try:
         result = subprocess.run(
-            [str(helper), thumbprint, username, effective_client_id, TOKEN_HELPER_AUTHORITY, resource],
+            [str(helper), thumbprint, username, TOKEN_HELPER_CLIENT_ID, TOKEN_HELPER_AUTHORITY, resource],
             capture_output=True,
             text=True,
             timeout=45,
@@ -1322,12 +1278,6 @@ def _ensure_onelake_bearer() -> str:
     The OneLake DFS endpoint validates a different audience than the Power BI bearer
     cached in `.edog-bearer-cache`. We cache the OneLake token separately and mint a
     fresh one (via token-helper) when the cache is empty or expired.
-
-    Used by UI-side filesystem calls (table-metadata, item-timestamps, etc.) which
-    send only the `Authorization` header — no S2S header — so OneLake's appid
-    allowlist is not enforced. Minted with the default TOKEN_HELPER_CLIENT_ID
-    (FabricSparkCST). For tokens that will be carried as the S2S header (used by
-    FLT's OneLakeRestClient), see `_ensure_onelake_s2s_bearer`.
     """
     cached, _ = _read_cache(ONELAKE_BEARER_CACHE)
     if cached:
@@ -1344,47 +1294,6 @@ def _ensure_onelake_bearer() -> str:
         _write_cache(ONELAKE_BEARER_CACHE, token, expiry)
         remaining = int((expiry - time.time()) / 60)
         print(f"  [OneLake] Bearer cached, expires in {remaining} min")
-        return token
-
-
-def _ensure_onelake_s2s_bearer() -> str:
-    """Return a OneLake bearer minted with FLT_FIRSTPARTY_CLIENT_ID.
-
-    Used by the `/api/edog/s2s-token` endpoint to satisfy FLT's OneLakeRestClient,
-    which carries this token in the `X-S2S-Authorization` header. OneLake DFS
-    validates the token's `appid` claim against its trusted-workload allowlist;
-    the FLT 1P workload app is on that list, so the resulting token is accepted
-    while one minted with TOKEN_HELPER_CLIENT_ID (FabricSparkCST) would be
-    rejected with "Untrusted client ID".
-
-    Cached separately from `_ensure_onelake_bearer` (different `appid`) to keep
-    the UI auth path independent. If the cached token's `appid` doesn't match
-    FLT_FIRSTPARTY_CLIENT_ID (e.g. stale cache from before this change, or
-    cache poisoning by accidental writes), it is discarded and re-minted.
-    """
-    cached, _ = _read_cache(ONELAKE_S2S_CACHE)
-    if cached and _jwt_appid(cached) == FLT_FIRSTPARTY_CLIENT_ID:
-        return cached
-
-    with _onelake_mint_lock:
-        cached, _ = _read_cache(ONELAKE_S2S_CACHE)
-        if cached and _jwt_appid(cached) == FLT_FIRSTPARTY_CLIENT_ID:
-            return cached
-
-        if cached:
-            stale_appid = _jwt_appid(cached) or "<undecodable>"
-            print(
-                f"  [OneLake S2S] Discarding cached bearer (appid={stale_appid}, "
-                f"expected {FLT_FIRSTPARTY_CLIENT_ID})"
-            )
-
-        print(f"  [OneLake S2S] Minting bearer for audience {ONELAKE_RESOURCE} as FLT 1P...")
-        token, expiry = _mint_token_for_resource(
-            ONELAKE_RESOURCE, client_id=FLT_FIRSTPARTY_CLIENT_ID
-        )
-        _write_cache(ONELAKE_S2S_CACHE, token, expiry)
-        remaining = int((expiry - time.time()) / 60)
-        print(f"  [OneLake S2S] Bearer cached, expires in {remaining} min")
         return token
 
 
@@ -3490,18 +3399,11 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
 
         try:
             if resource == ONELAKE_RESOURCE:
-                # Fast path: cached OneLake bearer minted with FLT 1P client_id so
-                # OneLake DFS accepts the `appid` claim on the X-S2S-Authorization
-                # header. Distinct from the UI-side `_ensure_onelake_bearer` which
-                # uses FabricSparkCST for user-Authorization-only filesystem calls.
-                token = _ensure_onelake_s2s_bearer()
+                # Fast path: use the cached OneLake bearer
+                token = _ensure_onelake_bearer()
                 expiry = _parse_jwt_expiry(token)
             else:
-                # PBI Shared and other allowlisted S2S audiences: mint with FLT 1P
-                # client_id so the `appid` claim matches a trusted Fabric workload.
-                token, expiry = _mint_token_for_resource(
-                    resource, client_id=FLT_FIRSTPARTY_CLIENT_ID
-                )
+                token, expiry = _mint_token_for_resource(resource)
 
             print(f"  [S2S Bypass] Minted CBA token for {resource} (expires in {int((expiry - time.time()) / 60)} min)")
             self._json_response(
