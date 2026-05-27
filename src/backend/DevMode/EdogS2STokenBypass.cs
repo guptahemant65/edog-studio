@@ -47,6 +47,16 @@ namespace Microsoft.LiveTable.Service.DevMode
         private const string DevServerEndpoint = "http://localhost:5555/api/edog/s2s-token";
         private const string StorageResource = "https://storage.azure.com";
         private const string PbiSharedResource = "https://analysis.windows.net/powerbi/api";
+
+        // GTSFirstPartyApplicationId from Test.json (PPE). GTSBasedSparkClient.GenerateS2STokenForGTSWorkloadAsync
+        // passes this bare GUID as the target audience to mint an S2S token used to call the Gateway Token
+        // Service when runDAG triggers a Spark job. Without the real FLT 1P cert on the dev box, the inner
+        // provider throws S2SAuthenticationException — CBA mint is the only DevMode escape hatch. NB: CBA
+        // tokens carry the dev-server's appid (FabricSparkCST, ea0616ba-...) so this only works if GTS's
+        // appid allowlist accepts FabricSparkCST in the target ring; otherwise the call will fail at GTS
+        // with a clearer error than the AAD-side throw and the POC will need a real workload cert.
+        private const string GtsResource = "82d3be98-d7ff-4d38-8592-8c417b6df004";
+
         private const int CacheBufferMinutes = 5;
 
         private static readonly HttpClient _httpClient = new HttpClient
@@ -80,10 +90,11 @@ namespace Microsoft.LiveTable.Service.DevMode
         }
 
         /// <summary>
-        /// Target-audience S2S — bypass for storage.azure.com and PBI Shared
-        /// (the only two resources our dev-server can mint). Other audiences
-        /// (e.g. GTS first-party app ID) fall through to the real provider.
-        /// This is the previously-uncovered path called by CatalogHandler.
+        /// Target-audience S2S — bypass for storage.azure.com, PBI Shared, and
+        /// the GTS first-party application ID. Other audiences fall through to
+        /// the real provider. This is the previously-uncovered path called by
+        /// CatalogHandler (storage), and by GTSBasedSparkClient when runDAG
+        /// triggers a Spark job (GTS).
         /// </summary>
         public async Task<string> GetS2STokenForTargetAudienceAsync(string targetAudience)
         {
@@ -193,7 +204,8 @@ namespace Microsoft.LiveTable.Service.DevMode
         private static bool IsCbaMintable(string canonicalAudience)
         {
             return string.Equals(canonicalAudience, StorageResource, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(canonicalAudience, PbiSharedResource, StringComparison.OrdinalIgnoreCase);
+                || string.Equals(canonicalAudience, PbiSharedResource, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(canonicalAudience, GtsResource, StringComparison.OrdinalIgnoreCase);
         }
 
         private async Task<string> GetTokenViaCbaOrFallbackAsync(
