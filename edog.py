@@ -2435,13 +2435,30 @@ def scan_flt_components(repo_root):
         return []
 
     components = set()
-    bracket_pattern = re.compile(r'"\[([A-Za-z][A-Za-z0-9_]{2,})\]')
+    # Bracket tag pattern. Allow internal single spaces so multi-word tags like
+    # "[Token Manager]", "[DAG Execution]", "[Reliable Ops]" survive extraction.
+    # Without spaces in the character class the regex silently dropped 20+
+    # component tags used throughout FLT (TokenManagement, DAG runtime, OneLake
+    # IO, GTS parsing, Reliable Ops, etc.), causing the EdogLogInterceptor to
+    # filter every line from those components in DevMode.
+    #
+    # Constraints:
+    #   - First char MUST be uppercase letter (every real FLT component tag is
+    #     PascalCase or ALLCAPS — rejects "[hello world]" style prose in comments).
+    #   - Second char MUST be letter/digit/underscore (rejects "[X ]" / "[A ]" stubs).
+    #   - Rest can include single spaces between words.
+    #   - Whole capture is .strip()'d after match.
+    bracket_pattern = re.compile(r'"\[([A-Z][A-Za-z0-9_][A-Za-z0-9_ ]*?)\]')
     marker_pattern = re.compile(r'(?:CodeMarkerScope|MonitoredScope)\s*\(\s*"([^"]+)"')
     class_pattern = re.compile(
         r"^(?:\s+(?:public|internal|private)\s+(?:sealed\s+)?(?:partial\s+)?class\s+)(\w+Handler\w*|\w+Executor\w*|\w+Manager\w*|\w+Provider\w*|\w+Service\w*)"
     )
 
-    # Well-known FLT component prefixes (always included as baseline)
+    # Well-known FLT component prefixes (always included as baseline).
+    # These act as fallbacks if the scan fails or misses something — the
+    # bracket regex above auto-discovers everything else, including multi-word
+    # tags like "[Token Manager]" and "[DAG Execution]". Don't bloat this set
+    # with names that the scanner already picks up.
     baseline = {
         "LiveTable",
         "DagExecution",
@@ -2472,9 +2489,9 @@ def scan_flt_components(repo_root):
         except Exception:
             continue
 
-        # Extract bracket tags: "[DagExecution]", "[CatalogSync]", etc.
+        # Extract bracket tags: "[DagExecution]", "[CatalogSync]", "[Token Manager]", etc.
         for m in bracket_pattern.finditer(content):
-            tag = m.group(1)
+            tag = m.group(1).strip()
             if len(tag) >= 3 and not tag.startswith("Test"):
                 components.add(tag)
 
