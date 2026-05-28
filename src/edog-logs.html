@@ -27671,6 +27671,40 @@ svg.iw-dag-connections {
   word-break: break-all;
 }
 .sp-ro-mlv .sp-kvv.dim { color: var(--text-dim); }
+
+/* Spark conf grid: key column flexes to wrap long dotted keys, value hugs right.
+ * Distinct from sp-ro-mlv (fixed 130px key column) which is for short MLV labels. */
+.sp-conf-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 18px;
+  row-gap: 6px;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--border);
+  align-items: baseline;
+}
+.sp-conf-grid .sp-conf-key {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  word-break: break-all;
+  line-height: 1.45;
+  min-width: 0;
+}
+.sp-conf-grid .sp-conf-val {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text);
+  text-align: right;
+  white-space: nowrap;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sp-conf-grid > div {
+  padding: 2px 0;
+  border-bottom: 1px dotted var(--border-faint, rgba(255, 255, 255, 0.04));
+}
 .sp-ro-msg {
   margin-top: 12px;
   padding: 10px 12px;
@@ -65021,10 +65055,10 @@ class SparkSessionsTab {
       return `<div class="sp-empty"><div class="sp-empty-title">No Spark conf captured</div><div class="sp-empty-sub">No SessionProperties observed for this session yet — appears on first TransformSubmitted or SessionPropertiesSet.</div></div>`;
     }
     const keys = Object.keys(conf).sort();
-    const rows = keys.map((k) => `<div class="sp-kvl">${this._esc(k)}</div><div class="sp-kvv">${this._esc(String(conf[k]))}</div>`).join("");
+    const rows = keys.map((k) => `<div class="sp-conf-key">${this._esc(k)}</div><div class="sp-conf-val">${this._esc(String(conf[k]))}</div>`).join("");
     return `
       <div class="sp-section-h">Spark configuration <span class="sp-h-meta">${keys.length} entries</span><span class="sp-h-line"></span></div>
-      <div class="sp-ro-mlv">${rows}</div>`;
+      <div class="sp-conf-grid">${rows}</div>`;
   }
 
   _renderAttemptsHtml(s, t) {

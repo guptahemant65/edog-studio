@@ -1474,10 +1474,10 @@ class SparkSessionsTab {
       return `<div class="sp-empty"><div class="sp-empty-title">No Spark conf captured</div><div class="sp-empty-sub">No SessionProperties observed for this session yet — appears on first TransformSubmitted or SessionPropertiesSet.</div></div>`;
     }
     const keys = Object.keys(conf).sort();
-    const rows = keys.map((k) => `<div class="sp-kvl">${this._esc(k)}</div><div class="sp-kvv">${this._esc(String(conf[k]))}</div>`).join("");
+    const rows = keys.map((k) => `<div class="sp-conf-key">${this._esc(k)}</div><div class="sp-conf-val">${this._esc(String(conf[k]))}</div>`).join("");
     return `
       <div class="sp-section-h">Spark configuration <span class="sp-h-meta">${keys.length} entries</span><span class="sp-h-line"></span></div>
-      <div class="sp-ro-mlv">${rows}</div>`;
+      <div class="sp-conf-grid">${rows}</div>`;
   }
 
   _renderAttemptsHtml(s, t) {
