@@ -143,7 +143,6 @@ DEVMODE_FILES = {
     "MitmRuleStore": SERVICE_PATH / "DevMode/MitmRuleStore.cs",
     "MitmCoordinator": SERVICE_PATH / "DevMode/MitmCoordinator.cs",
     "MitmDecision": SERVICE_PATH / "DevMode/MitmDecision.cs",
-    "EdogS2STokenBypass": SERVICE_PATH / "DevMode/EdogS2STokenBypass.cs",
     "EdogLogsHtml": SERVICE_PATH / "DevMode/edog-logs.html",
     "EditorConfig": SERVICE_PATH / "DevMode/.editorconfig",
 }
@@ -1964,7 +1963,7 @@ def apply_log_viewer_registration_workloadapp_cs(content):
             "            }\n"
             "            catch (System.Exception edogEx)\n"
             "            {\n"
-            "                System.Console.WriteLine($\"[EDOG] DevMode post-init failed (non-fatal): {edogEx.Message}\");\n"
+            '                System.Console.WriteLine($"[EDOG] DevMode post-init failed (non-fatal): {edogEx.Message}");\n'
             "            }\n"
             "\n"
             "            DependencyHandler.Resolve<IReliableOperationsManager>();"

@@ -2941,8 +2941,6 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_coverage_get()
         elif self.path == "/api/identity":
             self._serve_identity()
-        elif self.path.startswith("/api/edog/s2s-token"):
-            self._serve_s2s_token()
         elif self.path == "/api/edog/patch-warnings":
             self._serve_patch_warnings()
         elif self.path == "/api/edog/interceptors-status":
@@ -3346,88 +3344,6 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         except Exception as e:
             sys.stderr.write(f"[EDOG] _serve_identity error: {e}\n")
             self._json_response(200, {"machine": "", "osUser": "", "error": str(e)})
-
-    # ── S2S Token Bypass (DevMode cert expiry workaround) ──────────────────
-
-    # Allowlisted audiences for the S2S token bypass — only these resources
-    # can be minted via CBA. Keeps the endpoint from becoming an arbitrary
-    # token oracle.
-    _S2S_ALLOWED_AUDIENCES = frozenset(
-        {
-            "https://storage.azure.com",  # OneLake / TridentLake
-            "https://analysis.windows.net/powerbi/api",  # PBI Shared
-        }
-    )
-
-    def _serve_s2s_token(self):
-        """GET /api/edog/s2s-token?resource=<audience> — Mint CBA token for S2S bypass.
-
-        Called by EdogS2STokenBypass (C# DevMode interceptor) when the workload
-        S2S certificate has expired. Mints a user-delegated CBA token for the
-        requested resource audience using the valid Admin CBA cert.
-
-        Query params:
-            resource (required): Target audience URI (must be in allowlist).
-
-        Returns:
-            200 {"token": "eyJ...", "expiresOn": <unix_seconds>}
-            400 if resource missing or not allowlisted.
-            500 if token mint fails.
-        """
-        parsed = urllib.parse.urlparse(self.path)
-        qs = urllib.parse.parse_qs(parsed.query)
-        resource = qs.get("resource", [None])[0]
-
-        if not resource:
-            self._json_response(
-                400,
-                {
-                    "error": "missing_param",
-                    "message": "resource query parameter required",
-                },
-            )
-            return
-
-        if resource not in self._S2S_ALLOWED_AUDIENCES:
-            self._json_response(
-                400,
-                {
-                    "error": "audience_not_allowed",
-                    "message": f"Resource '{resource}' not in S2S bypass allowlist",
-                    "allowed": list(self._S2S_ALLOWED_AUDIENCES),
-                },
-            )
-            return
-
-        try:
-            if resource == ONELAKE_RESOURCE:
-                # Fast path: use the cached OneLake bearer
-                token = _ensure_onelake_bearer()
-                expiry = _parse_jwt_expiry(token)
-            else:
-                token, expiry = _mint_token_for_resource(resource)
-
-            print(f"  [S2S Bypass] Minted CBA token for {resource} (expires in {int((expiry - time.time()) / 60)} min)")
-            self._json_response(
-                200,
-                {
-                    "token": token,
-                    "expiresOn": int(expiry),
-                    "tokenType": "Bearer",
-                    "resource": resource,
-                    "source": "cba_bypass",
-                },
-            )
-        except Exception as e:
-            print(f"  [S2S Bypass] Failed for {resource}: {e}")
-            self._json_response(
-                500,
-                {
-                    "error": "token_mint_failed",
-                    "message": str(e),
-                    "resource": resource,
-                },
-            )
 
     def _json_response(self, code, data):
         body = json.dumps(data).encode()
@@ -5316,7 +5232,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             # MoveToWcl/RequestExecution/ExecutionContextManager.cs:95). Without
             # this header, controllers run with an empty moniker context and the
             # catalog scan returns empty arrays (nodes: [], edges: []).
-            if token_type == "mwc" and not any(k.lower() == "x-ms-workload-resource-moniker" for k in sanitized_headers):
+            # NB: keep one line — test_playground_moniker source regex requires it.
+            if token_type == "mwc" and not any(k.lower() == "x-ms-workload-resource-moniker" for k in sanitized_headers):  # fmt: skip
                 req.add_header("x-ms-workload-resource-moniker", art_id)
         except Exception as e:
             self._json_response(400, {"error": "bad_request", "message": f"failed to build request: {e}"})
