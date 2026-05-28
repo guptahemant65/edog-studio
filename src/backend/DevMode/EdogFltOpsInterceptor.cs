@@ -743,6 +743,58 @@ namespace Microsoft.LiveTable.Service.DevMode
                 throw;
             }
         }
+
+        /// <inheritdoc/>
+        public async Task<Dictionary<Guid, string>> GetDisplayNamesByIdsAsync(
+            string tenantId,
+            Guid workspaceId,
+            Guid lakehouseId,
+            List<Guid> mlvDefinitionIds,
+            CancellationToken cancellationToken = default)
+        {
+            var sw = Stopwatch.StartNew();
+            var requestedCount = mlvDefinitionIds?.Count ?? 0;
+            try
+            {
+                var result = await _inner.GetDisplayNamesByIdsAsync(
+                    tenantId, workspaceId, lakehouseId, mlvDefinitionIds, cancellationToken).ConfigureAwait(false);
+                sw.Stop();
+
+                FltOpsEventHelper.PublishEvent(new
+                {
+                    @event = "MLVDefinitionDisplayNamesBatchFetched",
+                    operation = "MLVDefinition",
+                    action = "GetDisplayNamesByIds",
+                    workspaceId = workspaceId.ToString(),
+                    lakehouseId = lakehouseId.ToString(),
+                    requestedCount = requestedCount,
+                    resolvedCount = result?.Count ?? 0,
+                    durationMs = sw.ElapsedMilliseconds,
+                    success = true,
+                });
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                sw.Stop();
+
+                FltOpsEventHelper.PublishEvent(new
+                {
+                    @event = "MLVDefinitionDisplayNamesBatchFetchFailed",
+                    operation = "MLVDefinition",
+                    action = "GetDisplayNamesByIds",
+                    workspaceId = workspaceId.ToString(),
+                    lakehouseId = lakehouseId.ToString(),
+                    requestedCount = requestedCount,
+                    durationMs = sw.ElapsedMilliseconds,
+                    success = false,
+                    errorType = ex.GetType().Name,
+                });
+
+                throw;
+            }
+        }
     }
 
     // ──────────────────────────────────────────────────────────────
