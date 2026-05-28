@@ -3356,11 +3356,6 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         {
             "https://storage.azure.com",  # OneLake / TridentLake
             "https://analysis.windows.net/powerbi/api",  # PBI Shared
-            # GTSFirstPartyApplicationId (PPE) — bare GUID, no URL prefix. Used by
-            # GTSBasedSparkClient.GenerateS2STokenForGTSWorkloadAsync on runDAG.
-            # CBA mint produces a token with appid=FabricSparkCST; GTS will accept
-            # only if its PPE allowlist includes that appid.
-            "82d3be98-d7ff-4d38-8592-8c417b6df004",
         }
     )
 
