@@ -63916,6 +63916,15 @@ class SparkSessionsTab {
     t.retriable = !!d.retriable;
     t.retryAfterMs = d.retryAfterMs ?? null;
     if (d.sparkCode) t.sparkCode = d.sparkCode;
+    // Backend snapshots live SessionProperties on submit so the Conf tab
+    // populates even when FLT sets conf via constructor (the setter
+    // override in EdogSparkClientWrapper never fires in that case).
+    // Don't clobber an existing non-empty conf with a smaller snapshot.
+    if (d.conf && typeof d.conf === "object" && Object.keys(d.conf).length) {
+      if (!s.sparkConf || !Object.keys(s.sparkConf).length) {
+        s.sparkConf = d.conf;
+      }
+    }
     if (d.error) t.submitError = d.error;
     else t.submitError = null;
     if (t.gts) {
@@ -63931,7 +63940,18 @@ class SparkSessionsTab {
     if (!sid) return;
     const s = this._getOrCreateSession(sid);
     this._mergePendingCreated(s, sid);
-    s.sparkConf = d.conf || {};
+    // Prefer the full `conf` dict (post-fix backend); fall back to building
+    // a key-only map from `confKeys` (legacy backend) so the tab at least
+    // shows what keys exist with sentinel values.
+    if (d.conf && typeof d.conf === "object") {
+      s.sparkConf = d.conf;
+    } else if (Array.isArray(d.confKeys) && d.confKeys.length) {
+      const placeholder = {};
+      for (const k of d.confKeys) placeholder[k] = "(value not captured)";
+      if (!s.sparkConf || !Object.keys(s.sparkConf).length) s.sparkConf = placeholder;
+    } else {
+      s.sparkConf = s.sparkConf || {};
+    }
     s._sessionRawEvents.push({ at: Date.now(), kind: "SessionPropertiesSet", data: d });
   }
 
@@ -64600,7 +64620,7 @@ class SparkSessionsTab {
     const live = s.status === "running";
 
     const hasError = !!(t && (t.error || t.submitError)) || !!s.createError;
-    const hasOutput = !!(t && t.refreshOutput);
+    const hasOutput = !!(t && (t.refreshOutput || t.rawOutput));
     const hasCode = !!(t && t.sparkCode);
     const hasConf = !!(s.sparkConf && Object.keys(s.sparkConf).length);
     const attemptCount = t && t.submitAttempts ? t.submitAttempts.length : 0;
@@ -64903,7 +64923,7 @@ class SparkSessionsTab {
     const ro = t && t.refreshOutput;
     const raw = t && t.rawOutput;
     if (!ro && !raw) {
-      return `<div class="sp-empty"><div class="sp-empty-title">No refresh output</div><div class="sp-empty-sub">Available once a transform reaches the Succeeded state.</div></div>`;
+      return `<div class="sp-empty"><div class="sp-empty-title">No output captured</div><div class="sp-empty-sub">Structured refresh stats appear on Succeeded; raw Spark output appears for any terminal state with body bytes.</div></div>`;
     }
     let mainHtml = "";
     if (ro) {
@@ -64956,7 +64976,7 @@ class SparkSessionsTab {
   _renderConfHtml(s) {
     const conf = s && s.sparkConf;
     if (!conf || !Object.keys(conf).length) {
-      return `<div class="sp-empty"><div class="sp-empty-title">No Spark conf captured</div><div class="sp-empty-sub">SessionProperties.set has not been observed for this session.</div></div>`;
+      return `<div class="sp-empty"><div class="sp-empty-title">No Spark conf captured</div><div class="sp-empty-sub">No SessionProperties observed for this session yet — appears on first TransformSubmitted or SessionPropertiesSet.</div></div>`;
     }
     const keys = Object.keys(conf).sort();
     const rows = keys.map((k) => `<div class="sp-kvl">${this._esc(k)}</div><div class="sp-kvv">${this._esc(String(conf[k]))}</div>`).join("");
