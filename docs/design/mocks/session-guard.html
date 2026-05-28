@@ -1,0 +1,1668 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EDOG Studio — Session Guard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+/* ═══════════════════════════════════════════════════════════════════
+   EDOG Studio — Session Guard
+   Capacity-aware deploy collision prevention.
+   Inspired by VS Code Live Share collaborator pills + Figma multiplayer
+   presence + Linear's modal weight.
+   ═══════════════════════════════════════════════════════════════════ */
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #f7f8fa;
+  --bg-dim: #eef0f4;
+  --surface: #ffffff;
+  --surface-2: #fafbfc;
+  --surface-hover: #f0f1f3;
+  --border: rgba(0,0,0,0.06);
+  --border-strong: rgba(0,0,0,0.10);
+  --border-focus: rgba(109,92,255,0.4);
+
+  --text: #111827;
+  --text-secondary: #4b5563;
+  --text-muted: #6b7280;
+  --text-faint: #9ca3af;
+
+  --accent: #6d5cff;
+  --accent-hover: #5b4bdb;
+  --accent-dim: rgba(109,92,255,0.07);
+  --accent-soft: rgba(109,92,255,0.12);
+  --accent-glow: rgba(109,92,255,0.18);
+
+  --green: #16a34a;
+  --green-bright: #22c55e;
+  --green-soft: rgba(22,163,74,0.10);
+  --green-glow: rgba(34,197,94,0.30);
+
+  --amber: #d97706;
+  --amber-bright: #f59e0b;
+  --amber-soft: rgba(245,158,11,0.12);
+  --amber-glow: rgba(245,158,11,0.30);
+
+  --red: #dc2626;
+  --red-bright: #ef4444;
+  --red-soft: rgba(220,38,38,0.08);
+  --red-glow: rgba(220,38,38,0.20);
+
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
+
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.06);
+  --shadow-md: 0 2px 8px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-lg: 0 4px 16px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+  --shadow-xl: 0 12px 40px rgba(0,0,0,0.10), 0 4px 12px rgba(0,0,0,0.06);
+  --shadow-dialog: 0 32px 96px rgba(17,24,39,0.18), 0 12px 32px rgba(17,24,39,0.10);
+  --shadow-toast: 0 12px 32px rgba(17,24,39,0.14), 0 4px 10px rgba(17,24,39,0.06);
+
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-theme="dark"] {
+  --bg: #0a0b0f;
+  --bg-dim: #07080b;
+  --surface: #111318;
+  --surface-2: #161922;
+  --surface-hover: #1a1d25;
+  --border: rgba(255,255,255,0.06);
+  --border-strong: rgba(255,255,255,0.10);
+
+  --text: #e5e7eb;
+  --text-secondary: #b6bac4;
+  --text-muted: #8b8fa0;
+  --text-faint: #5b6070;
+
+  --accent: #8577ff;
+  --accent-hover: #9d91ff;
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3), 0 1px 3px rgba(0,0,0,0.2);
+  --shadow-md: 0 2px 8px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.2);
+  --shadow-lg: 0 4px 16px rgba(0,0,0,0.45), 0 2px 4px rgba(0,0,0,0.25);
+  --shadow-xl: 0 12px 40px rgba(0,0,0,0.55), 0 4px 12px rgba(0,0,0,0.30);
+  --shadow-dialog: 0 32px 96px rgba(0,0,0,0.70), 0 12px 32px rgba(0,0,0,0.40);
+  --shadow-toast: 0 12px 32px rgba(0,0,0,0.55), 0 4px 10px rgba(0,0,0,0.30);
+}
+
+/* ─── Base ─── */
+html { font-size: 14px; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  min-height: 100vh;
+  transition: background 240ms var(--ease), color 240ms var(--ease);
+  overflow: hidden;
+}
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   ANIMATIONS — named, purposeful, ~18 of them
+   ═══════════════════════════════════════════════════════════════════ */
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideDown { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes scaleSpring { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
+@keyframes dialogIn { from { opacity: 0; transform: scale(0.94) translateY(20px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+@keyframes dialogOut { to { opacity: 0; transform: scale(0.96) translateY(8px); } }
+@keyframes overlayIn { from { backdrop-filter: blur(0); -webkit-backdrop-filter: blur(0); background: rgba(15,18,28,0); } to { backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); background: rgba(15,18,28,0.32); } }
+@keyframes overlayOut { from { backdrop-filter: blur(10px); background: rgba(15,18,28,0.32); } to { backdrop-filter: blur(0); background: rgba(15,18,28,0); } }
+@keyframes toastIn { from { opacity: 0; transform: translateX(24px) scale(0.96); } to { opacity: 1; transform: translateX(0) scale(1); } }
+@keyframes toastOut { to { opacity: 0; transform: translateX(24px) scale(0.96); } }
+@keyframes pulseGreen { 0%, 100% { box-shadow: 0 0 0 0 var(--green-glow); } 50% { box-shadow: 0 0 0 6px transparent; } }
+@keyframes pulseAmber { 0%, 100% { box-shadow: 0 0 0 0 var(--amber-glow); } 50% { box-shadow: 0 0 0 5px transparent; } }
+@keyframes pulseRed { 0%, 100% { box-shadow: 0 0 0 0 var(--red-glow); } 50% { box-shadow: 0 0 0 8px transparent; } }
+@keyframes warningRingExpand { 0% { transform: scale(0.6); opacity: 0.7; } 100% { transform: scale(1.6); opacity: 0; } }
+@keyframes shakeX { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-3px); } 40%, 80% { transform: translateX(3px); } }
+@keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+@keyframes badgePop { 0% { transform: scale(0.4); opacity: 0; } 60% { transform: scale(1.15); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes checkPop { 0% { transform: scale(0); } 60% { transform: scale(1.2); } 100% { transform: scale(1); } }
+@keyframes tooltipIn { from { opacity: 0; transform: translate(-50%, 4px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@keyframes lineFlow { from { background-position: 0 0; } to { background-position: 24px 0; } }
+
+/* ═══════════════════════════════════════════════════════════════════
+   APP SHELL
+   ═══════════════════════════════════════════════════════════════════ */
+.app {
+  height: 100vh;
+  display: grid;
+  grid-template-rows: 48px 1fr 44px;
+  position: relative;
+}
+
+/* ─── Topbar ─── */
+.topbar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 14px;
+  z-index: 50;
+}
+.brand {
+  display: flex; align-items: center; gap: 8px;
+  font-weight: 700; font-size: 13px; letter-spacing: -0.01em;
+}
+.brand-dot {
+  width: 18px; height: 18px; border-radius: 5px;
+  background: linear-gradient(135deg, var(--accent), #8577ff);
+  display: grid; place-items: center;
+  color: white; font-size: 10px; font-weight: 700;
+  box-shadow: var(--shadow-sm);
+}
+.topbar-sep { width: 1px; height: 16px; background: var(--border); }
+.breadcrumb {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--text-muted);
+}
+.breadcrumb b { color: var(--text-secondary); font-weight: 500; }
+.breadcrumb-arrow { opacity: 0.4; font-size: 10px; }
+.topbar-spacer { flex: 1; }
+.user-pill {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 10px 4px 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 12px; color: var(--text-secondary);
+}
+.user-avatar {
+  width: 22px; height: 22px; border-radius: 999px;
+  background: linear-gradient(135deg, #6d5cff, #b794f4);
+  display: grid; place-items: center;
+  color: white; font-size: 10px; font-weight: 700;
+}
+.user-pill .who { font-weight: 500; color: var(--text); }
+.user-pill .machine { color: var(--text-faint); font-family: var(--font-mono); font-size: 11px; }
+
+/* ─── Main split ─── */
+.main {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  min-height: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   LEFT — Workspace Explorer
+   ═══════════════════════════════════════════════════════════════════ */
+.explorer {
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.explorer-header {
+  padding: 14px 16px 10px;
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+}
+.explorer-title {
+  font-size: 11px; font-weight: 600;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-muted);
+}
+.explorer-search {
+  width: 22px; height: 22px; border-radius: 5px;
+  display: grid; place-items: center;
+  color: var(--text-faint); cursor: pointer;
+  transition: background 150ms var(--ease), color 150ms var(--ease);
+}
+.explorer-search:hover { background: var(--surface-hover); color: var(--text-secondary); }
+
+.explorer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+
+/* ─── Capacity Session Banner ─── */
+.cap-banner {
+  position: relative;
+  background: linear-gradient(180deg, var(--surface-2) 0%, var(--surface) 100%);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  box-shadow: var(--shadow-xs);
+  transition: border-color 200ms var(--ease), box-shadow 200ms var(--ease);
+  animation: slideDown 360ms var(--ease-out) both;
+}
+.cap-banner.active {
+  border-color: rgba(22,163,74,0.20);
+  background: linear-gradient(180deg, rgba(22,163,74,0.04) 0%, var(--surface) 60%);
+}
+.cap-banner.idle {
+  border-color: var(--border);
+}
+.cap-banner-row {
+  display: flex; align-items: center; gap: 8px;
+}
+.cap-status-dot {
+  width: 8px; height: 8px; border-radius: 999px;
+  background: var(--green-bright);
+  position: relative;
+  flex-shrink: 0;
+  animation: pulseGreen 2.4s ease-in-out infinite;
+}
+.cap-banner.idle .cap-status-dot {
+  background: var(--text-faint);
+  animation: none;
+  box-shadow: none;
+}
+.cap-banner-title {
+  font-size: 13px; font-weight: 600;
+  color: var(--text);
+  flex: 1;
+  letter-spacing: -0.01em;
+}
+.cap-banner-sku {
+  font-size: 10px; font-weight: 600;
+  color: var(--green);
+  background: var(--green-soft);
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.02em;
+}
+.cap-banner.idle .cap-banner-sku {
+  color: var(--text-muted);
+  background: var(--bg-dim);
+}
+.cap-banner-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 6px;
+  line-height: 1.5;
+}
+.cap-banner-sub b { color: var(--text-secondary); font-weight: 500; }
+
+.cap-sessions {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.cap-session-chip {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  position: relative;
+  transition: background 150ms var(--ease);
+  animation: slideUp 320ms var(--ease-out) both;
+}
+.cap-session-chip:hover { background: var(--surface-hover); }
+.cap-session-chip .avatar {
+  width: 18px; height: 18px; border-radius: 999px;
+  display: grid; place-items: center;
+  font-size: 9px; font-weight: 700; color: white;
+  flex-shrink: 0;
+}
+.cap-session-chip .avatar.raj { background: linear-gradient(135deg, #f59e0b, #f97316); }
+.cap-session-chip .avatar.priya { background: linear-gradient(135deg, #ec4899, #f43f5e); }
+.cap-session-chip .avatar.aman { background: linear-gradient(135deg, #10b981, #14b8a6); }
+.cap-session-chip .who {
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  font-size: 11px;
+  letter-spacing: -0.01em;
+}
+.cap-session-chip .lh {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.cap-session-chip .lh::before { content: "·"; margin: 0 4px; color: var(--text-faint); }
+
+/* Session tooltip */
+.cap-session-chip .tooltip {
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translate(-50%, -100%);
+  background: var(--text);
+  color: white;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  white-space: nowrap;
+  box-shadow: var(--shadow-lg);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 150ms var(--ease);
+  z-index: 10;
+  line-height: 1.6;
+}
+.cap-session-chip .tooltip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: var(--text);
+}
+.cap-session-chip .tooltip b { color: #fff; }
+.cap-session-chip .tooltip .t-row { display: block; color: rgba(255,255,255,0.7); font-size: 10px; }
+.cap-session-chip:hover .tooltip {
+  opacity: 1;
+  animation: tooltipIn 200ms var(--ease-out) both;
+}
+
+/* ─── Tree ─── */
+.tree-group { padding: 4px 0; }
+.tree-header {
+  display: flex; align-items: center; gap: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  cursor: pointer;
+  border-radius: 4px;
+  user-select: none;
+}
+.tree-header:hover { color: var(--text-secondary); }
+.tree-caret {
+  width: 12px;
+  display: inline-block;
+  transition: transform 150ms var(--ease);
+  font-size: 9px;
+  color: var(--text-faint);
+}
+.tree-header.collapsed .tree-caret { transform: rotate(-90deg); }
+.tree-count {
+  margin-left: auto;
+  font-size: 10px;
+  background: var(--bg-dim);
+  color: var(--text-muted);
+  padding: 1px 5px;
+  border-radius: 4px;
+  letter-spacing: 0;
+  font-weight: 600;
+  text-transform: none;
+  font-variant-numeric: tabular-nums;
+}
+.tree-children {
+  display: flex; flex-direction: column;
+  padding: 2px 0;
+}
+.tree-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px;
+  margin: 1px 0;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 120ms var(--ease), color 120ms var(--ease), transform 200ms var(--ease);
+  position: relative;
+}
+.tree-item:hover { background: var(--surface-hover); color: var(--text); }
+.tree-item.selected {
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-weight: 500;
+}
+.tree-item.selected::before {
+  content: "";
+  position: absolute;
+  left: -12px;
+  top: 6px; bottom: 6px;
+  width: 2px;
+  background: var(--accent);
+  border-radius: 0 2px 2px 0;
+}
+.tree-item-icon {
+  width: 14px; height: 14px;
+  color: var(--text-faint);
+  flex-shrink: 0;
+  display: grid; place-items: center;
+}
+.tree-item.selected .tree-item-icon { color: var(--accent); }
+.tree-item-name { flex: 1; letter-spacing: -0.01em; }
+
+/* Badge */
+.lh-badge {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  letter-spacing: -0.01em;
+}
+.lh-badge.occupied { color: var(--amber); }
+.lh-badge.available { color: var(--text-faint); }
+.lh-badge.you { color: var(--accent); font-weight: 600; }
+
+.lh-dot {
+  width: 7px; height: 7px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+.lh-dot.occupied {
+  background: var(--amber-bright);
+  animation: pulseAmber 2.6s ease-in-out infinite;
+}
+.lh-dot.available {
+  background: transparent;
+  border: 1.5px solid var(--text-faint);
+}
+.lh-dot.you {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   RIGHT — Deploy Panel
+   ═══════════════════════════════════════════════════════════════════ */
+.canvas {
+  background: var(--bg);
+  overflow-y: auto;
+  padding: 32px 40px 60px;
+  position: relative;
+}
+.canvas::before {
+  /* very subtle grid */
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 1px 1px, var(--border) 1px, transparent 0);
+  background-size: 24px 24px;
+  opacity: 0.5;
+  pointer-events: none;
+  mask-image: linear-gradient(180deg, rgba(0,0,0,0.6), transparent 80%);
+  -webkit-mask-image: linear-gradient(180deg, rgba(0,0,0,0.6), transparent 80%);
+}
+.canvas-inner {
+  max-width: 720px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+.page-eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 8px;
+  animation: slideDown 320ms var(--ease-out) both;
+}
+.page-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.02em;
+  margin-bottom: 6px;
+  animation: slideDown 360ms var(--ease-out) 40ms both;
+}
+.page-sub {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 28px;
+  line-height: 1.6;
+  animation: slideDown 400ms var(--ease-out) 80ms both;
+}
+.page-sub code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: var(--text-secondary);
+}
+
+/* ─── Status card ─── */
+.status-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  animation: slideUp 420ms var(--ease-out) 120ms both;
+}
+.status-head {
+  padding: 16px 20px;
+  display: flex; align-items: center; gap: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.status-icon {
+  width: 32px; height: 32px;
+  border-radius: 9px;
+  display: grid; place-items: center;
+  background: var(--green-soft);
+  color: var(--green);
+  flex-shrink: 0;
+  position: relative;
+}
+.status-card.idle .status-icon { background: var(--bg-dim); color: var(--text-muted); }
+.status-card.disconnected .status-icon { background: var(--red-soft); color: var(--red); animation: shakeX 600ms var(--ease) both; }
+.status-icon::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 11px;
+  border: 2px solid var(--green-glow);
+  opacity: 0;
+}
+.status-card:not(.idle):not(.disconnected) .status-icon::after {
+  animation: warningRingExpand 2.4s ease-out infinite;
+}
+.status-text { flex: 1; min-width: 0; }
+.status-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+.status-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  letter-spacing: -0.01em;
+}
+.status-actions { display: flex; gap: 8px; }
+
+/* Buttons */
+.btn {
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 7px;
+  padding: 7px 14px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: transform 150ms var(--ease), background 150ms var(--ease), border-color 150ms var(--ease), color 150ms var(--ease), box-shadow 200ms var(--ease);
+  display: inline-flex; align-items: center; gap: 6px;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.btn:hover { transform: translateY(-1px); background: var(--surface-hover); color: var(--text); box-shadow: var(--shadow-sm); }
+.btn:active { transform: translateY(0); }
+.btn-primary {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+  box-shadow: 0 1px 2px rgba(109,92,255,0.25), 0 4px 12px rgba(109,92,255,0.18);
+}
+.btn-primary:hover { background: var(--accent-hover); color: white; border-color: var(--accent-hover); box-shadow: 0 1px 3px rgba(109,92,255,0.30), 0 6px 16px rgba(109,92,255,0.22); }
+.btn-danger {
+  background: var(--red);
+  color: white;
+  border-color: var(--red);
+  box-shadow: 0 1px 2px rgba(220,38,38,0.25), 0 4px 12px rgba(220,38,38,0.20);
+}
+.btn-danger:hover { background: #b91c1c; color: white; border-color: #b91c1c; box-shadow: 0 1px 3px rgba(220,38,38,0.30), 0 6px 16px rgba(220,38,38,0.25); }
+.btn-ghost { background: transparent; border-color: transparent; color: var(--text-muted); }
+.btn-ghost:hover { background: var(--surface-hover); color: var(--text); box-shadow: none; }
+
+.status-body {
+  padding: 16px 20px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.kv-cell { display: flex; flex-direction: column; gap: 3px; }
+.kv-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.kv-value {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  font-family: var(--font-mono);
+  letter-spacing: -0.01em;
+}
+.kv-value .ok { color: var(--green); }
+.kv-value .warn { color: var(--amber); }
+.kv-value .err { color: var(--red); }
+
+/* Section: Lakehouse picker hint */
+.section-card {
+  margin-top: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px 20px;
+  box-shadow: var(--shadow-sm);
+  animation: slideUp 460ms var(--ease-out) 180ms both;
+}
+.section-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 12px;
+}
+.section-title {
+  font-size: 13px; font-weight: 600;
+  letter-spacing: -0.01em; color: var(--text);
+}
+.section-hint { font-size: 11px; color: var(--text-muted); }
+
+.flow-strip {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto 1fr;
+  align-items: stretch;
+  gap: 0;
+  margin-top: 4px;
+}
+.flow-step {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 4px;
+  position: relative;
+}
+.flow-step .num {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+.flow-step .lab {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+.flow-step .desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+.flow-step.current {
+  border-color: var(--accent-soft);
+  background: var(--accent-dim);
+}
+.flow-step.current .lab { color: var(--accent); }
+.flow-step.current .num { color: var(--accent); }
+.flow-arrow {
+  display: grid; place-items: center;
+  color: var(--text-faint);
+  padding: 0 4px;
+  font-size: 12px;
+}
+.flow-arrow svg { width: 14px; height: 14px; }
+
+/* ─── Demo bar ─── */
+.demobar {
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  z-index: 50;
+}
+.demobar-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.demo-seg {
+  display: flex;
+  background: var(--bg-dim);
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+}
+.demo-seg button {
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  padding: 5px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 150ms var(--ease), color 150ms var(--ease);
+  letter-spacing: -0.01em;
+}
+.demo-seg button:hover { color: var(--text); }
+.demo-seg button.active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-xs);
+}
+.demobar-spacer { flex: 1; }
+.demobar-hint {
+  font-size: 11px;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+}
+.theme-toggle {
+  width: 28px; height: 28px;
+  display: grid; place-items: center;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: background 150ms var(--ease), color 150ms var(--ease);
+}
+.theme-toggle:hover { background: var(--surface-hover); color: var(--text); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   MODAL — Deploy Collision Warning
+   ═══════════════════════════════════════════════════════════════════ */
+.overlay {
+  position: fixed; inset: 0;
+  z-index: 1000;
+  display: grid; place-items: center;
+  background: rgba(15,18,28,0.32);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  animation: overlayIn 280ms var(--ease-out) both;
+}
+.overlay.closing { animation: overlayOut 220ms var(--ease) both; }
+.dialog {
+  width: min(560px, calc(100vw - 48px));
+  max-height: calc(100vh - 80px);
+  background: var(--surface);
+  border-radius: 18px;
+  box-shadow: var(--shadow-dialog);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  animation: dialogIn 420ms var(--spring) both;
+  position: relative;
+}
+.overlay.closing .dialog { animation: dialogOut 200ms var(--ease) both; }
+
+.dialog-head {
+  padding: 20px 24px 16px;
+  display: flex; align-items: flex-start; gap: 14px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(245,158,11,0.05) 0%, var(--surface) 100%);
+}
+.dialog-icon {
+  width: 38px; height: 38px;
+  border-radius: 10px;
+  background: var(--amber-soft);
+  color: var(--amber);
+  display: grid; place-items: center;
+  flex-shrink: 0;
+  position: relative;
+}
+.dialog-icon::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 13px;
+  border: 2px solid var(--amber-glow);
+  opacity: 0;
+  animation: warningRingExpand 2s ease-out infinite;
+}
+.dialog-title-block { flex: 1; }
+.dialog-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.02em;
+  margin-bottom: 4px;
+}
+.dialog-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+.dialog-close {
+  width: 26px; height: 26px;
+  border-radius: 6px;
+  display: grid; place-items: center;
+  color: var(--text-faint);
+  cursor: pointer;
+  transition: background 150ms var(--ease), color 150ms var(--ease);
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.dialog-close:hover { background: var(--surface-hover); color: var(--text); }
+
+.dialog-body {
+  padding: 18px 24px;
+  overflow-y: auto;
+}
+
+.session-list {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.session-row {
+  padding: 12px 14px;
+  display: flex; align-items: flex-start; gap: 12px;
+  border-bottom: 1px solid var(--border);
+  animation: slideUp 360ms var(--ease-out) both;
+  position: relative;
+}
+.session-row:last-child { border-bottom: none; }
+.session-row:nth-child(1) { animation-delay: 180ms; }
+.session-row:nth-child(2) { animation-delay: 280ms; }
+.session-avatar {
+  width: 34px; height: 34px;
+  border-radius: 999px;
+  display: grid; place-items: center;
+  color: white; font-size: 12px; font-weight: 700;
+  flex-shrink: 0;
+  position: relative;
+}
+.session-avatar::after {
+  content: "";
+  position: absolute;
+  bottom: -1px; right: -1px;
+  width: 10px; height: 10px;
+  background: var(--amber-bright);
+  border: 2px solid var(--surface-2);
+  border-radius: 999px;
+  animation: pulseAmber 2.4s ease-in-out infinite;
+}
+.session-avatar.raj { background: linear-gradient(135deg, #f59e0b, #f97316); }
+.session-avatar.priya { background: linear-gradient(135deg, #ec4899, #f43f5e); }
+.session-text { flex: 1; min-width: 0; }
+.session-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  font-family: var(--font-mono);
+  letter-spacing: -0.01em;
+}
+.session-meta {
+  display: flex; flex-wrap: wrap; gap: 4px 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  line-height: 1.5;
+}
+.session-meta b {
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-family: var(--font-mono);
+}
+.session-meta .activity-dot {
+  display: inline-block;
+  width: 5px; height: 5px;
+  border-radius: 999px;
+  background: var(--green-bright);
+  margin-right: 4px;
+  vertical-align: 1px;
+}
+
+.dialog-alt {
+  display: flex; align-items: flex-start; gap: 10px;
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-soft);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+.dialog-alt-icon {
+  color: var(--accent);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.dialog-alt b { color: var(--text); font-weight: 600; }
+
+.dialog-foot {
+  padding: 14px 24px;
+  display: flex; gap: 10px; justify-content: flex-end;
+  background: var(--surface-2);
+  border-top: 1px solid var(--border);
+}
+.dialog-foot .btn { font-size: 13px; padding: 8px 16px; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   TOASTS
+   ═══════════════════════════════════════════════════════════════════ */
+.toast-stack {
+  position: fixed;
+  top: 64px;
+  right: 24px;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+.toast {
+  width: 360px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-toast);
+  padding: 14px 16px;
+  display: flex; align-items: flex-start; gap: 12px;
+  animation: toastIn 420ms var(--spring) both;
+  pointer-events: auto;
+  position: relative;
+  overflow: hidden;
+}
+.toast.closing { animation: toastOut 220ms var(--ease) forwards; }
+.toast::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+}
+.toast.success::before { background: var(--green-bright); }
+.toast.danger::before { background: var(--red-bright); }
+.toast-icon {
+  width: 28px; height: 28px;
+  border-radius: 8px;
+  display: grid; place-items: center;
+  flex-shrink: 0;
+}
+.toast.success .toast-icon { background: var(--green-soft); color: var(--green); }
+.toast.danger .toast-icon {
+  background: var(--red-soft); color: var(--red);
+  animation: pulseRed 2s ease-in-out infinite;
+}
+.toast-body { flex: 1; min-width: 0; }
+.toast-title {
+  font-size: 13px; font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  margin-bottom: 2px;
+}
+.toast-msg {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+.toast-msg b { color: var(--text-secondary); font-family: var(--font-mono); font-weight: 500; }
+.toast-actions {
+  margin-top: 8px;
+  display: flex; gap: 6px;
+}
+.toast-actions .btn { font-size: 11px; padding: 5px 10px; }
+.toast-close {
+  width: 22px; height: 22px;
+  border-radius: 5px;
+  display: grid; place-items: center;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 150ms var(--ease), color 150ms var(--ease);
+  flex-shrink: 0;
+}
+.toast-close:hover { background: var(--surface-hover); color: var(--text); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   ICONS
+   ═══════════════════════════════════════════════════════════════════ */
+svg.icon { width: 14px; height: 14px; }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ═══ TOPBAR ═══ -->
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-dot">E</div>
+      EDOG Studio
+    </div>
+    <div class="topbar-sep"></div>
+    <div class="breadcrumb">
+      <b>FMLV Workspace</b>
+      <span class="breadcrumb-arrow">▸</span>
+      <b id="bc-capacity">FMLVCapacity</b>
+      <span class="breadcrumb-arrow">▸</span>
+      <span id="bc-lh">Lakehouses</span>
+    </div>
+    <div class="topbar-spacer"></div>
+    <div class="user-pill">
+      <div class="user-avatar">A</div>
+      <span class="who">aman</span>
+      <span class="machine">@AMAN-PC</span>
+    </div>
+  </div>
+
+  <!-- ═══ MAIN ═══ -->
+  <div class="main">
+
+    <!-- ─── LEFT: Workspace Explorer ─── -->
+    <aside class="explorer">
+      <div class="explorer-header">
+        <div class="explorer-title">Workspace</div>
+        <div class="explorer-search" title="Search">
+          <svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/>
+          </svg>
+        </div>
+      </div>
+
+      <div class="explorer-body">
+
+        <!-- Capacity Session Banner -->
+        <div class="cap-banner active" id="capBanner">
+          <div class="cap-banner-row">
+            <span class="cap-status-dot" id="capDot"></span>
+            <span class="cap-banner-title" id="capTitle">EDOG Active on FMLVCapacity</span>
+            <span class="cap-banner-sku" id="capSku">P1</span>
+          </div>
+          <div class="cap-banner-sub" id="capSub">
+            <b>2 sessions</b> connected to DevMode runtime
+          </div>
+          <div class="cap-sessions" id="capSessions">
+            <div class="cap-session-chip">
+              <div class="avatar raj">R</div>
+              <span class="who">raj@RAJ-LAPTOP</span>
+              <span class="lh">abc_lh</span>
+              <div class="tooltip">
+                <b>raj@RAJ-LAPTOP</b>
+                <span class="t-row">connected since 2:15 PM</span>
+                <span class="t-row">last activity 3m ago</span>
+              </div>
+            </div>
+            <div class="cap-session-chip">
+              <div class="avatar priya">P</div>
+              <span class="who">priya@PRIYA-PC</span>
+              <span class="lh">sales_lh</span>
+              <div class="tooltip">
+                <b>priya@PRIYA-PC</b>
+                <span class="t-row">connected since 12:30 PM</span>
+                <span class="t-row">last activity 8m ago</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tree -->
+        <div class="tree-group">
+          <div class="tree-header">
+            <span class="tree-caret">▾</span>
+            Lakehouses
+            <span class="tree-count" id="lhCount">4</span>
+          </div>
+          <div class="tree-children" id="lhList">
+            <div class="tree-item" data-lh="abc_lh">
+              <div class="tree-item-icon">
+                <svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
+                  <ellipse cx="8" cy="4" rx="5.5" ry="2"/><path d="M2.5 4v8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2V4"/><path d="M2.5 8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2"/>
+                </svg>
+              </div>
+              <span class="tree-item-name">abc_lh</span>
+              <span class="lh-badge occupied">
+                <span class="lh-dot occupied"></span> raj
+              </span>
+            </div>
+            <div class="tree-item" data-lh="sales_lh">
+              <div class="tree-item-icon">
+                <svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
+                  <ellipse cx="8" cy="4" rx="5.5" ry="2"/><path d="M2.5 4v8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2V4"/><path d="M2.5 8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2"/>
+                </svg>
+              </div>
+              <span class="tree-item-name">sales_lh</span>
+              <span class="lh-badge occupied">
+                <span class="lh-dot occupied"></span> priya
+              </span>
+            </div>
+            <div class="tree-item selected" data-lh="inventory_lh">
+              <div class="tree-item-icon">
+                <svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
+                  <ellipse cx="8" cy="4" rx="5.5" ry="2"/><path d="M2.5 4v8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2V4"/><path d="M2.5 8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2"/>
+                </svg>
+              </div>
+              <span class="tree-item-name">inventory_lh</span>
+              <span class="lh-badge available">
+                <span class="lh-dot available"></span> available
+              </span>
+            </div>
+            <div class="tree-item" data-lh="staging_lh">
+              <div class="tree-item-icon">
+                <svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
+                  <ellipse cx="8" cy="4" rx="5.5" ry="2"/><path d="M2.5 4v8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2V4"/><path d="M2.5 8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2"/>
+                </svg>
+              </div>
+              <span class="tree-item-name">staging_lh</span>
+              <span class="lh-badge available">
+                <span class="lh-dot available"></span> available
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="tree-group">
+          <div class="tree-header collapsed">
+            <span class="tree-caret">▾</span>
+            Notebooks
+            <span class="tree-count">12</span>
+          </div>
+        </div>
+        <div class="tree-group">
+          <div class="tree-header collapsed">
+            <span class="tree-caret">▾</span>
+            Pipelines
+            <span class="tree-count">3</span>
+          </div>
+        </div>
+
+      </div>
+    </aside>
+
+    <!-- ─── RIGHT: Deploy panel ─── -->
+    <section class="canvas">
+      <div class="canvas-inner">
+
+        <div class="page-eyebrow">DevMode Runtime</div>
+        <h1 class="page-title" id="pageTitle">Connect to <span id="targetLh">inventory_lh</span></h1>
+        <p class="page-sub" id="pageSub">
+          DevMode is already deployed on <code>FMLVCapacity</code>.
+          You can connect to any available lakehouse without redeploying — but redeploying will
+          restart the runtime and disconnect everyone.
+        </p>
+
+        <!-- Status card -->
+        <div class="status-card" id="statusCard">
+          <div class="status-head">
+            <div class="status-icon" id="statusIcon">
+              <svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" id="statusIconSvg">
+                <path d="M8 1.5 14 5v6L8 14.5 2 11V5z"/>
+                <path d="m2 5 6 3.5L14 5"/><path d="M8 8.5v6"/>
+              </svg>
+            </div>
+            <div class="status-text">
+              <div class="status-title" id="statusTitle">DevMode runtime is healthy</div>
+              <div class="status-meta" id="statusMeta">FLT v2.3.114 · uptime 1h 42m · 2 active sessions</div>
+            </div>
+            <div class="status-actions">
+              <button class="btn btn-ghost" id="btnReconnect" style="display:none">
+                <svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1.5 8a6.5 6.5 0 0 1 11-4.6L14 2v4h-4"/><path d="M14.5 8a6.5 6.5 0 0 1-11 4.6L2 14v-4h4"/></svg>
+                Reconnect
+              </button>
+              <button class="btn" id="btnConnect">
+                <svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 8h6m-3-3 3 3-3 3"/><circle cx="8" cy="8" r="6.5"/></svg>
+                Connect
+              </button>
+              <button class="btn btn-primary" id="btnDeploy">
+                <svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 1.5v9m0-9L4.5 5M8 1.5 11.5 5"/><path d="M2 11v2.5h12V11"/></svg>
+                Deploy
+              </button>
+            </div>
+          </div>
+          <div class="status-body">
+            <div class="kv-cell">
+              <div class="kv-label">Capacity</div>
+              <div class="kv-value">FMLVCapacity <span class="ok">· P1</span></div>
+            </div>
+            <div class="kv-cell">
+              <div class="kv-label">Deployed by</div>
+              <div class="kv-value" id="kvDeployedBy">raj@RAJ-LAPTOP</div>
+            </div>
+            <div class="kv-cell">
+              <div class="kv-label">Your status</div>
+              <div class="kv-value" id="kvYourStatus"><span class="warn">● not connected</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Flow strip -->
+        <div class="section-card">
+          <div class="section-head">
+            <div class="section-title">Session Guard flow</div>
+            <div class="section-hint">capacity-scoped runtime, per-user connections</div>
+          </div>
+          <div class="flow-strip">
+            <div class="flow-step current">
+              <span class="num">01</span>
+              <span class="lab">Detect</span>
+              <span class="desc">EDOG sees DevMode is live on this capacity</span>
+            </div>
+            <div class="flow-arrow">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 8h10m-3-3 3 3-3 3"/></svg>
+            </div>
+            <div class="flow-step">
+              <span class="num">02</span>
+              <span class="lab">Choose</span>
+              <span class="desc">Connect to a free lakehouse, or redeploy</span>
+            </div>
+            <div class="flow-arrow">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 8h10m-3-3 3 3-3 3"/></svg>
+            </div>
+            <div class="flow-step">
+              <span class="num">03</span>
+              <span class="lab">Guard</span>
+              <span class="desc">If redeploying, confirm killing live sessions</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </div>
+
+  <!-- ═══ DEMO BAR ═══ -->
+  <div class="demobar">
+    <span class="demobar-label">Demo state</span>
+    <div class="demo-seg" id="demoSeg">
+      <button data-state="empty">No sessions</button>
+      <button data-state="busy" class="active">2 active sessions</button>
+      <button data-state="kicked">You got disconnected</button>
+    </div>
+    <span class="demobar-spacer"></span>
+    <span class="demobar-hint">tip: click <b style="color:var(--text-secondary)">Deploy</b> with active sessions to trigger the collision modal</span>
+    <div class="theme-toggle" id="themeToggle" title="Toggle theme">
+      <svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" id="themeIcon">
+        <path d="M13 9.5A5.5 5.5 0 1 1 6.5 3a4.5 4.5 0 0 0 6.5 6.5z"/>
+      </svg>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══ TOAST STACK ═══ -->
+<div class="toast-stack" id="toastStack"></div>
+
+<!-- ═══ MODAL ROOT ═══ -->
+<div id="modalRoot"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   Session Guard — interactive logic
+   ═══════════════════════════════════════════════════════════════════ */
+
+const STATE = {
+  current: 'busy', // 'empty' | 'busy' | 'kicked'
+};
+
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+
+// ── Theme toggle ──
+$('#themeToggle').addEventListener('click', () => {
+  const html = document.documentElement;
+  const next = html.dataset.theme === 'dark' ? 'light' : 'dark';
+  html.dataset.theme = next;
+  const icon = $('#themeIcon');
+  if (next === 'dark') {
+    icon.innerHTML = '<circle cx="8" cy="8" r="3"/><path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3.05 3.05l1.06 1.06M11.89 11.89l1.06 1.06M3.05 12.95l1.06-1.06M11.89 4.11l1.06-1.06"/>';
+  } else {
+    icon.innerHTML = '<path d="M13 9.5A5.5 5.5 0 1 1 6.5 3a4.5 4.5 0 0 0 6.5 6.5z"/>';
+  }
+});
+
+// ── Demo state switcher ──
+$$('#demoSeg button').forEach(b => {
+  b.addEventListener('click', () => {
+    $$('#demoSeg button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    applyState(b.dataset.state);
+  });
+});
+
+function applyState(name) {
+  STATE.current = name;
+  closeAllToasts(true);
+  const banner = $('#capBanner');
+  const sub = $('#capSub');
+  const sessions = $('#capSessions');
+  const lhList = $('#lhList');
+  const card = $('#statusCard');
+  const sTitle = $('#statusTitle');
+  const sMeta = $('#statusMeta');
+  const kvBy = $('#kvDeployedBy');
+  const kvYou = $('#kvYourStatus');
+  const btnReconnect = $('#btnReconnect');
+  const btnConnect = $('#btnConnect');
+  const btnDeploy = $('#btnDeploy');
+
+  card.classList.remove('idle', 'disconnected');
+  banner.classList.remove('idle');
+
+  if (name === 'empty') {
+    banner.classList.add('idle');
+    banner.classList.remove('active');
+    $('#capTitle').textContent = 'No DevMode on FMLVCapacity';
+    sub.innerHTML = '<b>0 sessions.</b> Deploy DevMode to start working.';
+    sessions.style.display = 'none';
+
+    // Reset all lh badges to available
+    setLhBadge('abc_lh', 'available');
+    setLhBadge('sales_lh', 'available');
+    setLhBadge('inventory_lh', 'available');
+    setLhBadge('staging_lh', 'available');
+
+    card.classList.add('idle');
+    sTitle.textContent = 'DevMode is not deployed';
+    sMeta.textContent = 'no runtime · 0 sessions';
+    kvBy.innerHTML = '<span style="color:var(--text-faint)">— not deployed —</span>';
+    kvYou.innerHTML = '<span style="color:var(--text-faint)">○ idle</span>';
+
+    btnReconnect.style.display = 'none';
+    btnConnect.style.display = 'none';
+    btnDeploy.style.display = '';
+    btnDeploy.classList.add('btn-primary');
+    btnDeploy.classList.remove('btn');
+  }
+  else if (name === 'busy') {
+    banner.classList.add('active');
+    $('#capTitle').textContent = 'EDOG Active on FMLVCapacity';
+    sub.innerHTML = '<b>2 sessions</b> connected to DevMode runtime';
+    sessions.style.display = '';
+
+    setLhBadge('abc_lh', 'occupied', 'raj');
+    setLhBadge('sales_lh', 'occupied', 'priya');
+    setLhBadge('inventory_lh', 'available');
+    setLhBadge('staging_lh', 'available');
+
+    sTitle.textContent = 'DevMode runtime is healthy';
+    sMeta.textContent = 'FLT v2.3.114 · uptime 1h 42m · 2 active sessions';
+    kvBy.textContent = 'raj@RAJ-LAPTOP';
+    kvYou.innerHTML = '<span class="warn">● not connected</span>';
+
+    btnReconnect.style.display = 'none';
+    btnConnect.style.display = '';
+    btnDeploy.style.display = '';
+  }
+  else if (name === 'kicked') {
+    banner.classList.add('idle');
+    banner.classList.remove('active');
+    $('#capTitle').textContent = 'EDOG restarted by aman@AMAN-PC';
+    sub.innerHTML = 'DevMode just redeployed — <b>all sessions terminated.</b>';
+    sessions.style.display = 'none';
+
+    setLhBadge('abc_lh', 'available');
+    setLhBadge('sales_lh', 'available');
+    setLhBadge('inventory_lh', 'available');
+    setLhBadge('staging_lh', 'available');
+
+    card.classList.add('disconnected');
+    sTitle.textContent = 'Your session was disconnected';
+    sMeta.textContent = 'FLT runtime restarted at 2:45 PM';
+    kvBy.innerHTML = 'aman@AMAN-PC <span class="warn">· just now</span>';
+    kvYou.innerHTML = '<span class="err">● disconnected</span>';
+
+    btnReconnect.style.display = '';
+    btnConnect.style.display = 'none';
+    btnDeploy.style.display = 'none';
+
+    // Show the disconnected toast (we're "raj")
+    setTimeout(() => showDisconnectToast(), 280);
+  }
+}
+
+function setLhBadge(lh, state, who) {
+  const row = $(`.tree-item[data-lh="${lh}"]`);
+  if (!row) return;
+  const badge = row.querySelector('.lh-badge');
+  badge.className = 'lh-badge ' + state;
+  if (state === 'occupied') {
+    badge.innerHTML = `<span class="lh-dot occupied"></span> ${who}`;
+  } else {
+    badge.innerHTML = `<span class="lh-dot available"></span> available`;
+  }
+}
+
+// ── Tree item select ──
+$$('.tree-item').forEach(item => {
+  item.addEventListener('click', () => {
+    const lh = item.dataset.lh;
+    $$('.tree-item').forEach(x => x.classList.remove('selected'));
+    item.classList.add('selected');
+    $('#targetLh').textContent = lh;
+    $('#bc-lh').textContent = lh;
+  });
+});
+
+// ── Deploy click ──
+$('#btnDeploy').addEventListener('click', () => {
+  if (STATE.current === 'busy') {
+    openCollisionModal();
+  } else {
+    // No conflict — instant deploy
+    showToast({
+      kind: 'success',
+      title: 'DevMode deployed',
+      message: 'FLT runtime started on <b>FMLVCapacity</b>. Ready to connect.',
+    });
+    applyState('busy');
+    $$('#demoSeg button').forEach(x => x.classList.toggle('active', x.dataset.state === 'busy'));
+  }
+});
+
+// ── Connect click ──
+$('#btnConnect').addEventListener('click', () => {
+  const lh = $('#targetLh').textContent;
+  showToast({
+    kind: 'success',
+    title: 'Connected without deploy',
+    message: `Connected to <b>${lh}</b> on <b>FMLVCapacity</b>. DevMode untouched, no sessions disrupted.`,
+  });
+});
+
+// ── Reconnect (in kicked state) ──
+$('#btnReconnect').addEventListener('click', () => {
+  showToast({
+    kind: 'success',
+    title: 'Reconnected',
+    message: 'New SignalR session established on <b>FMLVCapacity</b>.',
+  });
+  applyState('busy');
+  $$('#demoSeg button').forEach(x => x.classList.toggle('active', x.dataset.state === 'busy'));
+});
+
+/* ═══════════════════════════════════════════════════════════════════
+   MODAL — Collision warning
+   ═══════════════════════════════════════════════════════════════════ */
+function openCollisionModal() {
+  const root = $('#modalRoot');
+  root.innerHTML = `
+    <div class="overlay" id="overlay">
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
+        <div class="dialog-head">
+          <div class="dialog-icon">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 3 2 21h20L12 3z"/><path d="M12 10v5"/><circle cx="12" cy="18" r="1" fill="currentColor"/>
+            </svg>
+          </div>
+          <div class="dialog-title-block">
+            <div class="dialog-title" id="dlgTitle">Active sessions on FMLVCapacity</div>
+            <div class="dialog-sub">
+              Deploying will restart the FLT runtime and <b style="color:var(--text-secondary)">disconnect all active EDOG sessions</b>. Their unsaved DevMode state will be lost.
+            </div>
+          </div>
+          <div class="dialog-close" id="dlgClose">✕</div>
+        </div>
+        <div class="dialog-body">
+          <div class="session-list">
+            <div class="session-row">
+              <div class="session-avatar raj">R</div>
+              <div class="session-text">
+                <div class="session-name">raj@RAJ-LAPTOP</div>
+                <div class="session-meta">
+                  <span>Lakehouse <b>abc_lh</b></span>
+                  <span>Connected since <b>2:15 PM</b></span>
+                  <span><span class="activity-dot"></span>Last activity 3m ago</span>
+                </div>
+              </div>
+            </div>
+            <div class="session-row">
+              <div class="session-avatar priya">P</div>
+              <div class="session-text">
+                <div class="session-name">priya@PRIYA-PC</div>
+                <div class="session-meta">
+                  <span>Lakehouse <b>sales_lh</b></span>
+                  <span>Connected since <b>12:30 PM</b></span>
+                  <span><span class="activity-dot"></span>Last activity 8m ago</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="dialog-alt">
+            <div class="dialog-alt-icon">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6">
+                <circle cx="8" cy="8" r="6.5"/><path d="M8 5v3.5l2 2"/>
+              </svg>
+            </div>
+            <div>
+              <b>Heads up:</b> redeploying restarts the FLT runtime for the whole capacity.
+              Every active EDOG session on <b>FMLVCapacity</b> will drop, and any unsaved DevMode state will be lost.
+            </div>
+          </div>
+        </div>
+        <div class="dialog-foot">
+          <button class="btn btn-ghost" id="dlgCancel">Cancel</button>
+          <button class="btn btn-danger" id="dlgDeploy">Deploy anyway</button>
+        </div>
+      </div>
+    </div>
+  `;
+  const overlay = $('#overlay');
+  const close = () => {
+    overlay.classList.add('closing');
+    setTimeout(() => { root.innerHTML = ''; }, 240);
+  };
+  $('#dlgCancel').addEventListener('click', close);
+  $('#dlgClose').addEventListener('click', close);
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+  document.addEventListener('keydown', escClose);
+  function escClose(e) {
+    if (e.key === 'Escape') { close(); document.removeEventListener('keydown', escClose); }
+  }
+
+  $('#dlgDeploy').addEventListener('click', () => {
+    close();
+    setTimeout(() => {
+      showToast({
+        kind: 'danger',
+        title: 'DevMode redeployed',
+        message: '2 sessions terminated. <b>raj</b> and <b>priya</b> were notified.',
+      });
+      // Switch to "kicked" perspective after a beat to show the other-user view
+      setTimeout(() => {
+        applyState('kicked');
+        $$('#demoSeg button').forEach(x => x.classList.toggle('active', x.dataset.state === 'kicked'));
+      }, 1200);
+    }, 200);
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   TOAST SYSTEM
+   ═══════════════════════════════════════════════════════════════════ */
+const TOAST_TTL = 5400;
+const _toasts = new Set();
+
+function showToast({ kind = 'success', title, message, actions, ttl = TOAST_TTL }) {
+  const stack = $('#toastStack');
+  const el = document.createElement('div');
+  el.className = `toast ${kind}`;
+  const iconSvg = kind === 'success'
+    ? '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="m3.5 8 3 3 6-6"/></svg>'
+    : '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 1.5 14.5 14h-13L8 1.5z"/><path d="M8 6v3.5"/><circle cx="8" cy="11.5" r="0.8" fill="currentColor"/></svg>';
+  el.innerHTML = `
+    <div class="toast-icon">${iconSvg}</div>
+    <div class="toast-body">
+      <div class="toast-title">${title}</div>
+      <div class="toast-msg">${message}</div>
+      ${actions ? `<div class="toast-actions">${actions}</div>` : ''}
+    </div>
+    <div class="toast-close" title="Dismiss">✕</div>
+  `;
+  stack.appendChild(el);
+  _toasts.add(el);
+
+  const close = () => {
+    el.classList.add('closing');
+    setTimeout(() => { el.remove(); _toasts.delete(el); }, 240);
+  };
+  el.querySelector('.toast-close').addEventListener('click', close);
+  if (ttl) setTimeout(() => { if (el.isConnected) close(); }, ttl);
+  return { close, el };
+}
+
+function closeAllToasts(immediate) {
+  _toasts.forEach(el => {
+    if (immediate) { el.remove(); }
+    else { el.classList.add('closing'); setTimeout(() => el.remove(), 240); }
+  });
+  if (immediate) _toasts.clear();
+}
+
+function showDisconnectToast() {
+  const stack = $('#toastStack');
+  const el = document.createElement('div');
+  el.className = 'toast danger';
+  el.innerHTML = `
+    <div class="toast-icon">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M8 1.5 14.5 14h-13L8 1.5z"/><path d="M8 6v3.5"/><circle cx="8" cy="11.5" r="0.8" fill="currentColor"/>
+      </svg>
+    </div>
+    <div class="toast-body">
+      <div class="toast-title">Session disconnected</div>
+      <div class="toast-msg">
+        <b>aman@AMAN-PC</b> deployed to <b>FMLVCapacity</b> at 2:45 PM.<br>
+        Your EDOG session was terminated.
+      </div>
+      <div class="toast-actions">
+        <button class="btn btn-primary" id="tDoReconnect">Reconnect</button>
+        <button class="btn" id="tDismiss">Dismiss</button>
+      </div>
+    </div>
+    <div class="toast-close" title="Dismiss">✕</div>
+  `;
+  stack.appendChild(el);
+  _toasts.add(el);
+  const close = () => {
+    el.classList.add('closing');
+    setTimeout(() => { el.remove(); _toasts.delete(el); }, 240);
+  };
+  el.querySelector('.toast-close').addEventListener('click', close);
+  el.querySelector('#tDismiss').addEventListener('click', close);
+  el.querySelector('#tDoReconnect').addEventListener('click', () => {
+    close();
+    setTimeout(() => {
+      showToast({
+        kind: 'success',
+        title: 'Reconnected',
+        message: 'New SignalR session established on <b>FMLVCapacity</b>.',
+      });
+      applyState('busy');
+      $$('#demoSeg button').forEach(x => x.classList.toggle('active', x.dataset.state === 'busy'));
+    }, 220);
+  });
+}
+
+// ── Init ──
+applyState('busy');
+</script>
+</body>
+</html>

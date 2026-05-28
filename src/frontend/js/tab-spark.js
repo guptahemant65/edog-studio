@@ -40,6 +40,7 @@ class SparkSessionsTab {
     this._maxSessions = 200;
     this._maxPollsPerTxf = 500;
     this._maxRawEvents = 2000;
+    this._maxSessionRawEvents = 1000;
     this._renderDebounceMs = 80;
 
     this._buildDOM();
@@ -303,7 +304,7 @@ class SparkSessionsTab {
     if (d.error) {
       const s = this._getOrCreateSession(sid);
       this._mergePendingCreated(s, sid);
-      s._sessionRawEvents.push({ at: Date.now(), kind: "Created", data: d });
+    this._pushRaw(s, { at: Date.now(), kind: "Created", data: d });
       this._recomputeStatus(s);
     }
   }
@@ -313,13 +314,21 @@ class SparkSessionsTab {
     if (!sid) return;
     const s = this._getOrCreateSession(sid);
     this._mergePendingCreated(s, sid);
+    // Seed session identity from the Error event so the failed-factory card
+    // shows the artifact / workspace it was for, not just "edog-spark-N".
+    if (!s.iterationId && d.iterationId) s.iterationId = d.iterationId;
+    if (!s.tenantId && d.tenantId) s.tenantId = d.tenantId;
+    if (!s.workspaceId && d.workspaceId) s.workspaceId = d.workspaceId;
+    if (!s.workspaceName && d.workspaceName) s.workspaceName = d.workspaceName;
+    if (!s.artifactId && d.artifactId) s.artifactId = d.artifactId;
+    if (!s.artifactName && d.artifactName) s.artifactName = d.artifactName;
     s.createError = d.error || "Unknown factory error";
     s.errorType = d.errorType || null;
     s.errorStack = d.stackTrace || null;
     s.lastState = "Failed";
     s.disposed = true;
     s.disposedAt = Date.now();
-    s._sessionRawEvents.push({ at: Date.now(), kind: "Error", data: d });
+    this._pushRaw(s, { at: Date.now(), kind: "Error", data: d });
     this._recomputeStatus(s);
   }
 
@@ -337,7 +346,7 @@ class SparkSessionsTab {
     s.warm = p.warm;
     s.createError = p.createError;
     s.startedAt = p.createdAt;
-    s._sessionRawEvents.push({ at: p.createdAt, kind: "Created", data: p.rawEvent });
+    this._pushRaw(s, { at: p.createdAt, kind: "Created", data: p.rawEvent });
     this._pendingCreated.delete(sid);
   }
 
@@ -386,11 +395,8 @@ class SparkSessionsTab {
     }
     if (d.error) t.submitError = d.error;
     else t.submitError = null;
-    if (t.gts) {
-      if (!s.gtsRepls.has(t.gts)) s.gtsRepls.set(t.gts, new Set());
-      if (t.replId) s.gtsRepls.get(t.gts).add(t.replId);
-    }
-    s._sessionRawEvents.push({ at: now, kind: "TransformSubmitted", data: d });
+    this._recordReplBinding(s, t);
+    this._pushRaw(s, { at: now, kind: "TransformSubmitted", data: d });
     this._recomputeStatus(s);
   }
 
@@ -411,7 +417,7 @@ class SparkSessionsTab {
     } else {
       s.sparkConf = s.sparkConf || {};
     }
-    s._sessionRawEvents.push({ at: Date.now(), kind: "SessionPropertiesSet", data: d });
+    this._pushRaw(s, { at: Date.now(), kind: "SessionPropertiesSet", data: d });
   }
 
   _onPolled(d) {
@@ -464,7 +470,13 @@ class SparkSessionsTab {
     if (t.polls.length > this._maxPollsPerTxf) {
       t.polls.splice(0, t.polls.length - this._maxPollsPerTxf);
     }
-    s._sessionRawEvents.push({ at: now, kind: "TransformPolled", data: d });
+    // Backend never emits non-empty gts/replId on polls (the FLT poll response
+    // type has no ComputeInfo) — but the call is harmless and keeps the binding
+    // map fresh if a future FLT version starts surfacing it.
+    if (d.gtsSessionId && !t.gts) t.gts = d.gtsSessionId;
+    if (d.replId && !t.replId) t.replId = d.replId;
+    this._recordReplBinding(s, t);
+    this._pushRaw(s, { at: now, kind: "TransformPolled", data: d });
     this._recomputeStatus(s);
   }
 
@@ -506,7 +518,8 @@ class SparkSessionsTab {
       };
     }
     if (d.rawOutput) t.rawOutput = d.rawOutput;
-    s._sessionRawEvents.push({ at: now, kind: "TransformCompleted", data: d });
+    this._recordReplBinding(s, t);
+    this._pushRaw(s, { at: now, kind: "TransformCompleted", data: d });
     this._recomputeStatus(s);
   }
 
@@ -526,7 +539,8 @@ class SparkSessionsTab {
     if (d.error) {
       t.error = { code: null, message: d.error, source: null, stage: null, stackTrace: null, retriable: false, retryAfterMs: d.retryAfterMs ?? null };
     }
-    s._sessionRawEvents.push({ at: now, kind: "TransformCancelled", data: d });
+    this._recordReplBinding(s, t);
+    this._pushRaw(s, { at: now, kind: "TransformCancelled", data: d });
     this._recomputeStatus(s);
   }
 
@@ -541,7 +555,7 @@ class SparkSessionsTab {
     s.lifetimeMs = typeof d.lifetimeMs === "number" ? d.lifetimeMs : (now - (s.startedAt || now));
     s.transformCount = typeof d.transformCount === "number" ? d.transformCount : s.transforms.length;
     s.lastState = d.lastState || s.lastState;
-    s._sessionRawEvents.push({ at: now, kind: "Disposed", data: d });
+    this._pushRaw(s, { at: now, kind: "Disposed", data: d });
     this._recomputeStatus(s);
   }
 
@@ -608,6 +622,25 @@ class SparkSessionsTab {
     session.transforms.push(t);
     session._txfIdx.set(txfId, t);
     return t;
+  }
+
+  // Cap per-session raw event buffer so a long-running session can't leak.
+  // Drops oldest events first (ring buffer).
+  _pushRaw(s, ev) {
+    if (!s._sessionRawEvents) s._sessionRawEvents = [];
+    if (s._sessionRawEvents.length >= this._maxSessionRawEvents) {
+      s._sessionRawEvents.splice(0, s._sessionRawEvents.length - this._maxSessionRawEvents + 1);
+    }
+    s._sessionRawEvents.push(ev);
+  }
+
+  // Record the GTS↔REPL binding from a transform's current identity. Idempotent
+  // — safe to call multiple times. Used after any event that may have refreshed
+  // the transform's gts/replId (Submit, Polled, Completed, Cancelled).
+  _recordReplBinding(s, t) {
+    if (!t || !t.gts) return;
+    if (!s.gtsRepls.has(t.gts)) s.gtsRepls.set(t.gts, new Set());
+    if (t.replId) s.gtsRepls.get(t.gts).add(t.replId);
   }
 
   _recomputeStatus(s) {
@@ -1310,9 +1343,12 @@ class SparkSessionsTab {
       const term = p.state === "Succeeded" || p.state === "Failed" || p.state === "Cancelled";
       if (term) cls = p.state === "Succeeded" ? " terminal-ok" : p.state === "Failed" ? " terminal-err" : " terminal-cancel";
       else if (p.stateChanged) cls = " state-change";
-      const note = p.stateChanged
+      const httpDur = (typeof p.durationMs === "number" && p.durationMs >= 0)
+        ? ` <span class="sp-poll-http">· HTTP ${this._fmtDuration(p.durationMs)}</span>` : "";
+      const noteBody = p.stateChanged
         ? `<span class="sp-mono">${this._esc(p.previousState || "?")}</span><span class="sp-change-arrow">→</span><span class="sp-mono">${this._esc(p.state)}</span>`
         : `${p.retryAfterMs ? `retry in ${this._fmtDuration(p.retryAfterMs)}` : "no change"}`;
+      const note = `${noteBody}${httpDur}`;
       rows += `
         <div class="sp-poll-row${cls}">
           <div class="sp-col-n">#${String(i + 1).padStart(3, "0")}</div>
