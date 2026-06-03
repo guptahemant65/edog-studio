@@ -125,6 +125,11 @@ _onelake_mint_lock = threading.Lock()
 _mwc_cache: dict = {}  # value: {"token": str, "host": str, "expiry": float}
 _mwc_lock = threading.Lock()
 
+# MWC token freshness buffer (seconds).
+# FLT's TokenManager.GetTokenAsync rejects tokens within 10 min of expiry.
+# We use 15 min so EDOG never hands FLT a token it will consider stale.
+MWC_TOKEN_REFRESH_BUFFER_SECS = 15 * 60  # 900s = 15 minutes
+
 # In-memory Jupyter session cache — keyed by "ws:nb:cap" composite
 _jupyter_sessions: dict = {}  # value: {"kernelId": str, "sessionId": str, "capHost": str}
 _jupyter_lock = threading.Lock()
@@ -1176,7 +1181,7 @@ def _get_mwc_token(bearer: str, ws_id: str, artifact_id: str, cap_id: str, workl
     cache_key = f"{ws_id}:{artifact_id}:{cap_id}:{workload_type}"
     with _mwc_lock:
         cached = _mwc_cache.get(cache_key)
-        if cached and time.time() < cached["expiry"] - 300 and cached.get("bearer") == bearer:
+        if cached and time.time() < cached["expiry"] - MWC_TOKEN_REFRESH_BUFFER_SECS and cached.get("bearer") == bearer:
             print(f"  [MWC] Cache hit for {cache_key[:30]}...")
             return cached["token"], cached["host"]
 
@@ -1244,7 +1249,9 @@ def _get_mwc_token(bearer: str, ws_id: str, artifact_id: str, cap_id: str, workl
     with _mwc_lock:
         _mwc_cache[cache_key] = {"token": token, "host": host, "expiry": expiry, "bearer": bearer}
     remaining = int((expiry - time.time()) / 60)
-    print(f"  [MWC] Token cached, expires in {remaining} min")
+    buffer_min = MWC_TOKEN_REFRESH_BUFFER_SECS // 60
+    usable = max(0, remaining - buffer_min)
+    print(f"  [MWC] Token cached, expires in {remaining} min (usable for {usable} min, {buffer_min} min buffer)")
     return token, host
 
 
@@ -1750,12 +1757,12 @@ def _resolve_mwc_for_jupyter(cap_id: str, ws_id: str = "", nb_id: str = "", lh_i
     nb_key = f"{ws_id}:{nb_id}:{cap_id}:Notebook"
     with _mwc_lock:
         cached = _mwc_cache.get(nb_key)
-        if cached and time.time() < cached["expiry"] - 300:
+        if cached and time.time() < cached["expiry"] - MWC_TOKEN_REFRESH_BUFFER_SECS:
             print("  [JUPYTER] MWC Notebook cache hit")
             return cached["token"], cached.get("host", "")
         # Fall back to any token for this capacity
         for key, entry in _mwc_cache.items():
-            if cap_id in key and time.time() < entry["expiry"] - 300:
+            if cap_id in key and time.time() < entry["expiry"] - MWC_TOKEN_REFRESH_BUFFER_SECS:
                 print(f"  [JUPYTER] MWC cache hit (non-notebook): {key[:30]}...")
                 return entry["token"], entry.get("host", "")
 
