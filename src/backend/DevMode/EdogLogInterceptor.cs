@@ -23,6 +23,15 @@ namespace Microsoft.LiveTable.Service.DevMode
     /// </summary>
     internal sealed class EdogLogInterceptor : IStructuredTestLogger
     {
+        // Strategy for ExtractComponent: PascalCase class-name prefix convention.
+        // FLT internal logs pervasively use "ClassName: message" (80+ call sites, 16 files).
+        // Platform/WCL logs never use this convention — they use [BracketTag] or CodeMarkers.
+        // Requires: starts uppercase, has at least one lowercase (excludes "WARNING:", "ERROR:"),
+        // minimum 6 chars total, followed by ": " (colon+space).
+        private static readonly Regex ClassPrefixRegex = new Regex(
+            @"^([A-Z][a-z][a-zA-Z0-9]{4,})\s*:\s",
+            RegexOptions.Compiled);
+
         private static readonly Regex IterationIdRegex = new Regex(
             @"(?:\[IterationId\s+|\bIterationId[=: ]+)([0-9a-fA-F-]{36})\b",
             RegexOptions.Compiled);
@@ -111,18 +120,17 @@ namespace Microsoft.LiveTable.Service.DevMode
                 var timestamp = DateTime.UtcNow;
                 var level = NormalizeLevel(testLogEvent.Level.ToString());
                 var message = testLogEvent.Message;
-                var component = ExtractComponent(MonitoredScope.CurrentCodeMarkerName, message);
+                var component = ExtractComponent(MonitoredScope.CurrentCodeMarkerName, message, out bool fromClassPrefix);
                 var rootActivityId = MonitoredScope.RootActivityId.ToString();
                 var eventId = testLogEvent.EventId;
 
                 var isFlt = this.IsFltComponent(component);
 
                 // Noise filter: non-FLT logs are dropped when allowlist is active.
-                // Previously only dropped Info/Verbose — but platform ERROR/WARNING
-                // from WCL relay, security audit, telemetry internals etc. are noise
-                // for FLT developers. Only pass non-FLT errors if they mention FLT
-                // error codes (MLV_, FLT_, SPARK_) as those are cross-cutting.
-                if (this.hasAllowlist && !isFlt)
+                // Logs with a PascalCase class-name prefix (e.g., "InsightsOboTokenProvider: ...")
+                // are FLT-internal by convention — platform/WCL never uses this pattern —
+                // so they bypass the allowlist check entirely.
+                if (this.hasAllowlist && !isFlt && !fromClassPrefix)
                 {
                     if (!message.Contains("MLV_") && !message.Contains("FLT_") && !message.Contains("SPARK_"))
                     {
@@ -279,21 +287,39 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         /// <summary>
         /// Extracts a clean component name from the MonitoredScope code marker name.
-        /// Strips WCL- prefixes and extracts FLT-specific bracket tags from messages.
+        /// Strips WCL- prefixes and extracts FLT-specific tags from messages.
+        ///
+        /// Three extraction strategies (in priority order):
+        ///   1. [BracketTag] prefix — used by both FLT and platform, checked against allowlist
+        ///   2. PascalCaseClassName: prefix — FLT-internal convention (80+ call sites), bypasses allowlist
+        ///   3. MonitoredScope CodeMarker — fallback, checked against allowlist
         /// </summary>
-        private static string ExtractComponent(string codeMarkerName, string message)
+        private static string ExtractComponent(string codeMarkerName, string message, out bool fromClassPrefix)
         {
-            // Try to extract [BracketedComponent] from message first — most informative
+            fromClassPrefix = false;
+
             if (!string.IsNullOrEmpty(message))
             {
+                // Strategy 1: [BracketedComponent] from message — most informative
                 int start = message.IndexOf('[');
                 int end = message.IndexOf(']');
                 if (start == 0 && end > 1 && end < 60)
                 {
                     return message.Substring(1, end - 1);
                 }
+
+                // Strategy 2: PascalCaseClassName: prefix — FLT-internal convention.
+                // Platform/WCL logs never use this pattern; it's exclusive to FLT internals
+                // (InsightsOboTokenProvider, RefreshTriggersHandler, DagExecutionStore, etc.).
+                var m = ClassPrefixRegex.Match(message);
+                if (m.Success)
+                {
+                    fromClassPrefix = true;
+                    return m.Groups[1].Value;
+                }
             }
 
+            // Strategy 3: MonitoredScope code marker
             if (string.IsNullOrEmpty(codeMarkerName) || codeMarkerName == "Unknown")
             {
                 return "Unknown";
