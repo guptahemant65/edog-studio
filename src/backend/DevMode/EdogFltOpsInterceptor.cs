@@ -744,31 +744,40 @@ namespace Microsoft.LiveTable.Service.DevMode
             }
         }
 
-        /// <inheritdoc/>
+        /// <summary>
+        /// Optional interface method — may or may not exist on the current FLT build.
+        /// Uses reflection to delegate so the decorator compiles against any version.
+        /// If the method doesn't exist on _inner, returns an empty dictionary.
+        /// </summary>
         public async Task<Dictionary<Guid, string>> GetDisplayNamesByIdsAsync(
             string tenantId,
             Guid workspaceId,
             Guid lakehouseId,
-            List<Guid> mlvDefinitionIds,
+            List<Guid> ids,
             CancellationToken cancellationToken = default)
         {
             var sw = Stopwatch.StartNew();
-            var requestedCount = mlvDefinitionIds?.Count ?? 0;
             try
             {
-                var result = await _inner.GetDisplayNamesByIdsAsync(
-                    tenantId, workspaceId, lakehouseId, mlvDefinitionIds, cancellationToken).ConfigureAwait(false);
+                var method = _inner.GetType().GetMethod("GetDisplayNamesByIdsAsync");
+                if (method == null)
+                {
+                    return new Dictionary<Guid, string>();
+                }
+
+                var task = (Task<Dictionary<Guid, string>>)method.Invoke(
+                    _inner, new object[] { tenantId, workspaceId, lakehouseId, ids, cancellationToken });
+                var result = await task.ConfigureAwait(false);
                 sw.Stop();
 
                 FltOpsEventHelper.PublishEvent(new
                 {
-                    @event = "MLVDefinitionDisplayNamesBatchFetched",
+                    @event = "MLVDefinitionDisplayNamesRetrieved",
                     operation = "MLVDefinition",
                     action = "GetDisplayNamesByIds",
                     workspaceId = workspaceId.ToString(),
                     lakehouseId = lakehouseId.ToString(),
-                    requestedCount = requestedCount,
-                    resolvedCount = result?.Count ?? 0,
+                    count = ids?.Count ?? 0,
                     durationMs = sw.ElapsedMilliseconds,
                     success = true,
                 });
@@ -781,12 +790,12 @@ namespace Microsoft.LiveTable.Service.DevMode
 
                 FltOpsEventHelper.PublishEvent(new
                 {
-                    @event = "MLVDefinitionDisplayNamesBatchFetchFailed",
+                    @event = "MLVDefinitionDisplayNamesRetrieveFailed",
                     operation = "MLVDefinition",
                     action = "GetDisplayNamesByIds",
                     workspaceId = workspaceId.ToString(),
                     lakehouseId = lakehouseId.ToString(),
-                    requestedCount = requestedCount,
+                    count = ids?.Count ?? 0,
                     durationMs = sw.ElapsedMilliseconds,
                     success = false,
                     errorType = ex.GetType().Name,
