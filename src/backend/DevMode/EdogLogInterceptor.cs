@@ -10,27 +10,19 @@ namespace Microsoft.LiveTable.Service.DevMode
     using System;
     using System.Collections.Concurrent;
     using System.Collections.Generic;
-    using System.IO;
     using System.Linq;
-    using System.Text.Json;
     using System.Text.RegularExpressions;
     using Microsoft.ServicePlatform.Telemetry;
     /// <summary>
     /// Intercepts all Tracer.LogSanitized* calls and forwards them to EdogLogServer for dev-time analysis.
     /// Also writes colored console output so developers see logs in their terminal.
     /// Provides error storm protection via dedup (same error within 2s window is suppressed).
-    /// Optionally filters noise from non-FLT components using a dynamically-generated allowlist.
+    /// No server-side content filtering — ALL logs are forwarded. Frontend component presets
+    /// (filters.js) handle user-controlled filtering. This default-allow design prevents
+    /// the silent log-dropping bugs that plagued the previous allowlist-based approach.
     /// </summary>
     internal sealed class EdogLogInterceptor : IStructuredTestLogger
     {
-        // FLT-internal logs pervasively use "CompoundClassName: message" (80+ call sites).
-        // Compound PascalCase = 2+ uppercase humps (InsightsOboTokenProvider, DagExecutionStore).
-        // Single-hump words (Information, Verbose, Warning, Exception) are excluded —
-        // those are platform/WCL log-level prefixes, not FLT class names.
-        private static readonly Regex FltClassPrefixRegex = new Regex(
-            @"^[A-Z][a-z]+[A-Z][a-zA-Z]*\s*:\s",
-            RegexOptions.Compiled);
-
         private static readonly Regex IterationIdRegex = new Regex(
             @"(?:\[IterationId\s+|\bIterationId[=: ]+)([0-9a-fA-F-]{36})\b",
             RegexOptions.Compiled);
@@ -79,15 +71,10 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         // Error dedup: suppress duplicate errors within a 2-second window (storm protection)
         private const int ErrorDedupWindowMs = 2000;
-        private const int ErrorMessageKeyLength = 120;
         private const int MaxDedupEntries = 200;
         private const int PruneAgeMs = 10000; // 5x dedup window
 
         private readonly ConcurrentDictionary<string, long> recentErrors = new ConcurrentDictionary<string, long>();
-
-        // Dynamic FLT component allowlist (loaded from edog-flt-components.json at startup)
-        private readonly HashSet<string> fltComponentPrefixes;
-        private readonly bool hasAllowlist;
 
         private readonly EdogLogServer edogLogServer;
 
@@ -98,8 +85,6 @@ namespace Microsoft.LiveTable.Service.DevMode
         public EdogLogInterceptor(EdogLogServer server)
         {
             this.edogLogServer = server ?? throw new ArgumentNullException(nameof(server));
-            this.fltComponentPrefixes = LoadComponentAllowlist();
-            this.hasAllowlist = this.fltComponentPrefixes.Count > 0;
         }
 
         /// <summary>
@@ -123,33 +108,14 @@ namespace Microsoft.LiveTable.Service.DevMode
                 var rootActivityId = MonitoredScope.RootActivityId.ToString();
                 var eventId = testLogEvent.EventId;
 
-                var isFlt = this.IsFltComponent(component);
-
-                // Noise filter: non-FLT logs are dropped when allowlist is active.
-                // Secondary signal: FLT code uses compound PascalCase class prefixes
-                // (e.g., "InsightsOboTokenProvider: ...", "DagExecutionStore: ...").
-                // These are FLT-internal by convention — platform/WCL never uses this
-                // pattern. Checked separately so component name stays CodeMarker-based
-                // (preserving frontend filter behavior).
-                if (this.hasAllowlist && !isFlt)
+                // Error storm protection: dedup repeated errors/warnings within 2s window.
+                // Applied universally — prevents UI flood from any component.
+                var upperLevel = level.ToUpperInvariant();
+                if (upperLevel == "ERROR" || upperLevel == "WARNING")
                 {
-                    bool messageHintsFlt = FltClassPrefixRegex.IsMatch(message);
-                    if (!messageHintsFlt && !message.Contains("MLV_") && !message.Contains("FLT_") && !message.Contains("SPARK_"))
+                    if (this.IsDuplicateError(level, component, message, eventId))
                     {
                         return;
-                    }
-                }
-
-                // Error storm protection: dedup non-FLT errors/warnings within 2s window
-                if (!isFlt)
-                {
-                    var upperLevel = level.ToUpperInvariant();
-                    if (upperLevel == "ERROR" || upperLevel == "WARNING")
-                    {
-                        if (this.IsDuplicateError(level, component, message))
-                        {
-                            return;
-                        }
                     }
                 }
 
@@ -290,6 +256,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <summary>
         /// Extracts a clean component name from the MonitoredScope code marker name.
         /// Strips WCL- prefixes and extracts FLT-specific bracket tags from messages.
+        /// Used as display metadata for the frontend — no filtering decisions depend on this.
         /// </summary>
         private static string ExtractComponent(string codeMarkerName, string message)
         {
@@ -319,61 +286,14 @@ namespace Microsoft.LiveTable.Service.DevMode
         }
 
         /// <summary>
-        /// Checks if a component is a known FLT component based on the dynamic allowlist.
-        /// Returns true if no allowlist is loaded (allow-all fallback).
-        ///
-        /// Special case for "Unknown" component (post-mortem 2026-05-26):
-        ///   The allowlist exists to filter logs from *explicitly tagged* third-party
-        ///   components ("WCL-PlatformRelay", "Security-Audit", etc.). When a log
-        ///   has no bracket prefix AND no useful MonitoredScope (so component=="Unknown"),
-        ///   it's overwhelmingly an FLT internal call (WorkloadApp.cs, FeatureFlighter.cs,
-        ///   etc., which use bare `Tracer.LogSanitizedMessage(...)` without a tag).
-        ///   Treating Unknown as not-FLT here was hard-dropping every untagged internal
-        ///   log the moment the allowlist file was generated. Restore the pre-allowlist
-        ///   behavior for the Unknown bucket: allow it through. The dedup-and-error-storm
-        ///   protection below still applies, so genuine third-party Unknown errors don't
-        ///   flood the UI.
-        /// </summary>
-        private bool IsFltComponent(string component)
-        {
-            if (!this.hasAllowlist)
-            {
-                return true; // No allowlist = allow all
-            }
-
-            if (string.IsNullOrEmpty(component))
-            {
-                return false;
-            }
-
-            if (component == "Unknown")
-            {
-                // See doc comment above — Unknown is treated as FLT-internal in DevMode.
-                return true;
-            }
-
-            foreach (var prefix in this.fltComponentPrefixes)
-            {
-                if (component.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ||
-                    component.Equals(prefix, StringComparison.OrdinalIgnoreCase))
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        /// <summary>
         /// Error storm protection: returns true if this error was already seen within the dedup window.
-        /// Uses level + component + first N chars of message as the dedup key.
+        /// Uses level + component + eventId + message hash as the dedup key.
         /// </summary>
-        private bool IsDuplicateError(string level, string component, string message)
+        private bool IsDuplicateError(string level, string component, string message, int eventId)
         {
-            var keyMsg = message.Length > ErrorMessageKeyLength
-                ? message.Substring(0, ErrorMessageKeyLength)
-                : message;
-            var key = string.Concat(level, ":", component, ":", keyMsg);
+            // Use full message hash for precision — avoids collisions from truncation
+            var msgHash = message.GetHashCode().ToString();
+            var key = string.Concat(level, ":", component, ":", eventId.ToString(), ":", msgHash);
             var nowTicks = DateTime.UtcNow.Ticks;
             var nowMs = nowTicks / TimeSpan.TicksPerMillisecond;
 
@@ -410,63 +330,6 @@ namespace Microsoft.LiveTable.Service.DevMode
             {
                 this.recentErrors.TryRemove(key, out _);
             }
-        }
-
-        /// <summary>
-        /// Loads the FLT component allowlist from edog-flt-components.json in the DevMode directory.
-        /// The file is generated by edog.py at deploy time by scanning the FLT codebase.
-        /// Returns empty set if file not found (safe fallback: allow all).
-        /// </summary>
-        private static HashSet<string> LoadComponentAllowlist()
-        {
-            var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            try
-            {
-                // Look for the components file next to this assembly
-                var assemblyDir = AppDomain.CurrentDomain.BaseDirectory;
-                var candidates = new[]
-                {
-                    Path.Combine(assemblyDir, "DevMode", "edog-flt-components.json"),
-                    Path.Combine(assemblyDir, "edog-flt-components.json"),
-                };
-
-                string filePath = null;
-                foreach (var c in candidates)
-                {
-                    if (File.Exists(c))
-                    {
-                        filePath = c;
-                        break;
-                    }
-                }
-
-                if (filePath == null)
-                {
-                    return result; // No file = allow all
-                }
-
-                var json = File.ReadAllText(filePath);
-                var doc = JsonDocument.Parse(json);
-                if (doc.RootElement.TryGetProperty("components", out var arr) && arr.ValueKind == JsonValueKind.Array)
-                {
-                    foreach (var item in arr.EnumerateArray())
-                    {
-                        var val = item.GetString();
-                        if (!string.IsNullOrWhiteSpace(val))
-                        {
-                            result.Add(val);
-                        }
-                    }
-                }
-
-                Console.WriteLine($"[EDOG] Loaded {result.Count} FLT component prefixes from allowlist");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[EDOG] Could not load component allowlist: {ex.Message} — allowing all");
-            }
-
-            return result;
         }
     }
 }

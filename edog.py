@@ -1744,11 +1744,10 @@ def apply_log_viewer_files(repo_root):
                 shutil.copy2(src_file, target)
                 created_files.append(f"{target.name} (updated)")
 
-    # Also copy edog-logs.html, edog-flt-components.json, and edog-config.json
+    # Also copy edog-logs.html and edog-config.json
     # to build output dirs so the server can find them at runtime
     # (AppDomain.CurrentDomain.BaseDirectory)
     html_src = src_dir / "edog-logs.html"
-    components_src = repo_root / SERVICE_PATH / "DevMode" / "edog-flt-components.json"
     config_src = Path(__file__).parent / CONFIG_FILE
     entry_point = repo_root / "Service" / "Microsoft.LiveTable.Service.EntryPoint"
     bin_dir = entry_point / "bin"
@@ -1759,8 +1758,6 @@ def apply_log_viewer_files(repo_root):
             out_devmode.mkdir(parents=True, exist_ok=True)
             if html_src.exists():
                 shutil.copy2(html_src, out_devmode / "edog-logs.html")
-            if components_src.exists():
-                shutil.copy2(components_src, out_devmode / "edog-flt-components.json")
             if config_src.exists():
                 shutil.copy2(config_src, out_devmode / "edog-config.json")
             fw_endpoints_src = Path(__file__).parent / "data" / "framework-endpoints.json"
@@ -1792,11 +1789,13 @@ def revert_log_viewer_files(repo_root):
             target.unlink()
             removed = True
 
-    # Also remove the generated component allowlist (deploy-time artifact)
-    components_file = repo_root / SERVICE_PATH / "DevMode" / "edog-flt-components.json"
-    if components_file.exists():
-        components_file.unlink()
-        removed = True
+    # Also remove stale generated component allowlist (no longer used — log
+    # interceptor switched to default-allow; see EdogLogInterceptor.cs)
+    for stale in ("edog-flt-components.json",):
+        stale_file = repo_root / SERVICE_PATH / "DevMode" / stale
+        if stale_file.exists():
+            stale_file.unlink()
+            removed = True
 
     # Remove DevMode directory if empty
     devmode_dir = repo_root / SERVICE_PATH / "DevMode"
@@ -2408,130 +2407,6 @@ def _cache_bearer(token: str) -> None:
     except (ValueError, KeyError, IndexError, json.JSONDecodeError):
         expiry_ts = time.time() + 3600
     cache_bearer_token(token, expiry_ts)
-
-
-# ============================================================================
-# Dynamic FLT component allowlist generation
-# ============================================================================
-def scan_flt_components(repo_root):
-    """Scan FLT C# source code to discover component names for the log allowlist.
-
-    Generates edog-flt-components.json in the DevMode directory so the
-    EdogLogInterceptor can filter noise from non-FLT components while
-    dynamically adapting to new components added to the codebase.
-
-    Extraction sources:
-    1. Bracket tags in Tracer calls: [ComponentName] in string literals
-    2. CodeMarkerScope names: new CodeMarkerScope("Name") or MonitoredScope
-    3. Class names of key FLT service classes (Handlers, Executors, etc.)
-
-    Returns:
-        list of component prefix strings, or empty list on failure.
-    """
-    service_dir = repo_root / "Service" / "Microsoft.LiveTable.Service"
-    if not service_dir.exists():
-        print(f"  ⚠️  FLT service dir not found: {service_dir}")
-        return []
-
-    components = set()
-    # Bracket tag pattern. Allow internal single spaces so multi-word tags like
-    # "[Token Manager]", "[DAG Execution]", "[Reliable Ops]" survive extraction.
-    # Without spaces in the character class the regex silently dropped 20+
-    # component tags used throughout FLT (TokenManagement, DAG runtime, OneLake
-    # IO, GTS parsing, Reliable Ops, etc.), causing the EdogLogInterceptor to
-    # filter every line from those components in DevMode.
-    #
-    # Constraints:
-    #   - First char MUST be uppercase letter (every real FLT component tag is
-    #     PascalCase or ALLCAPS — rejects "[hello world]" style prose in comments).
-    #   - Second char MUST be letter/digit/underscore (rejects "[X ]" / "[A ]" stubs).
-    #   - Rest can include single spaces between words.
-    #   - Whole capture is .strip()'d after match.
-    bracket_pattern = re.compile(r'"\[([A-Z][A-Za-z0-9_][A-Za-z0-9_ ]*?)\]')
-    marker_pattern = re.compile(r'(?:CodeMarkerScope|MonitoredScope)\s*\(\s*"([^"]+)"')
-    class_pattern = re.compile(
-        r"^(?:\s+(?:public|internal|private)\s+(?:sealed\s+)?(?:partial\s+)?class\s+)(\w+Handler\w*|\w+Executor\w*|\w+Manager\w*|\w+Provider\w*|\w+Service\w*)"
-    )
-
-    # Well-known FLT component prefixes (always included as baseline).
-    # These act as fallbacks if the scan fails or misses something — the
-    # bracket regex above auto-discovers everything else, including multi-word
-    # tags like "[Token Manager]" and "[DAG Execution]". Don't bloat this set
-    # with names that the scanner already picks up.
-    baseline = {
-        "LiveTable",
-        "DagExecution",
-        "DagNode",
-        "Catalog",
-        "Lakehouse",
-        "Notebook",
-        "SparkSession",
-        "SQL_QUERY",
-        "FLT",
-        "MLV",
-        "Maintenance",
-        "Schedule",
-        "OneLake",
-        "CatalogSyncHandler",
-        "DeltaTable",
-        "Retention",
-    }
-    components.update(baseline)
-
-    cs_files = list(service_dir.rglob("*.cs"))
-    # Skip DevMode files (those are EDOG's own)
-    cs_files = [f for f in cs_files if "DevMode" not in str(f)]
-
-    for cs_file in cs_files:
-        try:
-            content = cs_file.read_text(encoding="utf-8", errors="replace")
-        except Exception:
-            continue
-
-        # Extract bracket tags: "[DagExecution]", "[CatalogSync]", "[Token Manager]", etc.
-        for m in bracket_pattern.finditer(content):
-            tag = m.group(1).strip()
-            if len(tag) >= 3 and not tag.startswith("Test"):
-                components.add(tag)
-
-        # Extract CodeMarkerScope/MonitoredScope names
-        for m in marker_pattern.finditer(content):
-            name = m.group(1)
-            # Clean up WCL- prefix if present
-            if name.startswith("WCL-"):
-                name = name[4:]
-            # Take only the part before underscore (e.g. "LiveTableSchedule_RunDAG" → "LiveTableSchedule")
-            parts = name.split("_")
-            if parts[0] and len(parts[0]) >= 3:
-                components.add(parts[0])
-
-        # Extract handler/executor/manager class names
-        for m in class_pattern.finditer(content):
-            components.add(m.group(1))
-
-    # Sort for deterministic output
-    sorted_components = sorted(components)
-
-    # Write to DevMode directory in FLT repo (deployed alongside interceptor)
-    devmode_dir = service_dir / "DevMode"
-    devmode_dir.mkdir(parents=True, exist_ok=True)
-    output_path = devmode_dir / "edog-flt-components.json"
-
-    output = {
-        "version": 1,
-        "generated_at": datetime.now().isoformat(),
-        "repo_path": str(repo_root),
-        "component_count": len(sorted_components),
-        "components": sorted_components,
-    }
-
-    try:
-        output_path.write_text(json.dumps(output, indent=2), encoding="utf-8")
-        print(f"  ✅ Generated FLT component allowlist: {len(sorted_components)} components")
-        return sorted_components
-    except Exception as e:
-        print(f"  ⚠️  Could not write component allowlist: {e}")
-        return sorted_components
 
 
 # ============================================================================
@@ -3428,33 +3303,15 @@ def headless_deploy(repo_root):
     except Exception:
         pass  # Non-fatal — don't block deploy for hook install failure
 
-    # Generate dynamic FLT component allowlist for log noise filtering
+    # Clean up stale edog-flt-components.json from prior deploys
+    # (no longer needed — log interceptor uses default-allow now)
     try:
-        components = scan_flt_components(repo_root)
-        if components:
-            emit(2, f"Generated FLT component allowlist ({len(components)} components)", "info")
-    except Exception as e:
-        emit(2, f"Component scan failed (non-fatal): {e}", "warn")
-
-    # Copy allowlist to build output dirs (must happen AFTER scan_flt_components
-    # generates the file, and AFTER apply_log_viewer_files which only copies
-    # files that exist at the time it runs)
-    try:
-        components_src = repo_root / SERVICE_PATH / "DevMode" / "edog-flt-components.json"
-        if components_src.exists():
-            entry_point = repo_root / "Service" / "Microsoft.LiveTable.Service.EntryPoint"
-            bin_dir = entry_point / "bin"
-            if bin_dir.exists():
-                copied = 0
-                for dll in bin_dir.rglob("Microsoft.LiveTable.Service.EntryPoint.dll"):
-                    out_devmode = dll.parent / "DevMode"
-                    out_devmode.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(components_src, out_devmode / "edog-flt-components.json")
-                    copied += 1
-                if copied:
-                    emit(2, f"Copied component allowlist to {copied} build output(s)", "info")
-    except Exception as e:
-        emit(2, f"Allowlist copy failed (non-fatal): {e}", "warn")
+        stale_components = repo_root / SERVICE_PATH / "DevMode" / "edog-flt-components.json"
+        if stale_components.exists():
+            stale_components.unlink()
+            emit(2, "Removed stale component allowlist (no longer used)", "info")
+    except Exception:
+        pass  # Non-fatal
 
     # Step 3: Build
     emit(3, "Building FLT service...")
@@ -3574,9 +3431,6 @@ def run_daemon(username, workspace_id, artifact_id, capacity_id, repo_root, laun
             print("\n⚠️  Some changes could not be applied")
         else:
             print("\n✅ Code changes applied successfully")
-        # Generate dynamic component allowlist for log noise filtering
-        with contextlib.suppress(Exception):  # Non-fatal
-            scan_flt_components(repo_root)
     else:
         print("   Code patching deferred until authentication completes.")
 
