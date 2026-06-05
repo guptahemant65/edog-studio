@@ -80,6 +80,7 @@ DEVMODE_FILES = {
     "EdogApiProxy": SERVICE_PATH / "DevMode/EdogApiProxy.cs",
     "EdogLogModels": SERVICE_PATH / "DevMode/EdogLogModels.cs",
     "EdogLogInterceptor": SERVICE_PATH / "DevMode/EdogLogInterceptor.cs",
+    "BlocklistFilter": SERVICE_PATH / "DevMode/BlocklistFilter.cs",
     "EdogTelemetryInterceptor": SERVICE_PATH / "DevMode/EdogTelemetryInterceptor.cs",
     "TopicEvent": SERVICE_PATH / "DevMode/TopicEvent.cs",
     "TopicBuffer": SERVICE_PATH / "DevMode/TopicBuffer.cs",
@@ -147,6 +148,7 @@ DEVMODE_FILES = {
     "MitmCoordinator": SERVICE_PATH / "DevMode/MitmCoordinator.cs",
     "MitmDecision": SERVICE_PATH / "DevMode/MitmDecision.cs",
     "EdogLogsHtml": SERVICE_PATH / "DevMode/edog-logs.html",
+    "EdogBlocklist": SERVICE_PATH / "DevMode/edog-blocklist.json",
     "EditorConfig": SERVICE_PATH / "DevMode/.editorconfig",
 }
 
@@ -1766,6 +1768,9 @@ def apply_log_viewer_files(repo_root):
             fw_endpoints_src = Path(__file__).parent / "data" / "framework-endpoints.json"
             if fw_endpoints_src.exists():
                 shutil.copy2(fw_endpoints_src, out_devmode / "framework-endpoints.json")
+            blocklist_src = src_dir / "edog-blocklist.json"
+            if blocklist_src.exists():
+                shutil.copy2(blocklist_src, out_devmode / "edog-blocklist.json")
 
     if created_files:
         return "applied", created_files

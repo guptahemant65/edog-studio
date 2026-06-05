@@ -12,14 +12,33 @@ namespace Microsoft.LiveTable.Service.DevMode
     using System.Collections.Generic;
     using System.Linq;
     using System.Text.RegularExpressions;
+    using System.Threading;
     using Microsoft.ServicePlatform.Telemetry;
+
     /// <summary>
-    /// Intercepts all Tracer.LogSanitized* calls and forwards them to EdogLogServer for dev-time analysis.
-    /// Also writes colored console output so developers see logs in their terminal.
-    /// Provides error storm protection via dedup (same error within 2s window is suppressed).
-    /// No server-side content filtering — ALL logs are forwarded. Frontend component presets
-    /// (filters.js) handle user-controlled filtering. This default-allow design prevents
-    /// the silent log-dropping bugs that plagued the previous allowlist-based approach.
+    /// Intercepts Tracer.LogSanitized* calls and forwards FLT-relevant logs to EdogLogServer.
+    ///
+    /// Two-layer defence (filter at source + handle pressure on what survives):
+    ///   Layer 1 — Component BLOCKLIST: drop logs whose CodeMarkerName matches any
+    ///             pattern in <c>edog-blocklist.json</c> (loaded by <see cref="BlocklistFilter"/>).
+    ///             Errors and Warnings always pass — even if blocklisted — so failures
+    ///             are never hidden. Default content covers known noisy platform
+    ///             components (WCL-*, Microsoft.AspNetCore, Kestrel, System.*, etc.).
+    ///   Layer 2 — Error dedup: identical errors within a 2s window are collapsed so
+    ///             relay-timeout-storms don't flood the pipeline.
+    ///
+    /// Why blocklist (not allowlist):
+    ///   The prior allowlist was a hardcoded set of ~30 regex patterns enumerating FLT
+    ///   bracket-tags and code-marker namespaces. Two failure modes:
+    ///     1. ~63% of FLT logs are plain (no [Bracket] tag, no MonitoredScope) and were
+    ///        being silently dropped.
+    ///     2. Every new bracket tag (e.g. [DeltaLogReader], [DeltaSnapshotCache]) required
+    ///        editing both this file AND the frontend preset — easy to forget.
+    ///   A blocklist of noisy platform components is bounded and slow-moving; FLT churn
+    ///   is constant. Defaulting to "allow" surfaces new FLT logs automatically.
+    ///
+    /// Pressure handling (truncation, dedup batching, adaptive flush, backpressure)
+    /// lives in EdogLogServer.cs.
     /// </summary>
     internal sealed class EdogLogInterceptor : IStructuredTestLogger
     {
@@ -27,54 +46,10 @@ namespace Microsoft.LiveTable.Service.DevMode
             @"(?:\[IterationId\s+|\bIterationId[=: ]+)([0-9a-fA-F-]{36})\b",
             RegexOptions.Compiled);
 
-        // Strategy 2: Extract node name from log messages
-        // Matches: "for Node silver.mlv_noref", "metrics for silver.mlv_noref",
-        //          "Updated in-memory node metrics for silver.mlv_incr_join"
-        private static readonly Regex NodeNameRegex = new Regex(
-            @"(?:for Node |metrics for |node metrics for |Node name: )([a-zA-Z_][a-zA-Z0-9_./-]+)",
-            RegexOptions.Compiled);
-
-        // Strategy 3: Extract artifactId (lakehouse ID) from URL paths in messages
-        // Matches: "/lakehouses/2b3c9fa5-3199-4256-9c65-93fc8e3b6c45"
-        //          "/artifacts/2b3c9fa5-3199-4256-9c65-93fc8e3b6c45"
-        private static readonly Regex ArtifactInUrlRegex = new Regex(
-            @"(?:/lakehouses/|/artifacts/)([0-9a-fA-F-]{36})",
-            RegexOptions.Compiled);
-
-        // Strategy 1: rootActivityId → iterationId reverse index
-        // When a telemetry event carries correlationId = "rootId|iterationId",
-        // we cache that mapping so log entries with the same rootActivityId
-        // can inherit the iterationId.
-        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string>
-            _rootActivityToIteration = new(StringComparer.OrdinalIgnoreCase);
-
-        /// <summary>
-        /// Called by EdogTelemetryInterceptor to register a rootActivityId → iterationId
-        /// mapping whenever a telemetry event with a correlationId is processed.
-        /// </summary>
-        public static void RegisterRootActivityMapping(string correlationId, string iterationId)
-        {
-            if (string.IsNullOrEmpty(correlationId) || string.IsNullOrEmpty(iterationId)) return;
-            // Extract rootActivityId from correlation: "rootId|iterationId" or "rootId-iterationId"
-            var pipeIdx = correlationId.IndexOf('|');
-            if (pipeIdx > 0)
-            {
-                _rootActivityToIteration[correlationId.Substring(0, pipeIdx)] = iterationId;
-            }
-            else if (correlationId.Length >= 73 && correlationId[36] == '-')
-            {
-                _rootActivityToIteration[correlationId.Substring(0, 36)] = iterationId;
-            }
-            // Cap at 500 entries (FIFO is complex for ConcurrentDictionary — just let it grow slowly)
-            // In practice, a session has <50 distinct rootActivityIds
-        }
-
-        // Error dedup: suppress duplicate errors within a 2-second window (storm protection)
+        // ── Error dedup — prevents relay-timeout-storm floods ────────────
         private const int ErrorDedupWindowMs = 2000;
-        private const int MaxDedupEntries = 200;
-        private const int PruneAgeMs = 10000; // 5x dedup window
-
-        private readonly ConcurrentDictionary<string, long> recentErrors = new ConcurrentDictionary<string, long>();
+        private const int ErrorMessageKeyLength = 120;
+        private readonly ConcurrentDictionary<string, long> recentErrors = new();
 
         private readonly EdogLogServer edogLogServer;
 
@@ -88,7 +63,8 @@ namespace Microsoft.LiveTable.Service.DevMode
         }
 
         /// <summary>
-        /// Intercepts trace events from the telemetry system and forwards them to EdogLogServer.
+        /// Intercepts trace events from the telemetry system. Only FLT-relevant logs
+        /// and errors pass through. Everything else is dropped at the source.
         /// </summary>
         /// <param name="testLogEvent">The test log event containing telemetry data.</param>
         public void TraceEvent(TestLogEvent testLogEvent)
@@ -104,31 +80,43 @@ namespace Microsoft.LiveTable.Service.DevMode
                 var timestamp = DateTime.UtcNow;
                 var level = NormalizeLevel(testLogEvent.Level.ToString());
                 var message = testLogEvent.Message;
-                var component = ExtractComponent(MonitoredScope.CurrentCodeMarkerName, message);
+                var rawCodeMarker = MonitoredScope.CurrentCodeMarkerName;
+                var component = ExtractComponent(rawCodeMarker, message);
                 var rootActivityId = MonitoredScope.RootActivityId.ToString();
                 var eventId = testLogEvent.EventId;
-                var upperLevel = level.ToUpperInvariant();
 
-                // Drop non-FLT Verbose/Message logs to prevent SignalR flood.
-                // FLT components are identified by their CodeMarker/bracket prefix.
-                // Error/Warning from any source always pass through.
-                if (upperLevel != "ERROR" && upperLevel != "WARNING")
+                var isError = level.Equals("Error", StringComparison.OrdinalIgnoreCase)
+                           || level.Equals("Warning", StringComparison.OrdinalIgnoreCase);
+
+                // ── Layer 1: Blocklist — drop known platform-noise components ───
+                // Errors/Warnings always bypass so failures are never hidden.
+                if (!isError && BlocklistFilter.Instance.IsBlocked(rawCodeMarker))
                 {
-                    if (!IsFltComponent(component)
-                        && !message.Contains("MLV_")
-                        && !message.Contains("FLT_"))
+                    return;
+                }
+
+                // ── Layer 2: Error dedup — suppress duplicate error storms ─
+                // Dedup applies to errors/warnings whose component is itself blocklisted
+                // (i.e. they only got through because of the always-pass rule, and could
+                // arrive in storms). FLT-source errors are NOT deduped — every one matters.
+                if (isError && BlocklistFilter.Instance.IsBlocked(rawCodeMarker))
+                {
+                    var key = message.Length > ErrorMessageKeyLength
+                        ? message.Substring(0, ErrorMessageKeyLength)
+                        : message;
+                    var nowTicks = Environment.TickCount64;
+
+                    if (recentErrors.TryGetValue(key, out var lastTick) &&
+                        (nowTicks - lastTick) < ErrorDedupWindowMs)
                     {
                         return;
                     }
-                }
 
-                // Error storm protection: dedup repeated errors/warnings within 2s window.
-                // Applied universally — prevents UI flood from any component.
-                if (upperLevel == "ERROR" || upperLevel == "WARNING")
-                {
-                    if (this.IsDuplicateError(level, component, message, eventId))
+                    recentErrors[key] = nowTicks;
+
+                    if (recentErrors.Count > 200)
                     {
-                        return;
+                        PruneRecentErrors(nowTicks);
                     }
                 }
 
@@ -146,61 +134,31 @@ namespace Microsoft.LiveTable.Service.DevMode
                 var entry = new LogEntry(timestamp, level, message, component, rootActivityId, eventId, customData);
                 entry.CodeMarkerName = MonitoredScope.CurrentCodeMarkerName;
 
-                // Extract IterationId using 3-strategy enrichment.
-                // Strategy 1 (Definite): CustomData["IterationId"] from MonitoredScope
-                // Strategy 2 (Strong): Regex match in message body
-                // Strategy 3 (Strong): rootActivityId → iterationId reverse index
-                string extractedIterationId = null;
-                string iterationIdSource = null;
-
-                if (customData.TryGetValue("IterationId", out var iidFromCustom) && IsValidGuid(iidFromCustom))
+                var iterMatch = IterationIdRegex.Match(message);
+                if (iterMatch.Success)
                 {
-                    extractedIterationId = iidFromCustom;
-                    iterationIdSource = "customData";
-                }
-                else
-                {
-                    var iterMatch = IterationIdRegex.Match(message);
-                    if (iterMatch.Success)
-                    {
-                        extractedIterationId = iterMatch.Groups[1].Value;
-                        iterationIdSource = "regex";
-                    }
-                    else if (_rootActivityToIteration.TryGetValue(rootActivityId, out var chainedIterId))
-                    {
-                        extractedIterationId = chainedIterId;
-                        iterationIdSource = "rootActivityId-chain";
-                    }
-                }
-
-                if (!string.IsNullOrEmpty(extractedIterationId))
-                {
-                    entry.IterationId = extractedIterationId;
-                    entry.IterationIdSource = iterationIdSource;
-                }
-
-                // Extract NodeName from message (Strategy 2 for cross-tab linking)
-                var nodeMatch = NodeNameRegex.Match(message);
-                if (nodeMatch.Success)
-                {
-                    entry.NodeName = nodeMatch.Groups[1].Value.Trim();
-                }
-
-                // Extract ArtifactId from URL patterns (Strategy 3 for request chain grouping)
-                var artMatch = ArtifactInUrlRegex.Match(message);
-                if (artMatch.Success)
-                {
-                    entry.ArtifactId = artMatch.Groups[1].Value;
+                    entry.IterationId = iterMatch.Groups[1].Value;
                 }
 
                 this.edogLogServer.AddLog(entry);
 
-                // Write colored console output for developer visibility
+                // Console also filtered — no point printing noise to stdout
                 this.WriteColoredConsoleOutput(level, component, rootActivityId, message);
             }
             catch
             {
                 // Never throw from telemetry interceptor - silently handle any errors
+            }
+        }
+
+        private void PruneRecentErrors(long nowTicks)
+        {
+            foreach (var kvp in recentErrors)
+            {
+                if (nowTicks - kvp.Value > ErrorDedupWindowMs * 5)
+                {
+                    recentErrors.TryRemove(kvp.Key, out _);
+                }
             }
         }
 
@@ -235,24 +193,6 @@ namespace Microsoft.LiveTable.Service.DevMode
         }
 
         /// <summary>
-        /// Returns true if the value looks like a non-empty, non-default GUID (36 chars, hyphenated).
-        /// </summary>
-        private static bool IsValidGuid(string value)
-        {
-            if (string.IsNullOrEmpty(value) || value.Length != 36)
-            {
-                return false;
-            }
-
-            if (value == "00000000-0000-0000-0000-000000000000")
-            {
-                return false;
-            }
-
-            return Guid.TryParse(value, out _);
-        }
-
-        /// <summary>
         /// Normalizes ServicePlatform TraceLevel enum names to the display names used by the frontend.
         /// The platform uses "Informational" but the UI expects "Message".
         /// </summary>
@@ -269,7 +209,6 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <summary>
         /// Extracts a clean component name from the MonitoredScope code marker name.
         /// Strips WCL- prefixes and extracts FLT-specific bracket tags from messages.
-        /// Used as display metadata for the frontend — no filtering decisions depend on this.
         /// </summary>
         private static string ExtractComponent(string codeMarkerName, string message)
         {
@@ -296,76 +235,6 @@ namespace Microsoft.LiveTable.Service.DevMode
             }
 
             return codeMarkerName;
-        }
-
-        /// <summary>
-        /// Returns true if the component name looks like an FLT-internal component.
-        /// Simple prefix check — "Unknown" is treated as FLT (bare Tracer calls
-        /// without bracket tags are overwhelmingly FLT internal).
-        /// Known non-FLT prefixes (WCL, Security, Platform, PBI) are excluded.
-        /// </summary>
-        private static bool IsFltComponent(string component)
-        {
-            if (string.IsNullOrEmpty(component)) return false;
-            if (component == "Unknown") return true;
-
-            // Known non-FLT platform prefixes
-            if (component.StartsWith("WCL-", StringComparison.OrdinalIgnoreCase)
-                || component.StartsWith("Security", StringComparison.OrdinalIgnoreCase)
-                || component.StartsWith("Platform", StringComparison.OrdinalIgnoreCase)
-                || component.StartsWith("PBI", StringComparison.OrdinalIgnoreCase))
-            {
-                return false;
-            }
-
-            return true;
-        }
-
-        /// <summary>
-        /// Error storm protection: returns true if this error was already seen within the dedup window.
-        /// Uses level + component + eventId + message hash as the dedup key.
-        /// </summary>
-        private bool IsDuplicateError(string level, string component, string message, string eventId)
-        {
-            // Use full message hash for precision — avoids collisions from truncation
-            var msgHash = message.GetHashCode().ToString();
-            var key = string.Concat(level, ":", component, ":", eventId ?? "", ":", msgHash);
-            var nowTicks = DateTime.UtcNow.Ticks;
-            var nowMs = nowTicks / TimeSpan.TicksPerMillisecond;
-
-            if (this.recentErrors.TryGetValue(key, out var lastSeenMs))
-            {
-                if (nowMs - lastSeenMs < ErrorDedupWindowMs)
-                {
-                    this.recentErrors[key] = nowMs; // Refresh timestamp
-                    return true; // Duplicate within window
-                }
-            }
-
-            this.recentErrors[key] = nowMs;
-
-            // Prune old entries if map is getting large
-            if (this.recentErrors.Count > MaxDedupEntries)
-            {
-                this.PruneRecentErrors(nowMs);
-            }
-
-            return false;
-        }
-
-        /// <summary>
-        /// Removes stale entries from the dedup map (older than PruneAgeMs).
-        /// </summary>
-        private void PruneRecentErrors(long nowMs)
-        {
-            var keysToRemove = this.recentErrors
-                .Where(kvp => nowMs - kvp.Value > PruneAgeMs)
-                .Select(kvp => kvp.Key)
-                .ToList();
-            foreach (var key in keysToRemove)
-            {
-                this.recentErrors.TryRemove(key, out _);
-            }
         }
     }
 }

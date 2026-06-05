@@ -1,0 +1,35 @@
+{
+  "$schema": "https://example.invalid/edog-blocklist.schema.json",
+  "version": 1,
+  "comment": "Components matching ANY regex are dropped at the EDOG source. Patterns are tested against the raw CodeMarkerName (case-insensitive). Errors and Warnings always bypass this list — even if their component matches. To tune, edit and re-run 'edog apply'.",
+  "blocked": [
+    {
+      "pattern": "^Microsoft\\.AspNetCore",
+      "reason": "ASP.NET Core HTTP pipeline internals"
+    },
+    {
+      "pattern": "^Microsoft\\.Extensions",
+      "reason": ".NET generic host / DI / configuration noise"
+    },
+    {
+      "pattern": "^Microsoft\\.EntityFrameworkCore",
+      "reason": "EF Core internals"
+    },
+    {
+      "pattern": "^System\\.",
+      "reason": ".NET base class library traces"
+    },
+    {
+      "pattern": "^Kestrel",
+      "reason": "Kestrel HTTP server framing / connection noise"
+    },
+    {
+      "pattern": "^ServicePlatform",
+      "reason": "Service Platform internal traces (not FLT-relevant)"
+    },
+    {
+      "pattern": "^IntervalTimer-HiccupMonitor",
+      "reason": "Hiccup monitor periodic ticks — high-frequency platform noise"
+    }
+  ]
+}

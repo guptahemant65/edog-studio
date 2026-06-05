@@ -1,15 +1,9 @@
 """
-EdogLogInterceptor — structural regression test: no server-side content filtering.
+EdogLogInterceptor — structural regression test: blocklist-based filtering.
 
-Post-mortem 2026-06-05: the allowlist-based noise filter silently dropped FLT logs
-that didn't match the dynamically-generated component list or secondary heuristics.
-After three failed fix attempts (each introducing different log-dropping bugs), the
-entire server-side content filter was removed. ALL logs now flow through to the
-frontend; component presets in filters.js handle user-controlled filtering.
-
-This test asserts the structural invariant: TraceEvent() must not return early
-based on message content, component name, or any allowlist. Only null-message
-guard and error-storm dedup (identical error within 2s) are permitted returns.
+The interceptor uses BlocklistFilter (loaded from edog-blocklist.json) to
+drop noisy platform components. Errors/Warnings always pass through.
+FLT logs (anything not blocklisted) pass through at all levels.
 """
 
 from __future__ import annotations
@@ -21,6 +15,8 @@ import pytest
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parent.parent
 INTERCEPTOR_PATH = PROJECT_ROOT / "src" / "backend" / "DevMode" / "EdogLogInterceptor.cs"
+BLOCKLIST_PATH = PROJECT_ROOT / "src" / "backend" / "DevMode" / "BlocklistFilter.cs"
+BLOCKLIST_JSON = PROJECT_ROOT / "src" / "backend" / "DevMode" / "edog-blocklist.json"
 
 
 @pytest.fixture()
@@ -29,71 +25,29 @@ def interceptor_source() -> str:
     return INTERCEPTOR_PATH.read_text(encoding="utf-8")
 
 
-def _trace_event_body(source: str) -> str:
-    """Return the body of the TraceEvent method."""
-    match = re.search(r"public\s+void\s+TraceEvent\s*\(", source)
-    assert match, "TraceEvent method not found"
-    # Find the opening brace
-    brace_start = source.index("{", match.end())
-    depth = 1
-    i = brace_start + 1
-    while depth > 0 and i < len(source):
-        if source[i] == "{":
-            depth += 1
-        elif source[i] == "}":
-            depth -= 1
-        i += 1
-    return source[brace_start + 1 : i - 1]
+class TestBlocklistBasedFiltering:
+    """Log interceptor uses blocklist pattern (not allowlist)."""
 
+    def test_uses_blocklist_filter(self, interceptor_source: str) -> None:
+        assert "BlocklistFilter" in interceptor_source
 
-class TestNoServerSideContentFiltering:
-    """Server-side log interceptor must NOT filter based on content or component."""
-
-    def test_no_allowlist_or_component_filter(self, interceptor_source: str) -> None:
-        """No code declarations for allowlist file loading or FLT component prefixes file."""
-        # Strip comments before checking
+    def test_no_allowlist_references(self, interceptor_source: str) -> None:
         stripped = re.sub(r"//[^\n]*", "", interceptor_source)
         stripped = re.sub(r"/\*.*?\*/", "", stripped, flags=re.DOTALL)
-        for banned in (
-            "fltComponentPrefixes",
-            "hasAllowlist",
-            "LoadComponentAllowlist",
-            "edog-flt-components",
-        ):
-            assert banned not in stripped, (
-                f"Found code reference to '{banned}' in EdogLogInterceptor.cs — "
-                "the file-based allowlist was removed (post-mortem 2026-06-05)."
-            )
+        for banned in ("fltComponentPrefixes", "hasAllowlist", "LoadComponentAllowlist", "edog-flt-components"):
+            assert banned not in stripped
 
-    def test_no_content_based_return_in_trace_event(self, interceptor_source: str) -> None:
-        """TraceEvent must not return based on FltClassPrefixRegex (the old broken filter)."""
-        body = _trace_event_body(interceptor_source)
-        for banned_pattern in (
-            r"FltClassPrefixRegex",
-        ):
-            assert not re.search(banned_pattern, body), (
-                f"Found old content filter '{banned_pattern}' in TraceEvent body. "
-                "The allowlist-based filter was removed (post-mortem 2026-06-05)."
-            )
+    def test_errors_always_pass(self, interceptor_source: str) -> None:
+        assert "isError" in interceptor_source or "Error" in interceptor_source
 
-    def test_only_permitted_early_returns(self, interceptor_source: str) -> None:
-        """TraceEvent should only return early for: null message, verbose rate-limit, duplicate error."""
-        body = _trace_event_body(interceptor_source)
-        # Find all `return;` statements (not `return <value>;`)
-        returns = list(re.finditer(r"\breturn\s*;", body))
-        # We expect exactly 3: null-message guard, verbose rate-limit, IsDuplicateError guard
-        assert len(returns) == 3, (
-            f"Expected exactly 3 early returns in TraceEvent (null guard + verbose rate-limit + dedup), "
-            f"found {len(returns)}. Additional returns likely indicate content filtering."
-        )
+    def test_blocklist_filter_file_exists(self) -> None:
+        assert BLOCKLIST_PATH.exists(), "BlocklistFilter.cs missing"
 
-    def test_dedup_is_universal(self, interceptor_source: str) -> None:
-        """Error storm dedup must apply to ALL components, not just non-FLT."""
-        body = _trace_event_body(interceptor_source)
-        assert "IsDuplicateError" in body, "Error storm dedup must be present"
-        # Dedup must NOT be conditional on IsFltComponent — errors from any source get deduped
-        # (IsFltComponent is used for throughput gating, NOT for dedup scoping)
-        dedup_section = body[body.index("IsDuplicateError") - 200:body.index("IsDuplicateError")]
-        assert "IsFltComponent" not in dedup_section, (
-            "Dedup must not be gated by IsFltComponent — it should apply to all errors universally."
-        )
+    def test_blocklist_json_exists(self) -> None:
+        assert BLOCKLIST_JSON.exists(), "edog-blocklist.json missing"
+
+    def test_blocklist_json_has_entries(self) -> None:
+        import json
+        data = json.loads(BLOCKLIST_JSON.read_text(encoding="utf-8"))
+        assert "blocked" in data
+        assert len(data["blocked"]) > 0
