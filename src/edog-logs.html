@@ -50576,7 +50576,14 @@ class ExecutionSummary {
 
     container.innerHTML = html;
     this.wireInteractions(container, data);
-    this.open();
+    // Don't auto-open here — caller (refreshExecutionSummary) decides visibility.
+    // Auto-open only on first render when drawer has no data yet.
+    const drawer = document.getElementById('exec-drawer');
+    if (drawer && !drawer.classList.contains('has-data') && !drawer.classList.contains('collapsed')) {
+      this.open();
+    } else if (drawer && !drawer.classList.contains('has-data')) {
+      drawer.classList.add('has-data');
+    }
   }
 
   renderNodes = (nodes, maxDurMs) => {
@@ -112095,13 +112102,7 @@ class EdogLogViewer {
     }
     const data = this.execSummary.compute(this.state.raidFilter);
     if (data) {
-      const drawer = document.getElementById('exec-drawer');
-      const isCollapsed = drawer && drawer.classList.contains('collapsed');
-      // Render data into DOM (updates content even when collapsed)
       this.execSummary.render(data);
-      // If user collapsed the drawer, keep it collapsed — don't force open
-      if (isCollapsed) this.execSummary.collapse();
-      // Update badge counts
       this.showExecutionBadge(this.state.raidFilter);
     }
   }

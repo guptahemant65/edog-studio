@@ -1205,13 +1205,7 @@ class EdogLogViewer {
     }
     const data = this.execSummary.compute(this.state.raidFilter);
     if (data) {
-      const drawer = document.getElementById('exec-drawer');
-      const isCollapsed = drawer && drawer.classList.contains('collapsed');
-      // Render data into DOM (updates content even when collapsed)
       this.execSummary.render(data);
-      // If user collapsed the drawer, keep it collapsed — don't force open
-      if (isCollapsed) this.execSummary.collapse();
-      // Update badge counts
       this.showExecutionBadge(this.state.raidFilter);
     }
   }

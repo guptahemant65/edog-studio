@@ -331,7 +331,14 @@ class ExecutionSummary {
 
     container.innerHTML = html;
     this.wireInteractions(container, data);
-    this.open();
+    // Don't auto-open here — caller (refreshExecutionSummary) decides visibility.
+    // Auto-open only on first render when drawer has no data yet.
+    const drawer = document.getElementById('exec-drawer');
+    if (drawer && !drawer.classList.contains('has-data') && !drawer.classList.contains('collapsed')) {
+      this.open();
+    } else if (drawer && !drawer.classList.contains('has-data')) {
+      drawer.classList.add('has-data');
+    }
   }
 
   renderNodes = (nodes, maxDurMs) => {
