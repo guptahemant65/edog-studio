@@ -2,9 +2,11 @@
  * ErrorSimulator — Error Code Simulator frontend (F-ESIM).
  *
  * Owns the entire error-injection UX inside DAG Studio:
- *   • Picker modal (right-click a node → choose an error code)
+ *   • Side-panel picker (slides in from right, canvas stays interactive)
+ *   • Multi-node bulk inject (shift/ctrl-click in renderer → picker targets N nodes)
+ *   • Fuzzy + synonym search across the error catalog
  *   • Active rules panel (rendered below the DAG graph)
- *   • Node badges (⚡ glyph on nodes with injections)
+ *   • Node badges (⚡ glyph, count-stacked, source-tinted, pulse on add)
  *   • Blast-radius drawer (slides in from the right post-execution)
  *
  * Hub contract (server methods on EdogPlaygroundHub):
@@ -15,9 +17,36 @@
  *   ErrorSimClearAll()                                  → JSON {cleared}
  *   ErrorSimGetBlastRadius(ruleId)                      → JSON {...}
  */
+
+// Search synonyms: when a query starts with / equals these keys, we OR-expand
+// to the listed terms so semantic search finds the right codes even when the
+// user types intent instead of a specific token.
+var ESIM_SYNONYMS = {
+  auth:        ['auth', 'access', 'permission', 'denied', 'forbidden'],
+  access:      ['auth', 'access', 'permission'],
+  throttle:    ['throttle', 'capacity', 'quota', 'too_many', 'rate'],
+  capacity:    ['capacity', 'throttle', 'quota', 'sku'],
+  quota:       ['quota', 'throttle', 'capacity'],
+  schema:      ['schema', 'mismatch', 'column'],
+  connect:     ['session', 'submission', 'connection', 'network'],
+  connection:  ['session', 'submission', 'connection'],
+  session:     ['session', 'spark'],
+  network:     ['network', 'connection', 'submission'],
+  timeout:     ['timeout', 'time', 'slow', 'expire'],
+  slow:        ['timeout', 'slow', 'time'],
+  dep:         ['dependency', 'circular', 'lineage', 'dag'],
+  depend:      ['dependency', 'circular', 'lineage', 'dag'],
+  notfound:    ['not_found', 'missing', 'artifact'],
+  missing:     ['not_found', 'missing', 'artifact'],
+  retry:       ['retry', 'transient', 'submission'],
+  ingest:      ['ingest', 'path', 'file', 'auth'],
+  spark:       ['spark', 'session', 'job', 'pyspark'],
+  pyspark:     ['pyspark', 'spark', 'notebook'],
+};
+
 class ErrorSimulator {
   constructor() {
-    this._catalog = null;           // ErrorCodeEntry[] from hub
+    this._catalog = null;
     this._catalogByCode = new Map();
     this._activeRules = new Map();  // ruleId -> rule
     this._nodeIndex = new Map();    // nodeId -> [rule, ...]
@@ -26,21 +55,20 @@ class ErrorSimulator {
     this._loadPromise = null;
 
     // DOM refs (lazily created)
-    this._overlayEl = null;
     this._pickerEl = null;
     this._rulesPanelEl = null;
     this._drawerEl = null;
 
-    // Picker state
-    this._pickerNodeId = null;
-    this._pickerNodeName = null;
-    this._pickerNodeKind = null;
+    // Picker state — now always an array of {id, name, kind}
+    this._pickerTargets = [];
     this._pickerSelectedCode = null;
     this._pickerFilter = '';
     this._searchDebounce = 0;
 
+    // localStorage-backed recents (last 8 codes injected)
+    this._recents = this._loadRecents();
+
     // Bind handlers
-    this._onDocClick = this._onDocClick.bind(this);
     this._onKeyDown = this._onKeyDown.bind(this);
   }
 
@@ -54,55 +82,76 @@ class ErrorSimulator {
     if (this._signalR && this._signalR === signalR && this._dagStudio) return;
     this._signalR = signalR;
     this._dagStudio = dagStudio;
-    // Lazy-load the catalog the first time we need it
     this._loadCatalog().catch(function(err) {
       console.warn('[ErrorSim] catalog load failed:', err);
     });
-    // Refresh active rules in case server already has some
     this._refreshActiveRules().catch(function() {});
     this._ensureRulesPanel();
   }
 
   /**
-   * Open the error-code picker positioned near the click.
-   * @param {string} nodeId   FLT node id
-   * @param {string} nodeName Display name (used in header + rule)
-   * @param {string} nodeKind 'sql' | 'pyspark' | 'ingest' | 'unknown'
-   * @param {number} x        clientX from contextmenu event
-   * @param {number} y        clientY from contextmenu event
+   * Single-node picker entry (back-compat shortcut for the right-click flow).
+   * x/y are accepted but ignored — the picker is now a fixed side-panel.
    */
-  showPicker(nodeId, nodeName, nodeKind, x, y) {
+  showPicker(nodeId, nodeName, nodeKind, /* x */ _x, /* y */ _y) {
+    this.showPickerForSelection([{
+      id: nodeId,
+      name: nodeName || nodeId,
+      kind: (nodeKind || 'unknown').toLowerCase()
+    }]);
+  }
+
+  /**
+   * Multi-node picker entry. Pass an array of {id, name, kind}.
+   * Header summarizes the targets; commit fires one rule per node.
+   */
+  showPickerForSelection(targets) {
+    if (!targets || !targets.length) return;
     var self = this;
-    this._pickerNodeId = nodeId;
-    this._pickerNodeName = nodeName || nodeId;
-    this._pickerNodeKind = (nodeKind || 'unknown').toLowerCase();
+    this._pickerTargets = targets.map(function(t) {
+      return { id: t.id, name: t.name || t.id, kind: (t.kind || 'unknown').toLowerCase() };
+    });
     this._pickerSelectedCode = null;
     this._pickerFilter = '';
-    // Ensure catalog is loaded
     this._loadCatalog().then(function() {
-      self._renderPicker(x, y);
+      self._renderPicker();
     }).catch(function(err) {
       console.error('[ErrorSim] cannot open picker — catalog unavailable:', err);
       if (window.toast) window.toast('Error simulator catalog unavailable', 'error');
     });
   }
 
-  /** Returns the inline ⚡ glyph HTML if the node has any injection (else ''). */
+  /**
+   * Live update: if the picker is open and the user changes their canvas
+   * selection (shift-click etc), reflect the new targets without reopening.
+   */
+  updateSelectionFromCanvas(nodeIds) {
+    if (!this._pickerEl) return;
+    if (!nodeIds || !nodeIds.length) return;
+    var targets = [];
+    for (var i = 0; i < nodeIds.length; i++) {
+      var meta = this._lookupNodeMeta(nodeIds[i]);
+      if (meta) targets.push(meta);
+    }
+    if (!targets.length) return;
+    this._pickerTargets = targets;
+    this._renderPickerHeader();
+    // Re-rank entries — node-kind filter may have shifted
+    this._renderEntries();
+  }
+
+  /** Returns the inline ⚡-stack HTML if the node has any injection (else ''). */
   getNodeBadge(nodeId) {
     if (!this.hasInjection(nodeId)) return '';
     var rules = this._nodeIndex.get(nodeId) || [];
-    var codes = rules.map(function(r) { return r.errorCode; }).join(', ');
-    return '<span class="esim-node-badge" title="' +
-      this._escape(codes + ' will be injected') + '">\u26A1</span>';
+    return this._buildBadgeHtml(rules);
   }
 
-  /** True if any active rule targets the given node. */
   hasInjection(nodeId) {
     var rules = this._nodeIndex.get(nodeId);
     return !!(rules && rules.length);
   }
 
-  /** Returns the array of active rules for a node (may be empty). */
   rulesForNode(nodeId) {
     return (this._nodeIndex.get(nodeId) || []).slice();
   }
@@ -128,7 +177,6 @@ class ErrorSimulator {
   async _loadCatalog() {
     if (this._catalog) return this._catalog;
 
-    // Primary: use the static embedded catalog (works in any mode — no SignalR needed)
     if (typeof ERROR_SIM_CATALOG !== 'undefined' && Array.isArray(ERROR_SIM_CATALOG) && ERROR_SIM_CATALOG.length > 0) {
       this._catalog = ERROR_SIM_CATALOG;
       this._catalogByCode.clear();
@@ -138,7 +186,6 @@ class ErrorSimulator {
       return this._catalog;
     }
 
-    // Fallback: load from SignalR (connected phase with deployed C# code)
     if (!this._signalR || !this._signalR.connection) {
       throw new Error('No catalog available — ERROR_SIM_CATALOG not loaded and SignalR not connected');
     }
@@ -178,26 +225,52 @@ class ErrorSimulator {
     }
   }
 
-  async _addRule(nodeId, nodeName, nodeKind, errorCode) {
+  async _addRule(nodeId, nodeName, nodeKind, errorCode, opts) {
     if (!this._signalR || !this._signalR.connection) return null;
+    opts = opts || {};
     try {
       var json = await this._signalR.connection.invoke(
         'ErrorSimAddRule', nodeId, nodeName, nodeKind, errorCode);
       var rule = typeof json === 'string' ? JSON.parse(json) : json;
       if (!rule || rule.error) {
         var msg = rule && rule.error ? rule.error.message : 'Unknown error';
-        if (window.toast) window.toast('Inject failed: ' + msg, 'error');
+        if (!opts.silent && window.toast) window.toast('Inject failed: ' + msg, 'error');
         return null;
       }
       this._indexRule(rule);
       this._renderActiveRulesPanel();
-      this._refreshNodeBadges();
-      if (window.toast) window.toast('Injected ' + errorCode + ' on ' + (nodeName || nodeId), 'success');
+      if (!opts.skipBadgeRefresh) this._refreshNodeBadges({ pulseFor: nodeId });
+      if (!opts.silent && window.toast) {
+        window.toast('Injected ' + errorCode + ' on ' + (nodeName || nodeId), 'success');
+      }
       return rule;
     } catch (err) {
       console.error('[ErrorSim] add rule failed:', err);
-      if (window.toast) window.toast('Inject failed: ' + (err && err.message || err), 'error');
+      if (!opts.silent && window.toast) window.toast('Inject failed: ' + (err && err.message || err), 'error');
       return null;
+    }
+  }
+
+  async _addRulesBulk(targets, errorCode) {
+    if (!targets || !targets.length) return;
+    var results = await Promise.all(targets.map((t) =>
+      this._addRule(t.id, t.name, t.kind, errorCode, { silent: true, skipBadgeRefresh: true })
+    ));
+    var ok = 0, fail = 0;
+    var pulseIds = new Set();
+    for (var i = 0; i < results.length; i++) {
+      if (results[i]) { ok++; pulseIds.add(targets[i].id); }
+      else fail++;
+    }
+    this._refreshNodeBadges({ pulseFor: pulseIds });
+    if (window.toast) {
+      if (fail === 0) {
+        window.toast('Injected ' + errorCode + ' on ' + ok + ' node' + (ok === 1 ? '' : 's'), 'success');
+      } else if (ok === 0) {
+        window.toast('All ' + fail + ' injections failed', 'error');
+      } else {
+        window.toast('Injected on ' + ok + ' nodes (' + fail + ' failed)', 'warning');
+      }
     }
   }
 
@@ -231,7 +304,6 @@ class ErrorSimulator {
     this._activeRules.set(rule.ruleId, rule);
     var list = this._nodeIndex.get(rule.nodeId);
     if (!list) { list = []; this._nodeIndex.set(rule.nodeId, list); }
-    // Replace if same code already present
     var i;
     for (i = 0; i < list.length; i++) {
       if (list[i].ruleId === rule.ruleId) { list[i] = rule; return; }
@@ -251,38 +323,20 @@ class ErrorSimulator {
     if (list.length === 0) this._nodeIndex.delete(rule.nodeId);
   }
 
-  /* ───────────────────────── Picker modal ───────────────────────── */
+  /* ───────────────────────── Picker (side panel) ───────────────────────── */
 
-  _renderPicker(x, y) {
+  _renderPicker() {
     this._teardownPicker();
     var self = this;
-    var overlay = document.createElement('div');
-    overlay.className = 'esim-overlay';
-    overlay.addEventListener('mousedown', function(e) {
-      if (e.target === overlay) self._teardownPicker();
-    });
-    this._overlayEl = overlay;
 
-    var picker = document.createElement('div');
-    picker.className = 'esim-picker';
-    picker.setAttribute('role', 'dialog');
-    picker.setAttribute('aria-label', 'Simulate error on node');
-    this._pickerEl = picker;
+    var panel = document.createElement('div');
+    panel.className = 'esim-picker-panel';
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-label', 'Simulate error on node');
+    this._pickerEl = panel;
 
-    // Position near the click (clamped to viewport)
-    var w = 520, h = Math.min(window.innerHeight * 0.7, 600);
-    var px = Math.max(8, Math.min(window.innerWidth - w - 8, (x || 80) + 8));
-    var py = Math.max(8, Math.min(window.innerHeight - h - 8, (y || 80) + 8));
-    picker.style.left = px + 'px';
-    picker.style.top = py + 'px';
-
-    picker.innerHTML =
-      '<div class="esim-picker-header">' +
-        '<div class="esim-picker-title">Simulate Error on ' +
-          '<span class="esim-node-ref">' + this._escape(this._pickerNodeName) + '</span>' +
-        '</div>' +
-        '<button class="esim-close-btn" id="esimCloseBtn" title="Close" aria-label="Close">\u2715</button>' +
-      '</div>' +
+    panel.innerHTML =
+      '<div class="esim-picker-header" id="esimPickerHeader"></div>' +
       '<div class="esim-search-wrap">' +
         '<span class="esim-search-icon" aria-hidden="true">' +
           '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5">' +
@@ -290,50 +344,88 @@ class ErrorSimulator {
           '</svg>' +
         '</span>' +
         '<input type="text" class="esim-search" id="esimSearch" ' +
-          'placeholder="Search error codes, descriptions, phases\u2026" autocomplete="off" spellcheck="false">' +
+          'placeholder="Fuzzy search — try \u201cauth\u201d, \u201cthrottle\u201d, \u201cschema\u201d\u2026" autocomplete="off" spellcheck="false">' +
+        '<kbd class="esim-search-kbd" aria-hidden="true">Esc</kbd>' +
       '</div>' +
-      '<div class="esim-categories" id="esimCategories"></div>' +
+      '<div class="esim-entries-wrap" id="esimCategories"></div>' +
       '<div class="esim-picker-footer">' +
         '<div class="esim-selected-hint" id="esimSelectedHint">Select an error code to simulate</div>' +
         '<div class="esim-footer-actions">' +
           '<button class="esim-btn esim-btn-ghost" id="esimCancelBtn">Cancel</button>' +
           '<button class="esim-btn esim-btn-primary" id="esimSimulateBtn" disabled>' +
-            'Simulate <span class="esim-bolt">\u26A1</span>' +
+            '<span id="esimSimulateLabel">Simulate</span> <span class="esim-bolt">\u26A1</span>' +
           '</button>' +
         '</div>' +
       '</div>';
 
-    overlay.appendChild(picker);
-    document.body.appendChild(overlay);
+    document.body.appendChild(panel);
+    // Force reflow so the slide-in transition fires
+    void panel.offsetWidth;
+    panel.classList.add('open');
 
-    // Wire events
-    document.getElementById('esimCloseBtn').addEventListener('click', function() { self._teardownPicker(); });
-    document.getElementById('esimCancelBtn').addEventListener('click', function() { self._teardownPicker(); });
-    document.getElementById('esimSimulateBtn').addEventListener('click', function() { self._commitSelection(); });
+    this._renderPickerHeader();
 
     var search = document.getElementById('esimSearch');
     search.addEventListener('input', function() {
       window.clearTimeout(self._searchDebounce);
       self._searchDebounce = window.setTimeout(function() {
         self._pickerFilter = search.value.trim().toLowerCase();
-        self._renderCategories();
-      }, 200);
+        self._renderEntries();
+      }, 120);
     });
 
     document.addEventListener('keydown', this._onKeyDown);
+    document.getElementById('esimCancelBtn').addEventListener('click', function() { self._teardownPicker(); });
+    document.getElementById('esimSimulateBtn').addEventListener('click', function() { self._commitSelection(); });
 
-    this._renderCategories();
+    this._renderEntries();
     setTimeout(function() { search.focus(); }, 30);
+  }
+
+  /** Render just the header chips (called on selection updates without re-rendering the body). */
+  _renderPickerHeader() {
+    var header = document.getElementById('esimPickerHeader');
+    if (!header) return;
+    var targets = this._pickerTargets;
+    var n = targets.length;
+    var titleHtml;
+    if (n === 1) {
+      titleHtml =
+        '<div class="esim-picker-title">Simulate Error on ' +
+          '<span class="esim-node-ref">' + this._escape(targets[0].name) + '</span>' +
+        '</div>';
+    } else {
+      var chips = '';
+      var visible = Math.min(n, 3);
+      for (var i = 0; i < visible; i++) {
+        chips += '<span class="esim-node-ref">' + this._escape(targets[i].name) + '</span>';
+      }
+      if (n > visible) chips += '<span class="esim-node-ref esim-node-ref-more">+' + (n - visible) + '</span>';
+      titleHtml =
+        '<div class="esim-picker-title">' +
+          '<span class="esim-multi-count">' + n + '</span> nodes selected' +
+        '</div>' +
+        '<div class="esim-target-chips">' + chips + '</div>';
+    }
+    header.innerHTML =
+      '<div class="esim-picker-title-wrap">' + titleHtml + '</div>' +
+      '<button class="esim-close-btn" id="esimCloseBtn" title="Close" aria-label="Close">\u2715</button>';
+    var closeBtn = document.getElementById('esimCloseBtn');
+    var self = this;
+    if (closeBtn) closeBtn.addEventListener('click', function() { self._teardownPicker(); });
+    // Update simulate-button label
+    var label = document.getElementById('esimSimulateLabel');
+    if (label) label.textContent = n > 1 ? ('Simulate on ' + n) : 'Simulate';
   }
 
   _teardownPicker() {
     document.removeEventListener('keydown', this._onKeyDown);
-    if (this._overlayEl && this._overlayEl.parentNode) {
-      this._overlayEl.parentNode.removeChild(this._overlayEl);
+    if (this._pickerEl && this._pickerEl.parentNode) {
+      this._pickerEl.parentNode.removeChild(this._pickerEl);
     }
-    this._overlayEl = null;
     this._pickerEl = null;
     this._pickerSelectedCode = null;
+    this._pickerTargets = [];
   }
 
   _onKeyDown(e) {
@@ -348,9 +440,74 @@ class ErrorSimulator {
     }
   }
 
-  _onDocClick() { /* reserved */ }
+  /* ───────────────────────── Fuzzy search ───────────────────────── */
 
-  /** Group catalog entries into display categories (label + ordered codes). */
+  /**
+   * Score how well `query` matches `text`. Higher = better. 0 = no match.
+   * Bonuses: prefix start, word-boundary hit, consecutive char run.
+   */
+  _fuzzyScore(query, text) {
+    if (!query) return 1;
+    text = String(text || '').toLowerCase();
+    query = String(query).toLowerCase();
+    var qi = 0, ti = 0, score = 0, consecutive = 0, prevWasBoundary = true;
+    while (qi < query.length && ti < text.length) {
+      var qc = query[qi];
+      var tc = text[ti];
+      if (qc === tc) {
+        var bonus = 1;
+        if (consecutive > 0) bonus += consecutive * 2;
+        if (prevWasBoundary) bonus += 3;
+        if (ti === 0) bonus += 5;
+        score += bonus;
+        qi++;
+        consecutive++;
+      } else {
+        consecutive = 0;
+        score -= 0.4;
+      }
+      prevWasBoundary = !/[a-z0-9]/.test(tc);
+      ti++;
+    }
+    return qi === query.length ? Math.max(score, 0.1) : 0;
+  }
+
+  /** Best fuzzy score across the haystack tokens (code, description, phase, category). */
+  _bestScore(query, entry) {
+    var haystacks = [
+      entry.code || '',
+      (entry.code || '').replace(/^MLV_/, ''),
+      entry.description || '',
+      entry.phase || '',
+      entry.category || ''
+    ];
+    var best = 0;
+    for (var i = 0; i < haystacks.length; i++) {
+      var s = this._fuzzyScore(query, haystacks[i]);
+      if (s > best) best = s;
+    }
+    return best;
+  }
+
+  /** Expand a query through ESIM_SYNONYMS if the user typed an intent word. */
+  _expandQuery(query) {
+    if (!query) return [''];
+    var alts = [query];
+    var key = query.toLowerCase();
+    // Look for synonym keys that the query starts with (so "throt" still hits "throttle")
+    Object.keys(ESIM_SYNONYMS).forEach(function(k) {
+      if (key.indexOf(k) === 0 || k.indexOf(key) === 0) {
+        var terms = ESIM_SYNONYMS[k];
+        for (var i = 0; i < terms.length; i++) {
+          if (alts.indexOf(terms[i]) === -1) alts.push(terms[i]);
+        }
+      }
+    });
+    return alts;
+  }
+
+  /* ───────────────────────── Categorize + render ───────────────────────── */
+
   _categorize() {
     var groups = [
       { id: 'throttling', label: 'Throttling & Capacity',  cats: ['throttling'] },
@@ -370,24 +527,19 @@ class ErrorSimulator {
       byId[groups[i].id] = { meta: groups[i], entries: [] };
       for (var j = 0; j < groups[i].cats.length; j++) byId[groups[i].cats[j]] = byId[groups[i].id];
     }
-    var nodeKind = this._pickerNodeKind;
-    var filter = this._pickerFilter;
+    // node-kind filter: when multi-targeting, an entry must be compatible with at least one selected kind
+    var allowedKinds = this._allowedNodeKindsForTargets();
     var seen = {};
     for (var k = 0; k < (this._catalog || []).length; k++) {
       var e = this._catalog[k];
       if (!e || !e.code) continue;
-      // Filter by node kind (skip if catalog declares incompatible kinds)
-      if (e.nodeKinds && e.nodeKinds.length && nodeKind && nodeKind !== 'unknown') {
+      if (allowedKinds && e.nodeKinds && e.nodeKinds.length) {
         var ok = false;
         for (var m = 0; m < e.nodeKinds.length; m++) {
-          if ((e.nodeKinds[m] || '').toLowerCase() === nodeKind) { ok = true; break; }
+          var nk = (e.nodeKinds[m] || '').toLowerCase();
+          if (allowedKinds.has(nk)) { ok = true; break; }
         }
         if (!ok) continue;
-      }
-      // Text filter
-      if (filter) {
-        var hay = (e.code + ' ' + (e.description || '') + ' ' + (e.phase || '')).toLowerCase();
-        if (hay.indexOf(filter) === -1) continue;
       }
       var bucket = byId[(e.category || '').toLowerCase()];
       if (!bucket) {
@@ -400,7 +552,6 @@ class ErrorSimulator {
       }
       if (!seen[e.code]) { bucket.entries.push(e); seen[e.code] = true; }
     }
-    // Sort each bucket by code
     var out = [];
     for (var g = 0; g < groups.length; g++) {
       var b = byId[groups[g].id];
@@ -411,33 +562,111 @@ class ErrorSimulator {
     return out;
   }
 
-  _renderCategories() {
+  /** When picker has multiple targets, allowed kinds = union of each target's kind. 'unknown' = no filter. */
+  _allowedNodeKindsForTargets() {
+    var targets = this._pickerTargets;
+    if (!targets || !targets.length) return null;
+    var anyUnknown = false;
+    var set = new Set();
+    for (var i = 0; i < targets.length; i++) {
+      var k = (targets[i].kind || 'unknown').toLowerCase();
+      if (k === 'unknown') { anyUnknown = true; break; }
+      set.add(k);
+    }
+    return anyUnknown ? null : set;
+  }
+
+  /** Flat ranked list for fuzzy search mode. */
+  _rankedEntries(query) {
+    var allowedKinds = this._allowedNodeKindsForTargets();
+    var alts = this._expandQuery(query);
+    var rows = [];
+    var seen = {};
+    var catalog = this._catalog || [];
+    for (var i = 0; i < catalog.length; i++) {
+      var e = catalog[i];
+      if (!e || !e.code || seen[e.code]) continue;
+      if (allowedKinds && e.nodeKinds && e.nodeKinds.length) {
+        var ok = false;
+        for (var m = 0; m < e.nodeKinds.length; m++) {
+          if (allowedKinds.has((e.nodeKinds[m] || '').toLowerCase())) { ok = true; break; }
+        }
+        if (!ok) continue;
+      }
+      var best = 0;
+      for (var a = 0; a < alts.length; a++) {
+        var s = this._bestScore(alts[a], e);
+        if (s > best) best = s;
+      }
+      if (best > 0) { rows.push({ entry: e, score: best }); seen[e.code] = true; }
+    }
+    rows.sort(function(x, y) { return y.score - x.score; });
+    return rows.slice(0, 40).map(function(r) { return r.entry; });
+  }
+
+  _renderEntries() {
     var container = document.getElementById('esimCategories');
     if (!container) return;
-    var groups = this._categorize();
-    if (groups.length === 0) {
-      container.innerHTML = '<div class="esim-empty">No matching error codes for this node kind.</div>';
-      return;
-    }
     var html = '';
-    for (var i = 0; i < groups.length; i++) {
-      var g = groups[i];
-      var open = i === 0 ? ' open' : '';
-      html += '<details class="esim-category"' + open + ' data-group="' + this._escape(g.meta.id) + '">' +
-        '<summary class="esim-category-summary">' +
-          '<span class="esim-cat-chevron" aria-hidden="true">\u25B8</span>' +
-          '<span class="esim-cat-label">' + this._escape(g.meta.label) + '</span>' +
-          '<span class="esim-cat-count">' + g.entries.length + '</span>' +
-        '</summary>' +
-        '<div class="esim-entries">';
-      for (var j = 0; j < g.entries.length; j++) {
-        html += this._renderEntry(g.entries[j]);
+
+    // Recents strip — only shown when not searching
+    if (!this._pickerFilter && this._recents.length) {
+      var recentEntries = this._recents
+        .map((c) => this._catalogByCode.get(c))
+        .filter(function(e) { return !!e; });
+      if (recentEntries.length) {
+        html += '<div class="esim-recents-strip" aria-label="Recently used">' +
+          '<div class="esim-recents-label">RECENT</div>' +
+          '<div class="esim-recents-row">';
+        for (var ri = 0; ri < recentEntries.length; ri++) {
+          var re = recentEntries[ri];
+          html += '<button class="esim-recent-chip" data-code="' + this._escape(re.code) + '" title="' +
+            this._escape(re.description || '') + '">' +
+            this._escape(re.code) + '</button>';
+        }
+        html += '</div></div>';
       }
-      html += '</div></details>';
+    }
+
+    if (this._pickerFilter) {
+      // Fuzzy mode — flat ranked list
+      var ranked = this._rankedEntries(this._pickerFilter);
+      if (ranked.length === 0) {
+        html += '<div class="esim-empty">No matches for \u201c' + this._escape(this._pickerFilter) + '\u201d</div>';
+      } else {
+        html += '<div class="esim-ranked-header">' +
+          '<span class="esim-ranked-label">BEST MATCHES</span>' +
+          '<span class="esim-ranked-count">' + ranked.length + '</span>' +
+        '</div>';
+        html += '<div class="esim-entries">';
+        for (var r = 0; r < ranked.length; r++) html += this._renderEntry(ranked[r]);
+        html += '</div>';
+      }
+    } else {
+      // Browse mode — categorized accordions
+      var groups = this._categorize();
+      if (groups.length === 0) {
+        html += '<div class="esim-empty">No error codes for these node kinds.</div>';
+      } else {
+        for (var i = 0; i < groups.length; i++) {
+          var g = groups[i];
+          var open = i === 0 ? ' open' : '';
+          html += '<details class="esim-category"' + open + ' data-group="' + this._escape(g.meta.id) + '">' +
+            '<summary class="esim-category-summary">' +
+              '<span class="esim-cat-chevron" aria-hidden="true">\u25B8</span>' +
+              '<span class="esim-cat-label">' + this._escape(g.meta.label) + '</span>' +
+              '<span class="esim-cat-count">' + g.entries.length + '</span>' +
+            '</summary>' +
+            '<div class="esim-entries">';
+          for (var j = 0; j < g.entries.length; j++) {
+            html += this._renderEntry(g.entries[j]);
+          }
+          html += '</div></details>';
+        }
+      }
     }
     container.innerHTML = html;
 
-    // Wire entry clicks
     var self = this;
     var entries = container.querySelectorAll('.esim-entry');
     for (var k = 0; k < entries.length; k++) {
@@ -448,12 +677,19 @@ class ErrorSimulator {
         if (self._pickerSelectedCode) self._commitSelection();
       });
     }
+    var chips = container.querySelectorAll('.esim-recent-chip');
+    for (var c = 0; c < chips.length; c++) {
+      chips[c].addEventListener('click', (function(chip) {
+        return function() { self._selectEntry(chip.getAttribute('data-code')); };
+      })(chips[c]));
+    }
   }
 
   _renderEntry(e) {
     var severity = (e.errorSource || '').toLowerCase() === 'system' ? 'system' : 'user';
     var sevClass = severity === 'system' ? 'esim-severity-system' : 'esim-severity-user';
-    return '<div class="esim-entry" data-code="' + this._escape(e.code) + '" tabindex="0">' +
+    var isStarred = this._recents.indexOf(e.code) !== -1 ? ' esim-entry-recent' : '';
+    return '<div class="esim-entry' + isStarred + '" data-code="' + this._escape(e.code) + '" tabindex="0">' +
       '<span class="esim-dot ' + sevClass + '" aria-hidden="true">\u25CF</span>' +
       '<div class="esim-entry-text">' +
         '<div class="esim-entry-code">' + this._escape(e.code) + '</div>' +
@@ -474,17 +710,47 @@ class ErrorSimulator {
     var btn = document.getElementById('esimSimulateBtn');
     if (btn) btn.disabled = false;
     var hint = document.getElementById('esimSelectedHint');
-    if (hint) hint.textContent = code;
+    if (hint) {
+      var entry = this._catalogByCode.get(code);
+      hint.innerHTML = '<span class="esim-mono">' + this._escape(code) + '</span>' +
+        (entry && entry.description ? ' <span class="esim-hint-desc">— ' + this._escape(entry.description) + '</span>' : '');
+    }
   }
 
   _commitSelection() {
     if (!this._pickerSelectedCode) return;
-    var nodeId = this._pickerNodeId;
-    var nodeName = this._pickerNodeName;
-    var nodeKind = this._pickerNodeKind;
+    var targets = this._pickerTargets.slice();
     var code = this._pickerSelectedCode;
+    this._pushRecent(code);
     this._teardownPicker();
-    this._addRule(nodeId, nodeName, nodeKind, code);
+    if (targets.length <= 1) {
+      var t = targets[0];
+      if (t) this._addRule(t.id, t.name, t.kind, code);
+    } else {
+      this._addRulesBulk(targets, code);
+    }
+  }
+
+  /* ───────────────────────── Recents (localStorage) ───────────────────────── */
+
+  _loadRecents() {
+    try {
+      var raw = window.localStorage && window.localStorage.getItem('esim.recents');
+      if (!raw) return [];
+      var arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr.slice(0, 8) : [];
+    } catch (e) { return []; }
+  }
+
+  _pushRecent(code) {
+    if (!code) return;
+    var existing = this._recents.indexOf(code);
+    if (existing !== -1) this._recents.splice(existing, 1);
+    this._recents.unshift(code);
+    if (this._recents.length > 8) this._recents.length = 8;
+    try {
+      window.localStorage && window.localStorage.setItem('esim.recents', JSON.stringify(this._recents));
+    } catch (e) { /* private mode etc — ignore */ }
   }
 
   /* ───────────────────────── Active rules panel ───────────────────────── */
@@ -499,7 +765,6 @@ class ErrorSimulator {
       panel.id = 'esimRulesPanel';
       panel.className = 'esim-rules-panel';
       panel.style.display = 'none';
-      // Insert after the graph panel (before side panel) within .dag-body
       graphPanel.parentNode.insertBefore(panel, graphPanel.nextSibling);
     }
     this._rulesPanelEl = panel;
@@ -592,8 +857,44 @@ class ErrorSimulator {
     }
   }
 
-  /** Re-paint the ⚡ badges on DAG nodes after rules change. */
-  _refreshNodeBadges() {
+  /* ───────────────────────── Node badge rendering (richer) ───────────────────────── */
+
+  /** Build the badge HTML string for the given rule list. Pure — no DOM. */
+  _buildBadgeHtml(rules) {
+    if (!rules || !rules.length) return '';
+    // Source tint: System dominates User
+    var anySystem = false;
+    var codes = [];
+    for (var i = 0; i < rules.length; i++) {
+      if ((rules[i].errorSource || '').toLowerCase() === 'system') anySystem = true;
+      codes.push(rules[i].errorCode);
+    }
+    var tintClass = anySystem ? ' esim-badge-system' : ' esim-badge-user';
+    var n = rules.length;
+    var visible = Math.min(n, 3);
+    var bolts = '';
+    for (var b = 0; b < visible; b++) bolts += '<span class="esim-bolt-glyph">\u26A1</span>';
+    var more = n > visible ? '<span class="esim-badge-more">+' + (n - visible) + '</span>' : '';
+    var title = (n === 1 ? codes[0] + ' will be injected'
+                          : n + ' injections: ' + codes.join(', '));
+    return '<span class="esim-node-badge esim-badge-stack' + tintClass +
+      '" title="' + this._escape(title) + '" data-count="' + n + '">' +
+      bolts + more + '</span>';
+  }
+
+  /**
+   * Re-paint badges on every DAG node. Pass {pulseFor: nodeId} to add a one-shot
+   * pulse animation on the badge of a node that just received a new rule.
+   */
+  _refreshNodeBadges(opts) {
+    opts = opts || {};
+    // Normalize pulseFor into a Set for uniform membership tests.
+    var pulseSet = null;
+    if (opts.pulseFor) {
+      if (opts.pulseFor instanceof Set) pulseSet = opts.pulseFor;
+      else if (Array.isArray(opts.pulseFor)) pulseSet = new Set(opts.pulseFor);
+      else pulseSet = new Set([opts.pulseFor]);
+    }
     var layer = document.getElementById('dagNodesLayer');
     if (!layer) return;
     var nodes = layer.querySelectorAll('.dag-node');
@@ -604,21 +905,40 @@ class ErrorSimulator {
       if (!header) continue;
       var existing = header.querySelector('.esim-node-badge');
       if (existing) existing.parentNode.removeChild(existing);
-      if (this.hasInjection(id)) {
-        var nameEl = header.querySelector('.dag-node-name');
-        var badge = document.createElement('span');
-        badge.className = 'esim-node-badge';
-        var rules = this._nodeIndex.get(id) || [];
-        var codes = rules.map(function(r) { return r.errorCode; }).join(', ');
-        badge.title = codes + ' will be injected';
-        badge.textContent = '\u26A1';
-        if (nameEl && nameEl.nextSibling) {
-          header.insertBefore(badge, nameEl.nextSibling);
-        } else {
-          header.appendChild(badge);
-        }
+      if (!this.hasInjection(id)) continue;
+      var rules = this._nodeIndex.get(id) || [];
+      var nameEl = header.querySelector('.dag-node-name');
+      var holder = document.createElement('span');
+      holder.innerHTML = this._buildBadgeHtml(rules);
+      var badge = holder.firstChild;
+      if (!badge) continue;
+      if (pulseSet && pulseSet.has(id)) {
+        badge.classList.add('esim-badge-pulse');
+        (function(b) {
+          setTimeout(function() { b.classList.remove('esim-badge-pulse'); }, 1300);
+        })(badge);
+      }
+      if (nameEl && nameEl.nextSibling) {
+        header.insertBefore(badge, nameEl.nextSibling);
+      } else {
+        header.appendChild(badge);
       }
     }
+  }
+
+  /** Look up a node's display name + kind via the host DagStudio's model. */
+  _lookupNodeMeta(nodeId) {
+    if (!this._dagStudio) return null;
+    if (typeof this._dagStudio._findNodeById === 'function') {
+      var n = this._dagStudio._findNodeById(nodeId);
+      if (!n) return null;
+      return {
+        id: nodeId,
+        name: n.name || n.nodeId || n.id || nodeId,
+        kind: (n.kind || n.type || 'unknown').toString().toLowerCase()
+      };
+    }
+    return { id: nodeId, name: nodeId, kind: 'unknown' };
   }
 
   /* ───────────────────────── Blast-radius drawer ───────────────────────── */
@@ -674,7 +994,6 @@ class ErrorSimulator {
 
     document.body.appendChild(drawer);
     this._drawerEl = drawer;
-    // Force reflow so the slide-in transition fires
     void drawer.offsetWidth;
     drawer.classList.add('open');
 

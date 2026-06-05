@@ -517,9 +517,35 @@ class DagStudio {
     this._renderer.onNodeContextMenu = function(nodeId, x, y) {
       var node = self._findNodeById(nodeId);
       if (!node) return;
-      var name = node.name || node.nodeId || node.id || nodeId;
-      var kind = (node.kind || node.type || 'unknown');
-      self._errorSim.showPicker(nodeId, name, kind, x, y);
+      // If the right-clicked node is part of a multi-selection (size > 1),
+      // open the picker targeting the entire selection. Otherwise single.
+      var selected = (typeof self._renderer.getSelectedNodeIds === 'function')
+        ? self._renderer.getSelectedNodeIds() : [];
+      var multi = selected.length > 1 && selected.indexOf(nodeId) !== -1;
+      if (multi) {
+        var targets = [];
+        for (var i = 0; i < selected.length; i++) {
+          var n = self._findNodeById(selected[i]);
+          if (!n) continue;
+          targets.push({
+            id: selected[i],
+            name: n.name || n.nodeId || n.id || selected[i],
+            kind: (n.kind || n.type || 'unknown').toString().toLowerCase()
+          });
+        }
+        self._errorSim.showPickerForSelection(targets);
+      } else {
+        var name = node.name || node.nodeId || node.id || nodeId;
+        var kind = (node.kind || node.type || 'unknown');
+        self._errorSim.showPicker(nodeId, name, kind, x, y);
+      }
+    };
+    // Live picker target updates: shift/ctrl-click on canvas while picker is
+    // open should re-target without forcing a close/reopen.
+    this._renderer.onSelectionChanged = function(nodeIds) {
+      if (self._errorSim && typeof self._errorSim.updateSelectionFromCanvas === 'function') {
+        self._errorSim.updateSelectionFromCanvas(nodeIds);
+      }
     };
     // Init error simulator now that SignalR + renderer are wired
     this._errorSim.init(self._signalR, self);

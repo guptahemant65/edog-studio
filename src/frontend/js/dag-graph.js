@@ -24,6 +24,7 @@ class DagCanvasRenderer {
     this._edges = [];
     this._nodeMap = new Map();
     this._selectedNodeId = null;
+    this._selectedNodeIds = new Set();
     this._highlightedNodeId = null;
     this._isPanning = false;
     this._panStart = { x: 0, y: 0 };
@@ -34,6 +35,7 @@ class DagCanvasRenderer {
 
     // Callbacks
     this.onNodeSelected = null;
+    this.onSelectionChanged = null;   // (nodeIds: string[]) — fires for any selection mutation
     this.onNodeHovered = null;
     this.onNodeUnhovered = null;
     this.onNodeContextMenu = null;
@@ -242,8 +244,10 @@ class DagCanvasRenderer {
         return function(e) {
           e.stopPropagation();
           e.preventDefault();
-          self._selectNode(nodeId);
-          // Start drag tracking
+          var mode = e.shiftKey ? 'add' : ((e.ctrlKey || e.metaKey) ? 'toggle' : 'single');
+          self._selectNode(nodeId, mode);
+          // Start drag tracking (only when single-selecting — shift/ctrl shouldn't drag)
+          if (mode !== 'single') return;
           var node = self._nodeMap.get(nodeId);
           if (!node) return;
           var startX = e.clientX, startY = e.clientY;
@@ -583,10 +587,13 @@ class DagCanvasRenderer {
     this._panStart = { x: e.clientX, y: e.clientY };
     this._camStart = { x: this._camera.x, y: this._camera.y };
     this._canvas.style.cursor = 'grabbing';
-    // Deselect on canvas click
+    // Deselect on canvas click (unless modifier — keeps selection during shift-marquee in future)
+    if (e.shiftKey || e.ctrlKey || e.metaKey) return;
     this._selectedNodeId = null;
+    this._selectedNodeIds.clear();
     this._nodesLayer.querySelectorAll('.dag-node.selected').forEach(function(el) { el.classList.remove('selected'); });
     if (this.onNodeSelected) this.onNodeSelected(null);
+    if (this.onSelectionChanged) this.onSelectionChanged([]);
   }
 
   _onMouseMove(e) {
@@ -644,12 +651,43 @@ class DagCanvasRenderer {
     return Math.max(min, Math.min(max, val));
   }
 
-  _selectNode(nodeId) {
-    this._selectedNodeId = nodeId;
+  _selectNode(nodeId, mode) {
+    // mode: 'single' (default) — replace selection; 'add' — add (shift); 'toggle' — toggle (ctrl/cmd)
+    mode = mode || 'single';
+    var ids = this._selectedNodeIds;
+    if (mode === 'single') {
+      ids.clear();
+      ids.add(nodeId);
+      this._selectedNodeId = nodeId;
+    } else if (mode === 'add') {
+      ids.add(nodeId);
+      // Keep _selectedNodeId as the most-recently primary-clicked node
+      this._selectedNodeId = nodeId;
+    } else if (mode === 'toggle') {
+      if (ids.has(nodeId)) {
+        ids.delete(nodeId);
+        if (this._selectedNodeId === nodeId) {
+          this._selectedNodeId = ids.size ? ids.values().next().value : null;
+        }
+      } else {
+        ids.add(nodeId);
+        this._selectedNodeId = nodeId;
+      }
+    }
+    // Repaint selection classes
+    var self = this;
     this._nodesLayer.querySelectorAll('.dag-node.selected').forEach(function(el) { el.classList.remove('selected'); });
-    var el = this._nodesLayer.querySelector('[data-id="' + nodeId + '"]');
-    if (el) el.classList.add('selected');
-    if (this.onNodeSelected) this.onNodeSelected(nodeId);
+    ids.forEach(function(id) {
+      var el = self._nodesLayer.querySelector('[data-id="' + id + '"]');
+      if (el) el.classList.add('selected');
+    });
+    if (this.onNodeSelected) this.onNodeSelected(this._selectedNodeId);
+    if (this.onSelectionChanged) this.onSelectionChanged(Array.from(ids));
+  }
+
+  /** Returns the current multi-selection as a plain array (may be empty). */
+  getSelectedNodeIds() {
+    return Array.from(this._selectedNodeIds);
   }
 
   /** Recalculate edge endpoints when a node is dragged. */
