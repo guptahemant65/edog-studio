@@ -2213,6 +2213,50 @@ def revert_node_executor_wrapper_patch(content):
         content,
     )
     return content
+
+
+def apply_error_sim_pre_gts_patch(content):
+    """Patch DagExecutionHandlerV2.cs to call EdogErrorSimEngine.ApplyPreGtsFaults after DAG build.
+
+    Inserts AFTER `Check.AssertArgumentNotNull(dag, nameof(dag));` so the DAG
+    is guaranteed non-null. The call sets node.IsFaulted on targeted nodes;
+    the faulted-node check at line ~338 then picks them up naturally.
+    """
+    if "EdogErrorSimEngine.ApplyPreGtsFaults" in content:
+        return content, "already_applied"
+
+    marker = 'Check.AssertArgumentNotNull(dag, nameof(dag));'
+    if marker not in content:
+        return content, "pattern_not_found"
+
+    lines = content.split("\n")
+    for i, line in enumerate(lines):
+        if marker in line:
+            inject = [
+                "",
+                "                    // EDOG DevMode — Error Simulator: inject pre-GTS faults into DAG nodes",
+                "                    try { Microsoft.LiveTable.Service.DevMode.EdogErrorSimEngine.ApplyPreGtsFaults(dag); }",
+                "                    catch { /* non-fatal — never block DAG execution */ }",
+            ]
+            for j, il in enumerate(inject):
+                lines.insert(i + 1 + j, il)
+            return "\n".join(lines), "applied"
+
+    return content, "pattern_not_found"
+
+
+def revert_error_sim_pre_gts_patch(content):
+    """Remove EdogErrorSimEngine.ApplyPreGtsFaults call."""
+    return re.sub(
+        r"\n[ ]*// EDOG DevMode — Error Simulator: inject pre-GTS faults into DAG nodes\n"
+        r"[ ]*try \{ Microsoft\.LiveTable\.Service\.DevMode\.EdogErrorSimEngine\.ApplyPreGtsFaults\(dag\); \}\n"
+        r"[ ]*catch \{ /\* non-fatal — never block DAG execution \*/ \}",
+        "",
+        content,
+    )
+
+
+def revert_controllers_config_patch(content):
     """Remove EdogSessionController registration from ControllersConfig.cs.
 
     Retained after the Session Guard removal so existing patched FLT repos
@@ -2685,6 +2729,22 @@ def apply_all_changes(token, repo_root):
         elif status == "pattern_not_found":
             warnings.append("⚠️  Node executor wrapper: pattern not found in DagExecutionHandlerV2.cs")
 
+    # 4b-3. Patch DagExecutionHandlerV2.cs for Error Simulator pre-GTS fault injection
+    rel_path = FILES["DagExecutionHandlerV2"]
+    filepath = repo_root / rel_path
+    content = read_file(filepath)
+    if content:
+        new_content, status = apply_error_sim_pre_gts_patch(content)
+        if status == "applied":
+            original_contents[rel_path] = content
+            write_file(filepath, new_content)
+            modified_contents[rel_path] = new_content
+            changes_made.append("✅ Error sim pre-GTS hook (DagExecutionHandlerV2.cs)")
+        elif status == "already_applied":
+            changes_made.append("⏭️  Error sim pre-GTS hook (already)")
+        elif status == "pattern_not_found":
+            warnings.append("⚠️  Error sim pre-GTS hook: pattern not found in DagExecutionHandlerV2.cs")
+
     # 4c. Clean any stranded EdogSessionController registration from ControllersConfig.cs.
     # Session Guard was removed; if a prior deploy patched this file, scrub it.
     rel_path = FILES["ControllersConfig"]
@@ -2848,6 +2908,22 @@ def revert_all_changes(repo_root):
                 print("   ⏭️  Node executor wrapper (clean)")
     except Exception as e:
         print(f"   ⚠️ Error reverting Node executor wrapper: {e}")
+        all_success = False
+
+    # 5b-3. Revert Error Simulator pre-GTS patch
+    try:
+        rel_path = FILES["DagExecutionHandlerV2"]
+        filepath = repo_root / rel_path
+        content = read_file(filepath)
+        if content:
+            reverted = revert_error_sim_pre_gts_patch(content)
+            if reverted != content:
+                write_file(filepath, reverted)
+                print("   ✅ Reverted Error sim pre-GTS hook (DagExecutionHandlerV2.cs)")
+            else:
+                print("   ⏭️  Error sim pre-GTS hook (clean)")
+    except Exception as e:
+        print(f"   ⚠️ Error reverting Error sim pre-GTS hook: {e}")
         all_success = False
 
     # 5c. Revert ControllersConfig.cs session probe controller auth

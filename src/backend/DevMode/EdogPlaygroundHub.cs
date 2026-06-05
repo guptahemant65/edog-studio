@@ -3694,5 +3694,62 @@ namespace Microsoft.LiveTable.Service.DevMode
         }
 
         #endregion
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // ERROR CODE SIMULATOR — hub methods for fault injection rule management
+        // ═══════════════════════════════════════════════════════════════════════
+        #region ErrorSimulator
+
+        /// <summary>
+        /// Returns the full error code catalog as JSON for the frontend picker.
+        /// </summary>
+        public string ErrorSimGetCatalog()
+        {
+            return EdogErrorSimEngine.GetCatalogJson();
+        }
+
+        /// <summary>
+        /// Adds an error injection rule for a specific DAG node.
+        /// </summary>
+        public string ErrorSimAddRule(string nodeId, string nodeName, string nodeKind, string errorCode)
+        {
+            return EdogErrorSimEngine.AddRule(nodeId, nodeName, nodeKind, errorCode);
+        }
+
+        /// <summary>
+        /// Removes a specific error injection rule.
+        /// </summary>
+        public string ErrorSimRemoveRule(string ruleId)
+        {
+            EdogErrorSimEngine.RemoveRule(ruleId);
+            return "{\"ok\":true}";
+        }
+
+        /// <summary>
+        /// Removes all active error injection rules.
+        /// </summary>
+        public string ErrorSimClearAll()
+        {
+            EdogErrorSimEngine.ClearAll();
+            return "{\"ok\":true}";
+        }
+
+        /// <summary>
+        /// Returns all active error injection rules as JSON.
+        /// </summary>
+        public string ErrorSimGetActiveRules()
+        {
+            return EdogErrorSimEngine.GetActiveRules();
+        }
+
+        /// <summary>
+        /// Returns blast radius data for a specific rule.
+        /// </summary>
+        public string ErrorSimGetBlastRadius(string ruleId)
+        {
+            return EdogErrorSimEngine.ComputeBlastRadius(ruleId);
+        }
+
+        #endregion
     }
 }
