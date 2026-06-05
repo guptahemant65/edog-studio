@@ -289,11 +289,11 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// Error storm protection: returns true if this error was already seen within the dedup window.
         /// Uses level + component + eventId + message hash as the dedup key.
         /// </summary>
-        private bool IsDuplicateError(string level, string component, string message, int eventId)
+        private bool IsDuplicateError(string level, string component, string message, string eventId)
         {
             // Use full message hash for precision — avoids collisions from truncation
             var msgHash = message.GetHashCode().ToString();
-            var key = string.Concat(level, ":", component, ":", eventId.ToString(), ":", msgHash);
+            var key = string.Concat(level, ":", component, ":", eventId ?? "", ":", msgHash);
             var nowTicks = DateTime.UtcNow.Ticks;
             var nowMs = nowTicks / TimeSpan.TicksPerMillisecond;
 

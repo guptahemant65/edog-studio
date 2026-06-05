@@ -232,18 +232,22 @@ namespace Microsoft.LiveTable.Service.DevMode
                     continue;
                 }
 
-                // Mutable state: check enabled flag (error sim rules have RuleId)
-                if (rule.RuleId != null
-                    && _ruleStates.TryGetValue(rule.RuleId, out var state)
-                    && !state.Enabled)
+                // Mutable state: single lookup for both enabled check + fire count
+                FaultRuleState ruleState = null;
+                if (rule.RuleId != null)
+                {
+                    _ruleStates.TryGetValue(rule.RuleId, out ruleState);
+                }
+
+                if (ruleState != null && !ruleState.Enabled)
                 {
                     continue;
                 }
 
-                // Track fire count for error sim rules
-                if (rule.RuleId != null && _ruleStates.TryGetValue(rule.RuleId, out var fireState))
+                // Track fire count
+                if (ruleState != null)
                 {
-                    Interlocked.Increment(ref fireState.FireCount);
+                    Interlocked.Increment(ref ruleState.FireCount);
                 }
 
                 match = rule;

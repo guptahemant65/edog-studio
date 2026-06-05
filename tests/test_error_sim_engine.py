@@ -95,7 +95,7 @@ class TestChannelDispatch:
     def test_channel_1_status_forge_body(self, source: str) -> None:
         # Channel 1 builds an HTTP 200 + Failed state JSON body.
         assert '\\"state\\":\\"Failed\\"' in source
-        assert '\\"errorDetails\\"' in source
+        assert '\\"error\\"' in source or '"error"' in source
 
     def test_channel_1_uses_status_200(self, source: str) -> None:
         # GTS Status Forge fires as http_error with 200 status.

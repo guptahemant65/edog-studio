@@ -87,6 +87,8 @@ DEVMODE_FILES = {
     "EdogInterceptorRegistry": SERVICE_PATH / "DevMode/EdogInterceptorRegistry.cs",
     "EdogDevModeRegistrar": SERVICE_PATH / "DevMode/EdogDevModeRegistrar.cs",
     "EdogErrorCodeCatalog": SERVICE_PATH / "DevMode/EdogErrorCodeCatalog.cs",
+    "EdogErrorSimEngine": SERVICE_PATH / "DevMode/EdogErrorSimEngine.cs",
+    "EdogNodeExecutionContext": SERVICE_PATH / "DevMode/EdogNodeExecutionContext.cs",
     "EdogFeatureFlighterWrapper": SERVICE_PATH / "DevMode/EdogFeatureFlighterWrapper.cs",
     "EdogFeatureOverrideStore": SERVICE_PATH / "DevMode/EdogFeatureOverrideStore.cs",
     "EdogTokenInterceptor": SERVICE_PATH / "DevMode/EdogTokenInterceptor.cs",
@@ -2138,7 +2140,7 @@ def apply_node_executor_wrapper_patch(content):
                 "                            {",
                 '                                NodeId = node.Name,',
                 '                                NodeName = node.Name,',
-                '                                DagId = dagExecInstance.Dag?.Name ?? "",',
+                '                                DagId = dagExecInstance.Dag?.Name ?? string.Empty,',
                 "                                IterationId = dagExecInstance.IterationId,",
                 "                            };",
             ]
@@ -2158,7 +2160,7 @@ def apply_node_executor_wrapper_patch(content):
             indent = "                                "
             lines[i] = (
                 f"{indent}var edogWrappedExecutor = new Microsoft.LiveTable.Service.DevMode.EdogNodeExecutorWrapper(\n"
-                f'{indent}    nodeExecutor, node.Name, dagExecInstance.Dag?.Name ?? "", dagExecInstance.IterationId);\n'
+                f'{indent}    nodeExecutor, node.Name, dagExecInstance.Dag?.Name ?? string.Empty, dagExecInstance.IterationId);\n'
                 f"{indent}await edogWrappedExecutor.ExecuteNodeAsync(cts.Token);"
             )
             break
@@ -2191,7 +2193,7 @@ def revert_node_executor_wrapper_patch(content):
         r"[ ]*\{\n"
         r"[ ]*NodeId = node\.Name,\n"
         r"[ ]*NodeName = node\.Name,\n"
-        r'[ ]*DagId = dagExecInstance\.Dag\?\.Name \?\? "",\n'
+        r"[ ]*DagId = dagExecInstance\.Dag\?\.Name \?\? string\.Empty,\n"
         r"[ ]*IterationId = dagExecInstance\.IterationId,\n"
         r"[ ]*\};",
         "",
@@ -2200,7 +2202,7 @@ def revert_node_executor_wrapper_patch(content):
     # Remove the wrapper replacement
     content = re.sub(
         r"[ ]*var edogWrappedExecutor = new Microsoft\.LiveTable\.Service\.DevMode\.EdogNodeExecutorWrapper\(\n"
-        r'[ ]*nodeExecutor, node\.Name, dagExecInstance\.Dag\?\.Name \?\? "", dagExecInstance\.IterationId\);\n'
+        r'[ ]*nodeExecutor, node\.Name, dagExecInstance\.Dag\?\.Name \?\? string\.Empty, dagExecInstance\.IterationId\);\n'
         r"[ ]*await edogWrappedExecutor\.ExecuteNodeAsync\(cts\.Token\);",
         "                                await nodeExecutor.ExecuteNodeAsync(cts.Token);",
         content,
@@ -2235,8 +2237,14 @@ def apply_error_sim_pre_gts_patch(content):
             inject = [
                 "",
                 "                    // EDOG DevMode — Error Simulator: inject pre-GTS faults into DAG nodes",
-                "                    try { Microsoft.LiveTable.Service.DevMode.EdogErrorSimEngine.ApplyPreGtsFaults(dag); }",
-                "                    catch { /* non-fatal — never block DAG execution */ }",
+                "                    try",
+                "                    {",
+                "                        Microsoft.LiveTable.Service.DevMode.EdogErrorSimEngine.ApplyPreGtsFaults(dag);",
+                "                    }",
+                "                    catch",
+                "                    {",
+                "                        // Non-fatal — never block DAG execution",
+                "                    }",
             ]
             for j, il in enumerate(inject):
                 lines.insert(i + 1 + j, il)
@@ -2249,8 +2257,14 @@ def revert_error_sim_pre_gts_patch(content):
     """Remove EdogErrorSimEngine.ApplyPreGtsFaults call."""
     return re.sub(
         r"\n[ ]*// EDOG DevMode — Error Simulator: inject pre-GTS faults into DAG nodes\n"
-        r"[ ]*try \{ Microsoft\.LiveTable\.Service\.DevMode\.EdogErrorSimEngine\.ApplyPreGtsFaults\(dag\); \}\n"
-        r"[ ]*catch \{ /\* non-fatal — never block DAG execution \*/ \}",
+        r"[ ]*try\n"
+        r"[ ]*\{\n"
+        r"[ ]*Microsoft\.LiveTable\.Service\.DevMode\.EdogErrorSimEngine\.ApplyPreGtsFaults\(dag\);\n"
+        r"[ ]*\}\n"
+        r"[ ]*catch\n"
+        r"[ ]*\{\n"
+        r"[ ]*// Non-fatal — never block DAG execution\n"
+        r"[ ]*\}",
         "",
         content,
     )

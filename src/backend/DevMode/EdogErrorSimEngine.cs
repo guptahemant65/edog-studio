@@ -106,6 +106,11 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// </returns>
         public static string AddRule(string nodeId, string nodeName, string nodeKind, string errorCode)
         {
+            // Normalize empty strings to null — null means "any node" in the fault store
+            if (string.IsNullOrEmpty(nodeId)) nodeId = null;
+            if (string.IsNullOrEmpty(nodeName)) nodeName = nodeId;
+            if (string.IsNullOrEmpty(nodeKind)) nodeKind = null;
+
             if (string.IsNullOrEmpty(errorCode))
             {
                 return ErrorJson("error_code_required", "errorCode is required");
@@ -320,14 +325,14 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         private static string BuildGtsStatusForgeBody(ErrorCodeEntry entry)
         {
-            // GTS poll response shape: HTTP 200 with a "Failed" state and
-            // an errorDetails block. FLT reads errorDetails.errorCode and
-            // surfaces it as the MLV_* code in the node failure.
+            // GTS poll response shape: HTTP 200 with "Failed" state and an
+            // "error" block (DataMember Name="error" on TransformExecutionResponse.ErrorDetails).
+            // FLT reads error.errorCode and surfaces it as the MLV_* code.
             var sb = new System.Text.StringBuilder();
             sb.Append('{');
             sb.Append("\"id\":\"00000000-0000-0000-0000-000000000000\"");
             sb.Append(",\"state\":\"Failed\"");
-            sb.Append(",\"errorDetails\":{");
+            sb.Append(",\"error\":{");
             sb.Append("\"errorCode\":\"").Append(JsonEncode(entry.Code)).Append('"');
             sb.Append(",\"message\":\"").Append(JsonEncode(entry.Description ?? entry.Code)).Append('"');
             sb.Append(",\"errorSource\":\"").Append(JsonEncode(entry.ErrorSource ?? "System")).Append('"');

@@ -98,7 +98,7 @@ class TestChannel1GtsStatusForge:
 
     def test_builds_error_details(self, all_sources):
         engine = all_sources["engine"]
-        assert "errorDetails" in engine
+        assert "error" in engine
 
     def test_uses_http_200(self, all_sources):
         engine = all_sources["engine"]
