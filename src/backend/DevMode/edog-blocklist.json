@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.invalid/edog-blocklist.schema.json",
-  "version": 1,
-  "comment": "Components matching ANY regex are dropped at the EDOG source. Patterns are tested against the raw CodeMarkerName (case-insensitive). Errors and Warnings always bypass this list — even if their component matches. To tune, edit and re-run 'edog apply'.",
+  "version": 2,
+  "comment": "Components matching ANY regex are dropped at the EDOG source. Patterns are tested against the raw CodeMarkerName (case-insensitive). Errors and Warnings always bypass this list — even if their component matches. To tune, edit and re-run 'edog --deploy'.",
   "blocked": [
     {
       "pattern": "^Microsoft\\.AspNetCore",
@@ -30,6 +30,38 @@
     {
       "pattern": "^IntervalTimer-HiccupMonitor",
       "reason": "Hiccup monitor periodic ticks — high-frequency platform noise"
+    },
+    {
+      "pattern": "^WCL-PlatformRelay",
+      "reason": "Platform relay internal messaging"
+    },
+    {
+      "pattern": "^WCL-Health",
+      "reason": "WCL health probe internals"
+    },
+    {
+      "pattern": "^WCL-Startup",
+      "reason": "WCL startup/bootstrap noise"
+    },
+    {
+      "pattern": "^WCL-Security",
+      "reason": "WCL security/auth pipeline noise"
+    },
+    {
+      "pattern": "^WCL-Middleware",
+      "reason": "WCL middleware pipeline noise"
+    },
+    {
+      "pattern": "^Trident",
+      "reason": "Trident platform internals"
+    },
+    {
+      "pattern": "^FeatureManagement",
+      "reason": ".NET feature management framework noise"
+    },
+    {
+      "pattern": "^Azure\\.",
+      "reason": "Azure SDK client library internals"
     }
   ]
 }
