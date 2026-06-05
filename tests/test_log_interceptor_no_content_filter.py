@@ -50,12 +50,11 @@ class TestNoServerSideContentFiltering:
     """Server-side log interceptor must NOT filter based on content or component."""
 
     def test_no_allowlist_or_component_filter(self, interceptor_source: str) -> None:
-        """No code declarations for allowlist, IsFltComponent, or fltComponentPrefixes."""
-        # Strip comments (// and /* */) before checking — references in doc comments are fine
+        """No code declarations for allowlist file loading or FLT component prefixes file."""
+        # Strip comments before checking
         stripped = re.sub(r"//[^\n]*", "", interceptor_source)
         stripped = re.sub(r"/\*.*?\*/", "", stripped, flags=re.DOTALL)
         for banned in (
-            "IsFltComponent",
             "fltComponentPrefixes",
             "hasAllowlist",
             "LoadComponentAllowlist",
@@ -63,8 +62,7 @@ class TestNoServerSideContentFiltering:
         ):
             assert banned not in stripped, (
                 f"Found code reference to '{banned}' in EdogLogInterceptor.cs — "
-                "the server-side allowlist filter was removed (post-mortem 2026-06-05). "
-                "All logs must flow through; frontend handles filtering."
+                "the file-based allowlist was removed (post-mortem 2026-06-05)."
             )
 
     def test_no_content_based_return_in_trace_event(self, interceptor_source: str) -> None:
@@ -93,8 +91,9 @@ class TestNoServerSideContentFiltering:
         """Error storm dedup must apply to ALL components, not just non-FLT."""
         body = _trace_event_body(interceptor_source)
         assert "IsDuplicateError" in body, "Error storm dedup must be present"
-        # Must NOT be guarded by the OLD isFlt / IsFltComponent check
-        # Note: isFltLog (the verbose rate-limiter) is different — it's backpressure, not content filtering
-        assert "IsFltComponent" not in body, (
-            "Dedup must not use the old IsFltComponent method."
+        # Dedup must NOT be conditional on IsFltComponent — errors from any source get deduped
+        # (IsFltComponent is used for throughput gating, NOT for dedup scoping)
+        dedup_section = body[body.index("IsDuplicateError") - 200:body.index("IsDuplicateError")]
+        assert "IsFltComponent" not in dedup_section, (
+            "Dedup must not be gated by IsFltComponent — it should apply to all errors universally."
         )

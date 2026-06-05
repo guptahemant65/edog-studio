@@ -12,7 +12,6 @@ namespace Microsoft.LiveTable.Service.DevMode
     using System.Collections.Generic;
     using System.Linq;
     using System.Text.RegularExpressions;
-    using System.Threading;
     using Microsoft.ServicePlatform.Telemetry;
     /// <summary>
     /// Intercepts all Tracer.LogSanitized* calls and forwards them to EdogLogServer for dev-time analysis.
@@ -77,9 +76,6 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         private readonly ConcurrentDictionary<string, long> recentErrors = new ConcurrentDictionary<string, long>();
 
-        // Backpressure: rate-limit platform Verbose logs (1 in 10 pass through)
-        private static long _platformVerboseCounter;
-
         private readonly EdogLogServer edogLogServer;
 
         /// <summary>
@@ -113,30 +109,17 @@ namespace Microsoft.LiveTable.Service.DevMode
                 var eventId = testLogEvent.EventId;
                 var upperLevel = level.ToUpperInvariant();
 
-                // ── Backpressure gate ──
-                // FLT has 11+ interceptors producing massive log volume. Platform/WCL
-                // components generate thousands of Verbose/Message logs per second that
-                // overwhelm SignalR if forwarded unconditionally.
-                //
-                // Policy:
-                //   FLT logs    → always pass (any level)
-                //   Non-FLT     → Error/Warning always pass, Message/Verbose dropped
-                //
-                // FLT detection: bracket-tagged components, "Unknown" component (bare
-                // Tracer calls), or messages containing MLV_/FLT_ prefixes.
-                bool isFltOrigin = component == "Unknown"
-                    || (component.Length > 0 && component[0] == '[')
-                    || (!component.StartsWith("WCL-", StringComparison.OrdinalIgnoreCase)
-                        && !component.StartsWith("Security", StringComparison.OrdinalIgnoreCase)
-                        && !component.StartsWith("Platform", StringComparison.OrdinalIgnoreCase)
-                        && !component.StartsWith("Workload.PBI", StringComparison.OrdinalIgnoreCase)
-                        && !component.StartsWith("PBI", StringComparison.OrdinalIgnoreCase))
-                    || message.Contains("MLV_")
-                    || message.Contains("FLT_");
-
-                if (!isFltOrigin && upperLevel != "ERROR" && upperLevel != "WARNING")
+                // Drop non-FLT Verbose/Message logs to prevent SignalR flood.
+                // FLT components are identified by their CodeMarker/bracket prefix.
+                // Error/Warning from any source always pass through.
+                if (upperLevel != "ERROR" && upperLevel != "WARNING")
                 {
-                    return;
+                    if (!this.IsFltComponent(component)
+                        && !message.Contains("MLV_")
+                        && !message.Contains("FLT_"))
+                    {
+                        return;
+                    }
                 }
 
                 // Error storm protection: dedup repeated errors/warnings within 2s window.
@@ -313,6 +296,29 @@ namespace Microsoft.LiveTable.Service.DevMode
             }
 
             return codeMarkerName;
+        }
+
+        /// <summary>
+        /// Returns true if the component name looks like an FLT-internal component.
+        /// Simple prefix check — "Unknown" is treated as FLT (bare Tracer calls
+        /// without bracket tags are overwhelmingly FLT internal).
+        /// Known non-FLT prefixes (WCL, Security, Platform, PBI) are excluded.
+        /// </summary>
+        private static bool IsFltComponent(string component)
+        {
+            if (string.IsNullOrEmpty(component)) return false;
+            if (component == "Unknown") return true;
+
+            // Known non-FLT platform prefixes
+            if (component.StartsWith("WCL-", StringComparison.OrdinalIgnoreCase)
+                || component.StartsWith("Security", StringComparison.OrdinalIgnoreCase)
+                || component.StartsWith("Platform", StringComparison.OrdinalIgnoreCase)
+                || component.StartsWith("PBI", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            return true;
         }
 
         /// <summary>
