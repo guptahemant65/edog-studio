@@ -114,7 +114,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 // Error/Warning from any source always pass through.
                 if (upperLevel != "ERROR" && upperLevel != "WARNING")
                 {
-                    if (!this.IsFltComponent(component)
+                    if (!IsFltComponent(component)
                         && !message.Contains("MLV_")
                         && !message.Contains("FLT_"))
                     {
