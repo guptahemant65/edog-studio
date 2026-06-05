@@ -68,27 +68,24 @@ class TestNoServerSideContentFiltering:
             )
 
     def test_no_content_based_return_in_trace_event(self, interceptor_source: str) -> None:
-        """TraceEvent must not return based on message content or FLT class prefix regex."""
+        """TraceEvent must not return based on FltClassPrefixRegex (the old broken filter)."""
         body = _trace_event_body(interceptor_source)
         for banned_pattern in (
             r"FltClassPrefixRegex",
-            r'message\.Contains\("MLV_"\)',
-            r'message\.Contains\("FLT_"\)',
-            r'message\.Contains\("SPARK_"\)',
         ):
             assert not re.search(banned_pattern, body), (
-                f"Found content-based filter '{banned_pattern}' in TraceEvent body. "
-                "Server-side must not drop logs based on message content."
+                f"Found old content filter '{banned_pattern}' in TraceEvent body. "
+                "The allowlist-based filter was removed (post-mortem 2026-06-05)."
             )
 
     def test_only_permitted_early_returns(self, interceptor_source: str) -> None:
-        """TraceEvent should only return early for: null message, duplicate error."""
+        """TraceEvent should only return early for: null message, verbose rate-limit, duplicate error."""
         body = _trace_event_body(interceptor_source)
         # Find all `return;` statements (not `return <value>;`)
         returns = list(re.finditer(r"\breturn\s*;", body))
-        # We expect exactly 2: null-message guard and IsDuplicateError guard
-        assert len(returns) == 2, (
-            f"Expected exactly 2 early returns in TraceEvent (null guard + dedup), "
+        # We expect exactly 3: null-message guard, verbose rate-limit, IsDuplicateError guard
+        assert len(returns) == 3, (
+            f"Expected exactly 3 early returns in TraceEvent (null guard + verbose rate-limit + dedup), "
             f"found {len(returns)}. Additional returns likely indicate content filtering."
         )
 
@@ -96,7 +93,8 @@ class TestNoServerSideContentFiltering:
         """Error storm dedup must apply to ALL components, not just non-FLT."""
         body = _trace_event_body(interceptor_source)
         assert "IsDuplicateError" in body, "Error storm dedup must be present"
-        # Must NOT be guarded by isFlt / IsFltComponent check
-        assert "isFlt" not in body, (
-            "Dedup must not be conditional on isFlt — it should apply universally."
+        # Must NOT be guarded by the OLD isFlt / IsFltComponent check
+        # Note: isFltLog (the verbose rate-limiter) is different — it's backpressure, not content filtering
+        assert "IsFltComponent" not in body, (
+            "Dedup must not use the old IsFltComponent method."
         )

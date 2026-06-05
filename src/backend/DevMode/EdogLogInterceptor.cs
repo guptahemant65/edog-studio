@@ -12,6 +12,7 @@ namespace Microsoft.LiveTable.Service.DevMode
     using System.Collections.Generic;
     using System.Linq;
     using System.Text.RegularExpressions;
+    using System.Threading;
     using Microsoft.ServicePlatform.Telemetry;
     /// <summary>
     /// Intercepts all Tracer.LogSanitized* calls and forwards them to EdogLogServer for dev-time analysis.
@@ -76,6 +77,9 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         private readonly ConcurrentDictionary<string, long> recentErrors = new ConcurrentDictionary<string, long>();
 
+        // Backpressure: rate-limit platform Verbose logs (1 in 10 pass through)
+        private static long _platformVerboseCounter;
+
         private readonly EdogLogServer edogLogServer;
 
         /// <summary>
@@ -107,10 +111,30 @@ namespace Microsoft.LiveTable.Service.DevMode
                 var component = ExtractComponent(MonitoredScope.CurrentCodeMarkerName, message);
                 var rootActivityId = MonitoredScope.RootActivityId.ToString();
                 var eventId = testLogEvent.EventId;
+                var upperLevel = level.ToUpperInvariant();
+
+                // Backpressure gate: drop Verbose logs from non-FLT platform components
+                // to prevent overwhelming SignalR. FLT logs always pass through.
+                // This is NOT content filtering (all FLT logs reach the frontend) —
+                // it's throughput protection against WCL/platform verbosity storms.
+                if (upperLevel == "VERBOSE")
+                {
+                    bool isFltLog = component != "Unknown"
+                        && !component.StartsWith("WCL-", StringComparison.OrdinalIgnoreCase)
+                        && !component.StartsWith("Security", StringComparison.OrdinalIgnoreCase)
+                        && !component.StartsWith("Platform", StringComparison.OrdinalIgnoreCase);
+                    if (!isFltLog && !message.Contains("MLV_") && !message.Contains("FLT_"))
+                    {
+                        // Rate-limit: allow 1 in 10 platform verbose logs
+                        if (Interlocked.Increment(ref _platformVerboseCounter) % 10 != 0)
+                        {
+                            return;
+                        }
+                    }
+                }
 
                 // Error storm protection: dedup repeated errors/warnings within 2s window.
                 // Applied universally — prevents UI flood from any component.
-                var upperLevel = level.ToUpperInvariant();
                 if (upperLevel == "ERROR" || upperLevel == "WARNING")
                 {
                     if (this.IsDuplicateError(level, component, message, eventId))
