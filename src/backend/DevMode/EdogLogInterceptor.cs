@@ -46,6 +46,31 @@ namespace Microsoft.LiveTable.Service.DevMode
             @"(?:\[IterationId\s+|\bIterationId[=: ]+)([0-9a-fA-F-]{36})\b",
             RegexOptions.Compiled);
 
+        // rootActivityId → iterationId reverse index for log enrichment.
+        // When a telemetry event carries correlationId = "rootId|iterationId",
+        // we cache that mapping so log entries with the same rootActivityId
+        // can inherit the iterationId.
+        private static readonly ConcurrentDictionary<string, string>
+            _rootActivityToIteration = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Called by EdogTelemetryInterceptor to register a rootActivityId → iterationId
+        /// mapping whenever a telemetry event with a correlationId is processed.
+        /// </summary>
+        public static void RegisterRootActivityMapping(string correlationId, string iterationId)
+        {
+            if (string.IsNullOrEmpty(correlationId) || string.IsNullOrEmpty(iterationId)) return;
+            var pipeIdx = correlationId.IndexOf('|');
+            if (pipeIdx > 0)
+            {
+                _rootActivityToIteration[correlationId.Substring(0, pipeIdx)] = iterationId;
+            }
+            else if (correlationId.Length >= 73 && correlationId[36] == '-')
+            {
+                _rootActivityToIteration[correlationId.Substring(0, 36)] = iterationId;
+            }
+        }
+
         // ── Error dedup — prevents relay-timeout-storm floods ────────────
         private const int ErrorDedupWindowMs = 2000;
         private const int ErrorMessageKeyLength = 120;
