@@ -1,0 +1,1440 @@
+// <copyright file="EdogErrorCodeCatalog.cs" company="Microsoft">
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// </copyright>
+
+#nullable disable
+#pragma warning disable // DevMode-only file
+
+namespace Microsoft.LiveTable.Service.DevMode
+{
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+    using System.Text.Json;
+
+    internal sealed class ErrorCodeEntry
+    {
+        public string Code { get; init; }
+        public string Phase { get; init; }
+        public int Channel { get; init; }
+        public string ErrorSource { get; init; }
+        public string Category { get; init; }
+        public string[] NodeKinds { get; init; }
+        public string Description { get; init; }
+        public int HttpStatus { get; init; }
+        public string FltCodePath { get; init; }
+    }
+
+    internal static class EdogErrorCodeCatalog
+    {
+        private static readonly ErrorCodeEntry[] _entries =
+        {
+            new ErrorCodeEntry
+            {
+                Code = "MLV_TOO_MANY_REQUESTS",
+                Phase = "GTS_SUBMIT",
+                Channel = 2,
+                ErrorSource = "User",
+                Category = "throttling",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Request rate limit exceeded",
+                HttpStatus = 429,
+                FltCodePath = "GTSBasedSparkClient.cs:488",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_SPARK_JOB_CAPACITY_THROTTLING",
+                Phase = "GTS_SUBMIT",
+                Channel = 2,
+                ErrorSource = "User",
+                Category = "throttling",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Capacity SKU exhausted",
+                HttpStatus = 430,
+                FltCodePath = "GTSBasedSparkClient.cs:503",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_SPARK_SESSION_ACQUISITION_FAILED",
+                Phase = "GTS_SUBMIT",
+                Channel = 2,
+                ErrorSource = "System",
+                Category = "execution",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Spark session creation failed",
+                HttpStatus = 500,
+                FltCodePath = "GTSBasedSparkClient.cs:489",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_SPARK_SESSION_REQUEST_SUBMISSION_FAILED",
+                Phase = "GTS_SUBMIT",
+                Channel = 2,
+                ErrorSource = "System",
+                Category = "execution",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Spark job submission rejected",
+                HttpStatus = 400,
+                FltCodePath = "GTSBasedSparkClient.cs:524",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_SPARK_SESSION_ACQUISITION_TIMEOUT",
+                Phase = "GTS_SUBMIT",
+                Channel = 4,
+                ErrorSource = "System",
+                Category = "execution",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Spark session acquisition timed out",
+                HttpStatus = 0,
+                FltCodePath = "GTSBasedSparkClient.cs:199",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_KNOWN_USER_ERROR",
+                Phase = "GTS_SUBMIT",
+                Channel = 2,
+                ErrorSource = "User",
+                Category = "execution",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "User error passed through from GTS",
+                HttpStatus = 400,
+                FltCodePath = "GTSBasedSparkClient.cs:517",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_TRANSFORM_EXECUTION_NOT_FOUND",
+                Phase = "GTS_POLL",
+                Channel = 1,
+                ErrorSource = "System",
+                Category = "execution",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Previously submitted transform ID not found on GTS",
+                HttpStatus = 200,
+                FltCodePath = "GTSBasedSparkClient.cs:304",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_ACCESS_DENIED",
+                Phase = "CATALOG_RESOLVE",
+                Channel = 3,
+                ErrorSource = "User",
+                Category = "auth",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "No permission to view lakehouse or table",
+                HttpStatus = 0,
+                FltCodePath = "CatalogHandler.cs:129",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_UNAUTHORIZED_ACCESS",
+                Phase = "CATALOG_RESOLVE",
+                Channel = 3,
+                ErrorSource = "User",
+                Category = "auth",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Session missing required credentials",
+                HttpStatus = 0,
+                FltCodePath = "ErrorRegistry",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_ENVIRONMENT_ACCESS_DENIED",
+                Phase = "CATALOG_RESOLVE",
+                Channel = 3,
+                ErrorSource = "User",
+                Category = "auth",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "No permission to access configured environment",
+                HttpStatus = 0,
+                FltCodePath = "ErrorRegistry",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_CATALOG_ACCESS_DENIED",
+                Phase = "CATALOG_RESOLVE",
+                Channel = 3,
+                ErrorSource = "User",
+                Category = "auth",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Catalog access denied",
+                HttpStatus = 0,
+                FltCodePath = "ErrorRegistry",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_CATALOG_AUTHENTICATION_FAILED",
+                Phase = "CATALOG_RESOLVE",
+                Channel = 3,
+                ErrorSource = "System",
+                Category = "auth",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Authentication failure accessing catalog",
+                HttpStatus = 0,
+                FltCodePath = "ErrorRegistry",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_ARTIFACT_NOT_FOUND",
+                Phase = "CATALOG_RESOLVE",
+                Channel = 3,
+                ErrorSource = "User",
+                Category = "resource",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Lakehouse no longer exists or can't be resolved",
+                HttpStatus = 0,
+                FltCodePath = "CatalogHandler.cs:138",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_LAKEHOUSE_SOURCE_NOT_FOUND",
+                Phase = "CATALOG_RESOLVE",
+                Channel = 3,
+                ErrorSource = "User",
+                Category = "resource",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Source lakehouse not found or deleted",
+                HttpStatus = 0,
+                FltCodePath = "ArtifactMetadataService.cs:59",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_NOTEBOOK_SOURCE_NOT_FOUND",
+                Phase = "CATALOG_RESOLVE",
+                Channel = 3,
+                ErrorSource = "User",
+                Category = "resource",
+                NodeKinds = new[] { "pyspark" },
+                Description = "Source notebook not found or deleted",
+                HttpStatus = 0,
+                FltCodePath = "ErrorRegistry",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_SOURCE_ENTITY_NOT_FOUND",
+                Phase = "CATALOG_RESOLVE",
+                Channel = 3,
+                ErrorSource = "User",
+                Category = "resource",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Source entity missing or inaccessible",
+                HttpStatus = 0,
+                FltCodePath = "CatalogHandler.cs:481",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_ENTITY_NOT_FOUND",
+                Phase = "CATALOG_RESOLVE",
+                Channel = 3,
+                ErrorSource = "User",
+                Category = "resource",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Referenced entity not found or inaccessible",
+                HttpStatus = 0,
+                FltCodePath = "ErrorRegistry",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_SELECTED_NOT_FOUND",
+                Phase = "CATALOG_RESOLVE",
+                Channel = 3,
+                ErrorSource = "User",
+                Category = "resource",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "Selected MLVs not found in lakehouse",
+                HttpStatus = 0,
+                FltCodePath = "CatalogHandler.cs:166",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_DATA_CORRUPTED",
+                Phase = "CATALOG_RESOLVE",
+                Channel = 3,
+                ErrorSource = "System",
+                Category = "system",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Catalog data corrupted or missing",
+                HttpStatus = 0,
+                FltCodePath = "Dag.cs/CatalogHandler.cs",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_STALE_METADATA",
+                Phase = "CATALOG_RESOLVE",
+                Channel = 3,
+                ErrorSource = "System",
+                Category = "resource",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Stale metadata detected",
+                HttpStatus = 0,
+                FltCodePath = "Node.cs:198",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_CROSS_WORKSPACE_NOT_SUPPORTED",
+                Phase = "CATALOG_RESOLVE",
+                Channel = 3,
+                ErrorSource = "User",
+                Category = "validation",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "Cross-workspace access not supported",
+                HttpStatus = 0,
+                FltCodePath = "ErrorRegistry",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_ARTIFACT_REFERENCE_UNAVAILABLE",
+                Phase = "CATALOG_RESOLVE",
+                Channel = 3,
+                ErrorSource = "User",
+                Category = "resource",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "Unable to retrieve artifact reference",
+                HttpStatus = 0,
+                FltCodePath = "ErrorRegistry",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_CIRCULAR_DEPENDENCY",
+                Phase = "DAG_CONSTRUCTION",
+                Channel = 3,
+                ErrorSource = "User",
+                Category = "dag",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "Circular dependency in lineage",
+                HttpStatus = 0,
+                FltCodePath = "Dag.cs",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_LINEAGE_CREATION_FAILURE",
+                Phase = "DAG_CONSTRUCTION",
+                Channel = 3,
+                ErrorSource = "System",
+                Category = "dag",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Lineage creation failed",
+                HttpStatus = 0,
+                FltCodePath = "LiveTableController.cs:213",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION",
+                Phase = "DAG_CONSTRUCTION",
+                Channel = 3,
+                ErrorSource = "System",
+                Category = "dag",
+                NodeKinds = new[] { "pyspark" },
+                Description = "Notebook exception during lineage creation",
+                HttpStatus = 0,
+                FltCodePath = "LiveTableController.cs:288",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_LINEAGE_NOT_FOUND",
+                Phase = "DAG_CONSTRUCTION",
+                Channel = 3,
+                ErrorSource = "User",
+                Category = "dag",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Lineage information not found",
+                HttpStatus = 0,
+                FltCodePath = "LiveTableHandler.cs:156",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_INVALID_FORMAT",
+                Phase = "DAG_CONSTRUCTION",
+                Channel = 3,
+                ErrorSource = "User",
+                Category = "validation",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "Table/view name not in supported format",
+                HttpStatus = 0,
+                FltCodePath = "Node.cs",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_MAGIC_COMMAND_NOT_SUPPORTED",
+                Phase = "DAG_CONSTRUCTION",
+                Channel = 3,
+                ErrorSource = "User",
+                Category = "validation",
+                NodeKinds = new[] { "pyspark" },
+                Description = "Magic commands in notebook not supported",
+                HttpStatus = 0,
+                FltCodePath = "NotebookExecutionContext.cs:186",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL",
+                Phase = "DAG_CONSTRUCTION",
+                Channel = 3,
+                ErrorSource = "User",
+                Category = "validation",
+                NodeKinds = new[] { "pyspark" },
+                Description = "Multiple MLV definitions in single cell",
+                HttpStatus = 0,
+                FltCodePath = "NotebookExecutionContext.cs:216",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_NB_ETAG_CHANGED",
+                Phase = "DAG_CONSTRUCTION",
+                Channel = 3,
+                ErrorSource = "User",
+                Category = "concurrency",
+                NodeKinds = new[] { "pyspark" },
+                Description = "Notebook changed after operation started",
+                HttpStatus = 0,
+                FltCodePath = "ErrorRegistry",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_SETTINGS_FORMAT_ERROR",
+                Phase = "PRE_EXECUTION_VALIDATION",
+                Channel = 3,
+                ErrorSource = "User",
+                Category = "validation",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "DAG settings corrupted",
+                HttpStatus = 0,
+                FltCodePath = "DagExecutionHandlerV2.cs:260",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_SETTINGS_RETRIEVAL_ERROR",
+                Phase = "PRE_EXECUTION_VALIDATION",
+                Channel = 3,
+                ErrorSource = "System",
+                Category = "validation",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Settings retrieval failed",
+                HttpStatus = 0,
+                FltCodePath = "DagExecutionHandlerV2.cs:266",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_DAG_HAS_FAULTED_NODES",
+                Phase = "PRE_EXECUTION_VALIDATION",
+                Channel = 3,
+                ErrorSource = "User",
+                Category = "dag",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "DAG has faulted nodes from catalog resolution",
+                HttpStatus = 0,
+                FltCodePath = "DagExecutionHandlerV2.cs:338",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_FABRIC_RUNTIME_VERSION_INCOMPATIBLE",
+                Phase = "PRE_EXECUTION_VALIDATION",
+                Channel = 3,
+                ErrorSource = "User",
+                Category = "validation",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "Incompatible Fabric runtime version",
+                HttpStatus = 0,
+                FltCodePath = "ErrorRegistry",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_NOT_SUPPORTED",
+                Phase = "PRE_EXECUTION_VALIDATION",
+                Channel = 3,
+                ErrorSource = "User",
+                Category = "validation",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Feature not enabled for tenant",
+                HttpStatus = 0,
+                FltCodePath = "ErrorRegistry",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_OPERATION_NOT_SUPPORTED",
+                Phase = "PRE_EXECUTION_VALIDATION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "validation",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Operation not supported on MLV",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:178",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_NOTEBOOK_CONTEXT_REQUIRED",
+                Phase = "PRE_EXECUTION_VALIDATION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "validation",
+                NodeKinds = new[] { "pyspark" },
+                Description = "MLV requires Fabric Notebook context",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:174",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_SOURCE_ENTRY_FUNCTION_REFERENCE_NOT_FOUND",
+                Phase = "PRE_EXECUTION_VALIDATION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "resource",
+                NodeKinds = new[] { "pyspark" },
+                Description = "Source entry function reference not found",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:176",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_INVALID",
+                Phase = "PRE_EXECUTION_VALIDATION",
+                Channel = 3,
+                ErrorSource = "User",
+                Category = "validation",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Invalid request parameters",
+                HttpStatus = 0,
+                FltCodePath = "ErrorRegistry",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_MV_NOT_FOUND",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "resource",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "Materialized view not found",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:127",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_NOT_FOUND",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "resource",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "Materialized view not found (generic)",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:161",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_CONCURRENT_REFRESH",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "concurrency",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Concurrent write conflict",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:138",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_REFRESH_CONFLICT",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "concurrency",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Concurrent write occurred",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:154",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_REFRESH_WRITE_FAILED",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "System",
+                Category = "execution",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Write operation failed",
+                HttpStatus = 200,
+                FltCodePath = "ErrorRegistry",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_REFRESH_SOURCE_ENTITIES_UNDEFINED",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "validation",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "Source entities field undefined",
+                HttpStatus = 200,
+                FltCodePath = "ErrorRegistry",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_REFRESH_SOURCE_ENTITIES_CORRUPTED",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "System",
+                Category = "system",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "Source entity information corrupted",
+                HttpStatus = 200,
+                FltCodePath = "ErrorRegistry",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_REFRESH_DEFAULT_DB_UNDEFINED",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "validation",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "Default database not defined",
+                HttpStatus = 200,
+                FltCodePath = "ErrorRegistry",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_REFRESH_VIEW_TEXT_NOT_FOUND",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "validation",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "ViewText field missing or corrupted",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:140",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_SOURCE_ENTITIES_MISSING",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "resource",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "Required source entities missing",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:130/180",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_SOURCE_DB_MISSING",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "resource",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "Specified database entity not found",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:131",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_QUERY_NOT_FOUND",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "validation",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "ViewText missing/corrupted",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:162",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_SCHEMA_NOT_FOUND",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "schema",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "Default database not defined",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:163",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_SOURCE_ENTITY_CORRUPTED",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "system",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "Source entity information corrupted",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:165",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_INVALID_OBJECT_TYPE",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "validation",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "Entity is not a materialized view",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:166",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_NOT_A_TABLE",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "validation",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "Operation not supported on MLV",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:167",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_NOT_A_MATERIALIZED_VIEW",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "validation",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "Entity is not a materialized view",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:129",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "DELTA_TABLE_NOT_FOUND",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "resource",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "Delta table not found",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:128",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_CONSTRAINT_VIOLATION",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "constraint",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "Constraint violation",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:155",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_CONSTRAINT_VIOLATION_EXCEPTION",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "constraint",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "Constraint violation exception",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:136",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_CONSTRAINT_NON_BOOLEAN",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "constraint",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "Constraint does not evaluate to boolean",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:141",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_CONSTRAINT_NOT_BOOLEAN",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "constraint",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "Constraint does not evaluate to boolean",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:157",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_CONSTRAINT_NON_DETERMINISTIC",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "constraint",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "Constraint uses non-deterministic functions",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:156",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_CONSTRAINT_SCHEMA_VIOLATION",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "constraint",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "Constraint references non-existent columns",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:158",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_CONSTRAINT_UDF_NOT_SUPPORTED",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "constraint",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "Unsupported constraint",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:159",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_CONSTRAINT_MISMATCH",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "constraint",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "Constraint mismatch",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:173",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_SCHEMA_MISMATCH",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "schema",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "Schema mismatch during refresh",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:170",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_SOURCE_ENTITY_MISMATCH",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "schema",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "Source entity mismatch during refresh",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:169",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_TABLE_PROPERTIES_MISMATCH",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "schema",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "Table properties changed",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:171",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_PARTITION_MISMATCH",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "schema",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "Partition columns changed",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:172",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_CATALOG_WRITE_FAILED",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "execution",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "Catalog metadata write failed",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:160",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_COLUMN_DQ_CHECK_FAILED",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "dq",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "Data quality check failed",
+                HttpStatus = 200,
+                FltCodePath = "DqCheckNodeHook.cs:83",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_ALREADY_EXISTS",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "concurrency",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "MLV already exists",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:153",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_SAVEASTABLE_NOT_ALLOWED",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "validation",
+                NodeKinds = new[] { "sql", "pyspark" },
+                Description = "saveAsTable not allowed on MLV",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:152",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_UNCLASSIFIED_SYSTEM_ERROR",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "System",
+                Category = "system",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Unclassified system error",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:115",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_UNKNOWN_ERROR",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "System",
+                Category = "system",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Unknown error",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:118",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_ERROR_CODE_NOT_FOUND",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "System",
+                Category = "system",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Error code not found in registry",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutor.cs:152",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_SYSTEM_ERROR",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "System",
+                Category = "system",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "System error",
+                HttpStatus = 200,
+                FltCodePath = "ErrorRegistry",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_INTERNAL_SERVER_ERROR",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "System",
+                Category = "system",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Internal server error",
+                HttpStatus = 200,
+                FltCodePath = "ErrorRegistry",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_RUNTIME_ERROR",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "System",
+                Category = "execution",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Failed to execute MLV",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:177",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_INVALID_SYNTAX_PYSPARK",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "pyspark",
+                NodeKinds = new[] { "pyspark" },
+                Description = "Invalid PySpark syntax",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:134",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_LIBRARY_MODULE_UNAVAILABLE",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "pyspark",
+                NodeKinds = new[] { "pyspark" },
+                Description = "Required library/module missing",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:135",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_PYSPARK_REFRESH_SOURCE_ENTITIES_MISMATCH",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "pyspark",
+                NodeKinds = new[] { "pyspark" },
+                Description = "Source entities mismatch in PySpark refresh",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:142",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_PYSPARK_REFRESH_SCHEMA_MISMATCH",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "pyspark",
+                NodeKinds = new[] { "pyspark" },
+                Description = "Schema mismatch in PySpark refresh",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:143",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_PYSPARK_REFRESH_DQ_MISMATCH",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "pyspark",
+                NodeKinds = new[] { "pyspark" },
+                Description = "DQ mismatch in PySpark refresh",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:144",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_PYSPARK_CREATION_NOT_FROM_NOTEBOOK",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "pyspark",
+                NodeKinds = new[] { "pyspark" },
+                Description = "PySpark MLV not created from notebook",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:145",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_NOT_A_PYSPARK_MLV",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "pyspark",
+                NodeKinds = new[] { "pyspark" },
+                Description = "MLV is not a PySpark MLV",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:146",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_NOT_A_SQL_MLV",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "validation",
+                NodeKinds = new[] { "sql" },
+                Description = "MLV is not a SQL MLV",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:147/151",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_PYSPARK_MISSING_SOURCE_ENTRY_FUNCTION",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "System",
+                Category = "pyspark",
+                NodeKinds = new[] { "pyspark" },
+                Description = "Missing source entry function",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:116",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_PYSPARK_MISSING_SOURCE_NOTEBOOK_ID",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "System",
+                Category = "pyspark",
+                NodeKinds = new[] { "pyspark" },
+                Description = "Missing source notebook ID",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:117",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_PYSPARK_MISSING_SOURCE_WORKSPACE_ID",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "System",
+                Category = "pyspark",
+                NodeKinds = new[] { "pyspark" },
+                Description = "Missing source workspace ID",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:119",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_CONSTRAINT_MISMATCH_PYSPARK",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "pyspark",
+                NodeKinds = new[] { "pyspark" },
+                Description = "Constraint mismatch in PySpark",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:148",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_SCHEMA_MISMATCH_PYSPARK",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "pyspark",
+                NodeKinds = new[] { "pyspark" },
+                Description = "Schema mismatch in PySpark",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:149",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_SOURCE_ENTITY_MISMATCH_PYSPARK",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "pyspark",
+                NodeKinds = new[] { "pyspark" },
+                Description = "Source entity mismatch in PySpark",
+                HttpStatus = 200,
+                FltCodePath = "NodeExecutionUtils.cs:150",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_INGEST_PATH_NOT_FOUND",
+                Phase = "INGEST",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "ingest",
+                NodeKinds = new[] { "ingest" },
+                Description = "Source path does not exist",
+                HttpStatus = 200,
+                FltCodePath = "FileIngestionError.cs",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_INGEST_UNABLE_TO_INFER_SCHEMA",
+                Phase = "INGEST",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "ingest",
+                NodeKinds = new[] { "ingest" },
+                Description = "Cannot infer schema from source files",
+                HttpStatus = 200,
+                FltCodePath = "FileIngestionError.cs",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_INGEST_SCHEMA_DRIFT_REJECTED",
+                Phase = "INGEST",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "ingest",
+                NodeKinds = new[] { "ingest" },
+                Description = "Schema drift detected in FIXED mode",
+                HttpStatus = 200,
+                FltCodePath = "FileIngestionError.cs",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_INGEST_INCOMPATIBLE_TYPE",
+                Phase = "INGEST",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "ingest",
+                NodeKinds = new[] { "ingest" },
+                Description = "Unsafe type narrowing detected",
+                HttpStatus = 200,
+                FltCodePath = "FileIngestionError.cs",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_INGEST_CORRUPT_RECORDS",
+                Phase = "INGEST",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "ingest",
+                NodeKinds = new[] { "ingest" },
+                Description = "Malformed data in source file",
+                HttpStatus = 200,
+                FltCodePath = "FileIngestionError.cs",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_INGEST_DELTA_WRITE_FAILED",
+                Phase = "INGEST",
+                Channel = 1,
+                ErrorSource = "System",
+                Category = "ingest",
+                NodeKinds = new[] { "ingest" },
+                Description = "Delta write operation failed",
+                HttpStatus = 200,
+                FltCodePath = "FileIngestionError.cs",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_INGEST_AUTH_FAILURE",
+                Phase = "INGEST",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "ingest",
+                NodeKinds = new[] { "ingest" },
+                Description = "Auth failure reading source files",
+                HttpStatus = 200,
+                FltCodePath = "FileIngestionError.cs",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_INGEST_CONNECTION_TIMEOUT",
+                Phase = "INGEST",
+                Channel = 4,
+                ErrorSource = "System",
+                Category = "ingest",
+                NodeKinds = new[] { "ingest" },
+                Description = "Storage unreachable (network timeout)",
+                HttpStatus = 0,
+                FltCodePath = "FileIngestionError.cs",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_INGEST_INTERNAL_ERROR",
+                Phase = "INGEST",
+                Channel = 1,
+                ErrorSource = "System",
+                Category = "ingest",
+                NodeKinds = new[] { "ingest" },
+                Description = "Unexpected internal ingestion error",
+                HttpStatus = 200,
+                FltCodePath = "FileIngestionError.cs",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_INGEST_UNSUPPORTED_FORMAT",
+                Phase = "INGEST",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "ingest",
+                NodeKinds = new[] { "ingest" },
+                Description = "File format not recognized",
+                HttpStatus = 200,
+                FltCodePath = "FileIngestionError.cs",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_INGEST_MISSING_REQUIRED_OPTION",
+                Phase = "INGEST",
+                Channel = 1,
+                ErrorSource = "User",
+                Category = "ingest",
+                NodeKinds = new[] { "ingest" },
+                Description = "Required DDL option missing",
+                HttpStatus = 200,
+                FltCodePath = "FileIngestionError.cs",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_INGEST_EXTERNAL_MODIFICATION",
+                Phase = "INGEST",
+                Channel = 1,
+                ErrorSource = "System",
+                Category = "ingest",
+                NodeKinds = new[] { "ingest" },
+                Description = "Delta table modified outside pipeline",
+                HttpStatus = 200,
+                FltCodePath = "FileIngestionError.cs",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_TERMINAL_STATE",
+                Phase = "POST_EXECUTION",
+                Channel = 3,
+                ErrorSource = "User",
+                Category = "execution",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Execution already finished, can't cancel",
+                HttpStatus = 0,
+                FltCodePath = "LiveTableHandler.cs:168",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_REFRESH_PENDING",
+                Phase = "POST_EXECUTION",
+                Channel = 3,
+                ErrorSource = "User",
+                Category = "execution",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Iteration exists but not started",
+                HttpStatus = 0,
+                FltCodePath = "LiveTableHandler.cs:161",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_OPERATION_INPROGRESS",
+                Phase = "POST_EXECUTION",
+                Channel = 3,
+                ErrorSource = "User",
+                Category = "concurrency",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Another operation in progress",
+                HttpStatus = 0,
+                FltCodePath = "ErrorRegistry",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_RESOURCE_LOCKED",
+                Phase = "POST_EXECUTION",
+                Channel = 3,
+                ErrorSource = "User",
+                Category = "concurrency",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Entity locked by another operation",
+                HttpStatus = 0,
+                FltCodePath = "ErrorRegistry",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_EXEC_DEFN_NOT_FOUND",
+                Phase = "POST_EXECUTION",
+                Channel = 3,
+                ErrorSource = "User",
+                Category = "resource",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Execution definition not found",
+                HttpStatus = 0,
+                FltCodePath = "MLVExecutionDefinitionHandler.cs:130",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_EXEC_DEFN_EXISTS",
+                Phase = "POST_EXECUTION",
+                Channel = 3,
+                ErrorSource = "User",
+                Category = "concurrency",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Execution definition already exists",
+                HttpStatus = 0,
+                FltCodePath = "MLVExecutionDefinitionHandler.cs:181",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_CANCEL_TIMEOUT",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "System",
+                Category = "execution",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Node cancellation timed out",
+                HttpStatus = 200,
+                FltCodePath = "ErrorRegistry",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "DAG_EXECUTION_SKIPPED",
+                Phase = "POST_EXECUTION",
+                Channel = 3,
+                ErrorSource = "User",
+                Category = "execution",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "DAG skipped — iteration already in progress",
+                HttpStatus = 0,
+                FltCodePath = "DagExecutionHandlerV2.cs:904",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_SERVER_ERROR",
+                Phase = "NODE_EXECUTION",
+                Channel = 1,
+                ErrorSource = "System",
+                Category = "system",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Unexpected server error",
+                HttpStatus = 200,
+                FltCodePath = "LiveTableController.cs:332",
+            },
+            new ErrorCodeEntry
+            {
+                Code = "MLV_EXECUTION_DEFINITION_RETRIEVAL_FAILURE",
+                Phase = "CATALOG_RESOLVE",
+                Channel = 3,
+                ErrorSource = "System",
+                Category = "resource",
+                NodeKinds = new[] { "sql", "pyspark", "ingest" },
+                Description = "Failed to retrieve execution definition from OneLake",
+                HttpStatus = 0,
+                FltCodePath = "ErrorRegistry",
+            },
+        };
+
+        private static readonly Dictionary<string, ErrorCodeEntry> _byCode;
+
+        static EdogErrorCodeCatalog()
+        {
+            _byCode = new Dictionary<string, ErrorCodeEntry>(StringComparer.OrdinalIgnoreCase);
+            foreach (var entry in _entries)
+            {
+                _byCode[entry.Code] = entry;
+            }
+        }
+
+        public static ErrorCodeEntry GetByCode(string code) => _byCode.TryGetValue(code, out var entry) ? entry : null;
+
+        public static IReadOnlyList<ErrorCodeEntry> All => _entries;
+
+        public static string GetCatalogJson()
+        {
+            return JsonSerializer.Serialize(
+                _entries,
+                new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                    WriteIndented = false,
+                });
+        }
+    }
+}
