@@ -231,13 +231,25 @@ namespace Microsoft.LiveTable.Service.DevMode
             };
         }
 
+        private static readonly Regex CompoundPascalCasePrefix = new Regex(
+            @"^([A-Z][a-z]+[A-Z][a-zA-Z]*)\s*:\s",
+            RegexOptions.Compiled);
+
         /// <summary>
         /// Extracts a clean component name from the MonitoredScope code marker name.
         /// Strips WCL- prefixes and extracts FLT-specific bracket tags from messages.
+        ///
+        /// Three strategies (in priority order):
+        ///   1. [BracketedComponent] tag at start of message — most informative
+        ///   2. CompoundPascalCase: prefix in message (e.g. "InsightsOboTokenProvider: ...")
+        ///      — requires 2+ uppercase humps to exclude platform prefixes like "Information:"
+        ///   3. CodeMarkerName fallback — strip WCL- prefix
+        ///
+        /// This is display metadata ONLY — no filtering decisions depend on this value.
         /// </summary>
         private static string ExtractComponent(string codeMarkerName, string message)
         {
-            // Try to extract [BracketedComponent] from message first — most informative
+            // Strategy 1: [BracketedComponent] from message
             if (!string.IsNullOrEmpty(message))
             {
                 int start = message.IndexOf('[');
@@ -246,6 +258,14 @@ namespace Microsoft.LiveTable.Service.DevMode
                 {
                     return message.Substring(1, end - 1);
                 }
+
+                // Strategy 2: CompoundPascalCase: prefix (e.g. "InsightsOboTokenProvider: acquiring...")
+                // 2+ uppercase humps ensures we don't match "Information:", "Warning:", "Exception:"
+                var classMatch = CompoundPascalCasePrefix.Match(message);
+                if (classMatch.Success)
+                {
+                    return classMatch.Groups[1].Value;
+                }
             }
 
             if (string.IsNullOrEmpty(codeMarkerName) || codeMarkerName == "Unknown")
@@ -253,7 +273,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 return "Unknown";
             }
 
-            // Clean up WCL- prefix and take meaningful suffix
+            // Strategy 3: CodeMarkerName — clean up WCL- prefix and take meaningful suffix
             if (codeMarkerName.StartsWith("WCL-"))
             {
                 return codeMarkerName.Substring(4);
