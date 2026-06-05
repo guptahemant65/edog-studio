@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.invalid/edog-blocklist.schema.json",
-  "version": 2,
-  "comment": "Components matching ANY regex are dropped at the EDOG source. Patterns are tested against the raw CodeMarkerName (case-insensitive). Errors and Warnings always bypass this list — even if their component matches. To tune, edit and re-run 'edog --deploy'.",
+  "version": 3,
+  "comment": "Components matching ANY regex are dropped at the EDOG source. Patterns are tested against the raw CodeMarkerName (case-insensitive). Errors and Warnings always bypass this list. To tune, edit and re-run 'edog --deploy'.",
   "blocked": [
     {
       "pattern": "^Microsoft\\.AspNetCore",
@@ -25,11 +25,27 @@
     },
     {
       "pattern": "^ServicePlatform",
-      "reason": "Service Platform internal traces (not FLT-relevant)"
+      "reason": "Service Platform internal traces"
     },
     {
-      "pattern": "^IntervalTimer-HiccupMonitor",
-      "reason": "Hiccup monitor periodic ticks — high-frequency platform noise"
+      "pattern": "^IntervalTimer",
+      "reason": "Platform interval timer ticks (HiccupMonitor, etc.)"
+    },
+    {
+      "pattern": "MetricsAccumulator",
+      "reason": "WCL resource/consumption metrics accumulators — high-frequency timer noise"
+    },
+    {
+      "pattern": "^ReportUsageMetrics",
+      "reason": "Usage metrics reporting timer"
+    },
+    {
+      "pattern": "^WorkloadInitialization",
+      "reason": "Workload health check / relay probe pings"
+    },
+    {
+      "pattern": "^WorkloadResourceMetrics",
+      "reason": "Workload resource metrics polling"
     },
     {
       "pattern": "^WCL-PlatformRelay",
@@ -57,7 +73,7 @@
     },
     {
       "pattern": "^FeatureManagement",
-      "reason": ".NET feature management framework noise"
+      "reason": ".NET feature management framework"
     },
     {
       "pattern": "^Azure\\.",
