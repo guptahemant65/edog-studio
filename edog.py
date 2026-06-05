@@ -2134,6 +2134,7 @@ def apply_node_executor_wrapper_patch(content):
         if marker in line:
             # Insert AFTER this line
             ctx_lines = [
+                "",
                 "                            // EDOG DevMode — set per-node AsyncLocal context for fault injection scoping",
                 "                            Microsoft.LiveTable.Service.DevMode.EdogNodeExecutionContext.Current = new Microsoft.LiveTable.Service.DevMode.EdogNodeExecutionContext",
                 "                            {",
@@ -2233,6 +2234,7 @@ def apply_error_sim_pre_gts_patch(content):
     for i, line in enumerate(lines):
         if marker in line:
             inject = [
+                "",
                 "                    // EDOG DevMode — Error Simulator: inject pre-GTS faults into DAG nodes",
                 "                    try",
                 "                    {",
