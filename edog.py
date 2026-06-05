@@ -70,6 +70,7 @@ FILES = {
     / "WorkloadParameters/ParametersManifest.json",
     "TestRollout": Path("Service/Microsoft.LiveTable.Service.EntryPoint") / "WorkloadParameters/Rollouts/Test.json",
     "DagExecutionHandlerV2": SERVICE_PATH / "Core/V2/DagExecutionHandlerV2.cs",
+    "NodeExecutionUtils": SERVICE_PATH / "Utils/NodeExecutionUtils.cs",
     "ControllersConfig": SERVICE_PATH / "Initialization/ControllersConfig.cs",
 }
 
@@ -89,7 +90,9 @@ DEVMODE_FILES = {
     "EdogDevModeRegistrar": SERVICE_PATH / "DevMode/EdogDevModeRegistrar.cs",
     "EdogErrorCodeCatalog": SERVICE_PATH / "DevMode/EdogErrorCodeCatalog.cs",
     "EdogErrorSimEngine": SERVICE_PATH / "DevMode/EdogErrorSimEngine.cs",
+    "EdogFaultedNodeException": SERVICE_PATH / "DevMode/EdogFaultedNodeException.cs",
     "EdogNodeExecutionContext": SERVICE_PATH / "DevMode/EdogNodeExecutionContext.cs",
+    "EdogRequestContext": SERVICE_PATH / "DevMode/EdogRequestContext.cs",
     "EdogFeatureFlighterWrapper": SERVICE_PATH / "DevMode/EdogFeatureFlighterWrapper.cs",
     "EdogFeatureOverrideStore": SERVICE_PATH / "DevMode/EdogFeatureOverrideStore.cs",
     "EdogTokenInterceptor": SERVICE_PATH / "DevMode/EdogTokenInterceptor.cs",
@@ -2346,17 +2349,29 @@ def apply_file_sourced_force_full_patch(content):
 
     lines = content.split("\n")
     insert_idx = None
+    start_idx = None
     for i, line in enumerate(lines):
         if closing_marker in line:
             insert_idx = i
+            # The `bool isFullRefreshMode = string.Equals(` opener sits 1–3
+            # lines above (a short comment block may separate them in the
+            # real FLT source). Walk backwards until we find it so the
+            # new sibling declarations match the STATEMENT'S indent, not
+            # the continuation line's deeper indent (which would trip
+            # StyleCop SA1137 "siblings must share indentation").
+            for k in range(i - 1, max(-1, i - 6), -1):
+                if "bool isFullRefreshMode = string.Equals(" in lines[k]:
+                    start_idx = k
+                    break
             break
 
-    if insert_idx is None:
+    if insert_idx is None or start_idx is None:
         return content, "pattern_not_found"
 
-    # Match the indentation of the closing line so the new declarations
-    # sit cleanly inside the same try-block.
-    src_line = lines[insert_idx]
+    # Indent comes from the OPENER line, never the continuation. This is
+    # the StyleCop SA1137 fix — using the closing line's indent makes the
+    # inserted bools sit deeper than their siblings.
+    src_line = lines[start_idx]
     indent = src_line[: len(src_line) - len(src_line.lstrip(" "))]
 
     edog_block = [
@@ -2498,6 +2513,478 @@ def revert_node_completion_telemetry_patch(content):
         r"[ ]*catch\n"
         r"[ ]*\{\n"
         r"[ ]*// Telemetry must never fail node execution\.\n"
+        r"[ ]*\}",
+        "",
+        content,
+    )
+
+
+# =========================================================================
+# Phase 0 — Error Code Simulator first-principles rebuild patches.
+#
+# Six patches turn EDOG's request lifecycle into a typed, mapper-friendly
+# pipeline so the simulator can deliver fidelity-bearing failures:
+#
+#   1. apply_request_context_begin_patch       (DagExecutionHandlerV2.cs)
+#   2. apply_request_context_enrich_patch      (DagExecutionHandlerV2.cs)
+#   3. apply_request_context_end_patch         (DagExecutionHandlerV2.cs)
+#   4. apply_faulted_node_typed_throw_patch    (DagExecutionHandlerV2.cs)
+#   5. apply_outer_catch_guard_extend_patch    (DagExecutionHandlerV2.cs)
+#   6. apply_mapper_edog_branch_patch          (NodeExecutionUtils.cs)
+#
+# Patches 1-3 establish EdogRequestContext (AsyncLocal) over the lifetime
+# of a DAG execution iteration in two stages: Begin() at metadata-only
+# entry, Enrich() once dagExecutionContext is computed, End() in the
+# existing finally. This scope is independent of (and parent to) the
+# per-node EdogNodeExecutionContext.
+#
+# Patches 4-6 fix the faulted-node hijack: the original code pre-sets
+# resultCode = MLV_DAG_HAS_FAULTED_NODES, throws bare new Exception(...),
+# and the outer-catch's `if (string.IsNullOrEmpty(resultCode))` guard
+# short-circuits the mapper — so every per-node failure (e.g.
+# MLV_SOURCE_ENTITY_NOT_FOUND) collapses into the generic aggregate code.
+# Patch 4 swaps the bare throw for EdogFaultedNodeException carrying the
+# first faulted node's FLTErrorCode. Patch 5 extends the outer-catch
+# guard to additionally let EdogFaultedNodeException through the mapper
+# (legacy pre-setters at lines 233/260/266/348/449/470 keep their
+# short-circuit behavior). Patch 6 adds a top-of-mapper branch that
+# recognizes EdogFaultedNodeException and returns its carried code.
+# =========================================================================
+
+
+def apply_request_context_begin_patch(content):
+    """Patch DagExecutionHandlerV2.cs to begin the EDOG request context.
+
+    Inserts a Begin() call right after `var iterationId = metadata.OpId;`
+    so the AsyncLocal context carries the operation id and tenant id for
+    the entirety of this DAG execution. Enrich() runs later (separate
+    patch) once dagExecutionContext is computed. End() runs in the
+    existing finally block (separate patch).
+
+    Begin() is wrapped in try/catch — DevMode wiring must never block
+    a real DAG execution.
+    """
+    sentinel = "EdogRequestContext.Begin(metadata, iterationId)"
+    if sentinel in content:
+        return content, "already_applied"
+
+    marker = "var iterationId = metadata.OpId;"
+    if marker not in content:
+        return content, "pattern_not_found"
+
+    lines = content.split("\n")
+    for i, line in enumerate(lines):
+        if marker in line:
+            inject = [
+                "",
+                "                // EDOG DevMode — begin request context (operation id + tenant id only;",
+                "                // workspace/artifact/MLV name are filled in by Enrich() once",
+                "                // dagExecutionContext is computed).",
+                "                try",
+                "                {",
+                "                    Microsoft.LiveTable.Service.DevMode.EdogRequestContext.Begin(metadata, iterationId);",
+                "                }",
+                "                catch",
+                "                {",
+                "                    // Non-fatal — never block DAG execution from context setup.",
+                "                }",
+                "",
+            ]
+            for j, il in enumerate(inject):
+                lines.insert(i + 1 + j, il)
+            return "\n".join(lines), "applied"
+
+    return content, "pattern_not_found"
+
+
+def revert_request_context_begin_patch(content):
+    """Remove the EdogRequestContext.Begin call."""
+    return re.sub(
+        r"\n\n[ ]*// EDOG DevMode — begin request context \(operation id \+ tenant id only;\n"
+        r"[ ]*// workspace/artifact/MLV name are filled in by Enrich\(\) once\n"
+        r"[ ]*// dagExecutionContext is computed\)\.\n"
+        r"[ ]*try\n"
+        r"[ ]*\{\n"
+        r"[ ]*Microsoft\.LiveTable\.Service\.DevMode\.EdogRequestContext\.Begin\(metadata, iterationId\);\n"
+        r"[ ]*\}\n"
+        r"[ ]*catch\n"
+        r"[ ]*\{\n"
+        r"[ ]*// Non-fatal — never block DAG execution from context setup\.\n"
+        r"[ ]*\}\n",
+        "",
+        content,
+    )
+
+
+def apply_request_context_enrich_patch(content):
+    """Patch DagExecutionHandlerV2.cs to enrich the EDOG request context.
+
+    Inserts an Enrich() call right after the last `ms.AddCustomData(...)`
+    that uses dagExecutionContext — at that point WorkspaceId, LakehouseId
+    and DagName are all guaranteed populated.
+
+    Enrich() reads from the IDisposable DagExecutionContext but copies
+    the fields out — it does not retain a reference, so disposal of the
+    DagExecutionContext later in the request does not invalidate the
+    enriched EdogRequestContext.
+    """
+    sentinel = "EdogRequestContext.Enrich(dagExecutionContext)"
+    if sentinel in content:
+        return content, "already_applied"
+
+    marker = 'ms.AddCustomData("IsReliableOpsRetryRequest", reliableOpsRetryRequest);'
+    if marker not in content:
+        return content, "pattern_not_found"
+
+    lines = content.split("\n")
+    for i, line in enumerate(lines):
+        if marker in line:
+            inject = [
+                "",
+                "                    // EDOG DevMode — enrich request context with workspace/artifact/MLV name",
+                "                    // now that dagExecutionContext is resolved. Fields are copied; no reference is retained.",
+                "                    try",
+                "                    {",
+                "                        Microsoft.LiveTable.Service.DevMode.EdogRequestContext.Enrich(dagExecutionContext);",
+                "                    }",
+                "                    catch",
+                "                    {",
+                "                        // Non-fatal — never block DAG execution from context enrichment.",
+                "                    }",
+            ]
+            for j, il in enumerate(inject):
+                lines.insert(i + 1 + j, il)
+            return "\n".join(lines), "applied"
+
+    return content, "pattern_not_found"
+
+
+def revert_request_context_enrich_patch(content):
+    """Remove the EdogRequestContext.Enrich call."""
+    return re.sub(
+        r"\n\n[ ]*// EDOG DevMode — enrich request context with workspace/artifact/MLV name\n"
+        r"[ ]*// now that dagExecutionContext is resolved\. Fields are copied; no reference is retained\.\n"
+        r"[ ]*try\n"
+        r"[ ]*\{\n"
+        r"[ ]*Microsoft\.LiveTable\.Service\.DevMode\.EdogRequestContext\.Enrich\(dagExecutionContext\);\n"
+        r"[ ]*\}\n"
+        r"[ ]*catch\n"
+        r"[ ]*\{\n"
+        r"[ ]*// Non-fatal — never block DAG execution from context enrichment\.\n"
+        r"[ ]*\}",
+        "",
+        content,
+    )
+
+
+def apply_request_context_end_patch(content):
+    """Patch DagExecutionHandlerV2.cs to end the EDOG request context.
+
+    Inserts an End() call at the very top of the existing outer finally
+    block so the AsyncLocal context is cleared on every code path (success,
+    handled exception, unhandled exception). End() is wrapped in try/catch.
+
+    Anchors on the 3-line opening of the finally block (`finally`, `{`, and
+    the comment line that begins with `*****`) for uniqueness — the
+    standalone `}` and the `// ***` line appear elsewhere in the file.
+    """
+    sentinel = "EdogRequestContext.End();"
+    if sentinel in content:
+        return content, "already_applied"
+
+    marker_block = (
+        "                finally\n"
+        "                {\n"
+        "                    // *************************************************************************************"
+    )
+    if marker_block not in content:
+        return content, "pattern_not_found"
+
+    injection = (
+        "                finally\n"
+        "                {\n"
+        "                    // EDOG DevMode — end request context for this DAG execution.\n"
+        "                    // Runs first so a leaked AsyncLocal can never outlive the request,\n"
+        "                    // even if subsequent cleanup throws.\n"
+        "                    try\n"
+        "                    {\n"
+        "                        Microsoft.LiveTable.Service.DevMode.EdogRequestContext.End();\n"
+        "                    }\n"
+        "                    catch\n"
+        "                    {\n"
+        "                        // Non-fatal — never block DAG execution from context teardown.\n"
+        "                    }\n"
+        "\n"
+        "                    // *************************************************************************************"
+    )
+
+    return content.replace(marker_block, injection, 1), "applied"
+
+
+def revert_request_context_end_patch(content):
+    """Remove the EdogRequestContext.End call from the outer finally."""
+    return re.sub(
+        r"[ ]*// EDOG DevMode — end request context for this DAG execution\.\n"
+        r"[ ]*// Runs first so a leaked AsyncLocal can never outlive the request,\n"
+        r"[ ]*// even if subsequent cleanup throws\.\n"
+        r"[ ]*try\n"
+        r"[ ]*\{\n"
+        r"[ ]*Microsoft\.LiveTable\.Service\.DevMode\.EdogRequestContext\.End\(\);\n"
+        r"[ ]*\}\n"
+        r"[ ]*catch\n"
+        r"[ ]*\{\n"
+        r"[ ]*// Non-fatal — never block DAG execution from context teardown\.\n"
+        r"[ ]*\}\n"
+        r"\n",
+        "",
+        content,
+    )
+
+
+def apply_faulted_node_typed_throw_patch(content):
+    """Patch DagExecutionHandlerV2.cs faulted-node block to throw a typed exception.
+
+    The original code (line ~351) pre-sets resultCode = MLV_DAG_HAS_FAULTED_NODES
+    and throws bare `new Exception(errorMessage)`. The outer-catch's
+    `if (string.IsNullOrEmpty(resultCode))` guard then bypasses the mapper
+    entirely, collapsing every per-node failure into the aggregate code.
+
+    This patch replaces the bare throw with EdogFaultedNodeException carrying
+    the first faulted node's FLTErrorCode (falling back to MLV_DAG_HAS_FAULTED_NODES
+    when the simulator did not stamp one). The companion outer-catch guard
+    patch lets this typed exception through the mapper; the companion mapper
+    branch patch returns its carried code unmodified.
+
+    The line `resultCode = ErrorCode.MLV_DAG_HAS_FAULTED_NODES.ToString();` at
+    line ~348 is intentionally LEFT IN PLACE. It is harmless once Patch 5
+    extends the outer-catch guard (the mapper still runs because the new
+    `e is EdogFaultedNodeException` clause is true); removing it would risk
+    altering behavior on any legacy code path that reads resultCode between
+    the throw and the catch.
+
+    Default statusCode=422 (Unprocessable Entity) maps the faulted-node
+    aggregate to a user error, matching errorSource = ErrorSource.User
+    on the preceding line. The mapper's branch then selects
+    SucceededWithErrors as the activity status.
+    """
+    sentinel = "new Microsoft.LiveTable.Service.DevMode.EdogFaultedNodeException"
+    if sentinel in content:
+        return content, "already_applied"
+
+    original = "                        throw new Exception(errorMessage);"
+    if original not in content:
+        return content, "pattern_not_found"
+
+    replacement = (
+        "\n"
+        "                        // EDOG DevMode — throw a typed exception so the outer-catch mapper\n"
+        "                        // can surface the originating per-node FLTErrorCode (set by the simulator\n"
+        "                        // or by FLT itself for unresolved cross-workspace entities) instead of\n"
+        "                        // collapsing every faulted-node failure into MLV_DAG_HAS_FAULTED_NODES.\n"
+        "                        throw new Microsoft.LiveTable.Service.DevMode.EdogFaultedNodeException(\n"
+        "                            errorMessage,\n"
+        "                            422,\n"
+        "                            faultedNodes[0].FLTErrorCode ?? ErrorCode.MLV_DAG_HAS_FAULTED_NODES,\n"
+        "                            ErrorSource.User);"
+    )
+
+    return content.replace(original, replacement, 1), "applied"
+
+
+def revert_faulted_node_typed_throw_patch(content):
+    """Restore the original bare throw in the faulted-node block."""
+    patched = (
+        "\n"
+        "                        // EDOG DevMode — throw a typed exception so the outer-catch mapper\n"
+        "                        // can surface the originating per-node FLTErrorCode (set by the simulator\n"
+        "                        // or by FLT itself for unresolved cross-workspace entities) instead of\n"
+        "                        // collapsing every faulted-node failure into MLV_DAG_HAS_FAULTED_NODES.\n"
+        "                        throw new Microsoft.LiveTable.Service.DevMode.EdogFaultedNodeException(\n"
+        "                            errorMessage,\n"
+        "                            422,\n"
+        "                            faultedNodes[0].FLTErrorCode ?? ErrorCode.MLV_DAG_HAS_FAULTED_NODES,\n"
+        "                            ErrorSource.User);"
+    )
+    original = "                        throw new Exception(errorMessage);"
+    return content.replace(patched, original, 1)
+
+
+def apply_outer_catch_guard_extend_patch(content):
+    """Patch DagExecutionHandlerV2.cs outer-catch guard so mapper runs on EdogFaultedNodeException.
+
+    Original (line ~545):
+        if (string.IsNullOrEmpty(resultCode))
+
+    The guard exists to preserve pre-set resultCode + errorMessage on legacy
+    code paths (settings_format_error at line ~260, settings_retrieval_error
+    at line ~266, dag_has_faulted_nodes at line ~348, plus others). We do NOT
+    want to remove the guard — those paths still pre-set fields and rely on
+    short-circuit behavior.
+
+    We additively extend the guard to ALSO route EdogFaultedNodeException
+    through the mapper. resultCode is still pre-set to MLV_DAG_HAS_FAULTED_NODES
+    on the faulted-node path, so without this extension the guard would
+    short-circuit and the typed exception's carried code would be lost.
+    """
+    sentinel = "|| e is Microsoft.LiveTable.Service.DevMode.EdogFaultedNodeException"
+    if sentinel in content:
+        return content, "already_applied"
+
+    original = "                        if (string.IsNullOrEmpty(resultCode))"
+    if original not in content:
+        return content, "pattern_not_found"
+
+    replacement = (
+        "                        // EDOG DevMode — extend the guard so EdogFaultedNodeException is\n"
+        "                        // always routed through the mapper (the typed exception carries the\n"
+        "                        // originating per-node code; the pre-set resultCode would otherwise\n"
+        "                        // short-circuit it). Legacy pre-setters at lines ~233/260/266/348/\n"
+        "                        // 449/470 continue to short-circuit as before.\n"
+        "                        if (string.IsNullOrEmpty(resultCode) || e is Microsoft.LiveTable.Service.DevMode.EdogFaultedNodeException)"
+    )
+
+    return content.replace(original, replacement, 1), "applied"
+
+
+def revert_outer_catch_guard_extend_patch(content):
+    """Restore the original outer-catch guard."""
+    patched = (
+        "                        // EDOG DevMode — extend the guard so EdogFaultedNodeException is\n"
+        "                        // always routed through the mapper (the typed exception carries the\n"
+        "                        // originating per-node code; the pre-set resultCode would otherwise\n"
+        "                        // short-circuit it). Legacy pre-setters at lines ~233/260/266/348/\n"
+        "                        // 449/470 continue to short-circuit as before.\n"
+        "                        if (string.IsNullOrEmpty(resultCode) || e is Microsoft.LiveTable.Service.DevMode.EdogFaultedNodeException)"
+    )
+    original = "                        if (string.IsNullOrEmpty(resultCode))"
+    return content.replace(patched, original, 1)
+
+
+def apply_mapper_edog_branch_patch(content):
+    """Patch NodeExecutionUtils.cs MapExceptionToErrorInfo with an EdogFaultedNodeException branch.
+
+    Inserts a branch at the top of MapExceptionToErrorInfo (immediately after
+    the existing entry-point Tracer.LogSanitizedError call) that:
+      - recognizes EdogFaultedNodeException;
+      - returns its carried (ErrorCode, message, activityStatus) verbatim;
+      - selects SucceededWithErrors for 4xx StatusCode, Failed otherwise
+        (matches the convention used by the NotebookException and
+        CatalogException branches lower in the same method).
+
+    The branch must run BEFORE the existing branches so the carried code
+    is honored — without this, a `NotebookException` branch could match
+    first if EdogFaultedNodeException ever inherits from something
+    upstream-known (it doesn't today, but future-proof against that).
+    """
+    sentinel = "exception is Microsoft.LiveTable.Service.DevMode.EdogFaultedNodeException"
+    if sentinel in content:
+        return content, "already_applied"
+
+    marker = 'Tracer.LogSanitizedError(exception, $"Exception occurred during MapExceptionToErrorInfo: {exception.Message}");'
+    if marker not in content:
+        return content, "pattern_not_found"
+
+    lines = content.split("\n")
+    for i, line in enumerate(lines):
+        if marker in line:
+            inject = [
+                "",
+                "            // EDOG DevMode — recognize EdogFaultedNodeException and surface its carried",
+                "            // per-node ErrorCode instead of falling through to the generic NotebookException/",
+                "            // CatalogException/fallback branches. activityStatus follows the same 4xx-vs-5xx",
+                "            // convention used elsewhere in this method.",
+                "            if (exception is Microsoft.LiveTable.Service.DevMode.EdogFaultedNodeException edogFaultedEx)",
+                "            {",
+                "                var edogActivityStatus = edogFaultedEx.StatusCode >= 400 && edogFaultedEx.StatusCode < 500",
+                "                    ? StandardizedActivityStatus.SucceededWithErrors",
+                "                    : StandardizedActivityStatus.Failed;",
+                "                return (edogFaultedEx.ErrorCode, exception.Message, edogActivityStatus);",
+                "            }",
+            ]
+            for j, il in enumerate(inject):
+                lines.insert(i + 1 + j, il)
+            return "\n".join(lines), "applied"
+
+    return content, "pattern_not_found"
+
+
+def revert_mapper_edog_branch_patch(content):
+    """Remove the EdogFaultedNodeException branch from MapExceptionToErrorInfo."""
+    return re.sub(
+        r"\n\n[ ]*// EDOG DevMode — recognize EdogFaultedNodeException and surface its carried\n"
+        r"[ ]*// per-node ErrorCode instead of falling through to the generic NotebookException/\n"
+        r"[ ]*// CatalogException/fallback branches\. activityStatus follows the same 4xx-vs-5xx\n"
+        r"[ ]*// convention used elsewhere in this method\.\n"
+        r"[ ]*if \(exception is Microsoft\.LiveTable\.Service\.DevMode\.EdogFaultedNodeException edogFaultedEx\)\n"
+        r"[ ]*\{\n"
+        r"[ ]*var edogActivityStatus = edogFaultedEx\.StatusCode >= 400 && edogFaultedEx\.StatusCode < 500\n"
+        r"[ ]*\? StandardizedActivityStatus\.SucceededWithErrors\n"
+        r"[ ]*: StandardizedActivityStatus\.Failed;\n"
+        r"[ ]*return \(edogFaultedEx\.ErrorCode, exception\.Message, edogActivityStatus\);\n"
+        r"[ ]*\}",
+        "",
+        content,
+    )
+
+
+def apply_outer_catch_error_source_propagate_patch(content):
+    """Patch DagExecutionHandlerV2.cs outer-catch to propagate EdogFaultedNodeException.ErrorSource.
+
+    MapExceptionToErrorInfo returns only (errorCode, errorMessage, activityStatus).
+    Without this patch, `errorSource` in the outer catch retains whatever was
+    pre-set before the throw (e.g., ErrorSource.User from line 350 in the
+    faulted-node block). Today that happens to be correct for Phase 0's
+    only callsite, but the typed exception carries its own ErrorSource for
+    future Phase 1+ callsites where the simulator may intentionally inject
+    a System-classified failure.
+
+    This patch inserts a small block immediately after the mapper call
+    (`resultCode = mappedErrorCode.ToString();`) that propagates
+    EdogFaultedNodeException.ErrorSource into the outer `errorSource`
+    variable, which is then used by both DagTerminalInfo construction
+    (line ~589) and OnDagExecutionEndAsync (line ~597).
+
+    The block is conditional on `e is EdogFaultedNodeException` so it
+    only affects EDOG-simulated faults — never alters behavior for any
+    real FLT exception type.
+    """
+    sentinel = "errorSource = edogFaultedExForSource.ErrorSource;"
+    if sentinel in content:
+        return content, "already_applied"
+
+    marker = "                            resultCode = mappedErrorCode.ToString();"
+    if marker not in content:
+        return content, "pattern_not_found"
+
+    lines = content.split("\n")
+    for i, line in enumerate(lines):
+        if line == marker:
+            inject = [
+                "",
+                "                            // EDOG DevMode — propagate ErrorSource from EdogFaultedNodeException so",
+                "                            // the persisted DAG terminal status reflects the simulator-intended",
+                "                            // classification (User vs System), not the pre-set default at the throw site.",
+                "                            if (e is Microsoft.LiveTable.Service.DevMode.EdogFaultedNodeException edogFaultedExForSource)",
+                "                            {",
+                "                                errorSource = edogFaultedExForSource.ErrorSource;",
+                "                            }",
+            ]
+            for j, il in enumerate(inject):
+                lines.insert(i + 1 + j, il)
+            return "\n".join(lines), "applied"
+
+    return content, "pattern_not_found"
+
+
+def revert_outer_catch_error_source_propagate_patch(content):
+    """Remove the EdogFaultedNodeException.ErrorSource propagation block."""
+    return re.sub(
+        r"\n\n[ ]*// EDOG DevMode — propagate ErrorSource from EdogFaultedNodeException so\n"
+        r"[ ]*// the persisted DAG terminal status reflects the simulator-intended\n"
+        r"[ ]*// classification \(User vs System\), not the pre-set default at the throw site\.\n"
+        r"[ ]*if \(e is Microsoft\.LiveTable\.Service\.DevMode\.EdogFaultedNodeException edogFaultedExForSource\)\n"
+        r"[ ]*\{\n"
+        r"[ ]*errorSource = edogFaultedExForSource\.ErrorSource;\n"
         r"[ ]*\}",
         "",
         content,
@@ -3030,6 +3517,149 @@ def apply_all_changes(token, repo_root):
                 "⚠️  Error sim completion telemetry: pattern not found in DagExecutionHandlerV2.cs"
             )
 
+    # 4b-6. Phase 0 — EDOG request context Begin() (DagExecutionHandlerV2.cs).
+    rel_path = FILES["DagExecutionHandlerV2"]
+    filepath = repo_root / rel_path
+    content = read_file(filepath)
+    if content:
+        new_content, status = apply_request_context_begin_patch(content)
+        if status == "applied":
+            original_contents.setdefault(rel_path, content)
+            write_file(filepath, new_content)
+            modified_contents[rel_path] = new_content
+            changes_made.append("✅ EDOG request context Begin (DagExecutionHandlerV2.cs)")
+        elif status == "already_applied":
+            changes_made.append("⏭️  EDOG request context Begin (already)")
+        elif status == "pattern_not_found":
+            warnings.append("⚠️  EDOG request context Begin: pattern not found in DagExecutionHandlerV2.cs")
+
+    # 4b-7. Phase 0 — EDOG request context Enrich() (DagExecutionHandlerV2.cs).
+    rel_path = FILES["DagExecutionHandlerV2"]
+    filepath = repo_root / rel_path
+    content = read_file(filepath)
+    if content:
+        new_content, status = apply_request_context_enrich_patch(content)
+        if status == "applied":
+            original_contents.setdefault(rel_path, content)
+            write_file(filepath, new_content)
+            modified_contents[rel_path] = new_content
+            changes_made.append("✅ EDOG request context Enrich (DagExecutionHandlerV2.cs)")
+        elif status == "already_applied":
+            changes_made.append("⏭️  EDOG request context Enrich (already)")
+        elif status == "pattern_not_found":
+            warnings.append("⚠️  EDOG request context Enrich: pattern not found in DagExecutionHandlerV2.cs")
+
+    # 4b-8. Phase 0 — EDOG request context End() (DagExecutionHandlerV2.cs).
+    rel_path = FILES["DagExecutionHandlerV2"]
+    filepath = repo_root / rel_path
+    content = read_file(filepath)
+    if content:
+        new_content, status = apply_request_context_end_patch(content)
+        if status == "applied":
+            original_contents.setdefault(rel_path, content)
+            write_file(filepath, new_content)
+            modified_contents[rel_path] = new_content
+            changes_made.append("✅ EDOG request context End (DagExecutionHandlerV2.cs)")
+        elif status == "already_applied":
+            changes_made.append("⏭️  EDOG request context End (already)")
+        elif status == "pattern_not_found":
+            warnings.append("⚠️  EDOG request context End: pattern not found in DagExecutionHandlerV2.cs")
+
+    # 4b-9. Phase 0 — faulted-node typed throw (DagExecutionHandlerV2.cs).
+    rel_path = FILES["DagExecutionHandlerV2"]
+    filepath = repo_root / rel_path
+    content = read_file(filepath)
+    if content:
+        new_content, status = apply_faulted_node_typed_throw_patch(content)
+        if status == "applied":
+            original_contents.setdefault(rel_path, content)
+            write_file(filepath, new_content)
+            modified_contents[rel_path] = new_content
+            changes_made.append("✅ Faulted-node typed throw (DagExecutionHandlerV2.cs)")
+        elif status == "already_applied":
+            changes_made.append("⏭️  Faulted-node typed throw (already)")
+        elif status == "pattern_not_found":
+            warnings.append("⚠️  Faulted-node typed throw: pattern not found in DagExecutionHandlerV2.cs")
+
+    # 4b-10. Phase 0 — outer-catch guard extension (DagExecutionHandlerV2.cs).
+    rel_path = FILES["DagExecutionHandlerV2"]
+    filepath = repo_root / rel_path
+    content = read_file(filepath)
+    if content:
+        new_content, status = apply_outer_catch_guard_extend_patch(content)
+        if status == "applied":
+            original_contents.setdefault(rel_path, content)
+            write_file(filepath, new_content)
+            modified_contents[rel_path] = new_content
+            changes_made.append("✅ Outer-catch guard extend (DagExecutionHandlerV2.cs)")
+        elif status == "already_applied":
+            changes_made.append("⏭️  Outer-catch guard extend (already)")
+        elif status == "pattern_not_found":
+            warnings.append("⚠️  Outer-catch guard extend: pattern not found in DagExecutionHandlerV2.cs")
+
+    # 4b-11. Phase 0 — mapper EdogFaultedNodeException branch (NodeExecutionUtils.cs).
+    rel_path = FILES["NodeExecutionUtils"]
+    filepath = repo_root / rel_path
+    content = read_file(filepath)
+    if content:
+        new_content, status = apply_mapper_edog_branch_patch(content)
+        if status == "applied":
+            original_contents[rel_path] = content
+            write_file(filepath, new_content)
+            modified_contents[rel_path] = new_content
+            changes_made.append("✅ Mapper EdogFaultedNodeException branch (NodeExecutionUtils.cs)")
+        elif status == "already_applied":
+            reverted = revert_mapper_edog_branch_patch(content)
+            if reverted != content:
+                original_contents[rel_path] = reverted
+                modified_contents[rel_path] = content
+            changes_made.append("⏭️  Mapper EdogFaultedNodeException branch (already)")
+        elif status == "pattern_not_found":
+            warnings.append("⚠️  Mapper EdogFaultedNodeException branch: pattern not found in NodeExecutionUtils.cs")
+
+    # 4b-12. Phase 0 — outer-catch ErrorSource propagation (DagExecutionHandlerV2.cs).
+    rel_path = FILES["DagExecutionHandlerV2"]
+    filepath = repo_root / rel_path
+    content = read_file(filepath)
+    if content:
+        new_content, status = apply_outer_catch_error_source_propagate_patch(content)
+        if status == "applied":
+            original_contents.setdefault(rel_path, content)
+            write_file(filepath, new_content)
+            modified_contents[rel_path] = new_content
+            changes_made.append("✅ Outer-catch ErrorSource propagation (DagExecutionHandlerV2.cs)")
+        elif status == "already_applied":
+            changes_made.append("⏭️  Outer-catch ErrorSource propagation (already)")
+        elif status == "pattern_not_found":
+            warnings.append("⚠️  Outer-catch ErrorSource propagation: pattern not found in DagExecutionHandlerV2.cs")
+
+    # 4b-13. Phase 0 — COUPLED POSTCONDITION CHECK.
+    # The faulted-node fidelity fix requires three patches to apply together:
+    #   - faulted_node_typed_throw  (file throws EdogFaultedNodeException)
+    #   - outer_catch_guard_extend  (guard routes typed exception through mapper)
+    #   - mapper_edog_branch        (mapper recognizes typed exception and returns carried code)
+    # If the typed throw applies but either of the other two does NOT, the runtime
+    # behavior degrades silently — the typed exception is thrown into a catch path
+    # that does not understand it, falling through to MLV_LINEAGE_CREATION_FAILURE
+    # (worse than the original MLV_DAG_HAS_FAULTED_NODES hijack).
+    # This check elevates that risk from a silent warning to a loud, actionable one
+    # at the same severity as a pattern_not_found failure.
+    dag_path = repo_root / FILES["DagExecutionHandlerV2"]
+    neu_path = repo_root / FILES["NodeExecutionUtils"]
+    dag_now = read_file(dag_path) or ""
+    neu_now = read_file(neu_path) or ""
+    has_typed_throw = "new Microsoft.LiveTable.Service.DevMode.EdogFaultedNodeException" in dag_now
+    has_guard_extend = "|| e is Microsoft.LiveTable.Service.DevMode.EdogFaultedNodeException" in dag_now
+    has_mapper_branch = "exception is Microsoft.LiveTable.Service.DevMode.EdogFaultedNodeException" in neu_now
+    if has_typed_throw and not (has_guard_extend and has_mapper_branch):
+        warnings.append(
+            "🚨 PHASE 0 COUPLED-PATCH INCONSISTENCY: typed throw applied but "
+            f"guard_extend={has_guard_extend} mapper_branch={has_mapper_branch}. "
+            "DAG faulted-node failures will now degrade to MLV_LINEAGE_CREATION_FAILURE "
+            "(worse than original behavior). Re-run `edog.py up` after fixing the missing "
+            "patch anchors, or `edog.py down` to revert."
+        )
+
     # 4c. Clean any stranded EdogSessionController registration from ControllersConfig.cs.
     # Session Guard was removed; if a prior deploy patched this file, scrub it.
     rel_path = FILES["ControllersConfig"]
@@ -3241,6 +3871,48 @@ def revert_all_changes(repo_root):
                 print("   ⏭️  Error sim completion telemetry (clean)")
     except Exception as e:
         print(f"   ⚠️ Error reverting Error sim completion telemetry: {e}")
+        all_success = False
+
+    # 5b-6 .. 5b-10. Phase 0 reverts (DagExecutionHandlerV2.cs).
+    # Order matters: revert in REVERSE of apply so multi-pass regex
+    # patches don't accidentally match each other's residue.
+    for desc, revert_fn in [
+        ("Outer-catch ErrorSource propagation", revert_outer_catch_error_source_propagate_patch),
+        ("Outer-catch guard extend", revert_outer_catch_guard_extend_patch),
+        ("Faulted-node typed throw", revert_faulted_node_typed_throw_patch),
+        ("EDOG request context End", revert_request_context_end_patch),
+        ("EDOG request context Enrich", revert_request_context_enrich_patch),
+        ("EDOG request context Begin", revert_request_context_begin_patch),
+    ]:
+        try:
+            rel_path = FILES["DagExecutionHandlerV2"]
+            filepath = repo_root / rel_path
+            content = read_file(filepath)
+            if content:
+                reverted = revert_fn(content)
+                if reverted != content:
+                    write_file(filepath, reverted)
+                    print(f"   ✅ Reverted {desc} (DagExecutionHandlerV2.cs)")
+                else:
+                    print(f"   ⏭️  {desc} (clean)")
+        except Exception as e:
+            print(f"   ⚠️ Error reverting {desc}: {e}")
+            all_success = False
+
+    # 5b-11. Phase 0 — revert mapper EdogFaultedNodeException branch (NodeExecutionUtils.cs).
+    try:
+        rel_path = FILES["NodeExecutionUtils"]
+        filepath = repo_root / rel_path
+        content = read_file(filepath)
+        if content:
+            reverted = revert_mapper_edog_branch_patch(content)
+            if reverted != content:
+                write_file(filepath, reverted)
+                print("   ✅ Reverted Mapper EdogFaultedNodeException branch (NodeExecutionUtils.cs)")
+            else:
+                print("   ⏭️  Mapper EdogFaultedNodeException branch (clean)")
+    except Exception as e:
+        print(f"   ⚠️ Error reverting Mapper EdogFaultedNodeException branch: {e}")
         all_success = False
 
     # 5c. Revert ControllersConfig.cs session probe controller auth
