@@ -1,83 +1,33 @@
 {
   "$schema": "https://example.invalid/edog-blocklist.schema.json",
   "version": 3,
-  "comment": "Components matching ANY regex are dropped at the EDOG source. Patterns are tested against the raw CodeMarkerName (case-insensitive). Errors and Warnings always bypass this list. To tune, edit and re-run 'edog --deploy'.",
+  "comment": "Components matching ANY regex are dropped at the EDOG source. Patterns are tested against the raw CodeMarkerName (case-insensitive). Errors and Warnings always bypass. To tune, edit and re-run 'edog --deploy'.",
   "blocked": [
-    {
-      "pattern": "^Microsoft\\.AspNetCore",
-      "reason": "ASP.NET Core HTTP pipeline internals"
-    },
-    {
-      "pattern": "^Microsoft\\.Extensions",
-      "reason": ".NET generic host / DI / configuration noise"
-    },
-    {
-      "pattern": "^Microsoft\\.EntityFrameworkCore",
-      "reason": "EF Core internals"
-    },
-    {
-      "pattern": "^System\\.",
-      "reason": ".NET base class library traces"
-    },
-    {
-      "pattern": "^Kestrel",
-      "reason": "Kestrel HTTP server framing / connection noise"
-    },
-    {
-      "pattern": "^ServicePlatform",
-      "reason": "Service Platform internal traces"
-    },
-    {
-      "pattern": "^IntervalTimer",
-      "reason": "Platform interval timer ticks (HiccupMonitor, etc.)"
-    },
-    {
-      "pattern": "MetricsAccumulator",
-      "reason": "WCL resource/consumption metrics accumulators — high-frequency timer noise"
-    },
-    {
-      "pattern": "^ReportUsageMetrics",
-      "reason": "Usage metrics reporting timer"
-    },
-    {
-      "pattern": "^WorkloadInitialization",
-      "reason": "Workload health check / relay probe pings"
-    },
-    {
-      "pattern": "^WorkloadResourceMetrics",
-      "reason": "Workload resource metrics polling"
-    },
-    {
-      "pattern": "^WCL-PlatformRelay",
-      "reason": "Platform relay internal messaging"
-    },
-    {
-      "pattern": "^WCL-Health",
-      "reason": "WCL health probe internals"
-    },
-    {
-      "pattern": "^WCL-Startup",
-      "reason": "WCL startup/bootstrap noise"
-    },
-    {
-      "pattern": "^WCL-Security",
-      "reason": "WCL security/auth pipeline noise"
-    },
-    {
-      "pattern": "^WCL-Middleware",
-      "reason": "WCL middleware pipeline noise"
-    },
-    {
-      "pattern": "^Trident",
-      "reason": "Trident platform internals"
-    },
-    {
-      "pattern": "^FeatureManagement",
-      "reason": ".NET feature management framework"
-    },
-    {
-      "pattern": "^Azure\\.",
-      "reason": "Azure SDK client library internals"
-    }
+    { "pattern": "^Microsoft\\.AspNetCore", "reason": "ASP.NET Core pipeline" },
+    { "pattern": "^Microsoft\\.Extensions", "reason": ".NET host/DI/config" },
+    { "pattern": "^Microsoft\\.EntityFrameworkCore", "reason": "EF Core" },
+    { "pattern": "^System\\.", "reason": ".NET BCL traces" },
+    { "pattern": "^Kestrel", "reason": "Kestrel HTTP server" },
+    { "pattern": "^ServicePlatform", "reason": "Service Platform internals" },
+    { "pattern": "^IntervalTimer", "reason": "Platform timer ticks" },
+    { "pattern": "MetricsAccumulator", "reason": "WCL resource/consumption metrics timers" },
+    { "pattern": "^ReportUsageMetrics", "reason": "Usage metrics reporting" },
+    { "pattern": "^WorkloadInitialization", "reason": "Health probe pings" },
+    { "pattern": "^WorkloadResourceMetrics", "reason": "Resource metrics polling" },
+    { "pattern": "^WorkloadClientRequest", "reason": "WCL request lifecycle" },
+    { "pattern": "^WorkloadS2S", "reason": "WCL S2S token plumbing" },
+    { "pattern": "^MwcAccessInfoProvider", "reason": "MWC token acquisition plumbing" },
+    { "pattern": "^AAD-", "reason": "AAD token acquisition" },
+    { "pattern": "^DependencyMonitoring", "reason": "Platform dependency tracking" },
+    { "pattern": "^FabricAccessContext", "reason": "WCL auth context" },
+    { "pattern": "^SP-Http", "reason": "Service Platform HTTP internals" },
+    { "pattern": "^WCL-PlatformRelay", "reason": "Platform relay messaging" },
+    { "pattern": "^WCL-Health", "reason": "WCL health probes" },
+    { "pattern": "^WCL-Startup", "reason": "WCL startup" },
+    { "pattern": "^WCL-Security", "reason": "WCL security pipeline" },
+    { "pattern": "^WCL-Middleware", "reason": "WCL middleware pipeline" },
+    { "pattern": "^Trident", "reason": "Trident platform" },
+    { "pattern": "^FeatureManagement", "reason": ".NET feature management" },
+    { "pattern": "^Azure\\.", "reason": "Azure SDK internals" }
   ]
 }
