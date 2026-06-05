@@ -72,6 +72,31 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         /// <summary>Delay applied before the call for <c>latency</c>, in milliseconds.</summary>
         public int LatencyMs { get; init; }
+
+        /// <summary>
+        /// Target node ID for error simulator rules. When non-null, this rule only
+        /// fires if <see cref="EdogNodeExecutionContext.Current"/> matches.
+        /// Null = fire for any node (QA chaos or DAG-level injection).
+        /// </summary>
+        public string NodeId { get; init; }
+
+        /// <summary>
+        /// Unique rule identifier for mutable state lookup in <see cref="EdogHttpFaultStore._ruleStates"/>.
+        /// Null for legacy QA chaos rules that don't need mutable state.
+        /// </summary>
+        public string RuleId { get; init; }
+    }
+
+    /// <summary>
+    /// Mutable runtime state for a fault rule. Stored separately from the
+    /// immutable <see cref="HttpFaultEntry"/> to preserve lock-free reads
+    /// on the frozen snapshot while allowing enable/disable toggling and
+    /// fire counting via atomic operations.
+    /// </summary>
+    internal sealed class FaultRuleState
+    {
+        public volatile bool Enabled = true;
+        public int FireCount;
     }
 
     /// <summary>
@@ -86,6 +111,11 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         private static readonly object _writeLock = new();
         private static long _revision; // monotonic; Interlocked.Increment
+
+        // Mutable runtime state per rule — keyed by RuleId. Separate from the
+        // immutable frozen snapshot so enable/disable + fire counting don't
+        // require snapshot rebuilds. Atomic reads via volatile/Interlocked.
+        private static readonly ConcurrentDictionary<string, FaultRuleState> _ruleStates = new();
 
         /// <summary>
         /// Gets the current snapshot revision. Bumps on every successful
@@ -180,14 +210,44 @@ namespace Microsoft.LiveTable.Service.DevMode
             var rules = _flatRules;
             if (rules.Length == 0) return false;
 
+            // Read AsyncLocal node context once — used for node-scoped rules.
+            var nodeCtx = EdogNodeExecutionContext.Current;
+            string currentNodeId = nodeCtx?.NodeId;
+
             foreach (var rule in rules)
             {
                 if (string.IsNullOrEmpty(rule.TargetSubstring)) continue;
-                if (absoluteUri.IndexOf(rule.TargetSubstring, StringComparison.OrdinalIgnoreCase) >= 0)
+
+                // Node scoping: if rule targets a specific node, skip unless context matches
+                if (rule.NodeId != null
+                    && (currentNodeId == null
+                        || !string.Equals(rule.NodeId, currentNodeId, StringComparison.OrdinalIgnoreCase)))
                 {
-                    match = rule;
-                    return true;
+                    continue;
                 }
+
+                // URL substring match (existing logic)
+                if (absoluteUri.IndexOf(rule.TargetSubstring, StringComparison.OrdinalIgnoreCase) < 0)
+                {
+                    continue;
+                }
+
+                // Mutable state: check enabled flag (error sim rules have RuleId)
+                if (rule.RuleId != null
+                    && _ruleStates.TryGetValue(rule.RuleId, out var state)
+                    && !state.Enabled)
+                {
+                    continue;
+                }
+
+                // Track fire count for error sim rules
+                if (rule.RuleId != null && _ruleStates.TryGetValue(rule.RuleId, out var fireState))
+                {
+                    Interlocked.Increment(ref fireState.FireCount);
+                }
+
+                match = rule;
+                return true;
             }
 
             return false;
@@ -201,7 +261,122 @@ namespace Microsoft.LiveTable.Service.DevMode
             lock (_writeLock)
             {
                 CommitSnapshot(new Dictionary<string, HttpFaultEntry[]>(StringComparer.Ordinal));
+                _ruleStates.Clear();
             }
+        }
+
+        /// <summary>
+        /// Adds a node-scoped error simulator rule. Used by <see cref="EdogErrorSimEngine"/>
+        /// for Channels 1 and 2 (GTS fault injection during node execution).
+        /// </summary>
+        /// <param name="ruleId">Unique rule ID for mutable state tracking.</param>
+        /// <param name="nodeId">Target node ID (null = DAG-level, any node).</param>
+        /// <param name="targetSubstring">URL substring to match (e.g., "customTransformExecution").</param>
+        /// <param name="fault">Fault type: "http_error" or "timeout".</param>
+        /// <param name="statusCode">HTTP status code for http_error faults.</param>
+        /// <param name="responseBody">Response body for http_error faults.</param>
+        public static void AddErrorSimRule(
+            string ruleId, string nodeId, string targetSubstring,
+            string fault, int statusCode = 200, string responseBody = null)
+        {
+            if (string.IsNullOrEmpty(ruleId)) return;
+
+            var entry = new HttpFaultEntry
+            {
+                ScenarioId = "error-sim",
+                RuleId = ruleId,
+                NodeId = nodeId,
+                TargetSubstring = targetSubstring ?? string.Empty,
+                Fault = fault ?? "http_error",
+                StatusCode = statusCode,
+                ResponseBody = responseBody,
+            };
+
+            _ruleStates[ruleId] = new FaultRuleState();
+
+            lock (_writeLock)
+            {
+                var newByScenario = new Dictionary<string, HttpFaultEntry[]>(
+                    _byScenario.Count + 1, StringComparer.Ordinal);
+                foreach (var kv in _byScenario) newByScenario[kv.Key] = kv.Value;
+
+                if (newByScenario.TryGetValue("error-sim", out var existing))
+                {
+                    var appended = new HttpFaultEntry[existing.Length + 1];
+                    Array.Copy(existing, appended, existing.Length);
+                    appended[existing.Length] = entry;
+                    newByScenario["error-sim"] = appended;
+                }
+                else
+                {
+                    newByScenario["error-sim"] = new[] { entry };
+                }
+
+                CommitSnapshot(newByScenario);
+            }
+        }
+
+        /// <summary>
+        /// Removes a specific error simulator rule by ruleId.
+        /// </summary>
+        public static void RemoveErrorSimRule(string ruleId)
+        {
+            if (string.IsNullOrEmpty(ruleId)) return;
+            _ruleStates.TryRemove(ruleId, out _);
+
+            lock (_writeLock)
+            {
+                if (!_byScenario.ContainsKey("error-sim")) return;
+
+                var current = _byScenario["error-sim"];
+                var filtered = current.Where(r => r.RuleId != ruleId).ToArray();
+
+                var newByScenario = new Dictionary<string, HttpFaultEntry[]>(
+                    _byScenario.Count, StringComparer.Ordinal);
+                foreach (var kv in _byScenario) newByScenario[kv.Key] = kv.Value;
+
+                if (filtered.Length > 0)
+                    newByScenario["error-sim"] = filtered;
+                else
+                    newByScenario.Remove("error-sim");
+
+                CommitSnapshot(newByScenario);
+            }
+        }
+
+        /// <summary>
+        /// Removes all error simulator rules.
+        /// </summary>
+        public static void ClearErrorSimRules()
+        {
+            lock (_writeLock)
+            {
+                // Clear just error-sim rules, preserve QA chaos rules
+                if (!_byScenario.ContainsKey("error-sim")) return;
+
+                var newByScenario = new Dictionary<string, HttpFaultEntry[]>(
+                    _byScenario.Count, StringComparer.Ordinal);
+                foreach (var kv in _byScenario)
+                {
+                    if (kv.Key != "error-sim") newByScenario[kv.Key] = kv.Value;
+                }
+
+                CommitSnapshot(newByScenario);
+            }
+
+            // Clear mutable state for all error-sim rules
+            foreach (var key in _ruleStates.Keys.ToArray())
+            {
+                _ruleStates.TryRemove(key, out _);
+            }
+        }
+
+        /// <summary>
+        /// Gets the mutable runtime state for a rule. Returns null if no state exists.
+        /// </summary>
+        public static FaultRuleState GetRuleState(string ruleId)
+        {
+            return ruleId != null && _ruleStates.TryGetValue(ruleId, out var s) ? s : null;
         }
 
         // ── Internals ─────────────────────────────────────────────────

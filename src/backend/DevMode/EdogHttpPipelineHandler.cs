@@ -339,7 +339,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             {
                 RequestMessage = request,
                 ReasonPhrase = $"QA chaos: {fault.Fault}",
-                Content = new StringContent(body),
+                Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json"),
             };
         }
 
