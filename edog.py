@@ -2104,7 +2104,115 @@ def revert_dag_execution_hook_patch(content):
     return re.sub(pattern, "", content)
 
 
-def revert_controllers_config_patch(content):
+def apply_node_executor_wrapper_patch(content):
+    """Patch DagExecutionHandlerV2.cs to wrap NodeExecutor with EdogNodeExecutorWrapper.
+
+    Inserts AsyncLocal context setup right after the per-node Task.Run's
+    `var cts = await cascadingCancellation.AddOrGetAsync(node.NodeId);` line.
+    This sets EdogNodeExecutionContext.Current so that ALL HTTP calls made
+    during node execution (both regular NodeExecutor and file-sourced ingest)
+    carry the node identity for fault injection scoping.
+
+    Also wraps `await nodeExecutor.ExecuteNodeAsync(cts.Token)` to go through
+    EdogNodeExecutorWrapper for observability event publishing.
+    """
+    if "EdogNodeExecutionContext" in content:
+        return content, "already_applied"
+
+    # Marker: the cascadingCancellation line inside the per-node Task.Run
+    marker = "var cts = await cascadingCancellation.AddOrGetAsync(node.NodeId);"
+    if marker not in content:
+        return content, "pattern_not_found"
+
+    lines = content.split("\n")
+
+    # Step 1: Insert AsyncLocal context set after the cts line
+    insert_done = False
+    for i, line in enumerate(lines):
+        if marker in line:
+            # Insert AFTER this line
+            ctx_lines = [
+                "",
+                "                            // EDOG DevMode — set per-node AsyncLocal context for fault injection scoping",
+                "                            Microsoft.LiveTable.Service.DevMode.EdogNodeExecutionContext.Current = new Microsoft.LiveTable.Service.DevMode.EdogNodeExecutionContext",
+                "                            {",
+                '                                NodeId = node.Name,',
+                '                                NodeName = node.Name,',
+                '                                DagId = dagExecInstance.Dag?.Name ?? "",',
+                "                                IterationId = dagExecInstance.IterationId,",
+                "                            };",
+            ]
+            for j, ctx_line in enumerate(ctx_lines):
+                lines.insert(i + 1 + j, ctx_line)
+            insert_done = True
+            break
+
+    if not insert_done:
+        return content, "pattern_not_found"
+
+    # Step 2: Wrap nodeExecutor.ExecuteNodeAsync with EdogNodeExecutorWrapper
+    # Find: await nodeExecutor.ExecuteNodeAsync(cts.Token);
+    exec_marker = "await nodeExecutor.ExecuteNodeAsync(cts.Token);"
+    for i, line in enumerate(lines):
+        if exec_marker in line:
+            indent = "                                "
+            lines[i] = (
+                f"{indent}var edogWrappedExecutor = new Microsoft.LiveTable.Service.DevMode.EdogNodeExecutorWrapper(\n"
+                f'{indent}    nodeExecutor, node.Name, dagExecInstance.Dag?.Name ?? "", dagExecInstance.IterationId);\n'
+                f"{indent}await edogWrappedExecutor.ExecuteNodeAsync(cts.Token);"
+            )
+            break
+
+    # Step 3: Add finally block to clear context before the existing catch
+    # Find the outer catch block that handles node execution failures
+    # Pattern: the line with "NodeExecutionMetrics currentNodeExecutionMetrics"
+    metrics_marker = "NodeExecutionMetrics currentNodeExecutionMetrics = dagExecInstance.GetNodeExecutionMetrics(node.NodeId);"
+    for i, line in enumerate(lines):
+        if metrics_marker in line:
+            # Insert context cleanup before this line
+            cleanup_lines = [
+                "                            // EDOG DevMode — clear per-node context after execution",
+                "                            Microsoft.LiveTable.Service.DevMode.EdogNodeExecutionContext.Current = null;",
+                "",
+            ]
+            for j, cl in enumerate(cleanup_lines):
+                lines.insert(i + j, cl)
+            break
+
+    return "\n".join(lines), "applied"
+
+
+def revert_node_executor_wrapper_patch(content):
+    """Remove EdogNodeExecutorWrapper and EdogNodeExecutionContext patches."""
+    # Remove the AsyncLocal context block
+    content = re.sub(
+        r"\n[ ]*// EDOG DevMode — set per-node AsyncLocal context for fault injection scoping\n"
+        r"[ ]*Microsoft\.LiveTable\.Service\.DevMode\.EdogNodeExecutionContext\.Current = new.*?\n"
+        r"[ ]*\{\n"
+        r"[ ]*NodeId = node\.Name,\n"
+        r"[ ]*NodeName = node\.Name,\n"
+        r'[ ]*DagId = dagExecInstance\.Dag\?\.Name \?\? "",\n'
+        r"[ ]*IterationId = dagExecInstance\.IterationId,\n"
+        r"[ ]*\};",
+        "",
+        content,
+    )
+    # Remove the wrapper replacement
+    content = re.sub(
+        r"[ ]*var edogWrappedExecutor = new Microsoft\.LiveTable\.Service\.DevMode\.EdogNodeExecutorWrapper\(\n"
+        r'[ ]*nodeExecutor, node\.Name, dagExecInstance\.Dag\?\.Name \?\? "", dagExecInstance\.IterationId\);\n'
+        r"[ ]*await edogWrappedExecutor\.ExecuteNodeAsync\(cts\.Token\);",
+        "                                await nodeExecutor.ExecuteNodeAsync(cts.Token);",
+        content,
+    )
+    # Remove context cleanup
+    content = re.sub(
+        r"\n[ ]*// EDOG DevMode — clear per-node context after execution\n"
+        r"[ ]*Microsoft\.LiveTable\.Service\.DevMode\.EdogNodeExecutionContext\.Current = null;\n",
+        "",
+        content,
+    )
+    return content
     """Remove EdogSessionController registration from ControllersConfig.cs.
 
     Retained after the Session Guard removal so existing patched FLT repos
@@ -2560,6 +2668,23 @@ def apply_all_changes(token, repo_root):
             modified_contents[rel_path] = content
             warnings.append("⚠️  DAG execution hook: pattern not found in DagExecutionHandlerV2.cs")
 
+    # 4b-2. Patch DagExecutionHandlerV2.cs to wrap NodeExecutor with EdogNodeExecutorWrapper
+    # Reuses the same file (may already be read above). Re-read to pick up hook patch.
+    rel_path = FILES["DagExecutionHandlerV2"]
+    filepath = repo_root / rel_path
+    content = read_file(filepath)
+    if content:
+        new_content, status = apply_node_executor_wrapper_patch(content)
+        if status == "applied":
+            original_contents[rel_path] = content
+            write_file(filepath, new_content)
+            modified_contents[rel_path] = new_content
+            changes_made.append("✅ Node executor wrapper (DagExecutionHandlerV2.cs)")
+        elif status == "already_applied":
+            changes_made.append("⏭️  Node executor wrapper (already)")
+        elif status == "pattern_not_found":
+            warnings.append("⚠️  Node executor wrapper: pattern not found in DagExecutionHandlerV2.cs")
+
     # 4c. Clean any stranded EdogSessionController registration from ControllersConfig.cs.
     # Session Guard was removed; if a prior deploy patched this file, scrub it.
     rel_path = FILES["ControllersConfig"]
@@ -2707,6 +2832,22 @@ def revert_all_changes(repo_root):
                 print("   ⏭️  DagExecutionHandlerV2.cs (clean)")
     except Exception as e:
         print(f"   ⚠️ Error reverting DagExecutionHandlerV2.cs: {e}")
+        all_success = False
+
+    # 5b-2. Revert NodeExecutor wrapper patch (same file, re-read after hook revert)
+    try:
+        rel_path = FILES["DagExecutionHandlerV2"]
+        filepath = repo_root / rel_path
+        content = read_file(filepath)
+        if content:
+            reverted = revert_node_executor_wrapper_patch(content)
+            if reverted != content:
+                write_file(filepath, reverted)
+                print("   ✅ Reverted Node executor wrapper (DagExecutionHandlerV2.cs)")
+            else:
+                print("   ⏭️  Node executor wrapper (clean)")
+    except Exception as e:
+        print(f"   ⚠️ Error reverting Node executor wrapper: {e}")
         all_success = False
 
     # 5c. Revert ControllersConfig.cs session probe controller auth

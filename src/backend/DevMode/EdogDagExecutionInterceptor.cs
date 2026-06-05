@@ -164,6 +164,16 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <inheritdoc/>
         public async Task ExecuteNodeAsync(CancellationToken ct)
         {
+            // Set AsyncLocal context so EdogHttpPipelineHandler can scope
+            // fault injection rules to THIS node during parallel execution.
+            EdogNodeExecutionContext.Current = new EdogNodeExecutionContext
+            {
+                NodeId = _nodeId,
+                NodeName = _nodeId,
+                DagId = _dagId,
+                IterationId = _iterationId,
+            };
+
             PublishEvent(new
             {
                 @event = "NodeStarted",
@@ -205,6 +215,10 @@ namespace Microsoft.LiveTable.Service.DevMode
 
                 // Transparent decorator — always re-throw
                 throw;
+            }
+            finally
+            {
+                EdogNodeExecutionContext.Current = null;
             }
         }
 
