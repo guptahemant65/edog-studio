@@ -551,6 +551,122 @@ namespace Microsoft.LiveTable.Service.DevMode
             EdogTopicRouter.Publish("telemetry", telemetryEvent);
         }
 
+        /// <summary>
+        /// Per-node lifecycle hook invoked by the patched DagExecutionHandlerV2
+        /// after each node completes (any path: regular NodeExecutor or file-
+        /// sourced ingestion). Emits ErrorSimRuleMatched / ErrorSimRuleUnmatched
+        /// events to the <c>dag</c> topic so the frontend Active Injections
+        /// panel can render per-rule match status pills.
+        /// </summary>
+        /// <remarks>
+        /// Channel 3 (pre-GTS reflection) rules are skipped — they apply during
+        /// DAG construction and fail the node before it runs, so the "did it
+        /// match?" question doesn't apply. For Channels 1/2/4 the engine reads
+        /// <see cref="EdogHttpFaultStore.GetMatchCount"/>; a non-zero count
+        /// means the HTTP pipeline handler intercepted at least one request
+        /// for the rule. The "unmatched" reason is best-effort and meant for
+        /// the user-facing tooltip — it does not affect FLT execution.
+        /// Never throws.
+        /// </remarks>
+        /// <param name="nodeId">Completed node's Guid string (matches rule.NodeId).</param>
+        /// <param name="nodeName">Completed node's display name.</param>
+        /// <param name="status">Final NodeExecutionStatus.ToString() (Completed/Failed/Cancelled/etc).</param>
+        /// <param name="dagId">Owning DAG name for event correlation.</param>
+        /// <param name="iterationId">Owning iteration ID for event correlation.</param>
+        public static void OnNodeExecutionCompleted(
+            string nodeId, string nodeName, string status, string dagId, Guid iterationId)
+        {
+            if (string.IsNullOrEmpty(nodeId)) return;
+            if (_activeRules.IsEmpty) return;
+
+            try
+            {
+                foreach (var kvp in _activeRules)
+                {
+                    var rule = kvp.Value;
+                    if (rule == null) continue;
+
+                    bool nodeMatches =
+                        (!string.IsNullOrEmpty(rule.NodeId)
+                            && string.Equals(rule.NodeId, nodeId, StringComparison.OrdinalIgnoreCase))
+                        || (!string.IsNullOrEmpty(rule.NodeName)
+                            && !string.IsNullOrEmpty(nodeName)
+                            && string.Equals(rule.NodeName, nodeName, StringComparison.OrdinalIgnoreCase));
+                    if (!nodeMatches) continue;
+
+                    int channel = rule.CatalogEntry?.Channel ?? 0;
+
+                    // Channel 3 fires during DAG construction (pre-GTS) and is reported
+                    // via its own synthetic telemetry. Skip to avoid duplicate events.
+                    if (channel == 3) continue;
+
+                    int fireCount = EdogHttpFaultStore.GetMatchCount(rule.RuleId);
+                    bool fired = fireCount > 0;
+
+                    string reason;
+                    if (fired)
+                    {
+                        reason = null;
+                    }
+                    else if (string.Equals(status, "Completed", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Node ran to success but the rule's GTS substring never appeared
+                        // in any HTTP request. Most common on file-sourced MLVs that took
+                        // the NO_NEW_DATA short-circuit before the file-sourced force-full
+                        // patch was applied — or on any node lifecycle that bypasses GTS.
+                        reason = "no_gts_call";
+                    }
+                    else if (string.Equals(status, "Cancelled", StringComparison.OrdinalIgnoreCase)
+                          || string.Equals(status, "Canceled", StringComparison.OrdinalIgnoreCase))
+                    {
+                        reason = "cancelled";
+                    }
+                    else if (string.Equals(status, "Skipped", StringComparison.OrdinalIgnoreCase))
+                    {
+                        reason = "node_skipped";
+                    }
+                    else if (string.Equals(status, "Failed", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Node failed but our specific HTTP rule never matched. Could be a
+                        // different fault firing first, or an upstream cause. Surface so
+                        // the user understands "your rule wasn't the one that fired".
+                        reason = "node_failed_other_cause";
+                    }
+                    else
+                    {
+                        reason = "unknown";
+                    }
+
+                    try
+                    {
+                        EdogTopicRouter.Publish("dag", new
+                        {
+                            @event = fired ? "ErrorSimRuleMatched" : "ErrorSimRuleUnmatched",
+                            ruleId = rule.RuleId,
+                            nodeId,
+                            nodeName,
+                            errorCode = rule.ErrorCode,
+                            channel,
+                            fireCount,
+                            status = status ?? "Unknown",
+                            reason,
+                            dagId = dagId ?? string.Empty,
+                            iterationId = iterationId.ToString(),
+                            timestamp = DateTime.UtcNow.ToString("o"),
+                        });
+                    }
+                    catch
+                    {
+                        // Never fail node execution because of telemetry.
+                    }
+                }
+            }
+            catch
+            {
+                // Defense in depth — engine-level enumeration must not throw.
+            }
+        }
+
         private static string SerializeRule(ErrorSimRule rule)
         {
             var entry = rule.CatalogEntry;

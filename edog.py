@@ -2304,6 +2304,206 @@ def revert_error_sim_pre_gts_patch(content):
     )
 
 
+def apply_file_sourced_force_full_patch(content):
+    """Patch ExecuteFileSourcedNodeAsync to force-fire EDOG Error Simulator faults.
+
+    Problem: file-sourced MLVs in APPEND_ONLY/MIRROR refresh mode run change
+    detection BEFORE submitting any SQL to GTS. When there is no new source
+    data, the function short-circuits with NodeExecutionStatus.Completed and
+    never calls /customTransformExecution — which means the Error Code
+    Simulator's HTTP fault store has nothing to match against, and the user
+    sees the node succeed even though they armed a Channel 1/2/4 rule.
+
+    Fix: at the top of ExecuteFileSourcedNodeAsync (right where the existing
+    FULL-vs-APPEND check is made) we add a third predicate that consults
+    EdogHttpFaultStore.HasArmedFaultForNode. When true, we treat the run as
+    if FULL refresh was requested — bypassing change detection and going
+    straight to the NodeExecutor → GTS submit path where the fault store can
+    intercept and return its synthetic failed response.
+
+    Importantly we also replace BOTH `if (isFullRefreshMode)` AND
+    `if (!isFullRefreshMode)` (the finalization guard) with the new
+    `effectiveFullRefreshMode` variable. Replacing only the first would
+    leave finalization running non-FULL logic on a FULL-mode submission —
+    a real correctness bug caught by code review.
+    """
+    if "edogForceFullRefresh" in content:
+        return content, "already_applied"
+
+    marker = (
+        "bool isFullRefreshMode = string.Equals(\n"
+    )
+    if marker not in content:
+        return content, "pattern_not_found"
+
+    # Step 1: insert the two new bool declarations directly after the existing
+    # `isFullRefreshMode` assignment block. The assignment spans two lines —
+    # `bool isFullRefreshMode = string.Equals(\n  node.FileSourceInfo?.RefreshMode, "FULL", ...);`
+    # — so we anchor on the closing line of that statement.
+    closing_marker = "node.FileSourceInfo?.RefreshMode, \"FULL\", StringComparison.OrdinalIgnoreCase);"
+    if closing_marker not in content:
+        return content, "pattern_not_found"
+
+    lines = content.split("\n")
+    insert_idx = None
+    for i, line in enumerate(lines):
+        if closing_marker in line:
+            insert_idx = i
+            break
+
+    if insert_idx is None:
+        return content, "pattern_not_found"
+
+    # Match the indentation of the closing line so the new declarations
+    # sit cleanly inside the same try-block.
+    src_line = lines[insert_idx]
+    indent = src_line[: len(src_line) - len(src_line.lstrip(" "))]
+
+    edog_block = [
+        "",
+        f"{indent}// EDOG DevMode — Error Simulator: when an HTTP fault rule is armed for",
+        f"{indent}// this node, bypass change detection and force the FULL refresh path so a",
+        f"{indent}// /customTransformExecution call definitely happens. Without this, file-",
+        f"{indent}// sourced MLVs in APPEND_ONLY/MIRROR mode short-circuit on NO_NEW_DATA",
+        f"{indent}// and silently complete — the armed fault never matches because no GTS",
+        f"{indent}// request is ever made.",
+        f"{indent}bool edogForceFullRefresh = Microsoft.LiveTable.Service.DevMode.EdogHttpFaultStore.HasArmedFaultForNode(node.NodeId.ToString());",
+        f"{indent}bool effectiveFullRefreshMode = isFullRefreshMode || edogForceFullRefresh;",
+    ]
+    for j, b in enumerate(edog_block):
+        lines.insert(insert_idx + 1 + j, b)
+
+    new_content = "\n".join(lines)
+
+    # Step 2: redirect both usages to the new effective mode variable. Each
+    # of these appears exactly once in DagExecutionHandlerV2.cs (verified).
+    if "if (isFullRefreshMode)" not in new_content:
+        return content, "pattern_not_found"
+    if "if (!isFullRefreshMode)" not in new_content:
+        return content, "pattern_not_found"
+
+    new_content = new_content.replace(
+        "if (isFullRefreshMode)", "if (effectiveFullRefreshMode)", 1
+    )
+    new_content = new_content.replace(
+        "if (!isFullRefreshMode)", "if (!effectiveFullRefreshMode)", 1
+    )
+
+    return new_content, "applied"
+
+
+def revert_file_sourced_force_full_patch(content):
+    """Remove the EDOG file-sourced force-full-refresh patch.
+
+    Strips the two helper bool declarations and reverts both
+    `effectiveFullRefreshMode` references back to `isFullRefreshMode`.
+    """
+    # Remove the inserted block (leading blank line + comments + two bools).
+    content = re.sub(
+        r"\n\n[ ]*// EDOG DevMode — Error Simulator: when an HTTP fault rule is armed for\n"
+        r"[ ]*// this node, bypass change detection and force the FULL refresh path so a\n"
+        r"[ ]*// /customTransformExecution call definitely happens\. Without this, file-\n"
+        r"[ ]*// sourced MLVs in APPEND_ONLY/MIRROR mode short-circuit on NO_NEW_DATA\n"
+        r"[ ]*// and silently complete — the armed fault never matches because no GTS\n"
+        r"[ ]*// request is ever made\.\n"
+        r"[ ]*bool edogForceFullRefresh = Microsoft\.LiveTable\.Service\.DevMode\.EdogHttpFaultStore\.HasArmedFaultForNode\(node\.NodeId\.ToString\(\)\);\n"
+        r"[ ]*bool effectiveFullRefreshMode = isFullRefreshMode \|\| edogForceFullRefresh;",
+        "",
+        content,
+    )
+    content = content.replace(
+        "if (effectiveFullRefreshMode)", "if (isFullRefreshMode)"
+    )
+    content = content.replace(
+        "if (!effectiveFullRefreshMode)", "if (!isFullRefreshMode)"
+    )
+    return content
+
+
+def apply_node_completion_telemetry_patch(content):
+    """Patch DagExecutionHandlerV2.cs to emit Error Simulator match telemetry.
+
+    Inserts a call to EdogErrorSimEngine.OnNodeExecutionCompleted right after
+    the per-node Task.Run reads `currentNodeExecutionMetrics`. This is the
+    canonical place where FLT has authoritative knowledge of how the node
+    finished (Completed/Failed/Cancelled/Skipped) — preferable to deriving
+    status from try/catch inside the wrapper, which would miss the FLT
+    pattern where a node fails without throwing an exception.
+
+    The engine method enumerates active rules for this node, checks the HTTP
+    fault store's per-rule match counter, and publishes either a
+    ErrorSimRuleMatched or ErrorSimRuleUnmatched event on the `dag` topic.
+    The frontend Active Injections panel subscribes and renders match status
+    pills on each rule row.
+    """
+    if "EdogErrorSimEngine.OnNodeExecutionCompleted" in content:
+        return content, "already_applied"
+
+    marker = (
+        "NodeExecutionMetrics currentNodeExecutionMetrics = "
+        "dagExecInstance.GetNodeExecutionMetrics(node.NodeId);"
+    )
+    if marker not in content:
+        return content, "pattern_not_found"
+
+    lines = content.split("\n")
+    for i, line in enumerate(lines):
+        if marker in line:
+            indent = line[: len(line) - len(line.lstrip(" "))]
+            inject = [
+                "",
+                f"{indent}// EDOG DevMode — Error Simulator: emit per-rule match telemetry now",
+                f"{indent}// that FLT has authoritative final status for this node. The engine",
+                f"{indent}// reads EdogHttpFaultStore.GetMatchCount(ruleId) and publishes either",
+                f"{indent}// ErrorSimRuleMatched or ErrorSimRuleUnmatched on the dag topic so the",
+                f"{indent}// frontend Active Injections panel can render match-status pills.",
+                f"{indent}try",
+                f"{indent}{{",
+                f"{indent}    Microsoft.LiveTable.Service.DevMode.EdogErrorSimEngine.OnNodeExecutionCompleted(",
+                f"{indent}        node.NodeId.ToString(),",
+                f"{indent}        node.Name,",
+                f"{indent}        currentNodeExecutionMetrics?.Status.ToString() ?? \"Unknown\",",
+                f"{indent}        dagExecInstance.Dag?.Name ?? string.Empty,",
+                f"{indent}        dagExecInstance.IterationId);",
+                f"{indent}}}",
+                f"{indent}catch",
+                f"{indent}{{",
+                f"{indent}    // Telemetry must never fail node execution.",
+                f"{indent}}}",
+            ]
+            for j, il in enumerate(inject):
+                lines.insert(i + 1 + j, il)
+            return "\n".join(lines), "applied"
+
+    return content, "pattern_not_found"
+
+
+def revert_node_completion_telemetry_patch(content):
+    """Remove the EDOG OnNodeExecutionCompleted telemetry call."""
+    return re.sub(
+        r"\n\n[ ]*// EDOG DevMode — Error Simulator: emit per-rule match telemetry now\n"
+        r"[ ]*// that FLT has authoritative final status for this node\. The engine\n"
+        r"[ ]*// reads EdogHttpFaultStore\.GetMatchCount\(ruleId\) and publishes either\n"
+        r"[ ]*// ErrorSimRuleMatched or ErrorSimRuleUnmatched on the dag topic so the\n"
+        r"[ ]*// frontend Active Injections panel can render match-status pills\.\n"
+        r"[ ]*try\n"
+        r"[ ]*\{\n"
+        r"[ ]*Microsoft\.LiveTable\.Service\.DevMode\.EdogErrorSimEngine\.OnNodeExecutionCompleted\(\n"
+        r"[ ]*node\.NodeId\.ToString\(\),\n"
+        r"[ ]*node\.Name,\n"
+        r"[ ]*currentNodeExecutionMetrics\?\.Status\.ToString\(\) \?\? \"Unknown\",\n"
+        r"[ ]*dagExecInstance\.Dag\?\.Name \?\? string\.Empty,\n"
+        r"[ ]*dagExecInstance\.IterationId\);\n"
+        r"[ ]*\}\n"
+        r"[ ]*catch\n"
+        r"[ ]*\{\n"
+        r"[ ]*// Telemetry must never fail node execution\.\n"
+        r"[ ]*\}",
+        "",
+        content,
+    )
+
+
 def revert_controllers_config_patch(content):
     """Remove EdogSessionController registration from ControllersConfig.cs.
 
@@ -2793,6 +2993,43 @@ def apply_all_changes(token, repo_root):
         elif status == "pattern_not_found":
             warnings.append("⚠️  Error sim pre-GTS hook: pattern not found in DagExecutionHandlerV2.cs")
 
+    # 4b-4. Patch DagExecutionHandlerV2.cs for Error Simulator file-sourced force-full
+    #       Re-read so we pick up the prior file-level patches.
+    rel_path = FILES["DagExecutionHandlerV2"]
+    filepath = repo_root / rel_path
+    content = read_file(filepath)
+    if content:
+        new_content, status = apply_file_sourced_force_full_patch(content)
+        if status == "applied":
+            original_contents.setdefault(rel_path, content)
+            write_file(filepath, new_content)
+            modified_contents[rel_path] = new_content
+            changes_made.append("✅ Error sim file-sourced force-full (DagExecutionHandlerV2.cs)")
+        elif status == "already_applied":
+            changes_made.append("⏭️  Error sim file-sourced force-full (already)")
+        elif status == "pattern_not_found":
+            warnings.append(
+                "⚠️  Error sim file-sourced force-full: pattern not found in DagExecutionHandlerV2.cs"
+            )
+
+    # 4b-5. Patch DagExecutionHandlerV2.cs for Error Simulator per-node match telemetry
+    rel_path = FILES["DagExecutionHandlerV2"]
+    filepath = repo_root / rel_path
+    content = read_file(filepath)
+    if content:
+        new_content, status = apply_node_completion_telemetry_patch(content)
+        if status == "applied":
+            original_contents.setdefault(rel_path, content)
+            write_file(filepath, new_content)
+            modified_contents[rel_path] = new_content
+            changes_made.append("✅ Error sim completion telemetry (DagExecutionHandlerV2.cs)")
+        elif status == "already_applied":
+            changes_made.append("⏭️  Error sim completion telemetry (already)")
+        elif status == "pattern_not_found":
+            warnings.append(
+                "⚠️  Error sim completion telemetry: pattern not found in DagExecutionHandlerV2.cs"
+            )
+
     # 4c. Clean any stranded EdogSessionController registration from ControllersConfig.cs.
     # Session Guard was removed; if a prior deploy patched this file, scrub it.
     rel_path = FILES["ControllersConfig"]
@@ -2972,6 +3209,38 @@ def revert_all_changes(repo_root):
                 print("   ⏭️  Error sim pre-GTS hook (clean)")
     except Exception as e:
         print(f"   ⚠️ Error reverting Error sim pre-GTS hook: {e}")
+        all_success = False
+
+    # 5b-4. Revert Error Simulator file-sourced force-full patch
+    try:
+        rel_path = FILES["DagExecutionHandlerV2"]
+        filepath = repo_root / rel_path
+        content = read_file(filepath)
+        if content:
+            reverted = revert_file_sourced_force_full_patch(content)
+            if reverted != content:
+                write_file(filepath, reverted)
+                print("   ✅ Reverted Error sim file-sourced force-full (DagExecutionHandlerV2.cs)")
+            else:
+                print("   ⏭️  Error sim file-sourced force-full (clean)")
+    except Exception as e:
+        print(f"   ⚠️ Error reverting Error sim file-sourced force-full: {e}")
+        all_success = False
+
+    # 5b-5. Revert Error Simulator completion telemetry patch
+    try:
+        rel_path = FILES["DagExecutionHandlerV2"]
+        filepath = repo_root / rel_path
+        content = read_file(filepath)
+        if content:
+            reverted = revert_node_completion_telemetry_patch(content)
+            if reverted != content:
+                write_file(filepath, reverted)
+                print("   ✅ Reverted Error sim completion telemetry (DagExecutionHandlerV2.cs)")
+            else:
+                print("   ⏭️  Error sim completion telemetry (clean)")
+    except Exception as e:
+        print(f"   ⚠️ Error reverting Error sim completion telemetry: {e}")
         all_success = False
 
     # 5c. Revert ControllersConfig.cs session probe controller auth

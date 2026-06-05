@@ -592,7 +592,57 @@
 
 .esim-cell-node { color: var(--text); font-weight: 600; }
 .esim-cell-code { color: var(--text); }
+.esim-cell-status { width: 1%; white-space: nowrap; }
 .esim-cell-actions { text-align: right; width: 1%; }
+
+/* ── Per-rule match status pill (Active Injections panel) ─────────
+ * Reflects backend telemetry from EdogErrorSimEngine.OnNodeExecutionCompleted:
+ *   armed     — rule registered, no run has touched it yet
+ *   matched   — fault store intercepted at least one HTTP request for the rule
+ *   unmatched — node finished but the rule never matched (tooltip carries reason)
+ * Colors reuse the existing status tokens so light/dark themes inherit free.
+ */
+.esim-match-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 3px 9px 3px 7px;
+  border-radius: var(--radius-full);
+  border: 1px solid transparent;
+  white-space: nowrap;
+  line-height: 1;
+  transition: background var(--transition-fast), border-color var(--transition-fast),
+              color var(--transition-fast);
+}
+
+.esim-match-glyph {
+  font-size: 10px;
+  line-height: 1;
+  display: inline-block;
+  transform: translateY(-0.5px);
+}
+
+.esim-status-armed {
+  color: var(--text-muted);
+  background: var(--surface-3);
+  border-color: color-mix(in srgb, var(--text-muted) 18%, transparent);
+}
+
+.esim-status-matched {
+  color: var(--status-succeeded);
+  background: color-mix(in srgb, var(--status-succeeded) 12%, transparent);
+  border-color: color-mix(in srgb, var(--status-succeeded) 32%, transparent);
+}
+
+.esim-status-unmatched {
+  color: var(--level-warning);
+  background: color-mix(in srgb, var(--level-warning) 12%, transparent);
+  border-color: color-mix(in srgb, var(--level-warning) 32%, transparent);
+}
 
 .esim-row-btn {
   width: 24px;

@@ -233,3 +233,90 @@ class TestSyntheticTelemetryEmit:
             r"telemetryEvent\.IterationId\s*=\s*iterationId",
             source,
         ), "IterationId must be stamped on the synthetic TelemetryEvent"
+
+
+class TestOnNodeExecutionCompleted:
+    """The per-node completion hook driving match-status pills in the UI.
+
+    Lifecycle:
+      1. DagExecutionHandlerV2 finishes a node (any path)
+      2. Calls EdogErrorSimEngine.OnNodeExecutionCompleted(nodeId, ...)
+      3. Engine enumerates rules registered for that node
+      4. For each, checks EdogHttpFaultStore.GetMatchCount(ruleId)
+      5. Publishes ErrorSimRuleMatched or ErrorSimRuleUnmatched to 'dag' topic
+      6. Frontend Active Injections panel re-renders the status pill
+
+    The contracts pinned below match what the frontend's _onDagEvent handler
+    in error-sim.js expects.
+    """
+
+    @pytest.fixture(scope="class")
+    def hook_body(self, source: str) -> str:
+        match = re.search(
+            r"public\s+static\s+void\s+OnNodeExecutionCompleted\s*\([^)]*\)\s*\{",
+            source,
+        )
+        assert match, "OnNodeExecutionCompleted method declaration not found"
+        # Generous slice — the hook has nested try/catch and a per-rule loop.
+        return source[match.start() : match.start() + 8000]
+
+    def test_method_exists(self, source: str) -> None:
+        assert "public static void OnNodeExecutionCompleted" in source
+
+    def test_takes_expected_parameters(self, source: str) -> None:
+        # The patcher in edog.py passes these exact arguments — drift here
+        # would break the patched FLT call site at compile time.
+        assert re.search(
+            r"OnNodeExecutionCompleted\s*\(\s*"
+            r"string\s+nodeId\s*,\s*"
+            r"string\s+nodeName\s*,\s*"
+            r"string\s+status\s*,\s*"
+            r"string\s+dagId\s*,\s*"
+            r"Guid\s+iterationId\s*\)",
+            source,
+        ), "Parameter signature must match what apply_node_completion_telemetry_patch passes."
+
+    def test_null_or_empty_nodeid_short_circuits(self, hook_body: str) -> None:
+        assert "IsNullOrEmpty(nodeId)" in hook_body, (
+            "Hook must defensively short-circuit on missing nodeId — never throw "
+            "into FLT's node executor (telemetry is best-effort)."
+        )
+
+    def test_publishes_to_dag_topic(self, hook_body: str) -> None:
+        assert 'EdogTopicRouter.Publish("dag"' in hook_body, (
+            "Match telemetry must be published on the 'dag' topic — the "
+            "frontend's error-sim.js subscribes to 'dag' specifically."
+        )
+
+    def test_emits_both_matched_and_unmatched_event_names(self, hook_body: str) -> None:
+        # The frontend's _onDagEvent filters strictly on these two strings.
+        assert "ErrorSimRuleMatched" in hook_body
+        assert "ErrorSimRuleUnmatched" in hook_body
+
+    def test_reads_match_count_from_fault_store(self, hook_body: str) -> None:
+        # Going through the fault store is the only authoritative count —
+        # any duplicate counter inside the engine would drift on retries.
+        assert "EdogHttpFaultStore.GetMatchCount" in hook_body
+
+    def test_skips_channel_three(self, hook_body: str) -> None:
+        # Channel 3 (pre-GTS reflection) doesn't depend on a GTS HTTP call,
+        # so GetMatchCount will always be 0 for it. Reporting "Unmatched"
+        # for Channel 3 would be misleading — skip it entirely and let the
+        # synthetic-emit path own the UI signal for those rules.
+        assert "Channel" in hook_body and "3" in hook_body, (
+            "Hook must explicitly skip Channel 3 rules — they don't go "
+            "through the HTTP fault store and have no GetMatchCount signal."
+        )
+
+    def test_wrapped_in_try_catch(self, hook_body: str) -> None:
+        # The whole hook must never propagate exceptions back into FLT.
+        assert "try" in hook_body and "catch" in hook_body, (
+            "Hook must be try/catch-wrapped — telemetry failures must not "
+            "fail node execution."
+        )
+
+    def test_carries_rule_id_in_event(self, hook_body: str) -> None:
+        # The frontend looks up the rule by ruleId. Missing it = silent
+        # broken pills.
+        assert "ruleId" in hook_body
+

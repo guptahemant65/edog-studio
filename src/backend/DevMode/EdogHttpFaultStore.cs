@@ -263,6 +263,80 @@ namespace Microsoft.LiveTable.Service.DevMode
             return false;
         }
 
+        // ── Error Simulator integration helpers ───────────────────────
+        //
+        // These two helpers exist so EDOG's Error Code Simulator can:
+        //   1. Detect "is this node armed?" BEFORE the executor picks a
+        //      lifecycle branch — used by the patched
+        //      ExecuteFileSourcedNodeAsync to force a GTS submit on
+        //      file-sourced MLVs that would otherwise short-circuit on
+        //      NO_NEW_DATA and never call customTransformExecution.
+        //   2. Read per-rule match counters AFTER a node completes —
+        //      used by EdogErrorSimEngine.OnNodeExecutionCompleted to
+        //      emit ErrorSimRuleMatched / ErrorSimRuleUnmatched telemetry.
+        //
+        // Both helpers are lock-free (read the frozen snapshot + the
+        // concurrent rule-state dictionary) and never throw.
+        // ───────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Returns <c>true</c> when the Error Simulator has at least one
+        /// enabled, node-scoped GTS rule armed for the given node ID.
+        /// Used as a precondition by the file-sourced execution path to
+        /// decide whether to bypass change detection and force a GTS
+        /// submit so the rule actually has a chance to fire.
+        /// </summary>
+        /// <remarks>
+        /// Strict filtering: only counts rules created via
+        /// <see cref="AddErrorSimRule"/> (<c>ScenarioId == "error-sim"</c>)
+        /// whose <c>TargetSubstring</c> contains <c>customTransformExecution</c>
+        /// (case-insensitive). DAG-level rules (<c>NodeId == null</c>) and
+        /// QA chaos rules are intentionally excluded — they do not represent
+        /// a specific node arm and forcing GTS for every file-sourced node
+        /// on a DAG-wide rule would be too invasive.
+        /// </remarks>
+        public static bool HasArmedFaultForNode(string nodeId)
+        {
+            if (string.IsNullOrEmpty(nodeId)) return false;
+
+            var rules = _flatRules;
+            if (rules.Length == 0) return false;
+
+            foreach (var rule in rules)
+            {
+                if (rule.ScenarioId != "error-sim") continue;
+                if (string.IsNullOrEmpty(rule.NodeId)) continue;
+                if (!string.Equals(rule.NodeId, nodeId, StringComparison.OrdinalIgnoreCase)) continue;
+                if (string.IsNullOrEmpty(rule.TargetSubstring)) continue;
+                if (rule.TargetSubstring.IndexOf("customTransformExecution", StringComparison.OrdinalIgnoreCase) < 0) continue;
+
+                if (rule.RuleId != null
+                    && _ruleStates.TryGetValue(rule.RuleId, out var state)
+                    && !state.Enabled)
+                {
+                    continue;
+                }
+
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Returns the number of times the rule with the given ID has matched
+        /// (and been applied by <see cref="EdogHttpPipelineHandler"/>) since
+        /// it was added. Zero if the rule does not exist or has not yet fired.
+        /// Lock-free.
+        /// </summary>
+        public static int GetMatchCount(string ruleId)
+        {
+            if (string.IsNullOrEmpty(ruleId)) return 0;
+            return _ruleStates.TryGetValue(ruleId, out var state)
+                ? Volatile.Read(ref state.FireCount)
+                : 0;
+        }
+
         /// <summary>
         /// Clears all active rules. Test-only — not exposed via SignalR.
         /// </summary>

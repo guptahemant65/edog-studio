@@ -685,6 +685,12 @@ class DagStudio {
     try {
       this._runBtn.disabled = true;
 
+      // EDOG DevMode — clear prior-run match pills before a new run so the
+      // user can see fresh status as nodes complete in this iteration.
+      if (this._errorSim && typeof this._errorSim.resetMatchStatus === 'function') {
+        this._errorSim.resetMatchStatus();
+      }
+
       // Check for stuck lock first
       try {
         var locked = await this._api.getLockedExecution();
