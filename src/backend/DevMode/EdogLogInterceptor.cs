@@ -113,24 +113,30 @@ namespace Microsoft.LiveTable.Service.DevMode
                 var eventId = testLogEvent.EventId;
                 var upperLevel = level.ToUpperInvariant();
 
-                // Backpressure gate: drop Verbose logs from non-FLT platform components
-                // to prevent overwhelming SignalR. FLT logs always pass through.
-                // This is NOT content filtering (all FLT logs reach the frontend) —
-                // it's throughput protection against WCL/platform verbosity storms.
-                if (upperLevel == "VERBOSE")
-                {
-                    bool isFltLog = component != "Unknown"
-                        && !component.StartsWith("WCL-", StringComparison.OrdinalIgnoreCase)
+                // ── Backpressure gate ──
+                // FLT has 11+ interceptors producing massive log volume. Platform/WCL
+                // components generate thousands of Verbose/Message logs per second that
+                // overwhelm SignalR if forwarded unconditionally.
+                //
+                // Policy:
+                //   FLT logs    → always pass (any level)
+                //   Non-FLT     → Error/Warning always pass, Message/Verbose dropped
+                //
+                // FLT detection: bracket-tagged components, "Unknown" component (bare
+                // Tracer calls), or messages containing MLV_/FLT_ prefixes.
+                bool isFltOrigin = component == "Unknown"
+                    || (component.Length > 0 && component[0] == '[')
+                    || (!component.StartsWith("WCL-", StringComparison.OrdinalIgnoreCase)
                         && !component.StartsWith("Security", StringComparison.OrdinalIgnoreCase)
-                        && !component.StartsWith("Platform", StringComparison.OrdinalIgnoreCase);
-                    if (!isFltLog && !message.Contains("MLV_") && !message.Contains("FLT_"))
-                    {
-                        // Rate-limit: allow 1 in 10 platform verbose logs
-                        if (Interlocked.Increment(ref _platformVerboseCounter) % 10 != 0)
-                        {
-                            return;
-                        }
-                    }
+                        && !component.StartsWith("Platform", StringComparison.OrdinalIgnoreCase)
+                        && !component.StartsWith("Workload.PBI", StringComparison.OrdinalIgnoreCase)
+                        && !component.StartsWith("PBI", StringComparison.OrdinalIgnoreCase))
+                    || message.Contains("MLV_")
+                    || message.Contains("FLT_");
+
+                if (!isFltOrigin && upperLevel != "ERROR" && upperLevel != "WARNING")
+                {
+                    return;
                 }
 
                 // Error storm protection: dedup repeated errors/warnings within 2s window.
