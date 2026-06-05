@@ -184,10 +184,10 @@ class FilterManager {
     const searchInput = document.getElementById('search-input');
     if (searchInput) searchInput.value = '';
     
-    // Reset levels (exclude Verbose by default)
-    this.state.activeLevels = new Set(['Message', 'Warning', 'Error']);
+    // Reset levels (include all levels — server-side blocklist handles noise)
+    this.state.activeLevels = new Set(['Verbose', 'Message', 'Warning', 'Error']);
     document.querySelectorAll('.level-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.level !== 'Verbose');
+      btn.classList.add('active');
     });
     
     // Reset component filters to FLT preset

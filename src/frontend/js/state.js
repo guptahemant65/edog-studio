@@ -136,7 +136,7 @@ class LogViewerState {
     this.logBuffer = new RingBuffer(10000);
     this.filterIndex = new FilterIndex();
     this.telemetryBuffer = new RingBuffer(5000);
-    this.activeLevels = new Set(['Message', 'Warning', 'Error']);
+    this.activeLevels = new Set(['Verbose', 'Message', 'Warning', 'Error']);
     this.searchText = '';
     this.correlationFilter = null;
     this.excludedComponents = new Set();

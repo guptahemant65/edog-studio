@@ -39960,7 +39960,7 @@ window.onerror = function(msg, src, line, col, err) {
               </div>
               <span id="execution-badge">Execution: <span id="exec-badge-id"></span> &#8212; <span id="exec-badge-counts"></span> <span class="badge-clear" id="exec-badge-clear" title="Clear execution filter">&#10005;</span></span>
               <div class="level-filters">
-                <button class="level-btn" data-level="Verbose">V</button>
+                <button class="level-btn active" data-level="Verbose">V</button>
                 <button class="level-btn active" data-level="Message">M</button>
                 <button class="level-btn active" data-level="Warning">W</button>
                 <button class="level-btn active" data-level="Error">E</button>
@@ -44757,7 +44757,7 @@ class LogViewerState {
     this.logBuffer = new RingBuffer(10000);
     this.filterIndex = new FilterIndex();
     this.telemetryBuffer = new RingBuffer(5000);
-    this.activeLevels = new Set(['Message', 'Warning', 'Error']);
+    this.activeLevels = new Set(['Verbose', 'Message', 'Warning', 'Error']);
     this.searchText = '';
     this.correlationFilter = null;
     this.excludedComponents = new Set();
@@ -49958,10 +49958,10 @@ class FilterManager {
     const searchInput = document.getElementById('search-input');
     if (searchInput) searchInput.value = '';
     
-    // Reset levels (exclude Verbose by default)
-    this.state.activeLevels = new Set(['Message', 'Warning', 'Error']);
+    // Reset levels (include all levels — server-side blocklist handles noise)
+    this.state.activeLevels = new Set(['Verbose', 'Message', 'Warning', 'Error']);
     document.querySelectorAll('.level-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.level !== 'Verbose');
+      btn.classList.add('active');
     });
     
     // Reset component filters to FLT preset
