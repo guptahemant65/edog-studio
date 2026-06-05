@@ -36,6 +36,7 @@ class DagCanvasRenderer {
     this.onNodeSelected = null;
     this.onNodeHovered = null;
     this.onNodeUnhovered = null;
+    this.onNodeContextMenu = null;
     this.onViewportChanged = null;
 
     // Bind event handlers
@@ -269,6 +270,14 @@ class DagCanvasRenderer {
           document.addEventListener('mouseup', onUp);
         };
       })(this, n.id, el));
+
+      el.addEventListener('contextmenu', (function(self, nodeId) {
+        return function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (self.onNodeContextMenu) self.onNodeContextMenu(nodeId, e.clientX, e.clientY);
+        };
+      })(this, n.id));
 
       el.addEventListener('mouseenter', (function(self, id) {
         return function() {

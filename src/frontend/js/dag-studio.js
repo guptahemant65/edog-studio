@@ -391,6 +391,7 @@ class DagStudio {
     this._autoDetector = autoDetector;
     this._esm = new ExecutionStateManager();
     this._layout = new DagLayout();
+    this._errorSim = new ErrorSimulator();
     this._renderer = null;
     this._gantt = null;
     this._dag = null;
@@ -507,6 +508,17 @@ class DagStudio {
     this._renderer.onNodeUnhovered = function() {
       if (self._gantt) self._gantt.unhoverNode();
     };
+    this._renderer.onNodeContextMenu = function(nodeId, x, y) {
+      var node = self._findNodeById(nodeId);
+      if (!node) return;
+      var name = node.name || node.nodeId || node.id || nodeId;
+      var kind = (node.kind || node.type || 'unknown');
+      self._errorSim.showPicker(nodeId, name, kind, x, y);
+    };
+    // Init error simulator now that SignalR + renderer are wired
+    this._errorSim.init(self._signalR, self);
+    // Re-paint badges after a layout/render cycle (DOM nodes may have just been created)
+    setTimeout(function() { self._errorSim._refreshNodeBadges(); }, 50);
     // Cross-highlighting: gantt → renderer
     this._gantt.onNodeSelected = function(nodeId) {
       if (self._renderer) self._renderer.highlightNode(nodeId);
@@ -1390,19 +1402,22 @@ class DagStudio {
     }
   }
 
+  /** Find a DAG node by ID (returns the node object or null). */
+  _findNodeById(nodeId) {
+    if (!this._dag || !this._dag.nodes) return null;
+    for (var i = 0; i < this._dag.nodes.length; i++) {
+      var candidate = this._dag.nodes[i];
+      if ((candidate.nodeId || candidate.id) === nodeId) return candidate;
+    }
+    return null;
+  }
+
   _renderNodeDetail(nodeId) {
     if (!nodeId || !this._dag) {
       if (this._detailSection) this._detailSection.style.display = 'none';
       return;
     }
-    var node = null;
-    for (var i = 0; i < this._dag.nodes.length; i++) {
-      var candidate = this._dag.nodes[i];
-      if ((candidate.nodeId || candidate.id) === nodeId) {
-        node = candidate;
-        break;
-      }
-    }
+    var node = this._findNodeById(nodeId);
     if (!node) {
       if (this._detailSection) this._detailSection.style.display = 'none';
       return;
@@ -1430,6 +1445,20 @@ class DagStudio {
     }
     if (state && state.errorCode) {
       html += '<dt>Error</dt><dd class="error-text">' + this._escapeHtml(state.errorCode) + '</dd>';
+    }
+    // Active error injections (F-ESIM)
+    if (this._errorSim && this._errorSim.hasInjection(nodeId)) {
+      var injRules = this._errorSim.rulesForNode(nodeId);
+      var injHtml = '';
+      for (var ri = 0; ri < injRules.length; ri++) {
+        var ir = injRules[ri];
+        injHtml += '<div class="dag-injection-chip" title="' + this._escapeHtml(ir.description || '') + '">' +
+          '<span class="dag-injection-bolt">\u26A1</span>' +
+          '<span class="dag-injection-code">' + this._escapeHtml(ir.errorCode) + '</span>' +
+          '<span class="dag-injection-phase">' + this._escapeHtml(ir.phase || '') + '</span>' +
+          '</div>';
+      }
+      html += '<dt>Injection</dt><dd>' + injHtml + '</dd>';
     }
     html += '</dl>';
     // ── Definition section (F21) ──
