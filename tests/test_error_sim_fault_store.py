@@ -4,6 +4,7 @@ EdogHttpFaultStore — structural tests for error simulator extensions.
 Verifies node-scoped fault matching, mutable FaultRuleState,
 and error-sim-specific CRUD methods.
 """
+
 from __future__ import annotations
 
 import pathlib
@@ -56,17 +57,36 @@ class TestTryMatchFaultNodeScoping:
         match = re.search(r"TryMatchFault.*?\{", store_source, re.DOTALL)
         assert match
         body_start = match.end()
-        body = store_source[body_start:body_start + 2000]
-        assert "EdogNodeExecutionContext.Current" in body, \
-            "TryMatchFault must read AsyncLocal node context"
+        body = store_source[body_start : body_start + 2000]
+        assert "EdogNodeExecutionContext.Current" in body, "TryMatchFault must read AsyncLocal node context"
 
     def test_checks_node_id(self, store_source):
-        assert "rule.NodeId" in store_source, \
-            "TryMatchFault must check rule.NodeId for node scoping"
+        assert "rule.NodeId" in store_source, "TryMatchFault must check rule.NodeId for node scoping"
 
     def test_checks_enabled(self, store_source):
-        assert "state.Enabled" in store_source or "Enabled" in store_source, \
+        assert "state.Enabled" in store_source or "Enabled" in store_source, (
             "TryMatchFault must check FaultRuleState.Enabled"
+        )
+
+    def test_reads_current_node_name_for_fallback(self, store_source):
+        # Defensive: the frontend sends Guid as rule.NodeId, and the AsyncLocal
+        # NodeId is the Guid string (post Bug A fix). But if a manual hub
+        # caller or legacy code sends a display name as rule.NodeId, the
+        # exact Guid equality would silently no-op. The fallback compares
+        # rule.NodeId against the current NodeName too, so a name-based
+        # rule still fires. Better to over-match a known rule than to
+        # silently drop it.
+        match = re.search(r"TryMatchFault.*?return\s+false;\s*\}", store_source, re.DOTALL)
+        assert match, "Could not isolate TryMatchFault body"
+        body = match.group(0)
+        assert "currentNodeName" in body, (
+            "TryMatchFault must read nodeCtx?.NodeName so name-vs-guid "
+            "drift doesn't silently break node-targeted rules."
+        )
+        assert re.search(
+            r"string\.Equals\s*\(\s*rule\.NodeId\s*,\s*currentNodeName",
+            body,
+        ), "Defensive Name fallback must compare rule.NodeId against currentNodeName"
 
 
 class TestErrorSimCrudMethods:
@@ -85,5 +105,4 @@ class TestErrorSimCrudMethods:
 
 class TestPipelineJsonContentType:
     def test_synthesize_uses_json(self, pipeline_source):
-        assert "application/json" in pipeline_source, \
-            "SynthesizeErrorResponse must use application/json content type"
+        assert "application/json" in pipeline_source, "SynthesizeErrorResponse must use application/json content type"

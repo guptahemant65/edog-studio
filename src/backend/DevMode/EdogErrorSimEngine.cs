@@ -255,7 +255,15 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <param name="dag">FLT Dag instance (passed as <c>object</c>
         /// because the DevMode assembly cannot reference the FLT Dag
         /// type directly).</param>
-        public static void ApplyPreGtsFaults(object dag)
+        /// <param name="dagExecInstance">Optional FLT DagExecutionInstance.
+        /// When provided, we reflect <c>IterationId</c> off it and stamp
+        /// the synthetic <c>NodeExecution Failed</c> telemetry with that
+        /// id so the frontend's iteration-scoped filter accepts it.
+        /// Null is tolerated for backward compatibility with older patch
+        /// sites; in that case the telemetry is emitted without an
+        /// IterationId and the frontend's "no-iteration filter" branch
+        /// accepts it (best-effort).</param>
+        public static void ApplyPreGtsFaults(object dag, object dagExecInstance = null)
         {
             if (dag == null || _preGtsRules.IsEmpty) return;
 
@@ -271,13 +279,34 @@ namespace Microsoft.LiveTable.Service.DevMode
             }
             if (nodeList.Count == 0) return;
 
+            string iterationId = TryGetIterationId(dagExecInstance);
+
             foreach (var rule in _preGtsRules.Values)
             {
                 var target = FindNodeByName(nodeList, rule.NodeName)
                              ?? FindNodeByName(nodeList, rule.NodeId);
                 if (target == null) continue;
 
-                InjectNodeFault(target, rule);
+                InjectNodeFault(target, rule, iterationId);
+            }
+        }
+
+        private static string TryGetIterationId(object dagExecInstance)
+        {
+            if (dagExecInstance == null) return null;
+            try
+            {
+                var prop = dagExecInstance.GetType().GetProperty(
+                    "IterationId",
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                var value = prop?.GetValue(dagExecInstance);
+                if (value == null) return null;
+                var s = value.ToString();
+                return string.IsNullOrEmpty(s) ? null : s;
+            }
+            catch
+            {
+                return null;
             }
         }
 
@@ -415,7 +444,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             return null;
         }
 
-        private static void InjectNodeFault(object node, ErrorSimRule rule)
+        private static void InjectNodeFault(object node, ErrorSimRule rule, string iterationId = null)
         {
             var nodeType = node.GetType();
             var entry = rule.CatalogEntry;
@@ -455,6 +484,71 @@ namespace Microsoft.LiveTable.Service.DevMode
                     }
                 }
             }
+
+            // Emit synthetic NodeExecution Failed telemetry so the EDOG Studio UI
+            // can see this pre-GTS injection. The node will never actually run —
+            // FLT aborts the entire DAG via MLV_DAG_HAS_FAULTED_NODES once it
+            // sees IsFaulted=true on any node — so no real NodeExecution telemetry
+            // is ever emitted for the targeted node. Without this synthetic emit
+            // the frontend leaves the node in 'pending' / "Not Started" with no
+            // error code, even though the backend correctly injected the fault.
+            // The frontend's ExecutionStateManager subscribes to the "telemetry"
+            // topic and treats {activityName=NodeExecution, activityStatus=Failed}
+            // exactly the same as a real FLT-emitted failure.
+            try
+            {
+                EmitSyntheticNodeFailedTelemetry(node, entry, iterationId);
+            }
+            catch
+            {
+                // Telemetry is best-effort — never break DAG construction.
+            }
+        }
+
+        private static void EmitSyntheticNodeFailedTelemetry(
+            object node, ErrorCodeEntry entry, string iterationId)
+        {
+            var nodeType = node.GetType();
+            var nodeIdProp = nodeType.GetProperty(
+                "NodeId", BindingFlags.Public | BindingFlags.Instance);
+            var nameProp = nodeType.GetProperty(
+                "Name", BindingFlags.Public | BindingFlags.Instance);
+            string nodeIdStr = nodeIdProp?.GetValue(node)?.ToString() ?? string.Empty;
+            string nodeName = nameProp?.GetValue(node) as string ?? string.Empty;
+
+            var attributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["NodeId"] = nodeIdStr,
+                ["NodeName"] = nodeName,
+                ["nodeId"] = nodeIdStr,
+                ["nodeName"] = nodeName,
+                ["ErrorCode"] = entry?.Code ?? string.Empty,
+                ["errorCode"] = entry?.Code ?? string.Empty,
+                ["ErrorSource"] = entry?.ErrorSource ?? "System",
+                ["InjectedBy"] = "EdogErrorSim",
+                ["Channel"] = "3",
+            };
+            if (!string.IsNullOrEmpty(iterationId))
+            {
+                attributes["IterationId"] = iterationId;
+                attributes["iterationId"] = iterationId;
+            }
+
+            var telemetryEvent = new TelemetryEvent(
+                DateTime.UtcNow,
+                "NodeExecution",
+                "Failed",
+                0L,
+                entry?.Code ?? string.Empty,
+                string.Empty,
+                attributes,
+                string.Empty);
+            if (!string.IsNullOrEmpty(iterationId))
+            {
+                telemetryEvent.IterationId = iterationId;
+            }
+
+            EdogTopicRouter.Publish("telemetry", telemetryEvent);
         }
 
         private static string SerializeRule(ErrorSimRule rule)

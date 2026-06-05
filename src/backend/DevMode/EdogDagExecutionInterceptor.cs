@@ -143,6 +143,7 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         private readonly INodeExecutor _inner;
         private readonly string _nodeId;
+        private readonly string _nodeName;
         private readonly string _dagId;
         private readonly Guid _iterationId;
 
@@ -150,13 +151,24 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// Initializes a new instance of the <see cref="EdogNodeExecutorWrapper"/> class.
         /// </summary>
         /// <param name="inner">The original <see cref="INodeExecutor"/> to delegate to.</param>
-        /// <param name="nodeId">The identifier of the node being executed.</param>
+        /// <param name="nodeId">
+        /// The node's unique identifier — MUST be <c>node.NodeId.ToString()</c>
+        /// (the FLT <see cref="Guid"/>). The Error Code Simulator's frontend sends
+        /// the Guid string as the rule's nodeId, and
+        /// <see cref="EdogHttpFaultStore.TryMatchFault"/> compares it against
+        /// <see cref="EdogNodeExecutionContext.NodeId"/>. Passing the display name
+        /// here (the historical bug) silently breaks Channels 1 &amp; 2 on every
+        /// node-targeted rule. Tests in <c>test_node_executor_wrapper_patch.py</c>
+        /// enforce this contract.
+        /// </param>
+        /// <param name="nodeName">The node's human-readable display name (e.g. <c>bronze_orders_mlv</c>).</param>
         /// <param name="dagId">The DAG name/identifier this node belongs to.</param>
         /// <param name="iterationId">The execution iteration identifier.</param>
-        public EdogNodeExecutorWrapper(INodeExecutor inner, string nodeId, string dagId, Guid iterationId)
+        public EdogNodeExecutorWrapper(INodeExecutor inner, string nodeId, string nodeName, string dagId, Guid iterationId)
         {
             _inner = inner ?? throw new ArgumentNullException(nameof(inner));
             _nodeId = nodeId;
+            _nodeName = nodeName ?? nodeId;
             _dagId = dagId;
             _iterationId = iterationId;
         }
@@ -166,10 +178,13 @@ namespace Microsoft.LiveTable.Service.DevMode
         {
             // Set AsyncLocal context so EdogHttpPipelineHandler can scope
             // fault injection rules to THIS node during parallel execution.
+            // NodeId is the FLT Guid string (matches what the Error Code Simulator
+            // frontend sends as the rule key); NodeName is the display name for
+            // diagnostics and the Channel-3 by-name fallback.
             EdogNodeExecutionContext.Current = new EdogNodeExecutionContext
             {
                 NodeId = _nodeId,
-                NodeName = _nodeId,
+                NodeName = _nodeName,
                 DagId = _dagId,
                 IterationId = _iterationId,
             };
@@ -178,6 +193,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             {
                 @event = "NodeStarted",
                 nodeId = _nodeId,
+                nodeName = _nodeName,
                 dagId = _dagId,
                 iterationId = _iterationId.ToString(),
                 timestamp = DateTime.UtcNow.ToString("o"),
@@ -193,6 +209,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 {
                     @event = "NodeCompleted",
                     nodeId = _nodeId,
+                    nodeName = _nodeName,
                     dagId = _dagId,
                     iterationId = _iterationId.ToString(),
                     durationMs = sw.ElapsedMilliseconds,
@@ -206,6 +223,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 {
                     @event = "NodeFailed",
                     nodeId = _nodeId,
+                    nodeName = _nodeName,
                     dagId = _dagId,
                     iterationId = _iterationId.ToString(),
                     durationMs = sw.ElapsedMilliseconds,

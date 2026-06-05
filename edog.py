@@ -2140,12 +2140,15 @@ def apply_node_executor_wrapper_patch(content):
             # Insert AFTER this line
             ctx_lines = [
                 "",
-                "                            // EDOG DevMode — set per-node AsyncLocal context for fault injection scoping",
+                "                            // EDOG DevMode — set per-node AsyncLocal context for fault injection scoping.",
+                "                            // NodeId MUST be node.NodeId.ToString() (the FLT Guid) — the Error Code",
+                "                            // Simulator frontend sends the Guid as the rule key. Using node.Name here",
+                "                            // silently breaks Channels 1 & 2 on every node-targeted rule.",
                 "                            Microsoft.LiveTable.Service.DevMode.EdogNodeExecutionContext.Current = new Microsoft.LiveTable.Service.DevMode.EdogNodeExecutionContext",
                 "                            {",
-                '                                NodeId = node.Name,',
-                '                                NodeName = node.Name,',
-                '                                DagId = dagExecInstance.Dag?.Name ?? string.Empty,',
+                "                                NodeId = node.NodeId.ToString(),",
+                "                                NodeName = node.Name,",
+                "                                DagId = dagExecInstance.Dag?.Name ?? string.Empty,",
                 "                                IterationId = dagExecInstance.IterationId,",
                 "                            };",
             ]
@@ -2157,15 +2160,19 @@ def apply_node_executor_wrapper_patch(content):
     if not insert_done:
         return content, "pattern_not_found"
 
-    # Step 2: Wrap nodeExecutor.ExecuteNodeAsync with EdogNodeExecutorWrapper
+    # Step 2: Wrap nodeExecutor.ExecuteNodeAsync with EdogNodeExecutorWrapper.
+    # Pass BOTH the Guid (nodeId) and the display name (nodeName) — see the
+    # block above for why nodeId must be the Guid string.
     # Find: await nodeExecutor.ExecuteNodeAsync(cts.Token);
     exec_marker = "await nodeExecutor.ExecuteNodeAsync(cts.Token);"
     for i, line in enumerate(lines):
         if exec_marker in line:
-            indent = "                                "
+            # Preserve the original indentation of the line being replaced so
+            # the patch works at any nesting level (real FLT and test fixtures).
+            indent = line[: len(line) - len(line.lstrip(" "))]
             lines[i] = (
                 f"{indent}var edogWrappedExecutor = new Microsoft.LiveTable.Service.DevMode.EdogNodeExecutorWrapper(\n"
-                f'{indent}    nodeExecutor, node.Name, dagExecInstance.Dag?.Name ?? string.Empty, dagExecInstance.IterationId);\n'
+                f"{indent}    nodeExecutor, node.NodeId.ToString(), node.Name, dagExecInstance.Dag?.Name ?? string.Empty, dagExecInstance.IterationId);\n"
                 f"{indent}await edogWrappedExecutor.ExecuteNodeAsync(cts.Token);"
             )
             break
@@ -2173,7 +2180,9 @@ def apply_node_executor_wrapper_patch(content):
     # Step 3: Add finally block to clear context before the existing catch
     # Find the outer catch block that handles node execution failures
     # Pattern: the line with "NodeExecutionMetrics currentNodeExecutionMetrics"
-    metrics_marker = "NodeExecutionMetrics currentNodeExecutionMetrics = dagExecInstance.GetNodeExecutionMetrics(node.NodeId);"
+    metrics_marker = (
+        "NodeExecutionMetrics currentNodeExecutionMetrics = dagExecInstance.GetNodeExecutionMetrics(node.NodeId);"
+    )
     for i, line in enumerate(lines):
         if metrics_marker in line:
             # Insert context cleanup before this line
@@ -2190,12 +2199,19 @@ def apply_node_executor_wrapper_patch(content):
 
 def revert_node_executor_wrapper_patch(content):
     """Remove EdogNodeExecutorWrapper and EdogNodeExecutionContext patches."""
-    # Remove the AsyncLocal context block
+    # Remove the AsyncLocal context block (matches the guardrail-commented form
+    # produced by apply_node_executor_wrapper_patch). The leading `\n\n`
+    # consumes the blank line apply inserts for visual separation between
+    # the existing cts line and our comment — without it revert leaves a
+    # stray blank line and apply+revert is not a clean roundtrip.
     content = re.sub(
-        r"\n[ ]*// EDOG DevMode — set per-node AsyncLocal context for fault injection scoping\n"
+        r"\n\n[ ]*// EDOG DevMode — set per-node AsyncLocal context for fault injection scoping\.\n"
+        r"[ ]*// NodeId MUST be node\.NodeId\.ToString\(\) \(the FLT Guid\) — the Error Code\n"
+        r"[ ]*// Simulator frontend sends the Guid as the rule key\. Using node\.Name here\n"
+        r"[ ]*// silently breaks Channels 1 & 2 on every node-targeted rule\.\n"
         r"[ ]*Microsoft\.LiveTable\.Service\.DevMode\.EdogNodeExecutionContext\.Current = new.*?\n"
         r"[ ]*\{\n"
-        r"[ ]*NodeId = node\.Name,\n"
+        r"[ ]*NodeId = node\.NodeId\.ToString\(\),\n"
         r"[ ]*NodeName = node\.Name,\n"
         r"[ ]*DagId = dagExecInstance\.Dag\?\.Name \?\? string\.Empty,\n"
         r"[ ]*IterationId = dagExecInstance\.IterationId,\n"
@@ -2203,17 +2219,22 @@ def revert_node_executor_wrapper_patch(content):
         "",
         content,
     )
-    # Remove the wrapper replacement
+    # Remove the wrapper replacement (new 5-arg signature: nodeId + nodeName + dagId + iterationId).
+    # Capture the leading indentation so revert restores the original call at the same
+    # indent level the surrounding code uses — fixture tests and the real FLT have
+    # different nesting depths.
     content = re.sub(
-        r"[ ]*var edogWrappedExecutor = new Microsoft\.LiveTable\.Service\.DevMode\.EdogNodeExecutorWrapper\(\n"
-        r'[ ]*nodeExecutor, node\.Name, dagExecInstance\.Dag\?\.Name \?\? string\.Empty, dagExecInstance\.IterationId\);\n'
+        r"([ ]*)var edogWrappedExecutor = new Microsoft\.LiveTable\.Service\.DevMode\.EdogNodeExecutorWrapper\(\n"
+        r"[ ]*nodeExecutor, node\.NodeId\.ToString\(\), node\.Name, dagExecInstance\.Dag\?\.Name \?\? string\.Empty, dagExecInstance\.IterationId\);\n"
         r"[ ]*await edogWrappedExecutor\.ExecuteNodeAsync\(cts\.Token\);",
-        "                                await nodeExecutor.ExecuteNodeAsync(cts.Token);",
+        r"\1await nodeExecutor.ExecuteNodeAsync(cts.Token);",
         content,
     )
-    # Remove context cleanup
+    # Remove context cleanup. Do NOT consume the leading newline — that newline
+    # belongs to the line before the inserted block (a `}` in real FLT), and
+    # consuming both leading+trailing `\n` collapses two lines into one.
     content = re.sub(
-        r"\n[ ]*// EDOG DevMode — clear per-node context after execution\n"
+        r"[ ]*// EDOG DevMode — clear per-node context after execution\n"
         r"[ ]*Microsoft\.LiveTable\.Service\.DevMode\.EdogNodeExecutionContext\.Current = null;\n",
         "",
         content,
@@ -2227,11 +2248,16 @@ def apply_error_sim_pre_gts_patch(content):
     Inserts AFTER `Check.AssertArgumentNotNull(dag, nameof(dag));` so the DAG
     is guaranteed non-null. The call sets node.IsFaulted on targeted nodes;
     the faulted-node check at line ~338 then picks them up naturally.
+
+    The dagExecInstance is passed so the engine can read IterationId for the
+    synthetic NodeExecution Failed telemetry it emits — that telemetry is the
+    only way the frontend learns about pre-GTS faulted nodes (FLT aborts the
+    DAG before the node ever runs, so no real telemetry is emitted).
     """
     if "EdogErrorSimEngine.ApplyPreGtsFaults" in content:
         return content, "already_applied"
 
-    marker = 'Check.AssertArgumentNotNull(dag, nameof(dag));'
+    marker = "Check.AssertArgumentNotNull(dag, nameof(dag));"
     if marker not in content:
         return content, "pattern_not_found"
 
@@ -2240,10 +2266,12 @@ def apply_error_sim_pre_gts_patch(content):
         if marker in line:
             inject = [
                 "",
-                "                    // EDOG DevMode — Error Simulator: inject pre-GTS faults into DAG nodes",
+                "                    // EDOG DevMode — Error Simulator: inject pre-GTS faults into DAG nodes.",
+                "                    // Pass dagExecInstance so the engine can stamp synthetic telemetry",
+                "                    // with the active IterationId (otherwise the frontend filters it out).",
                 "                    try",
                 "                    {",
-                "                        Microsoft.LiveTable.Service.DevMode.EdogErrorSimEngine.ApplyPreGtsFaults(dag);",
+                "                        Microsoft.LiveTable.Service.DevMode.EdogErrorSimEngine.ApplyPreGtsFaults(dag, dagExecInstance);",
                 "                    }",
                 "                    catch",
                 "                    {",
@@ -2260,10 +2288,12 @@ def apply_error_sim_pre_gts_patch(content):
 def revert_error_sim_pre_gts_patch(content):
     """Remove EdogErrorSimEngine.ApplyPreGtsFaults call."""
     return re.sub(
-        r"\n[ ]*// EDOG DevMode — Error Simulator: inject pre-GTS faults into DAG nodes\n"
+        r"\n\n[ ]*// EDOG DevMode — Error Simulator: inject pre-GTS faults into DAG nodes\.\n"
+        r"[ ]*// Pass dagExecInstance so the engine can stamp synthetic telemetry\n"
+        r"[ ]*// with the active IterationId \(otherwise the frontend filters it out\)\.\n"
         r"[ ]*try\n"
         r"[ ]*\{\n"
-        r"[ ]*Microsoft\.LiveTable\.Service\.DevMode\.EdogErrorSimEngine\.ApplyPreGtsFaults\(dag\);\n"
+        r"[ ]*Microsoft\.LiveTable\.Service\.DevMode\.EdogErrorSimEngine\.ApplyPreGtsFaults\(dag, dagExecInstance\);\n"
         r"[ ]*\}\n"
         r"[ ]*catch\n"
         r"[ ]*\{\n"

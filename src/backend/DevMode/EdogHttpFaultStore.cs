@@ -213,15 +213,21 @@ namespace Microsoft.LiveTable.Service.DevMode
             // Read AsyncLocal node context once — used for node-scoped rules.
             var nodeCtx = EdogNodeExecutionContext.Current;
             string currentNodeId = nodeCtx?.NodeId;
+            string currentNodeName = nodeCtx?.NodeName;
 
             foreach (var rule in rules)
             {
                 if (string.IsNullOrEmpty(rule.TargetSubstring)) continue;
 
-                // Node scoping: if rule targets a specific node, skip unless context matches
+                // Node scoping: if rule targets a specific node, skip unless context matches.
+                // Primary match is on NodeId (the FLT Guid string — what the Error Code
+                // Simulator frontend sends). Defensive Name fallback protects against
+                // legacy/manual hub callers that may send display names instead of Guids;
+                // we'd rather over-fire (with a known rule) than silently no-op.
                 if (rule.NodeId != null
                     && (currentNodeId == null
-                        || !string.Equals(rule.NodeId, currentNodeId, StringComparison.OrdinalIgnoreCase)))
+                        || (!string.Equals(rule.NodeId, currentNodeId, StringComparison.OrdinalIgnoreCase)
+                            && !string.Equals(rule.NodeId, currentNodeName, StringComparison.OrdinalIgnoreCase))))
                 {
                     continue;
                 }

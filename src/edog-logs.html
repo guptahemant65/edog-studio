@@ -56204,6 +56204,12 @@ class ExecutionStateManager {
   _processExecutionTelemetry(t) {
     var activityStatus = (t.activityStatus || '').toLowerCase();
     if (activityStatus === 'started' || activityStatus === 'inprogress') {
+      // Race guard: a synthetic NodeExecution Failed from EdogErrorSimEngine
+      // (pre-GTS fault injection) can arrive BEFORE RunDAG Started on a
+      // single-node DAG, driving _executionStatus to 'failed' via
+      // _checkCompletion(). Ignore a late RunDAG Started in that case so the
+      // failed state isn't silently regressed back to 'running'.
+      if (this._isTerminal(this._executionStatus)) return;
       if (this._executionStatus !== 'running') {
         this._executionStatus = 'running';
         this._startedAt = Date.now();
