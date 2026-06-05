@@ -127,10 +127,22 @@ class ErrorSimulator {
 
   async _loadCatalog() {
     if (this._catalog) return this._catalog;
-    if (this._loadPromise) return this._loadPromise;
-    if (!this._signalR || !this._signalR.connection) {
-      throw new Error('SignalR connection not ready');
+
+    // Primary: use the static embedded catalog (works in any mode — no SignalR needed)
+    if (typeof ERROR_SIM_CATALOG !== 'undefined' && Array.isArray(ERROR_SIM_CATALOG) && ERROR_SIM_CATALOG.length > 0) {
+      this._catalog = ERROR_SIM_CATALOG;
+      this._catalogByCode.clear();
+      for (var i = 0; i < this._catalog.length; i++) {
+        this._catalogByCode.set(this._catalog[i].code, this._catalog[i]);
+      }
+      return this._catalog;
     }
+
+    // Fallback: load from SignalR (connected phase with deployed C# code)
+    if (!this._signalR || !this._signalR.connection) {
+      throw new Error('No catalog available — ERROR_SIM_CATALOG not loaded and SignalR not connected');
+    }
+    if (this._loadPromise) return this._loadPromise;
     var self = this;
     this._loadPromise = (async function() {
       var json = await self._signalR.connection.invoke('ErrorSimGetCatalog');

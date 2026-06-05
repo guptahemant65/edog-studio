@@ -101,6 +101,7 @@ JS_MODULES = [
     "js/dag-layout.js",
     "js/dag-graph.js",
     "js/dag-gantt.js",
+    "js/error-sim-catalog.js",
     "js/error-sim.js",
     "js/dag-studio.js",
     "js/control-panel.js",
