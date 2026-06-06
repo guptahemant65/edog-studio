@@ -30,10 +30,12 @@ stub will need to grow with it — that's the cost of avoiding jsdom.
 @author Pixel — EDOG Studio hivemind
 """
 
+import contextlib
 import json
 import os
 import shutil
 import subprocess
+import tempfile
 
 import pytest
 
@@ -221,13 +223,26 @@ def _run(hash_value: str, studio_src: str, runtime_src: str) -> dict:
     harness = DOM_STUB + "\n" + studio_src + "\n" + runtime_src + "\n" + ASSERT_SUFFIX
     env = os.environ.copy()
     env["STUDIO_TEST_HASH"] = hash_value
-    result = subprocess.run(
-        [NODE, "-e", harness],
-        capture_output=True,
-        text=True,
-        timeout=15,
-        env=env,
-    )
+    # Write harness to a temp file rather than passing via `node -e`. Windows
+    # CreateProcess caps the combined command line at ~32 KB; once
+    # studio-state.js grew past ~10 KB the `-e` form started throwing
+    # "WinError 206: filename or extension is too long" for the larger
+    # harnesses. A temp .js file in the repo's tests/ dir sidesteps it
+    # entirely and works identically on POSIX.
+    fd, path = tempfile.mkstemp(suffix=".js", prefix=".harness-", dir=os.path.dirname(__file__))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(harness)
+        result = subprocess.run(
+            [NODE, path],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            env=env,
+        )
+    finally:
+        with contextlib.suppress(OSError):
+            os.unlink(path)
     assert result.returncode == 0, (
         f"RuntimeView init harness failed:\nstderr:\n{result.stderr}\nstdout:\n{result.stdout}"
     )

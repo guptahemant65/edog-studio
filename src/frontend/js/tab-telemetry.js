@@ -42,10 +42,14 @@ class TelemetryTab {
     /* View state */
     this._selectedId   = null;
     this._kbIndex      = -1;
-    this._filterText   = '';
-    this._statusFilter = 'all';
-    this._durMin       = 0;
-    this._durMax       = TelemetryTab.MAX_SLIDER_SEC;
+    // PR-B: filter fields (_filterText/_statusFilter/_durMin/_durMax) are now
+    // getter/setter proxies onto window.studioState.filters.telemetry — see
+    // _installFilterProxies(). UI state (_selectedId, _kbIndex, _detailOpen,
+    // _exportOpen) stays local because it's per-tab-visit ephemera.
+    this._filterFallbacks = {
+      q: '', status: 'all', dmin: 0, dmax: TelemetryTab.MAX_SLIDER_SEC,
+    };
+    this._installFilterProxies();
     this._detailOpen   = false;
     this._exportOpen   = false;
 
@@ -72,6 +76,43 @@ class TelemetryTab {
     }
   }
 
+  /* PR-B — Define getter/setter proxies for filter fields so reads/writes
+   * route through window.studioState.filters.telemetry. Keeps the URL/LS
+   * in sync and lets deep links pre-fill the filters before the tab is
+   * ever activated. Local fallbacks live in this._filterFallbacks for unit
+   * tests that bypass studio-state.js. */
+  _installFilterProxies() {
+    const ssGet = (key) => {
+      if (window.studioState) {
+        const f = window.studioState.get().filters;
+        if (f && f.telemetry && Object.prototype.hasOwnProperty.call(f.telemetry, key)) {
+          return f.telemetry[key];
+        }
+      }
+      return this._filterFallbacks[key];
+    };
+    const ssSet = (key, value) => {
+      if (window.studioSetFilter) {
+        const patch = {}; patch[key] = value;
+        window.studioSetFilter('telemetry', patch);
+      } else {
+        this._filterFallbacks[key] = value;
+      }
+    };
+    const scalar = (prop, key) => {
+      Object.defineProperty(this, prop, {
+        get: () => ssGet(key),
+        set: (v) => ssSet(key, v),
+        configurable: true,
+        enumerable: true,
+      });
+    };
+    scalar('_filterText',   'q');
+    scalar('_statusFilter', 'status');
+    scalar('_durMin',       'dmin');
+    scalar('_durMax',       'dmax');
+  }
+
   /* ═══════════════════════════════════════════════════════════════
      LIFECYCLE
      ═══════════════════════════════════════════════════════════════ */
@@ -83,6 +124,10 @@ class TelemetryTab {
     document.addEventListener('keydown', this._boundKeyDown);
     document.addEventListener('click', this._boundDocClick);
     this._startTicking();
+    // PR-B: reflect URL/LS-hydrated filters into local controls before render.
+    // Slider repaints itself via RAF in _initSlider's update() closure (reads
+    // proxied _durMin/_durMax). Search input + pills need explicit nudges.
+    this._syncFilterUi();
     this._render();
   }
 
@@ -733,6 +778,20 @@ class TelemetryTab {
         p.classList.add('tl-pill--' + sf);
       }
     });
+  }
+
+  /* PR-B — push studioState-hydrated filter values into the local controls.
+   * Called once on first activate() so deep-linked URLs paint the chrome
+   * correctly. Idempotent — cheap to re-run. */
+  _syncFilterUi() {
+    try {
+      if (this._dom.searchInput && this._filterText) {
+        this._dom.searchInput.value = this._filterText;
+      }
+      this._updatePillStates();
+      // Slider repaints itself via RAF in _initSlider.update() — no manual
+      // call needed (and the update closure is private to that method).
+    } catch (_e) { /* never crash activate over chrome sync */ }
   }
 
   /* ═══════════════════════════════════════════════════════════════

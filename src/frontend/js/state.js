@@ -131,16 +131,85 @@ class FilterIndex {
 
 // ===== STATE MANAGEMENT =====
 
+/**
+ * FilterSetView — Set-shaped view over a studioState filters array.
+ *
+ * PR-B: studioState stores activeLevels/excludedComponents as plain arrays
+ * (shallowEqual can't see into Sets). Downstream code still uses Set semantics
+ * (.has/.add/.delete/.clear/.size). This view bridges the two without
+ * duplicating storage. Every mutating call routes through window.studioSetFilter
+ * so the URL/localStorage stay in sync and subscribers fire.
+ *
+ * Read paths are O(n) on a tiny array (≤4 for levels, dozens for excluded
+ * components). For larger collections this should grow a cached Set
+ * invalidated on store change.
+ */
+function _ssFiltersGet(tab, key, fallback) {
+  if (!window.studioState) return fallback;
+  var f = window.studioState.get().filters;
+  if (!f || !f[tab]) return fallback;
+  var v = f[tab][key];
+  return v === undefined ? fallback : v;
+}
+
+function _ssFiltersSet(tab, partial) {
+  if (window.studioSetFilter) window.studioSetFilter(tab, partial);
+}
+
+class FilterSetView {
+  constructor(tab, key, defaultArr) {
+    this._tab = tab;
+    this._key = key;
+    this._default = defaultArr;
+  }
+  _read() {
+    return _ssFiltersGet(this._tab, this._key, this._default);
+  }
+  has(v) { return this._read().indexOf(v) !== -1; }
+  get size() { return this._read().length; }
+  forEach(fn) { this._read().forEach(fn); }
+  values() { return this._read().slice().values(); }
+  keys() { return this.values(); }
+  entries() {
+    var arr = this._read();
+    return arr.map(function (v) { return [v, v]; }).values();
+  }
+  [Symbol.iterator]() { return this.values(); }
+  add(v) {
+    var arr = this._read();
+    if (arr.indexOf(v) !== -1) return this;
+    var next = arr.concat([v]);
+    var patch = {}; patch[this._key] = next;
+    _ssFiltersSet(this._tab, patch);
+    return this;
+  }
+  delete(v) {
+    var arr = this._read();
+    var i = arr.indexOf(v);
+    if (i === -1) return false;
+    var next = arr.slice(0, i).concat(arr.slice(i + 1));
+    var patch = {}; patch[this._key] = next;
+    _ssFiltersSet(this._tab, patch);
+    return true;
+  }
+  clear() {
+    var arr = this._read();
+    if (arr.length === 0) return;
+    var patch = {}; patch[this._key] = [];
+    _ssFiltersSet(this._tab, patch);
+  }
+}
+
 class LogViewerState {
   constructor() {
     this.logBuffer = new RingBuffer(10000);
     this.filterIndex = new FilterIndex();
     this.telemetryBuffer = new RingBuffer(5000);
-    this.activeLevels = new Set(['Verbose', 'Message', 'Warning', 'Error']);
-    this.searchText = '';
-    this.correlationFilter = null;
-    this.excludedComponents = new Set();
-    this.activePreset = 'flt';
+    // PR-B: filter fields below are now getter/setter proxies onto
+    // window.studioState.filters.logs (see _installLogsFilterProxies()).
+    // Local fallbacks (_*Fallback) are seeded so isolated unit tests
+    // that bypass studio-state.js still see sensible values.
+    this._installLogsFilterProxies();
     // F12 Stream Controller — unified state machine (replaces autoScroll + paused)
     this.streamMode = 'LIVE';          // 'LIVE' | 'PAUSED'
     this.bufferedCount = 0;            // logs received while PAUSED
@@ -172,7 +241,6 @@ class LogViewerState {
         }
       }
     });
-    this.timeRangeSeconds = 0;
     this.stats = {
       totalLogs: 0, verbose: 0, message: 0, warning: 0, error: 0,
       totalEvents: 0, succeeded: 0, failed: 0
@@ -203,16 +271,13 @@ class LogViewerState {
       enumerable: true,
     });
 
-    // W0.2 — Endpoint filter
-    this.endpointFilter = '';
+    // W0.2 — Endpoint filter (filter value lives in studioState; metadata stays local)
     this.knownEndpoints = new Set();
 
-    // Component filter
-    this.componentFilter = '';
+    // Component filter (filter value lives in studioState; metadata stays local)
     this.knownComponents = new Set();
 
-    // W0.3 — RAID / IterationId filter
-    this.raidFilter = '';
+    // W0.3 — RAID / IterationId filter (filter value lives in studioState)
     this.knownIterationIds = new Map();
     this.recentExecutions = [];
 
@@ -254,6 +319,95 @@ class LogViewerState {
           get length() { return rb.length; }
         };
       }
+    });
+  }
+
+  /**
+   * PR-B — install getter/setter proxies for every logs-tab filter field.
+   * Reads pull from window.studioState.filters.logs (URL/localStorage-hydrated).
+   * Writes route through window.studioSetFilter so the URL/LS stay in sync and
+   * the store fires its single subscriber for re-render. Each property has a
+   * local fallback for the (rare) case where studio-state.js wasn't loaded
+   * before this class was instantiated — happens in isolated unit tests only.
+   *
+   * activeLevels and excludedComponents return Set-shaped views (FilterSetView)
+   * because downstream code (renderer.js, filters.js) uses .has/.add/.delete/.clear.
+   * Stored as arrays in studioState so shallowEqual works.
+   */
+  _installLogsFilterProxies() {
+    // Local fallbacks for unit-test environments without studio-state.js.
+    this._filterFallbacks = {
+      q: '',
+      corr: null,
+      preset: 'flt',
+      since: 0,
+      ep: '',
+      comp: '',
+      raid: '',
+      levels: ['Verbose', 'Message', 'Warning', 'Error'],
+      excl: [],
+    };
+
+    const ssGet = (key) => {
+      if (window.studioState) {
+        const f = window.studioState.get().filters;
+        if (f && f.logs && Object.prototype.hasOwnProperty.call(f.logs, key)) {
+          return f.logs[key];
+        }
+      }
+      return this._filterFallbacks[key];
+    };
+
+    const ssSet = (key, value) => {
+      if (window.studioSetFilter) {
+        const patch = {}; patch[key] = value;
+        window.studioSetFilter('logs', patch);
+      } else {
+        this._filterFallbacks[key] = value;
+      }
+    };
+
+    const scalar = (prop, key) => {
+      Object.defineProperty(this, prop, {
+        get: () => ssGet(key),
+        set: (v) => ssSet(key, v),
+        configurable: true,
+        enumerable: true,
+      });
+    };
+
+    scalar('searchText', 'q');
+    scalar('correlationFilter', 'corr');
+    scalar('activePreset', 'preset');
+    scalar('timeRangeSeconds', 'since');
+    scalar('endpointFilter', 'ep');
+    scalar('componentFilter', 'comp');
+    scalar('raidFilter', 'raid');
+
+    // Set-shaped views over the underlying arrays. Cached so identity-equality
+    // checks against state.activeLevels stay stable across reads.
+    const levelsView = new FilterSetView('logs', 'levels', this._filterFallbacks.levels);
+    const exclView   = new FilterSetView('logs', 'excl',   this._filterFallbacks.excl);
+
+    Object.defineProperty(this, 'activeLevels', {
+      get: () => levelsView,
+      set: (v) => {
+        // Accept either Set or Array. Normalize to array for studioState.
+        const arr = Array.isArray(v) ? v.slice() : Array.from(v || []);
+        ssSet('levels', arr);
+      },
+      configurable: true,
+      enumerable: true,
+    });
+
+    Object.defineProperty(this, 'excludedComponents', {
+      get: () => exclView,
+      set: (v) => {
+        const arr = Array.isArray(v) ? v.slice() : Array.from(v || []);
+        ssSet('excl', arr);
+      },
+      configurable: true,
+      enumerable: true,
     });
   }
 

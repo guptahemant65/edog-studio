@@ -127,11 +127,27 @@ class EdogLogViewer {
     // drive the DOM. RuntimeView.switchTab also writes back to studioState,
     // but its own early-return guard plus the store's shallowEqual gate
     // collapse the cycle to a single trip.
+    //
+    // PR-B: same subscriber also triggers filter re-renders when the URL
+    // (hashchange / deep link) mutates studioState.filters out from under
+    // the click-handler path. We track the last `filters` reference we
+    // rendered: when the new filters reference differs, fire applyFilters().
+    // Click handlers already call applyFilters() synchronously, so on the
+    // ensuing microtask we see the same reference we just rendered and skip.
     this._stateAbortController = new AbortController();
+    this._lastRenderedFilters = window.studioState ? window.studioState.get().filters : null;
     if (window.studioState) {
       window.studioState.subscribe((next) => {
         if (this.runtimeView && next.activeTab !== this.runtimeView._activeTab) {
           this.runtimeView.switchTab(next.activeTab);
+        }
+        if (next.filters && next.filters !== this._lastRenderedFilters) {
+          this._lastRenderedFilters = next.filters;
+          if (this.filter) this.filter.applyFilters();
+          // Telemetry tab owns its own render loop; nudge it directly.
+          if (this.telemetryTab && typeof this.telemetryTab._scheduleRender === 'function') {
+            this.telemetryTab._scheduleRender();
+          }
         }
       }, { signal: this._stateAbortController.signal });
     }
@@ -347,6 +363,7 @@ class EdogLogViewer {
     await this.workspaceExplorer.init();
     
     this.bindEventListeners();
+    this._syncFilterUiFromState();
     await this.loadInitialData();
 
     // Check for active/completed deploy (AFTER workspace explorer DOM exists)
@@ -618,7 +635,54 @@ class EdogLogViewer {
     
     // Auto-scroll detection is handled by renderer._onScroll
   }
-  
+
+  /**
+   * PR-B — Reflect URL/localStorage-hydrated logs filters back into the
+   * DOM controls so the chrome matches the data on first paint. Without
+   * this, deep-linking with #q=error&levels=warning,error would correctly
+   * filter the log list but the search input would be empty and all four
+   * level buttons would still show .active — confusing the user.
+   *
+   * Telemetry tab does its own DOM sync in activate() / _render() because
+   * its controls live inside the tab's owned shadow DOM.
+   */
+  _syncFilterUiFromState = () => {
+    try {
+      const searchInput = document.getElementById('search-input');
+      if (searchInput && this.state.searchText) searchInput.value = this.state.searchText;
+
+      const raidInput = document.getElementById('raid-filter-input');
+      if (raidInput && this.state.raidFilter) raidInput.value = this.state.raidFilter;
+
+      const epSel = document.getElementById('endpoint-filter');
+      if (epSel && this.state.endpointFilter) epSel.value = this.state.endpointFilter;
+
+      const compSel = document.getElementById('component-filter');
+      if (compSel && this.state.componentFilter) compSel.value = this.state.componentFilter;
+
+      document.querySelectorAll('.level-btn').forEach((btn) => {
+        const lvl = btn.dataset.level;
+        if (lvl) btn.classList.toggle('active', this.state.activeLevels.has(lvl));
+      });
+
+      document.querySelectorAll('.preset-btn').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.preset === this.state.activePreset);
+      });
+
+      const since = this.state.timeRangeSeconds || 0;
+      document.querySelectorAll('.time-btn').forEach((btn) => {
+        btn.classList.toggle('active', String(since) === String(btn.dataset.range));
+      });
+
+      // Render to reflect hydrated filters (subscriber won't fire until next
+      // mutation — we need a render NOW so deep-linked filter URLs paint
+      // correctly on the first frame).
+      if (this.filter) this.filter.applyFilters();
+    } catch (err) {
+      console.warn('[edog] _syncFilterUiFromState failed:', err);
+    }
+  }
+
   handleKeydown = (e) => {
     // Skip if typing in input field (sidebar handles 1-6 separately)
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
