@@ -237,9 +237,24 @@ class TestSparkFaultHelpers:
     def test_try_peek_method_declared(self, store_source):
         assert re.search(
             r"public\s+static\s+bool\s+TryPeekSparkFault\s*\(\s*string\s+nodeId\s*,"
+            r"\s*string\s+nodeName\s*,"
             r"\s*out\s+HttpFaultEntry\s+match\s*\)",
             store_source,
-        ), "TryPeekSparkFault must be `public static bool TryPeekSparkFault(string nodeId, out HttpFaultEntry match)`"
+        ), (
+            "TryPeekSparkFault must be `public static bool TryPeekSparkFault("
+            "string nodeId, string nodeName, out HttpFaultEntry match)` — "
+            "the nodeName parameter is the display-name fallback (frontend may "
+            "register a rule with either form)."
+        )
+
+    def test_try_peek_supports_name_fallback(self, store_source):
+        body = _extract_method_body(store_source, "TryPeekSparkFault")
+        assert "nodeName" in body and "rule.NodeId, nodeName" in body, (
+            "TryPeekSparkFault must compare the rule's stored NodeId against "
+            "BOTH the runtime nodeId Guid AND the runtime display nodeName — "
+            "mirroring TryMatchFault's dual-match. Without the fallback, "
+            "rules registered with display names silently never fire."
+        )
 
     def test_try_peek_filters_by_error_sim_scenario(self, store_source):
         body = _extract_method_body(store_source, "TryPeekSparkFault")

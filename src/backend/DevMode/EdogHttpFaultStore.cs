@@ -389,10 +389,10 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// Returns the FIRST matching enabled rule in registration order,
         /// consistent with <see cref="TryMatchFault"/>.
         /// </remarks>
-        public static bool TryPeekSparkFault(string nodeId, out HttpFaultEntry match)
+        public static bool TryPeekSparkFault(string nodeId, string nodeName, out HttpFaultEntry match)
         {
             match = null;
-            if (string.IsNullOrEmpty(nodeId)) return false;
+            if (string.IsNullOrEmpty(nodeId) && string.IsNullOrEmpty(nodeName)) return false;
 
             var rules = _flatRules;
             if (rules.Length == 0) return false;
@@ -401,7 +401,19 @@ namespace Microsoft.LiveTable.Service.DevMode
             {
                 if (rule.ScenarioId != "error-sim") continue;
                 if (string.IsNullOrEmpty(rule.NodeId)) continue;
-                if (!string.Equals(rule.NodeId, nodeId, StringComparison.OrdinalIgnoreCase)) continue;
+
+                // Match the rule's stored node identifier against EITHER the
+                // runtime NodeId Guid OR the runtime display Name. The frontend
+                // may send either form when adding a rule (callers historically
+                // varied — see EdogPlaygroundHub.ErrorSimAddRule). Mirrors the
+                // dual-match in TryMatchFault (line 227-233) and the per-node
+                // completion check in EdogErrorSimEngine.OnNodeExecutionCompleted.
+                bool idMatches = !string.IsNullOrEmpty(nodeId)
+                    && string.Equals(rule.NodeId, nodeId, StringComparison.OrdinalIgnoreCase);
+                bool nameMatches = !string.IsNullOrEmpty(nodeName)
+                    && string.Equals(rule.NodeId, nodeName, StringComparison.OrdinalIgnoreCase);
+                if (!idMatches && !nameMatches) continue;
+
                 if (string.IsNullOrEmpty(rule.TargetSubstring)) continue;
                 if (rule.TargetSubstring.IndexOf("customTransformExecution", StringComparison.OrdinalIgnoreCase) < 0) continue;
 

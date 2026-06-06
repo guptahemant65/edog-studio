@@ -214,7 +214,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             try
             {
                 string nodeIdKey = node?.NodeId.ToString();
-                if (EdogHttpFaultStore.TryPeekSparkFault(nodeIdKey, out var entry))
+                if (EdogHttpFaultStore.TryPeekSparkFault(nodeIdKey, node?.Name, out var entry))
                 {
                     if (string.Equals(entry.Fault, "http_error", StringComparison.OrdinalIgnoreCase)
                         && entry.StatusCode != 200)
@@ -325,7 +325,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 if (!_firedStatusForges.ContainsKey(transformationId))
                 {
                     string nodeIdKey = node?.NodeId.ToString();
-                    if (EdogHttpFaultStore.TryPeekSparkFault(nodeIdKey, out var entry)
+                    if (EdogHttpFaultStore.TryPeekSparkFault(nodeIdKey, node?.Name, out var entry)
                         && string.Equals(entry.Fault, "http_error", StringComparison.OrdinalIgnoreCase)
                         && entry.StatusCode == 200)
                     {
