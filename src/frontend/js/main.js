@@ -122,6 +122,19 @@ class EdogLogViewer {
     this.topbar = new TopBar();
     this.sidebar = new Sidebar();
     this.runtimeView = new RuntimeView(this.ws);
+
+    // PR-A: bridge studioState → RuntimeView so URL/hashchange/deep links
+    // drive the DOM. RuntimeView.switchTab also writes back to studioState,
+    // but its own early-return guard plus the store's shallowEqual gate
+    // collapse the cycle to a single trip.
+    this._stateAbortController = new AbortController();
+    if (window.studioState) {
+      window.studioState.subscribe((next) => {
+        if (this.runtimeView && next.activeTab !== this.runtimeView._activeTab) {
+          this.runtimeView.switchTab(next.activeTab);
+        }
+      }, { signal: this._stateAbortController.signal });
+    }
     this.workspaceExplorer = new WorkspaceExplorer(this.apiClient);
     window.edogWorkspaceExplorer = this.workspaceExplorer;
     this.commandPalette = new CommandPalette(this.sidebar, this.workspaceExplorer);
@@ -252,10 +265,11 @@ class EdogLogViewer {
     await this.apiClient.init();
     this.topbar.init();
     this.sidebar.init();
-    this.runtimeView.init();
-    this.commandPalette.init();
 
-    // Register the Logs tab module (existing renderer handles it)
+    // Register tab modules BEFORE runtimeView.init(): init() now applies
+    // the seeded activeTab (which may be a #tab=<id> deep-link) to the
+    // DOM and fires module.activate(). The module must already be in the
+    // _tabs map at that point or activate() won't run.
     this.runtimeView.registerTab('logs', {
       activate: () => {
         this.renderer.containerReady = false;
@@ -284,6 +298,9 @@ class EdogLogViewer {
     this.runtimeView.registerTab('flags', this.flagsTab);
     this.runtimeView.registerTab('di', this.diTab);
     this.runtimeView.registerTab('perf', this.perfTab);
+
+    this.runtimeView.init();
+    this.commandPalette.init();
 
     // Initialize logs enhancements (breakpoints, bookmarks, error clustering)
     if (this.logsEnhancements) {

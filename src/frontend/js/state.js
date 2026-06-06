@@ -182,7 +182,26 @@ class LogViewerState {
     this.newLogsSinceRender = 0;
 
     // W0.1 — Tab state
-    this.activeTab = localStorage.getItem('edog-active-tab') || 'logs';
+    // PR-A: activeTab now lives in window.studioState. We keep the
+    // LogViewerState.activeTab API for back-compat (callers may still
+    // read/write it) by proxying through the singleton. If studioState
+    // hasn't loaded yet (e.g. in isolated unit tests), fall back to a
+    // local field seeded from the old localStorage key. localStorage
+    // throws in private mode, so guard it.
+    try {
+      this._activeTabFallback = localStorage.getItem('edog-active-tab') || 'logs';
+    } catch (_e) {
+      this._activeTabFallback = 'logs';
+    }
+    Object.defineProperty(this, 'activeTab', {
+      get: () => (window.studioState ? window.studioState.get().activeTab : this._activeTabFallback),
+      set: (v) => {
+        if (window.studioState) window.studioState.set({ activeTab: v });
+        else this._activeTabFallback = v;
+      },
+      configurable: true,
+      enumerable: true,
+    });
 
     // W0.2 — Endpoint filter
     this.endpointFilter = '';

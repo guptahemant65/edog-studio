@@ -14,7 +14,9 @@ class RuntimeView {
   constructor(signalr) {
     this._signalr = signalr;
     this._tabs = {};           // tabId → { module, el }
-    this._activeTab = 'logs';  // default tab
+    // PR-A: seed initial tab from studioState (URL hash or localStorage)
+    // so deep links + reload land on the right tab. Falls back to 'logs'.
+    this._activeTab = (window.studioState && window.studioState.get().activeTab) || 'logs';
     this._phase = 'disconnected';
     this._internalsOpen = false;
     this._internalsActiveId = null;
@@ -115,8 +117,13 @@ class RuntimeView {
     // Keyboard: Alt+1-6 for tabs within Runtime View
     document.addEventListener('keydown', (e) => this._onKeyDown(e));
 
-    // Set initial indicator position
-    requestAnimationFrame(() => this._updateTabIndicator(this._activeTab));
+    // PR-A: reconcile the seeded `_activeTab` (which may be a deep-link
+    // from #tab=<id>, NOT the HTML-default 'logs') with the DOM. Index.html
+    // hard-codes Logs as active; without this reconcile a deep-link only
+    // moves the indicator and never fires the tab module's activate().
+    // _applyTab is idempotent — calling it for 'logs' just no-ops on class
+    // toggles and fires logs.activate() (which is itself idempotent).
+    this._applyTab(this._activeTab);
   }
 
   /** Register a tab module. Called by main.js for each tab. */
@@ -131,15 +138,37 @@ class RuntimeView {
   switchTab(tabId) {
     if (tabId === this._activeTab) return;
 
+    // PR-A: studioState is the single source of truth for activeTab.
+    // Publish first so URL/localStorage sync + any other subscribers see
+    // the change. The store dedupes via shallowEqual, and the subscriber
+    // in main.js no-ops when runtimeView is already on this tab — so no
+    // re-entrancy loop on user-initiated clicks.
+    if (window.studioState) window.studioState.set({ activeTab: tabId });
+
+    this._applyTab(tabId);
+  }
+
+  /**
+   * Apply a tab to the DOM and module lifecycle. Unguarded — callers
+   * (switchTab, init) own the "is this a real change?" decision. Safe to
+   * call with `tabId === this._activeTab` for initial reconcile.
+   */
+  _applyTab(tabId) {
     // Close Internals dropdown if switching away
     if (this._internalsOpen) this._closeInternals();
 
-    // Deactivate current tab module
-    const current = this._tabs[this._activeTab];
-    if (current && current.module && current.module.deactivate) {
-      current.module.deactivate();
+    // Deactivate previous tab module if it's actually a different tab.
+    // (init() calls us with tabId === _activeTab; skip the deactivate
+    // round-trip in that case so we don't fire deactivate→activate on a
+    // module that was never activated.)
+    const prevTab = this._activeTab;
+    if (prevTab !== tabId) {
+      const current = this._tabs[prevTab];
+      if (current && current.module && current.module.deactivate) {
+        current.module.deactivate();
+      }
+      if (current && current.el) current.el.classList.remove('active');
     }
-    if (current && current.el) current.el.classList.remove('active');
 
     // Update tab bar active state
     this._tabEls.forEach(el => el.classList.remove('active'));
@@ -165,7 +194,15 @@ class RuntimeView {
     // Activate new tab
     this._activeTab = tabId;
     const next = this._tabs[tabId];
-    if (next && next.el) next.el.classList.add('active');
+    if (next && next.el) {
+      // Reconcile content-pane active class: index.html hard-codes 'logs'
+      // as active, so on a deep-link we must clear the others first.
+      Object.keys(this._tabs).forEach(id => {
+        const t = this._tabs[id];
+        if (t && t.el && id !== tabId) t.el.classList.remove('active');
+      });
+      next.el.classList.add('active');
+    }
     if (next && next.module && next.module.activate) {
       next.module.activate();
     }
@@ -336,8 +373,25 @@ class RuntimeView {
     const tabEl = this._tabEls.find(el => el.dataset.tab === targetId);
     if (!tabEl) return;
 
+    // Don't attempt to measure if the tab is not in a laid-out subtree.
+    // offsetParent === null catches: detached nodes, display:none (self or
+    // any ancestor), Phase 1 overlay covering the runtime view at boot.
+    // This is the bound on the RAF retry below — if visibility never
+    // resolves, we never re-enter. Whoever makes the view visible later
+    // (a real switchTab on view change) re-fires the indicator update.
+    if (tabEl.offsetParent === null) return;
+
     const barRect = this._tabBarInner.getBoundingClientRect();
     const tabRect = tabEl.getBoundingClientRect();
+
+    // Even when offsetParent is set, width can briefly be 0 during paint
+    // warmup on the first frame after DOMContentLoaded. Retry next frame.
+    // Bounded by the offsetParent guard above — if the ancestor goes
+    // hidden between frames, the retry bails immediately.
+    if (tabRect.width === 0) {
+      requestAnimationFrame(() => this._updateTabIndicator(tabId));
+      return;
+    }
 
     this._indicator.style.left = (tabRect.left - barRect.left) + 'px';
     this._indicator.style.width = tabRect.width + 'px';

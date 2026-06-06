@@ -19,8 +19,8 @@ BUILD_SCRIPT = os.path.join(PROJECT_DIR, "scripts", "build-html.py")
 OUTPUT_FILE = os.path.join(PROJECT_DIR, "src", "edog-logs.html")
 
 # Expected module counts (update when adding new modules)
-EXPECTED_CSS_MODULES = 46
-EXPECTED_JS_MODULES = 81
+EXPECTED_CSS_MODULES = 47
+EXPECTED_JS_MODULES = 84
 EXPECTED_LIB_MODULES = 2
 
 # F16 Phase 2 wizard modules that MUST be present
