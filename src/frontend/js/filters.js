@@ -75,8 +75,12 @@ class FilterManager {
   }
   
   applyFilters = () => {
-    this.renderer.rerenderAllLogs();
-    this.renderer.rerenderTelemetry();
+    // PR-C: route through rAF scheduler so click bursts + subscriber-driven
+    // re-renders coalesce into one frame. Fallback runs sync if the scheduler
+    // module didn't load (unbundled dev, smoke tests).
+    const schedule = window.scheduleRender || ((fn) => fn());
+    schedule(() => this.renderer.rerenderAllLogs());
+    schedule(() => this.renderer.rerenderTelemetry());
   }
   
   // Component presets — regex patterns to INCLUDE (allowlist approach)

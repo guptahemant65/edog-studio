@@ -143,8 +143,14 @@ class EdogLogViewer {
         }
         if (next.filters && next.filters !== this._lastRenderedFilters) {
           this._lastRenderedFilters = next.filters;
-          if (this.filter) this.filter.applyFilters();
-          // Telemetry tab owns its own render loop; nudge it directly.
+          // PR-C: defer the cross-module re-render to the next frame so a
+          // burst of URL/hashchange writes collapses into one paint. The
+          // wrapped applyFilters() also internally schedules its renderer
+          // calls — double-deferral is harmless (still one frame), and the
+          // explicit wrap here keeps the subscriber's render contract obvious.
+          const schedule = window.scheduleRender || ((fn) => fn());
+          if (this.filter) schedule(() => this.filter.applyFilters());
+          // Telemetry tab owns its own RAF batcher; nudge it directly.
           if (this.telemetryTab && typeof this.telemetryTab._scheduleRender === 'function') {
             this.telemetryTab._scheduleRender();
           }

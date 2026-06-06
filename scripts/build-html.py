@@ -81,6 +81,7 @@ LIB_MODULES = [
 JS_MODULES = [
     "js/mock-data.js",
     "js/error-codes-data.js",
+    "js/render-scheduler.js",
     "js/studio-state.js",
     "js/state.js",
     "js/toast.js",

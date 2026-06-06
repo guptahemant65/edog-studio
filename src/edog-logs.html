@@ -44852,6 +44852,73 @@ window.ERROR_CODES_DB = {
   }
 };
 
+// === js/render-scheduler.js ===
+'use strict';
+
+/* ═══════════════════════════════════════════════════════════════
+   PR-C: rAF render scheduler
+
+   Coalesces render functions into one animation frame. Multiple
+   scheduleRender(fn) calls in the same tick → one flush. Same fn
+   scheduled twice in the same frame → fires once (Set semantics).
+
+   Snapshot-and-clear BEFORE running: a fn that re-schedules itself
+   during flush lands in the *next* frame, not this one. Mirrors
+   studioState's queueMicrotask snapshot pattern, so re-entrancy is
+   bounded by frame, not by re-entrant call depth.
+
+   Each fn runs inside its own try/catch so one bad render can't
+   strand the batch or leak entries in the dirty Set.
+
+   `flushRenders()` is a deterministic escape hatch for tests and
+   urgent paths (teardown, snapshotting). Prefer scheduleRender().
+   ═══════════════════════════════════════════════════════════════ */
+
+(function () {
+  const dirty = new Set();
+  let scheduled = false;
+  let rafId = 0;
+
+  const RAF = typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function'
+    ? window.requestAnimationFrame.bind(window)
+    : (fn) => setTimeout(fn, 0);
+  const CAF = typeof window !== 'undefined' && typeof window.cancelAnimationFrame === 'function'
+    ? window.cancelAnimationFrame.bind(window)
+    : (id) => clearTimeout(id);
+
+  function flush() {
+    scheduled = false;
+    rafId = 0;
+    const batch = Array.from(dirty);
+    dirty.clear();
+    for (let i = 0; i < batch.length; i++) {
+      try {
+        batch[i]();
+      } catch (err) {
+        console.error('[scheduleRender] fn threw:', err);
+      }
+    }
+  }
+
+  function scheduleRender(fn) {
+    if (typeof fn !== 'function') return;
+    dirty.add(fn);
+    if (!scheduled) {
+      scheduled = true;
+      rafId = RAF(flush);
+    }
+  }
+
+  function flushRenders() {
+    if (!scheduled) return;
+    if (rafId) CAF(rafId);
+    flush();
+  }
+
+  window.scheduleRender = scheduleRender;
+  window.flushRenders = flushRenders;
+})();
+
 // === js/studio-state.js ===
 /**
  * studioState — Tiny observable store for cross-module UI state.
@@ -50679,8 +50746,12 @@ class FilterManager {
   }
   
   applyFilters = () => {
-    this.renderer.rerenderAllLogs();
-    this.renderer.rerenderTelemetry();
+    // PR-C: route through rAF scheduler so click bursts + subscriber-driven
+    // re-renders coalesce into one frame. Fallback runs sync if the scheduler
+    // module didn't load (unbundled dev, smoke tests).
+    const schedule = window.scheduleRender || ((fn) => fn());
+    schedule(() => this.renderer.rerenderAllLogs());
+    schedule(() => this.renderer.rerenderTelemetry());
   }
   
   // Component presets — regex patterns to INCLUDE (allowlist approach)
@@ -63766,9 +63837,29 @@ class RuntimeView {
     // the change. The store dedupes via shallowEqual, and the subscriber
     // in main.js no-ops when runtimeView is already on this tab — so no
     // re-entrancy loop on user-initiated clicks.
-    if (window.studioState) window.studioState.set({ activeTab: tabId });
+    //
+    // PR-C: wrap the state mutation + DOM apply in a View Transition so the
+    // tab swap morphs instead of snap-flashing. The callback runs
+    // synchronously inside the transition snapshot — studioState.set's
+    // microtask notification fires *after* the transition commits, by
+    // which time runtimeView._activeTab already matches and the
+    // subscriber's bridge is a no-op (cycle stays bounded).
+    //
+    // prefers-reduced-motion is read per-call (not cached) so OS changes
+    // take effect immediately. Init's _applyTab(seededTab) is NOT routed
+    // through here — cold start stays transition-free on purpose.
+    const apply = () => {
+      if (window.studioState) window.studioState.set({ activeTab: tabId });
+      this._applyTab(tabId);
+    };
 
-    this._applyTab(tabId);
+    const reduced = typeof window.matchMedia === 'function'
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduced || typeof document.startViewTransition !== 'function') {
+      apply();
+      return;
+    }
+    document.startViewTransition(apply);
   }
 
   /**
@@ -112521,8 +112612,14 @@ class EdogLogViewer {
         }
         if (next.filters && next.filters !== this._lastRenderedFilters) {
           this._lastRenderedFilters = next.filters;
-          if (this.filter) this.filter.applyFilters();
-          // Telemetry tab owns its own render loop; nudge it directly.
+          // PR-C: defer the cross-module re-render to the next frame so a
+          // burst of URL/hashchange writes collapses into one paint. The
+          // wrapped applyFilters() also internally schedules its renderer
+          // calls — double-deferral is harmless (still one frame), and the
+          // explicit wrap here keeps the subscriber's render contract obvious.
+          const schedule = window.scheduleRender || ((fn) => fn());
+          if (this.filter) schedule(() => this.filter.applyFilters());
+          // Telemetry tab owns its own RAF batcher; nudge it directly.
           if (this.telemetryTab && typeof this.telemetryTab._scheduleRender === 'function') {
             this.telemetryTab._scheduleRender();
           }

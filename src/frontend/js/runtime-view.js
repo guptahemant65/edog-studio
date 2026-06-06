@@ -143,9 +143,29 @@ class RuntimeView {
     // the change. The store dedupes via shallowEqual, and the subscriber
     // in main.js no-ops when runtimeView is already on this tab — so no
     // re-entrancy loop on user-initiated clicks.
-    if (window.studioState) window.studioState.set({ activeTab: tabId });
+    //
+    // PR-C: wrap the state mutation + DOM apply in a View Transition so the
+    // tab swap morphs instead of snap-flashing. The callback runs
+    // synchronously inside the transition snapshot — studioState.set's
+    // microtask notification fires *after* the transition commits, by
+    // which time runtimeView._activeTab already matches and the
+    // subscriber's bridge is a no-op (cycle stays bounded).
+    //
+    // prefers-reduced-motion is read per-call (not cached) so OS changes
+    // take effect immediately. Init's _applyTab(seededTab) is NOT routed
+    // through here — cold start stays transition-free on purpose.
+    const apply = () => {
+      if (window.studioState) window.studioState.set({ activeTab: tabId });
+      this._applyTab(tabId);
+    };
 
-    this._applyTab(tabId);
+    const reduced = typeof window.matchMedia === 'function'
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduced || typeof document.startViewTransition !== 'function') {
+      apply();
+      return;
+    }
+    document.startViewTransition(apply);
   }
 
   /**
