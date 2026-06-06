@@ -220,3 +220,109 @@ class TestGetMatchCount:
 class TestPipelineJsonContentType:
     def test_synthesize_uses_json(self, pipeline_source):
         assert "application/json" in pipeline_source, "SynthesizeErrorResponse must use application/json content type"
+
+
+# ──────────────────────────────────────────────────────────────────────
+# ADR-008 SPARK FAULT HELPERS
+# ──────────────────────────────────────────────────────────────────────
+#
+# TryPeekSparkFault + IncrementMatchCount are the API surface
+# EdogSparkClientWrapper consumes. They split the "look up + record"
+# operation that HasArmedFaultForNode performs in one shot, because
+# the wrapper needs to peek FIRST (it dispatches by Fault + StatusCode)
+# and record SECOND (only after the synthetic response is built).
+
+
+class TestSparkFaultHelpers:
+    def test_try_peek_method_declared(self, store_source):
+        assert re.search(
+            r"public\s+static\s+bool\s+TryPeekSparkFault\s*\(\s*string\s+nodeId\s*,"
+            r"\s*out\s+HttpFaultEntry\s+match\s*\)",
+            store_source,
+        ), "TryPeekSparkFault must be `public static bool TryPeekSparkFault(string nodeId, out HttpFaultEntry match)`"
+
+    def test_try_peek_filters_by_error_sim_scenario(self, store_source):
+        body = _extract_method_body(store_source, "TryPeekSparkFault")
+        assert 'ScenarioId != "error-sim"' in body, (
+            "TryPeekSparkFault must only match rules registered by the Error "
+            "Code Simulator scenario — never global/HTTP-pipeline rules."
+        )
+
+    def test_try_peek_filters_by_customTransformExecution_target(self, store_source):
+        body = _extract_method_body(store_source, "TryPeekSparkFault")
+        assert "customTransformExecution" in body, (
+            "TryPeekSparkFault must only match GTS transform-execution rules — "
+            "the ISparkClient layer doesn't intercept other GTS endpoints."
+        )
+
+    def test_try_peek_filters_by_node_id_match(self, store_source):
+        body = _extract_method_body(store_source, "TryPeekSparkFault")
+        assert "StringComparison.OrdinalIgnoreCase" in body
+        assert "rule.NodeId" in body
+
+    def test_try_peek_respects_rule_state_enabled_flag(self, store_source):
+        body = _extract_method_body(store_source, "TryPeekSparkFault")
+        assert "_ruleStates" in body
+        assert "Enabled" in body, (
+            "TryPeekSparkFault must skip disabled rules — toggling a rule off "
+            "in the studio must immediately disarm it."
+        )
+
+    def test_try_peek_does_not_increment_fire_count(self, store_source):
+        # Peek semantics: SEPARATES lookup from accounting. The wrapper's
+        # IncrementMatchCount call is the only path that may bump FireCount
+        # via this helper pair — TryPeekSparkFault itself must be side-
+        # effect-free so callers can decide whether to fire.
+        body = _extract_method_body(store_source, "TryPeekSparkFault")
+        assert "Interlocked.Increment" not in body
+        assert "FireCount" not in body, (
+            "TryPeekSparkFault is a PEEK — it must not mutate FireCount. "
+            "Callers (e.g. EdogSparkClientWrapper) bump the counter via "
+            "IncrementMatchCount only after the synthetic response is built."
+        )
+
+    def test_try_peek_null_safe(self, store_source):
+        body = _extract_method_body(store_source, "TryPeekSparkFault")
+        assert "IsNullOrEmpty(nodeId)" in body
+
+    def test_increment_method_declared(self, store_source):
+        assert re.search(
+            r"public\s+static\s+void\s+IncrementMatchCount\s*\(\s*string\s+ruleId\s*\)",
+            store_source,
+        ), "IncrementMatchCount must be `public static void IncrementMatchCount(string ruleId)`"
+
+    def test_increment_uses_interlocked(self, store_source):
+        body = _extract_method_body(store_source, "IncrementMatchCount")
+        assert "Interlocked.Increment" in body, (
+            "IncrementMatchCount must use Interlocked — fire counts must be "
+            "thread-safe under concurrent submits."
+        )
+        assert "FireCount" in body
+
+    def test_increment_null_safe(self, store_source):
+        body = _extract_method_body(store_source, "IncrementMatchCount")
+        assert "IsNullOrEmpty(ruleId)" in body, (
+            "IncrementMatchCount must short-circuit on null/empty ruleId — "
+            "rules sourced from legacy files may lack an ID."
+        )
+
+
+def _extract_method_body(source: str, name: str) -> str:
+    """Brace-balanced extraction of a named method body."""
+    pattern = re.compile(rf"(?:public|private|internal)\s+(?:static\s+)?[^\n(]*?\b{name}\s*\(")
+    match = pattern.search(source)
+    assert match, f"Method {name} not found"
+    start = source.find("{", match.end())
+    assert start >= 0
+    depth = 0
+    i = start
+    while i < len(source):
+        c = source[i]
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return source[start : i + 1]
+        i += 1
+    raise AssertionError(f"Unbalanced braces in {name}")

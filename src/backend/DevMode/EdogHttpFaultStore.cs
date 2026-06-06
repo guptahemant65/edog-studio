@@ -337,6 +337,110 @@ namespace Microsoft.LiveTable.Service.DevMode
                 : 0;
         }
 
+        // ── Spark-layer fault injection (ADR-008) ─────────────────────
+        //
+        // The GTS HttpClient is built by WCL's Get1PWorkloadHttpClientAsync
+        // and bypasses IHttpClientFactory, so EdogHttpPipelineHandler is
+        // never inserted into its handler chain. That makes
+        // EdogHttpPipelineHandler.SendAsync unable to fire rules targeting
+        // customTransformExecution — see runDAG-lifecycle.md §4.3.4.
+        //
+        // EdogSparkClientWrapper intercepts at the ISparkClient semantic
+        // layer instead. It needs two operations on this store:
+        //
+        //   1. TryPeekSparkFault  — lock-free lookup that returns the matched
+        //                           rule WITHOUT incrementing FireCount.
+        //                           Used at every entry to SendTransform /
+        //                           GetTransformStatus so the wrapper can
+        //                           decide whether to short-circuit.
+        //
+        //   2. IncrementMatchCount — separate atomic increment, invoked
+        //                            exactly once on the call that actually
+        //                            returns the synthesized response.
+        //                            Channel 1 (status forge) increments on
+        //                            the status-poll call that returns Failed.
+        //                            Channel 2/4 increment on the submit call.
+        //
+        // Splitting peek from increment is deliberate: status polling can
+        // call into the wrapper many times for one transformation, but the
+        // user's mental model is "one armed rule fires once per node".
+        // The wrapper's _firedStatusForges dedup set + this split API
+        // together preserve that semantic.
+        // ───────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Returns <c>true</c> when an enabled error-simulator rule targeting
+        /// the GTS substring (<c>customTransformExecution</c>) is armed for
+        /// the given node. The matched rule is returned via <paramref name="match"/>
+        /// without incrementing its <see cref="FaultRuleState.FireCount"/>.
+        /// Lock-free; never throws.
+        /// </summary>
+        /// <param name="nodeId">Target node's Guid string. Null returns false.</param>
+        /// <param name="match">Receives the first matching rule on success.</param>
+        /// <remarks>
+        /// Strict filtering matches <see cref="HasArmedFaultForNode"/>: only
+        /// rules created via <see cref="AddErrorSimRule"/>
+        /// (<c>ScenarioId == "error-sim"</c>) with <c>TargetSubstring</c>
+        /// containing <c>customTransformExecution</c>. DAG-level rules
+        /// (<c>NodeId == null</c>) and QA chaos rules are excluded — a
+        /// node-scoped GTS rule is the only shape EdogSparkClientWrapper
+        /// can meaningfully fire on a per-node basis.
+        ///
+        /// Returns the FIRST matching enabled rule in registration order,
+        /// consistent with <see cref="TryMatchFault"/>.
+        /// </remarks>
+        public static bool TryPeekSparkFault(string nodeId, out HttpFaultEntry match)
+        {
+            match = null;
+            if (string.IsNullOrEmpty(nodeId)) return false;
+
+            var rules = _flatRules;
+            if (rules.Length == 0) return false;
+
+            foreach (var rule in rules)
+            {
+                if (rule.ScenarioId != "error-sim") continue;
+                if (string.IsNullOrEmpty(rule.NodeId)) continue;
+                if (!string.Equals(rule.NodeId, nodeId, StringComparison.OrdinalIgnoreCase)) continue;
+                if (string.IsNullOrEmpty(rule.TargetSubstring)) continue;
+                if (rule.TargetSubstring.IndexOf("customTransformExecution", StringComparison.OrdinalIgnoreCase) < 0) continue;
+
+                if (rule.RuleId != null
+                    && _ruleStates.TryGetValue(rule.RuleId, out var state)
+                    && !state.Enabled)
+                {
+                    continue;
+                }
+
+                match = rule;
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Atomically increments the match counter for the rule with the given ID.
+        /// No-op when <paramref name="ruleId"/> is null/empty or the rule has no
+        /// mutable state. Lock-free; never throws.
+        /// </summary>
+        /// <remarks>
+        /// Pairs with <see cref="TryPeekSparkFault"/> for the EdogSparkClientWrapper
+        /// fault-injection path. Must be invoked exactly once per fault firing so
+        /// downstream telemetry (<see cref="GetMatchCount"/>,
+        /// <see cref="EdogErrorSimEngine.OnNodeExecutionCompleted"/>'s
+        /// <c>ErrorSimRuleMatched</c>/<c>ErrorSimRuleUnmatched</c> branch)
+        /// reports accurately.
+        /// </remarks>
+        public static void IncrementMatchCount(string ruleId)
+        {
+            if (string.IsNullOrEmpty(ruleId)) return;
+            if (_ruleStates.TryGetValue(ruleId, out var state))
+            {
+                Interlocked.Increment(ref state.FireCount);
+            }
+        }
+
         /// <summary>
         /// Clears all active rules. Test-only — not exposed via SignalR.
         /// </summary>
