@@ -2522,15 +2522,17 @@ def revert_node_completion_telemetry_patch(content):
 # =========================================================================
 # Phase 0 — Error Code Simulator first-principles rebuild patches.
 #
-# Six patches turn EDOG's request lifecycle into a typed, mapper-friendly
+# Seven patches turn EDOG's request lifecycle into a typed, mapper-friendly
 # pipeline so the simulator can deliver fidelity-bearing failures:
 #
-#   1. apply_request_context_begin_patch       (DagExecutionHandlerV2.cs)
-#   2. apply_request_context_enrich_patch      (DagExecutionHandlerV2.cs)
-#   3. apply_request_context_end_patch         (DagExecutionHandlerV2.cs)
-#   4. apply_faulted_node_typed_throw_patch    (DagExecutionHandlerV2.cs)
-#   5. apply_outer_catch_guard_extend_patch    (DagExecutionHandlerV2.cs)
-#   6. apply_mapper_edog_branch_patch          (NodeExecutionUtils.cs)
+#   1. apply_request_context_begin_patch                  (DagExecutionHandlerV2.cs)
+#   2. apply_request_context_enrich_patch                 (DagExecutionHandlerV2.cs)
+#   3. apply_request_context_end_patch                    (DagExecutionHandlerV2.cs)
+#   4. apply_faulted_node_typed_throw_patch               (DagExecutionHandlerV2.cs)
+#   8. apply_register_hooks_before_faulted_throw_patch    (DagExecutionHandlerV2.cs) ← Patch 8
+#   5. apply_outer_catch_guard_extend_patch               (DagExecutionHandlerV2.cs)
+#   6. apply_mapper_edog_branch_patch                     (NodeExecutionUtils.cs)
+#   7. apply_outer_catch_error_source_propagate_patch     (DagExecutionHandlerV2.cs)
 #
 # Patches 1-3 establish EdogRequestContext (AsyncLocal) over the lifetime
 # of a DAG execution iteration in two stages: Begin() at metadata-only
@@ -2549,6 +2551,15 @@ def revert_node_completion_telemetry_patch(content):
 # (legacy pre-setters at lines 233/260/266/348/449/470 keep their
 # short-circuit behavior). Patch 6 adds a top-of-mapper branch that
 # recognizes EdogFaultedNodeException and returns its carried code.
+#
+# Patch 8 (slotted between Patch 4 and Patch 5 in apply order) pre-registers
+# InsightDiscoveryHook into dagExecutionHooks BEFORE the typed throw fires.
+# Without this, dagExecutionHooks is empty at throw-time (the normal-flow
+# registration block at L406+ runs AFTER the faulted-nodes branch escapes
+# the try), so the outer-catch hook-firing safety net at L646 silently
+# skips InsightDiscoveryHook and no insight card is generated for any
+# faulted-node failure (real or simulated). The pre-registration mirrors
+# the L457 hook construction verbatim (same feature flag, same rules).
 # =========================================================================
 
 
@@ -2807,6 +2818,138 @@ def revert_faulted_node_typed_throw_patch(content):
     )
     original = "                        throw new Exception(errorMessage);"
     return content.replace(patched, original, 1)
+
+
+def apply_register_hooks_before_faulted_throw_patch(content):
+    """Patch DagExecutionHandlerV2.cs to pre-register InsightDiscoveryHook before the faulted-nodes throw.
+
+    Bug this patch fixes
+    --------------------
+    The faulted-nodes branch at L375 throws EdogFaultedNodeException (added by
+    Patch 4) BEFORE the hook-registration block at L406-465. dagExecutionHooks
+    is declared empty at L155 and only populated by that L406+ block. So when
+    the faulted-nodes throw fires, the outer catch's "fire hooks on failure"
+    safety net at L646 sees `dagExecutionHooks.Count == 0` and silently does
+    nothing. Result: InsightDiscoveryHook never runs for ANY faulted-node
+    failure (real or simulated), and no insight card is generated for the
+    very failure mode it was built to surface.
+
+    The same bug existed pre-Phase-0 with the bare `throw new Exception(...)`
+    at the same line — Phase 0 just exposed it on the simulator path.
+
+    What this patch does
+    --------------------
+    Injects a guarded registration block IMMEDIATELY BEFORE the typed-throw
+    comment introduced by Patch 4. The block:
+      - null-guards on dagExecutionContext (defensive — should always be set
+        by this point, but a NRE here would mask the real failure);
+      - gates on the SAME feature flag as the normal-flow registration
+        (FeatureNames.FLTInsightsEngine, L454);
+      - dedups via `dagExecutionHooks.Any(h => h.Name == "InsightDiscovery")`
+        so a future re-order that runs both blocks does not double-register;
+      - constructs InsightDiscoveryHook with the EXACT rules list at L457
+        (ConsecutiveFailuresRule + DurationRegressionRule) — if these
+        diverge, the early-registered hook behaves differently from the
+        normal-flow one and that's a latent fidelity bug;
+      - wraps everything in try/catch so hook registration failure can
+        never block DAG fault handling (the outer catch must always reach
+        the typed throw).
+
+    Anchor / dependency on Patch 4
+    ------------------------------
+    The marker we replace is the typed-throw comment Patch 4 emits. This makes
+    Patch 8's dependency on Patch 4 explicit: if Patch 4 hasn't run, Patch 8
+    returns `pattern_not_found` cleanly rather than silently injecting into
+    a not-yet-typed-throw site. The coupled-postcondition check in
+    apply_devmode_patches additionally warns if Patch 4 applied but Patch 8
+    did NOT — that's the partial-fix state where faulted-node failures map
+    to the right error code but still produce no insight card.
+    """
+    sentinel = "// EDOG DevMode — register InsightDiscoveryHook before the faulted-nodes throw"
+    if sentinel in content:
+        return content, "already_applied"
+
+    marker = "                        // EDOG DevMode — throw a typed exception so the outer-catch mapper"
+    if marker not in content:
+        return content, "pattern_not_found"
+
+    injection = (
+        "                        // EDOG DevMode — register InsightDiscoveryHook before the faulted-nodes throw\n"
+        "                        // so the outer-catch hook-firing safety net (line ~646) actually has hooks to\n"
+        "                        // fire on faulted-node failures. Without this, dagExecutionHooks is still\n"
+        "                        // empty at throw-time (it is populated below at line ~406+, AFTER this\n"
+        "                        // branch escapes), so the catch handler silently skips InsightDiscoveryHook\n"
+        "                        // and no insight card is generated for any faulted-node failure (real or\n"
+        "                        // simulated). Rules list MUST match the normal-flow registration at L457.\n"
+        "                        try\n"
+        "                        {\n"
+        "                            if (dagExecutionContext != null\n"
+        "                                && this.featureFlighter.IsEnabled(\n"
+        "                                    FeatureNames.FLTInsightsEngine,\n"
+        "                                    TryParseGuidOrNull(dagExecutionContext.TenantId),\n"
+        "                                    TryParseGuidOrNull(GetCapacityObjectId()),\n"
+        "                                    dagExecutionContext.WorkspaceId)\n"
+        "                                && !dagExecutionHooks.Any(h => h.Name == \"InsightDiscovery\"))\n"
+        "                            {\n"
+        "                                dagExecutionHooks.Add(new InsightDiscoveryHook(new IInsightRule[]\n"
+        "                                {\n"
+        "                                    new ConsecutiveFailuresRule(),\n"
+        "                                    new DurationRegressionRule(),\n"
+        "                                }));\n"
+        "                            }\n"
+        "                        }\n"
+        "                        catch\n"
+        "                        {\n"
+        "                            // Non-fatal — hook registration failure must never block DAG fault handling.\n"
+        "                        }\n"
+        "\n"
+        + marker
+    )
+
+    return content.replace(marker, injection, 1), "applied"
+
+
+def revert_register_hooks_before_faulted_throw_patch(content):
+    """Restore DagExecutionHandlerV2.cs by stripping the Patch 8 pre-registration block.
+
+    Symmetric inverse of apply: deletes exactly the injected text and leaves
+    the typed-throw comment marker untouched (Patch 4's effect is reverted
+    separately by revert_faulted_node_typed_throw_patch).
+    """
+    marker = "                        // EDOG DevMode — throw a typed exception so the outer-catch mapper"
+    injection = (
+        "                        // EDOG DevMode — register InsightDiscoveryHook before the faulted-nodes throw\n"
+        "                        // so the outer-catch hook-firing safety net (line ~646) actually has hooks to\n"
+        "                        // fire on faulted-node failures. Without this, dagExecutionHooks is still\n"
+        "                        // empty at throw-time (it is populated below at line ~406+, AFTER this\n"
+        "                        // branch escapes), so the catch handler silently skips InsightDiscoveryHook\n"
+        "                        // and no insight card is generated for any faulted-node failure (real or\n"
+        "                        // simulated). Rules list MUST match the normal-flow registration at L457.\n"
+        "                        try\n"
+        "                        {\n"
+        "                            if (dagExecutionContext != null\n"
+        "                                && this.featureFlighter.IsEnabled(\n"
+        "                                    FeatureNames.FLTInsightsEngine,\n"
+        "                                    TryParseGuidOrNull(dagExecutionContext.TenantId),\n"
+        "                                    TryParseGuidOrNull(GetCapacityObjectId()),\n"
+        "                                    dagExecutionContext.WorkspaceId)\n"
+        "                                && !dagExecutionHooks.Any(h => h.Name == \"InsightDiscovery\"))\n"
+        "                            {\n"
+        "                                dagExecutionHooks.Add(new InsightDiscoveryHook(new IInsightRule[]\n"
+        "                                {\n"
+        "                                    new ConsecutiveFailuresRule(),\n"
+        "                                    new DurationRegressionRule(),\n"
+        "                                }));\n"
+        "                            }\n"
+        "                        }\n"
+        "                        catch\n"
+        "                        {\n"
+        "                            // Non-fatal — hook registration failure must never block DAG fault handling.\n"
+        "                        }\n"
+        "\n"
+        + marker
+    )
+    return content.replace(injection, marker, 1)
 
 
 def apply_outer_catch_guard_extend_patch(content):
@@ -3581,6 +3724,28 @@ def apply_all_changes(token, repo_root):
         elif status == "pattern_not_found":
             warnings.append("⚠️  Faulted-node typed throw: pattern not found in DagExecutionHandlerV2.cs")
 
+    # 4b-9b. Patch 8 — register InsightDiscoveryHook BEFORE the faulted-nodes throw
+    # (DagExecutionHandlerV2.cs). Anchored on the typed-throw comment emitted by 4b-9,
+    # so this MUST run after 4b-9 (its pattern_not_found result on a not-yet-typed
+    # site is the explicit dependency signal). Without this patch, the outer-catch
+    # hook-firing safety net at L646 sees an empty dagExecutionHooks list at
+    # throw-time and silently skips InsightDiscoveryHook — no insight card for any
+    # faulted-node failure (real or simulated).
+    rel_path = FILES["DagExecutionHandlerV2"]
+    filepath = repo_root / rel_path
+    content = read_file(filepath)
+    if content:
+        new_content, status = apply_register_hooks_before_faulted_throw_patch(content)
+        if status == "applied":
+            original_contents.setdefault(rel_path, content)
+            write_file(filepath, new_content)
+            modified_contents[rel_path] = new_content
+            changes_made.append("✅ Pre-register InsightDiscoveryHook before faulted throw (DagExecutionHandlerV2.cs)")
+        elif status == "already_applied":
+            changes_made.append("⏭️  Pre-register InsightDiscoveryHook before faulted throw (already)")
+        elif status == "pattern_not_found":
+            warnings.append("⚠️  Pre-register InsightDiscoveryHook: typed-throw anchor missing in DagExecutionHandlerV2.cs (run typed-throw patch first)")
+
     # 4b-10. Phase 0 — outer-catch guard extension (DagExecutionHandlerV2.cs).
     rel_path = FILES["DagExecutionHandlerV2"]
     filepath = repo_root / rel_path
@@ -3634,16 +3799,45 @@ def apply_all_changes(token, repo_root):
             warnings.append("⚠️  Outer-catch ErrorSource propagation: pattern not found in DagExecutionHandlerV2.cs")
 
     # 4b-13. Phase 0 — COUPLED POSTCONDITION CHECK.
-    # The faulted-node fidelity fix requires three patches to apply together:
-    #   - faulted_node_typed_throw  (file throws EdogFaultedNodeException)
-    #   - outer_catch_guard_extend  (guard routes typed exception through mapper)
-    #   - mapper_edog_branch        (mapper recognizes typed exception and returns carried code)
-    # If the typed throw applies but either of the other two does NOT, the runtime
-    # behavior degrades silently — the typed exception is thrown into a catch path
-    # that does not understand it, falling through to MLV_LINEAGE_CREATION_FAILURE
-    # (worse than the original MLV_DAG_HAS_FAULTED_NODES hijack).
-    # This check elevates that risk from a silent warning to a loud, actionable one
-    # at the same severity as a pattern_not_found failure.
+    # The fidelity fix requires four patches to apply together:
+    #   - faulted_node_typed_throw            (file throws EdogFaultedNodeException)
+    #   - register_hooks_before_faulted_throw (Patch 8: hooks registered BEFORE throw
+    #                                          so outer-catch safety net has hooks to fire)
+    #   - outer_catch_guard_extend            (guard routes typed exception through mapper)
+    #   - mapper_edog_branch                  (mapper recognizes typed exception, returns carried code)
+    # If the typed throw applies but any of the other three does NOT, behavior degrades:
+    #   - guard or mapper missing → typed exception falls through to MLV_LINEAGE_CREATION_FAILURE
+    #     (worse than the original MLV_DAG_HAS_FAULTED_NODES hijack);
+    #   - Patch 8 missing → mapper produces the correct code but InsightDiscoveryHook
+    #     never runs (no insight card for any faulted-node failure — the bug Patch 8 fixes).
+    # This check elevates all three partial-apply risks from silent warnings to loud,
+    # actionable ones at the same severity as a pattern_not_found failure.
+    dag_path = repo_root / FILES["DagExecutionHandlerV2"]
+    neu_path = repo_root / FILES["NodeExecutionUtils"]
+    dag_now = read_file(dag_path) or ""
+    neu_now = read_file(neu_path) or ""
+    has_typed_throw = "new Microsoft.LiveTable.Service.DevMode.EdogFaultedNodeException" in dag_now
+    has_guard_extend = "|| e is Microsoft.LiveTable.Service.DevMode.EdogFaultedNodeException" in dag_now
+    has_mapper_branch = "exception is Microsoft.LiveTable.Service.DevMode.EdogFaultedNodeException" in neu_now
+    has_register_hooks = "// EDOG DevMode — register InsightDiscoveryHook before the faulted-nodes throw" in dag_now
+    if has_typed_throw and not (has_guard_extend and has_mapper_branch):
+        warnings.append(
+            "🚨 PHASE 0 COUPLED-PATCH INCONSISTENCY: typed throw applied but "
+            f"guard_extend={has_guard_extend} mapper_branch={has_mapper_branch}. "
+            "DAG faulted-node failures will now degrade to MLV_LINEAGE_CREATION_FAILURE "
+            "(worse than original behavior). Re-run `edog.py up` after fixing the missing "
+            "patch anchors, or `edog.py down` to revert."
+        )
+    if has_typed_throw and not has_register_hooks:
+        warnings.append(
+            "🚨 PHASE 0 PATCH 8 NOT APPLIED: typed throw is in place but "
+            "InsightDiscoveryHook is NOT pre-registered before it. Faulted-node "
+            "failures will be mapped to the correct ErrorCode, but the outer-catch "
+            "hook-firing safety net (line ~646) will see an empty hooks list and "
+            "silently skip InsightDiscoveryHook — no insight card is generated for "
+            "any faulted-node failure (real or simulated). Re-run `edog.py up` "
+            "after fixing the Patch 8 anchor, or `edog.py down` to revert."
+        )
     dag_path = repo_root / FILES["DagExecutionHandlerV2"]
     neu_path = repo_root / FILES["NodeExecutionUtils"]
     dag_now = read_file(dag_path) or ""
@@ -3879,6 +4073,7 @@ def revert_all_changes(repo_root):
     for desc, revert_fn in [
         ("Outer-catch ErrorSource propagation", revert_outer_catch_error_source_propagate_patch),
         ("Outer-catch guard extend", revert_outer_catch_guard_extend_patch),
+        ("Pre-register InsightDiscoveryHook before faulted throw", revert_register_hooks_before_faulted_throw_patch),
         ("Faulted-node typed throw", revert_faulted_node_typed_throw_patch),
         ("EDOG request context End", revert_request_context_end_patch),
         ("EDOG request context Enrich", revert_request_context_enrich_patch),

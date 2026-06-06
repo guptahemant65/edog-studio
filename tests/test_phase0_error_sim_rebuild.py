@@ -707,6 +707,7 @@ class TestAllDagHandlerPatchesCombined:
         "request_context_enrich",
         "request_context_end",
         "faulted_node_typed_throw",
+        "register_hooks_before_faulted_throw",
         "outer_catch_guard_extend",
         "outer_catch_error_source_propagate",
     ]
@@ -718,11 +719,12 @@ class TestAllDagHandlerPatchesCombined:
             content, status = apply_fn(content)
             assert status == "applied", f"{name}: status={status}"
 
-        # Sanity: all 5 effects are present after combined apply.
+        # Sanity: all 6 DagHandler effects are present after combined apply.
         assert "EdogRequestContext.Begin(metadata, iterationId)" in content
         assert "EdogRequestContext.Enrich(dagExecutionContext)" in content
         assert "EdogRequestContext.End();" in content
         assert "throw new Microsoft.LiveTable.Service.DevMode.EdogFaultedNodeException(" in content
+        assert "// EDOG DevMode — register InsightDiscoveryHook before the faulted-nodes throw" in content
         assert "|| e is Microsoft.LiveTable.Service.DevMode.EdogFaultedNodeException" in content
 
         # Revert in reverse order.
@@ -802,18 +804,23 @@ class TestRealFLTStyleCopInvariants:
             edog.apply_request_context_enrich_patch,
             edog.apply_request_context_end_patch,
             edog.apply_faulted_node_typed_throw_patch,
+            edog.apply_register_hooks_before_faulted_throw_patch,
             edog.apply_outer_catch_guard_extend_patch,
             edog.apply_outer_catch_error_source_propagate_patch,
         ):
             content, status = fn(content)
-            assert status == "applied", f"{fn.__name__}: {status}"
+            # Tolerate already_applied — local FLT may already be in a
+            # patched state from a prior `edog up`. What matters for the
+            # StyleCop assertions is the final structural state.
+            assert status in ("applied", "already_applied"), f"{fn.__name__}: {status}"
         return content
 
     @pytest.fixture(scope="class")
     def patched_neu(self):
         content = FLT_NEU.read_text(encoding="utf-8")
         content, status = edog.apply_mapper_edog_branch_patch(content)
-        assert status == "applied", status
+        # Tolerate already_applied — local FLT may already be patched.
+        assert status in ("applied", "already_applied"), status
         return content
 
     def _edog_block_ranges(self, lines):
@@ -910,32 +917,52 @@ class TestRealFLTStyleCopInvariants:
                     )
 
     def test_all_patches_roundtrip_byte_equal_on_real_flt(self):
-        # Belt-and-braces: re-verify byte-for-byte roundtrip on the real source.
-        dag = FLT_DAG.read_text(encoding="utf-8")
-        neu = FLT_NEU.read_text(encoding="utf-8")
-        c = dag
+        """Belt-and-braces byte-for-byte roundtrip on real FLT source.
+
+        Normalize to a clean baseline (no Phase 0 patches applied) before
+        the roundtrip — the local FLT may already be in a patched state
+        from a prior `edog up`. The roundtrip then validates pure
+        apply/revert symmetry from that baseline.
+        """
+        dag_original = FLT_DAG.read_text(encoding="utf-8")
+        neu_original = FLT_NEU.read_text(encoding="utf-8")
+
+        # Revert ordering (reverse of apply) — required because Patch 8's
+        # revert anchors on Patch 4's injected text.
+        reverts_in_revert_order = [
+            edog.revert_outer_catch_error_source_propagate_patch,
+            edog.revert_outer_catch_guard_extend_patch,
+            edog.revert_register_hooks_before_faulted_throw_patch,
+            edog.revert_faulted_node_typed_throw_patch,
+            edog.revert_request_context_end_patch,
+            edog.revert_request_context_enrich_patch,
+            edog.revert_request_context_begin_patch,
+        ]
         applies = [
             edog.apply_request_context_begin_patch,
             edog.apply_request_context_enrich_patch,
             edog.apply_request_context_end_patch,
             edog.apply_faulted_node_typed_throw_patch,
+            edog.apply_register_hooks_before_faulted_throw_patch,
             edog.apply_outer_catch_guard_extend_patch,
             edog.apply_outer_catch_error_source_propagate_patch,
         ]
-        reverts = [
-            edog.revert_request_context_begin_patch,
-            edog.revert_request_context_enrich_patch,
-            edog.revert_request_context_end_patch,
-            edog.revert_faulted_node_typed_throw_patch,
-            edog.revert_outer_catch_guard_extend_patch,
-            edog.revert_outer_catch_error_source_propagate_patch,
-        ]
+
+        # Normalize to baseline.
+        dag_baseline = dag_original
+        for rv in reverts_in_revert_order:
+            dag_baseline = rv(dag_baseline)
+
+        c = dag_baseline
         for ap in applies:
             c, st = ap(c)
             assert st == "applied", f"{ap.__name__}: {st}"
-        for rv in reversed(reverts):
+        for rv in reverts_in_revert_order:
             c = rv(c)
-        assert c == dag, "DagHandler roundtrip not byte-equal"
-        m, st = edog.apply_mapper_edog_branch_patch(neu)
+        assert c == dag_baseline, "DagHandler roundtrip not byte-equal"
+
+        # NodeExecutionUtils is independent — same normalize-then-roundtrip.
+        neu_baseline = edog.revert_mapper_edog_branch_patch(neu_original)
+        m, st = edog.apply_mapper_edog_branch_patch(neu_baseline)
         assert st == "applied"
-        assert edog.revert_mapper_edog_branch_patch(m) == neu, "NodeExecutionUtils roundtrip not byte-equal"
+        assert edog.revert_mapper_edog_branch_patch(m) == neu_baseline, "NodeExecutionUtils roundtrip not byte-equal"
