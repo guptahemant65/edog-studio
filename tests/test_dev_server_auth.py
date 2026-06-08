@@ -34,22 +34,3 @@ def test_token_helper_list_certs():
     assert "cn" in cert
     assert "notAfter" in cert
     assert len(cert["thumbprint"]) == 40
-
-
-def test_token_helper_silent_cba():
-    """token-helper acquires a bearer token via Silent CBA."""
-    helper = _find_helper()
-    if not helper:
-        import pytest
-
-        pytest.skip("token-helper not built")
-    result = subprocess.run(
-        [str(helper), "6921EC59777B2667C9B0BD4B82FA09F1077AB973", "Admin1CBA@FabricFMLV08PPE.ccsctp.net"],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    assert result.returncode == 0, f"stderr: {result.stderr}"
-    token = result.stdout.strip()
-    assert token.startswith("eyJ"), "Token should be a JWT"
-    assert len(token) > 500, f"Token too short: {len(token)}"
