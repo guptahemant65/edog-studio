@@ -22,13 +22,21 @@ namespace Microsoft.LiveTable.Service.DevMode
     /// Loaded lazily from <c>edog-blocklist.json</c> located alongside the
     /// running assembly (the same convention as <c>edog-logs.html</c>).
     ///
+    /// Two filter layers:
+    ///   1. <see cref="IsBlocked(string)"/> — component-name patterns from the
+    ///      <c>blocked</c> array. Errors/Warnings ALWAYS bypass.
+    ///   2. <see cref="IsMessageBlocked(string)"/> — message-body patterns
+    ///      from the <c>messageBlocked</c> array. Used as a NARROW override
+    ///      for known dev-mode Warning noise (AppInsights metric init
+    ///      failures, etc.) that would otherwise bypass layer 1. Every
+    ///      pattern here MUST be tight enough to never match a real failure
+    ///      — see tests/test_blocklist_message_pattern_drop.py for the
+    ///      enforced sanity guard.
+    ///
     /// Fail-open semantics:
     ///   - Missing file       → empty blocklist, allow everything (warn once).
     ///   - Malformed JSON     → empty blocklist, allow everything (warn once).
     ///   - Invalid regex entry → skip that entry, warn once with index+pattern, keep others.
-    ///
-    /// Errors and Warnings ALWAYS bypass this filter in the interceptor; the
-    /// filter is only consulted for Verbose/Message-level logs.
     /// </summary>
     internal sealed class BlocklistFilter
     {
@@ -39,11 +47,21 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         private readonly IReadOnlyList<BlocklistEntry> entries;
         private readonly IReadOnlyList<Regex> patterns;
+        private readonly IReadOnlyList<BlocklistEntry> messageEntries;
+        private readonly IReadOnlyList<Regex> messagePatterns;
 
-        private BlocklistFilter(IReadOnlyList<BlocklistEntry> entries, IReadOnlyList<Regex> patterns, int version, string sourcePath)
+        private BlocklistFilter(
+            IReadOnlyList<BlocklistEntry> entries,
+            IReadOnlyList<Regex> patterns,
+            IReadOnlyList<BlocklistEntry> messageEntries,
+            IReadOnlyList<Regex> messagePatterns,
+            int version,
+            string sourcePath)
         {
             this.entries = entries;
             this.patterns = patterns;
+            this.messageEntries = messageEntries;
+            this.messagePatterns = messagePatterns;
             this.Version = version;
             this.SourcePath = sourcePath;
         }
@@ -61,6 +79,9 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         /// <summary>Gets the parsed blocklist entries for UI display.</summary>
         public IReadOnlyList<BlocklistEntry> Entries => this.entries;
+
+        /// <summary>Gets the parsed message-blocklist entries for UI display.</summary>
+        public IReadOnlyList<BlocklistEntry> MessageEntries => this.messageEntries;
 
         /// <summary>
         /// Returns true if the supplied code-marker name matches any blocklist pattern.
@@ -88,6 +109,38 @@ namespace Microsoft.LiveTable.Service.DevMode
             return false;
         }
 
+        /// <summary>
+        /// Returns true if the supplied message body matches any message-blocklist
+        /// pattern. Used as a NARROW override for known platform Warning noise
+        /// (e.g. AppInsights metric-init failures) that would otherwise bypass
+        /// the component-level filter via the "Errors/Warnings always pass" rule.
+        ///
+        /// EVERY pattern in <c>messageBlocked</c> is sanity-guarded by
+        /// tests/test_blocklist_message_pattern_drop.py against a corpus of
+        /// real FLT failure messages — do not add a pattern here without
+        /// extending that test set first.
+        /// </summary>
+        /// <param name="message">Raw message body from the log entry.</param>
+        /// <returns>True if the log should be dropped even when it is an Error/Warning.</returns>
+        public bool IsMessageBlocked(string message)
+        {
+            if (this.messagePatterns.Count == 0)
+            {
+                return false;
+            }
+
+            string body = message ?? string.Empty;
+            for (int i = 0; i < this.messagePatterns.Count; i++)
+            {
+                if (this.messagePatterns[i].IsMatch(body))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         private static BlocklistFilter Load()
         {
             string path = ResolveBlocklistPath();
@@ -95,7 +148,10 @@ namespace Microsoft.LiveTable.Service.DevMode
             if (path == null)
             {
                 Console.WriteLine($"[EDOG] {BlocklistFileName} not found — allowing all components.");
-                return new BlocklistFilter(Array.Empty<BlocklistEntry>(), Array.Empty<Regex>(), 0, null);
+                return new BlocklistFilter(
+                    Array.Empty<BlocklistEntry>(), Array.Empty<Regex>(),
+                    Array.Empty<BlocklistEntry>(), Array.Empty<Regex>(),
+                    0, null);
             }
 
             try
@@ -110,51 +166,73 @@ namespace Microsoft.LiveTable.Service.DevMode
                     version = versionProp.GetInt32();
                 }
 
-                if (!root.TryGetProperty("blocked", out var blockedProp) || blockedProp.ValueKind != JsonValueKind.Array)
-                {
-                    Console.WriteLine($"[EDOG] {BlocklistFileName} missing 'blocked' array — allowing all components.");
-                    return new BlocklistFilter(Array.Empty<BlocklistEntry>(), Array.Empty<Regex>(), version, path);
-                }
+                var entries = ParseArray(root, "blocked");
+                var messageEntries = ParseArray(root, "messageBlocked");
 
-                var entries = new List<BlocklistEntry>();
-                var patterns = new List<Regex>();
-                int index = 0;
-                foreach (var item in blockedProp.EnumerateArray())
-                {
-                    string pattern = item.TryGetProperty("pattern", out var p) ? p.GetString() : null;
-                    string reason = item.TryGetProperty("reason", out var r) ? r.GetString() : null;
+                Console.WriteLine(
+                    $"[EDOG] Loaded {entries.Item1.Count} component blocklist entries and " +
+                    $"{messageEntries.Item1.Count} message blocklist entries from {path} (version={version}).");
 
-                    if (string.IsNullOrWhiteSpace(pattern))
-                    {
-                        Console.WriteLine($"[EDOG] {BlocklistFileName} entry #{index} has empty pattern — skipped.");
-                        index++;
-                        continue;
-                    }
-
-                    try
-                    {
-                        var rx = new Regex(
-                            pattern,
-                            RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-                        patterns.Add(rx);
-                        entries.Add(new BlocklistEntry(pattern, reason ?? string.Empty));
-                    }
-                    catch (ArgumentException ex)
-                    {
-                        Console.WriteLine($"[EDOG] {BlocklistFileName} entry #{index} pattern '{pattern}' is invalid regex: {ex.Message}");
-                    }
-
-                    index++;
-                }
-
-                Console.WriteLine($"[EDOG] Loaded {entries.Count} blocklist entries from {path} (version={version}).");
-                return new BlocklistFilter(entries, patterns, version, path);
+                return new BlocklistFilter(
+                    entries.Item1, entries.Item2,
+                    messageEntries.Item1, messageEntries.Item2,
+                    version, path);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[EDOG] Failed to load {BlocklistFileName} from {path}: {ex.Message}. Allowing all components.");
-                return new BlocklistFilter(Array.Empty<BlocklistEntry>(), Array.Empty<Regex>(), 0, path);
+                return new BlocklistFilter(
+                    Array.Empty<BlocklistEntry>(), Array.Empty<Regex>(),
+                    Array.Empty<BlocklistEntry>(), Array.Empty<Regex>(),
+                    0, path);
             }
+        }
+
+        /// <summary>
+        /// Parses a named JSON array of <c>{pattern, reason}</c> objects into
+        /// a parallel pair of entries and compiled regexes. Invalid entries
+        /// are warned-and-skipped (fail-open). Missing array returns empties.
+        /// </summary>
+        private static (List<BlocklistEntry>, List<Regex>) ParseArray(JsonElement root, string arrayKey)
+        {
+            var entries = new List<BlocklistEntry>();
+            var patterns = new List<Regex>();
+
+            if (!root.TryGetProperty(arrayKey, out var arrayProp) || arrayProp.ValueKind != JsonValueKind.Array)
+            {
+                return (entries, patterns);
+            }
+
+            int index = 0;
+            foreach (var item in arrayProp.EnumerateArray())
+            {
+                string pattern = item.TryGetProperty("pattern", out var p) ? p.GetString() : null;
+                string reason = item.TryGetProperty("reason", out var r) ? r.GetString() : null;
+
+                if (string.IsNullOrWhiteSpace(pattern))
+                {
+                    Console.WriteLine($"[EDOG] {BlocklistFileName} {arrayKey}[{index}] has empty pattern — skipped.");
+                    index++;
+                    continue;
+                }
+
+                try
+                {
+                    var rx = new Regex(
+                        pattern,
+                        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+                    patterns.Add(rx);
+                    entries.Add(new BlocklistEntry(pattern, reason ?? string.Empty));
+                }
+                catch (ArgumentException ex)
+                {
+                    Console.WriteLine($"[EDOG] {BlocklistFileName} {arrayKey}[{index}] pattern '{pattern}' is invalid regex: {ex.Message}");
+                }
+
+                index++;
+            }
+
+            return (entries, patterns);
         }
 
         /// <summary>

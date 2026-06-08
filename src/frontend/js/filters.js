@@ -16,9 +16,69 @@ class FilterManager {
     // Debounce search
     clearTimeout(this.searchTimeout);
     this.searchTimeout = setTimeout(() => {
-      this.state.searchText = text.trim();
-      this.applyFilters();
+      this.setSearchImmediate(text);
     }, 300);
+  }
+
+  /**
+   * #2 (2026-06-07): synchronous search application.
+   *
+   * On non-empty: pause stream with reason 'search', sync renderer's
+   * search term, rebuild filter index, navigate to first match.
+   * On empty: clear renderer's search term, drop the current match,
+   * resume LIVE if the pause was search-driven.
+   *
+   * Used directly by the Enter / Shift+Enter keyboard wiring (and tests)
+   * so the user gets immediate feedback when pressing the key. The 300ms
+   * debounce above is only for the typing path.
+   */
+  setSearchImmediate = (text) => {
+    const next = (text || '').trim();
+    const prev = (this.state.searchText || '').trim();
+    this.state.searchText = next;
+    this.renderer.setSearchTerm(next);
+
+    if (next) {
+      // Auto-pause so new logs don't shove the viewport while reading hits.
+      if (this.state.streamMode === 'LIVE') {
+        this.state.streamMode = 'PAUSED';
+        this.state.pauseReason = 'search';
+        this.state.bufferedCount = 0;
+        if (typeof this.renderer._updateStreamBadge === 'function') {
+          this.renderer._updateStreamBadge();
+        }
+      } else if (this.state.pauseReason !== 'search') {
+        // Stickier pause reason — search wins over hover/scroll so a later
+        // hover-leave doesn't accidentally resume mid-search.
+        this.state.pauseReason = 'search';
+      }
+      // Rebuild filter index synchronously so navigateMatch sees the new
+      // results in this same tick. applyFilters() also schedules a render
+      // which will repaint the current-match row.
+      this.renderer.rerenderAllLogs();
+      this.renderer.navigateMatch('first');
+    } else if (prev) {
+      // Cleared by user. Drop the current match and (if we paused for
+      // search) resume LIVE. Hover/scroll-pauses are left alone.
+      this.renderer.setSearchTerm('');
+      if (this.state.pauseReason === 'search') {
+        this.state.streamMode = 'LIVE';
+        this.state.pauseReason = null;
+        this.state.bufferedCount = 0;
+        if (typeof this.renderer._updateStreamBadge === 'function') {
+          this.renderer._updateStreamBadge();
+        }
+      }
+      this.applyFilters();
+    } else {
+      // Idempotent re-set with empty string — still apply so any UI sync
+      // happens (e.g. search-count cleared on a programmatic clear).
+      this.applyFilters();
+    }
+
+    if (typeof this.renderer._updateSearchCountUi === 'function') {
+      this.renderer._updateSearchCountUi();
+    }
   }
   
   toggleLevel = (level) => {
@@ -83,11 +143,14 @@ class FilterManager {
     schedule(() => this.renderer.rerenderTelemetry());
   }
   
-  // Component presets — regex patterns to INCLUDE (allowlist approach)
+  // Component presets — FLT is the implicit, always-applied baseline.
+  // The ALL / DAG / Spark presets and the .preset-bar UI were removed in
+  // #3 (2026-06-07). FLT include patterns remain here so Renderer.passesFilter
+  // can apply the baseline regardless of any state field. To narrow within
+  // FLT, users still have the component dropdown and click-pill-to-exclude.
   // Derived from workload-fabriclivetable CodeMarkers.cs, MonitoredCodeMarkers.cs,
   // and bracket-tagged Tracer.Log* calls across the entire FLT codebase.
   static COMPONENT_PRESETS = {
-    all: {},
     flt: { include: [
       // CodeMarkers.cs — controllers, handlers, scheduler, reliable ops (54+ markers)
       /^LiveTable/i,
@@ -132,53 +195,11 @@ class FilterManager {
       /^SelectedOnly/i,
       /^OC\./i,
     ] },
-    dag: { include: [/DagExecution/i, /NodeExec/i, /Hook/i, /InsightsMetrics/i, /RunMetrics/i, /Orchestrat/i, /Pipeline/i] },
-    spark: { include: [/Spark/i, /GTS/i, /Notebook/i, /Session/i, /Livy/i, /Transform/i] },
   };
-  
-  applyPreset = (presetName) => {
-    this.state.activePreset = presetName;
-    this.state.excludedComponents.clear();
-    
-    const preset = FilterManager.COMPONENT_PRESETS[presetName];
-    if (!preset) return;
-    
-    if (preset.exclude) {
-      // Exclude components matching ANY exclude pattern
-      const allComponents = new Set();
-      this.state.logs.forEach(entry => {
-        if (entry.component) allComponents.add(entry.component);
-      });
-      
-      allComponents.forEach(component => {
-        if (preset.exclude.some(pattern => pattern.test(component))) {
-          this.state.excludedComponents.add(component);
-        }
-      });
-    } else if (preset.include) {
-      // Exclude everything EXCEPT components matching ANY include pattern  
-      const allComponents = new Set();
-      this.state.logs.forEach(entry => {
-        if (entry.component) allComponents.add(entry.component);
-      });
-      
-      allComponents.forEach(component => {
-        if (!preset.include.some(pattern => pattern.test(component))) {
-          this.state.excludedComponents.add(component);
-        }
-      });
-    }
-    
-    this.applyFilters();
-  }
   
   excludeComponent = (component) => {
     this.state.excludedComponents.add(component);
-    // Reset preset to 'all' since user manually excluded
-    this.state.activePreset = 'all';
-    document.querySelectorAll('.preset-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.preset === 'all');
-    });
+    // #3: presets are gone. Just narrow within the FLT baseline.
     this.applyFilters();
   }
 
@@ -188,17 +209,14 @@ class FilterManager {
     const searchInput = document.getElementById('search-input');
     if (searchInput) searchInput.value = '';
     
-    // Reset levels (include all levels — server-side blocklist handles noise)
+    // Reset levels (include all levels)
     this.state.activeLevels = new Set(['Verbose', 'Message', 'Warning', 'Error']);
     document.querySelectorAll('.level-btn').forEach(btn => {
       btn.classList.add('active');
     });
     
-    // Reset component filters to FLT preset
+    // Reset component exclusions. FLT baseline is always applied in passesFilter.
     this.state.excludedComponents.clear();
-    document.querySelectorAll('.preset-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.preset === 'flt');
-    });
     
     // Reset time filter
     this.updateTimeFilter(0);
@@ -209,7 +227,7 @@ class FilterManager {
     // Clear correlation
     this.clearCorrelationFilter();
     
-    // Apply FLT preset (populates excludedComponents and triggers applyFilters)
-    this.applyPreset('flt');
+    // Re-render with cleared filters; FLT baseline still applies.
+    this.applyFilters();
   }
 }

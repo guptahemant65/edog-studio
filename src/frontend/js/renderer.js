@@ -258,10 +258,12 @@ class Renderer {
     this.OVERSCAN = 8;
     this.MAX_VISIBLE = 80;
     this.rowPool = new RowPool(this.MAX_VISIBLE);
+    // #1 (2026-06-07): the prior renderThrottleMs/lastRenderTime/pendingTimer
+    // trio was replaced by pure-rAF scheduling in scheduleRender. Browser
+    // pacing at ~60fps coalesces log arrivals naturally without producing
+    // a visible 100ms cadence. Fields kept off the instance — easier to
+    // grep "this is the throttle" and find nothing.
     this.renderScheduled = false;
-    this.renderThrottleMs = 100;
-    this.lastRenderTime = 0;
-    this.pendingTimer = null;
     // Auto-scroll: suppress user-scroll-detection briefly after programmatic scrollTop changes
     this._scrollPinUntil = 0;
 
@@ -457,25 +459,31 @@ class Renderer {
 
   // ===== SCHEDULE / FLUSH =====
 
+  // ===== SCHEDULE / FLUSH =====
+
+  /**
+   * Schedule a render on the next animation frame.
+   *
+   * #1 (2026-06-07) — replaced a custom 100 ms throttle. The throttle was
+   * batching log arrivals into chunks of "up to 100 ms worth of work"
+   * which produced a visible cadence (paint → 100 ms pause → paint). Pure
+   * rAF lets the browser pace at ~60 fps; each frame's flush coalesces
+   * whatever arrived since the last frame. At 30-200 logs/sec this means
+   * 0.5-3 rows per frame — smooth motion, not chunks.
+   *
+   * The flush itself is internally O(visible rows + new-log filter scan),
+   * which is bounded (MAX_VISIBLE=80 rows × tiny filter cost). When the
+   * main thread is too busy to keep 60 fps, the browser naturally drops
+   * frames and our scheduleRender calls coalesce into the next available
+   * frame — no manual throttling required.
+   */
   scheduleRender = () => {
     if (this.renderScheduled) return;
-    const now = Date.now();
-    const elapsed = now - this.lastRenderTime;
-    if (elapsed >= this.renderThrottleMs) {
-      this.renderScheduled = true;
-      requestAnimationFrame(() => this.flush());
-    } else if (!this.pendingTimer) {
-      this.pendingTimer = setTimeout(() => {
-        this.pendingTimer = null;
-        this.renderScheduled = true;
-        requestAnimationFrame(() => this.flush());
-      }, this.renderThrottleMs - elapsed);
-    }
+    this.renderScheduled = true;
+    requestAnimationFrame(() => this.flush());
   }
 
   flush = () => {
-    this.lastRenderTime = Date.now();
-
     // When paused, still update filter index and stats but skip DOM rendering
     if (this.state.streamMode === 'PAUSED') {
       if (this.state.newLogsSinceRender > 0) {
@@ -525,6 +533,23 @@ class Renderer {
     const totalHeight = totalFiltered * this.ROW_HEIGHT;
 
     this.sentinel.style.height = totalHeight + 'px';
+
+    // ── Defensive orphan sweep (2026-06-07) ────────────────────────
+    // renderedRows can hold keys >= totalFiltered after a reconnect-clear,
+    // hover-freeze + filter-shrink race, or any code path that mutates
+    // filterIndex.length without triggering a clean render. The cleanup
+    // loop below only releases rows whose key is "not in neededSet" —
+    // but neededSet is the *current viewport range*, not "valid index
+    // range". Without this sweep, an orphan key can outlive the filter
+    // shrink and leave a row stamped at a translateY offset outside the
+    // valid scroll range, causing a blank viewport. See
+    // tests/test_renderer_orphan_row_sweep.py.
+    for (const [filtIdx, row] of this.renderedRows) {
+      if (filtIdx >= totalFiltered) {
+        this.rowPool.release(row);
+        this.renderedRows.delete(filtIdx);
+      }
+    }
 
     // Hide/show empty state
     const emptyState = document.getElementById('empty-state');
@@ -680,6 +705,16 @@ class Renderer {
       row.classList.remove('stripe');
     }
 
+    // #2 (2026-06-07): mark the current search-match row so the user can
+    // see which one is "selected" by Enter/Shift+Enter navigation. The
+    // _highlightVersion bump in navigateMatch() forces re-population so
+    // this class is reapplied even when seq is unchanged.
+    if (this._searchTerm && filteredIdx === this._currentSearchMatchIdx) {
+      row.classList.add('current-match-row');
+    } else {
+      row.classList.remove('current-match-row');
+    }
+
     row.dataset.rootActivityId = entry.rootActivityId || '';
   }
 
@@ -738,6 +773,107 @@ class Renderer {
     this._searchTerm = newTerm;
     this._currentSearchMatchIdx = -1;
     this._highlightVersion++;
+  }
+
+  /**
+   * Returns the current search-match index (position in the filter index
+   * of the row currently treated as "the match in focus"). -1 when no
+   * match is selected.
+   *
+   * @returns {number}
+   */
+  getCurrentSearchMatchIdx() {
+    return this._currentSearchMatchIdx;
+  }
+
+  /**
+   * Move the current-match cursor among filtered rows.
+   *
+   * #2 (2026-06-07): cross-row navigation for the search box. A "match"
+   * for navigation = a row in the filter index. (Intra-row text-span
+   * navigation is a future enhancement; users almost always want to jump
+   * to the row, not to a specific occurrence within a long message.)
+   *
+   * @param {'first'|'next'|'prev'} direction
+   * @returns {number} the new currentSearchMatchIdx (-1 when empty)
+   */
+  navigateMatch(direction) {
+    const total = this.state.filterIndex.length;
+    if (total === 0) {
+      this._currentSearchMatchIdx = -1;
+      this._highlightVersion++;
+      return -1;
+    }
+
+    let next;
+    if (direction === 'first') {
+      next = 0;
+    } else if (direction === 'next') {
+      next = this._currentSearchMatchIdx < 0
+        ? 0
+        : Math.min(this._currentSearchMatchIdx + 1, total - 1);
+    } else if (direction === 'prev') {
+      next = this._currentSearchMatchIdx <= 0
+        ? 0
+        : this._currentSearchMatchIdx - 1;
+    } else {
+      return this._currentSearchMatchIdx;
+    }
+
+    if (next === this._currentSearchMatchIdx) {
+      // Already there; still scroll so the user gets confirmation.
+      this.scrollToFilteredIndex(next);
+      return next;
+    }
+
+    this._currentSearchMatchIdx = next;
+    // Bump highlight version so _populateRow refreshes the current-match
+    // row class on the next render even when the seq is unchanged.
+    this._highlightVersion++;
+    this.scrollToFilteredIndex(next);
+    this._updateSearchCountUi();
+    // Trigger a render so the current-match row repaints with the new class.
+    this.scheduleRender();
+    return next;
+  }
+
+  /**
+   * Scroll the row at filterIndex[idx] into the middle of the viewport.
+   * Cheap calculation: scrollTop = (idx * ROW_HEIGHT) - (viewport/2) + ROW_HEIGHT/2.
+   * Clamped to [0, totalHeight - viewport].
+   */
+  scrollToFilteredIndex(idx) {
+    if (!this.scrollContainer) return;
+    const total = this.state.filterIndex.length;
+    if (idx < 0 || idx >= total) return;
+    const rowTop = idx * this.ROW_HEIGHT;
+    const viewportH = this.scrollContainer.clientHeight || 0;
+    const totalH = total * this.ROW_HEIGHT;
+    let target = rowTop - Math.max(0, (viewportH / 2) - (this.ROW_HEIGHT / 2));
+    target = Math.max(0, Math.min(target, Math.max(0, totalH - viewportH)));
+    this._scrollPinUntil = Date.now() + 80;
+    this.scrollContainer.scrollTop = target;
+  }
+
+  /**
+   * Update the #search-count toolbar element. Format: "N / M" where N is
+   * the 1-based current match position and M is the total filtered count.
+   * Hidden when no search active.
+   */
+  _updateSearchCountUi() {
+    const el = document.getElementById('search-count');
+    if (!el) return;
+    const total = this.state.filterIndex.length;
+    if (!this._searchTerm) {
+      el.textContent = '';
+      return;
+    }
+    if (total === 0) {
+      el.textContent = '0 matches';
+      return;
+    }
+    const cur = this._currentSearchMatchIdx >= 0 ? this._currentSearchMatchIdx + 1 : 1;
+    el.textContent = cur + ' / ' + total;
   }
 
   /**
@@ -887,30 +1023,28 @@ class Renderer {
   passesFilter = (entry) => {
     const component = entry.component || 'Unknown';
 
-    // Level filter — but allow Verbose from FLT-relevant components
+    // Level filter — respect the user's V/M/W/E click verbatim.
+    // Prior to #5, an override here silently re-admitted Verbose logs from
+    // FLT-relevant components when the user had clicked V off, on the
+    // (incorrect) assumption that server-side blocklisting handled Verbose
+    // noise. The dominant Verbose noise IS from FLT components, so the
+    // override made the V button look broken. Deleted intentionally — do
+    // not re-introduce. See tests/test_logs_level_filter_respects_user.py.
     const level = entry.level || 'Message';
-    if (!this.state.activeLevels.has(level)) {
-      // If Verbose is off but preset is FLT, still show Verbose from included components
-      if (level !== 'Verbose' || this.state.activePreset !== 'flt') return false;
-      if (this.state.excludedComponents.has(component)) return false;
-      const fltPreset = FilterManager.COMPONENT_PRESETS.flt;
-      if (fltPreset.include && !fltPreset.include.some(p => p.test(component))) return false;
-      // Falls through — this is a Verbose log from an FLT-relevant component
-    }
+    if (!this.state.activeLevels.has(level)) return false;
 
     // Correlation filter
     if (this.state.correlationFilter && entry.rootActivityId !== this.state.correlationFilter) {
       return false;
     }
 
-    // Component filter — check explicit exclusions AND active preset patterns
+    // Component filter — check explicit exclusions AND the FLT baseline.
+    // #3 (2026-06-07): the preset bar was removed; FLT is always applied
+    // here, not behind a state.activePreset gate.
     if (this.state.excludedComponents.has(component)) return false;
 
-    const preset = FilterManager.COMPONENT_PRESETS[this.state.activePreset];
-    if (preset) {
-      if (preset.exclude && preset.exclude.some(p => p.test(component))) return false;
-      if (preset.include && !preset.include.some(p => p.test(component))) return false;
-    }
+    const fltInclude = FilterManager.COMPONENT_PRESETS.flt.include;
+    if (!fltInclude.some(p => p.test(component))) return false;
 
     // Time range filter
     if (this.state.timeRangeSeconds > 0) {
@@ -934,13 +1068,22 @@ class Renderer {
       if (base.toLowerCase() !== this.state.componentFilter.toLowerCase()) return false;
     }
 
-    // RAID / IterationId filter (W0.3)
+    // RAID / IterationId filter (W0.3) — backed by IterationCorrelator
+    // (Cluster A, 2026-06-07). The naive 3-field substring filter that
+    // lived here previously caught only ~4% of an iteration's logs because
+    // most logs carry only their per-scope RAID in the prefix, with no
+    // direct reference to the iteration ID. The correlator chains causally
+    // from explicit iteration mentions through "overriding Monitored Scope"
+    // emissions and per-route incoming requests. See
+    // src/frontend/js/iteration-correlator.js and
+    // tests/test_iteration_correlator.py.
+    //
+    // If raidFilter is set but the correlator isn't wired (early boot or
+    // isolated unit test), we silently let everything through — better
+    // than a broken substring match that would mislead the user.
     if (this.state.raidFilter) {
-      const raidLower = this.state.raidFilter.toLowerCase();
-      const iterationId = (entry.iterationId || '').toLowerCase();
-      const message = (entry.message || '').toLowerCase();
-      const rootId = (entry.rootActivityId || '').toLowerCase();
-      if (!iterationId.includes(raidLower) && !message.includes(raidLower) && !rootId.includes(raidLower)) {
+      const corr = (typeof window !== 'undefined') ? window.edogIterationCorrelator : null;
+      if (corr && corr.activeIteration && !corr.matches(entry.rootActivityId)) {
         return false;
       }
     }

@@ -69,6 +69,31 @@ namespace Microsoft.LiveTable.Service.DevMode
             {
                 _rootActivityToIteration[correlationId.Substring(0, 36)] = iterationId;
             }
+            else
+            {
+                // Plain RAID (36-char GUID) — store as-is so sibling
+                // interceptors (file ops, http, etc.) can look up the
+                // iteration via TryGetIterationForRootActivity.
+                _rootActivityToIteration[correlationId] = iterationId;
+            }
+        }
+
+        /// <summary>
+        /// Reverse lookup used by sibling interceptors (file ops, HTTP, etc.)
+        /// that know only their ambient MonitoredScope.RootActivityId and
+        /// need to derive the iteration it belongs to.
+        ///
+        /// Returns null if no SSR or Additional telemetry event has been
+        /// observed for this rootActivityId yet — meaning the iteration
+        /// is genuinely unknown (e.g. the file op fires before any
+        /// iteration-scoped telemetry has been emitted). Callers should
+        /// publish the null and let the frontend's IterationCorrelator
+        /// chase it later.
+        /// </summary>
+        public static string TryGetIterationForRootActivity(string rootActivityId)
+        {
+            if (string.IsNullOrEmpty(rootActivityId)) return null;
+            return _rootActivityToIteration.TryGetValue(rootActivityId, out var iter) ? iter : null;
         }
 
         // ── Error dedup — prevents relay-timeout-storm floods ────────────
@@ -113,9 +138,40 @@ namespace Microsoft.LiveTable.Service.DevMode
                 var isError = level.Equals("Error", StringComparison.OrdinalIgnoreCase)
                            || level.Equals("Warning", StringComparison.OrdinalIgnoreCase);
 
+                // ── Layer 0: Message-pattern drop (unconditional) ──────────
+                // Round 3 (2026-06-07): some noise is emitted at Verbose/Message
+                // level FROM INSIDE FLT-baseline components (e.g.
+                // "Initializing ServiceMetric platform dimensions" from
+                // LiveTableController-GetLatestDAG, or "Set the 'x-ms-root-
+                // activity-id' request header." from LiveTable-OL-FSRequest-*).
+                // The component blocklist can't reach these because the
+                // component IS legitimate FLT signal — only the message is
+                // platform chatter. Apply IsMessageBlocked UNCONDITIONALLY
+                // so it covers Verbose/Message too.
+                //
+                // Earlier rounds gated this on isError to be conservative;
+                // the sanity-guard corpus in
+                // tests/test_blocklist_message_pattern_drop.py covers
+                // every real-failure shape we care about regardless of
+                // level, so unconditional is safe.
+                if (BlocklistFilter.Instance.IsMessageBlocked(message))
+                {
+                    return;
+                }
+
                 // ── Layer 1: Blocklist — drop known platform-noise components ───
                 // Errors/Warnings always bypass so failures are never hidden.
-                if (!isError && BlocklistFilter.Instance.IsBlocked(rawCodeMarker))
+                //
+                // Two-name match (2026-06-07): framework-emitted logs often have
+                // empty MonitoredScope.CurrentCodeMarkerName but a useful display
+                // name derived from the message body by ExtractComponent (e.g.
+                // "Unknown", "WorkloadEnvironmentProvider", "StartupConfigurationProvider").
+                // Checking both forms lets the JSON blocklist target whichever
+                // name is the actual signal. See
+                // tests/test_blocklist_extracted_component_check.py.
+                if (!isError
+                    && (BlocklistFilter.Instance.IsBlocked(rawCodeMarker)
+                        || BlocklistFilter.Instance.IsBlocked(component)))
                 {
                     return;
                 }

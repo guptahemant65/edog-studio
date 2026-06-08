@@ -90,6 +90,16 @@
   background: var(--surface-2);
 }
 
+/* #2 (2026-06-07): the row currently focused by search Enter/Shift+Enter
+   navigation. Subtle but unmistakable left rail + tint. Wins over stripe. */
+.log-row.current-match-row {
+  background: var(--accent-tint, rgba(99, 152, 255, 0.10));
+  box-shadow: inset 3px 0 0 0 var(--accent, #6398ff);
+}
+.log-row.current-match-row:hover {
+  background: var(--accent-tint-hover, rgba(99, 152, 255, 0.16));
+}
+
 .log-time {
   color: var(--text-muted);
   white-space: nowrap;
