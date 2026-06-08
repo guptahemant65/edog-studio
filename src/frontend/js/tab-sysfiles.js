@@ -65,8 +65,10 @@ class SystemFilesTab {
     // Render batching
     this._renderQueued = false;
 
-    // Known FLT directories
+    // Known FLT directories — seeded; Bug 9 fix: real list is the union
+    // of these and `_discoveredDirs` which auto-grows from observed paths.
     this._knownDirs = ['DagExecutionMetrics', 'Locks', 'Settings', 'MLVDefinitions', 'OneLake'];
+    this._discoveredDirs = new Set(this._knownDirs);
 
     // Lock first-seen map for age calculation
     this._lockFirstSeen = new Map();
@@ -124,32 +126,78 @@ class SystemFilesTab {
     const rawOp = d.operation || 'Read';
     const opCategory = this._opCategory(rawOp);
 
+    // Bug 6+7 fix: prefer real lastModified from the per-file metadata
+    // array when this event came from ListFilesWithMetadata (interceptor
+    // now publishes the (Path, LastModified, Size) triples as `files`).
+    // For a lock-path op, find the matching file in the metadata and
+    // use its real OneLake LastModified — so locks that pre-existed
+    // Studio's attach show their REAL age, not Studio's first-observed.
+    let lockLastModified = null;
+    if (Array.isArray(d.files) && (d.path || '').toLowerCase().includes('lock')) {
+      for (let i = 0; i < d.files.length; i++) {
+        const f = d.files[i];
+        if (f && f.path && (f.path || '').toLowerCase().includes('lock')) {
+          lockLastModified = f.lastModified || null;
+          if (lockLastModified) {
+            const t = new Date(lockLastModified).getTime();
+            if (!Number.isNaN(t)) this._lockFirstSeen.set(f.path, t);
+          }
+        }
+      }
+    }
+
     const op = {
       seq: event.sequenceId || this._events.length,
       path: d.path,
       operation: rawOp,
       opCategory: opCategory,
       sizeBytes: d.contentSizeBytes || 0,
+      // Bug 5 fix: itemCount surfaces "how many items came back" for
+      // list/metadata ops without abusing sizeBytes
+      itemCount: typeof d.itemCount === 'number' ? d.itemCount : 0,
       durationMs: d.durationMs || 0,
       timestamp: new Date(event.timestamp || Date.now()),
+      // Bug 1+2 fix: iterationId is best-effort (may be null), rootActivityId
+      // is always present, artifactId is the wks-lh tag
       iterationId: d.iterationId || null,
+      rootActivityId: d.rootActivityId || null,
+      artifactId: d.artifactId || null,
       hasContent: !!d.hasContent,
       contentPreview: d.contentPreview || null,
       previewTruncated: !!d.previewTruncated,
       ttlSeconds: d.ttlSeconds || null,
       operationResult: d.operationResult,
       metadata: d.metadata || null,
-      isLock: (d.path || '').includes('.lock')
+      // Bug 8 fix: pagination state surfaces on the row
+      hasMoreContinuation: d.hasMoreContinuation === true,
+      // Bug 6 fix: per-file metadata array (when present)
+      files: Array.isArray(d.files) ? d.files : null,
+      // Bug 3 fix: failed file ops are first-class — interceptor publishes
+      // success=false + errorMessage + errorType on the catch path
+      success: d.success !== false,
+      errorMessage: d.errorMessage || null,
+      errorType: d.errorType || null,
+      isLock: (d.path || '').toLowerCase().includes('.lock') ||
+              (d.path || '').toLowerCase().includes('/locks/'),
     };
 
-    // Track lock first-seen for age calculation
-    if (op.isLock && !this._lockFirstSeen.has(op.path)) {
+    // Lock first-seen tracking — only as fallback when real LastModified
+    // isn't available. Real metadata always wins (handled above).
+    if (op.isLock && lockLastModified == null && !this._lockFirstSeen.has(op.path)) {
       this._lockFirstSeen.set(op.path, op.timestamp.getTime());
     }
 
     // Delete removes lock tracking
     if (opCategory === 'Delete' && op.isLock) {
       this._lockFirstSeen.delete(op.path);
+    }
+
+    // Bug 9 fix: auto-discover top-level directories from observed paths
+    // (alongside the seed _knownDirs). Anything observed gets remembered
+    // so the dir-filter dropdown stays accurate even for new dirs.
+    if (this._discoveredDirs) {
+      const m = (op.path || '').match(/^\/?([^\/]+)\//);
+      if (m && m[1]) this._discoveredDirs.add(m[1]);
     }
 
     this._events.push(op);
@@ -164,13 +212,36 @@ class SystemFilesTab {
     if (this._active) this._queueRender();
   }
 
-  /** Map granular backend operation types to display categories */
+  /**
+   * Map granular backend operation types to display categories.
+   * Bug 4 fix: ListFilesWithMetadata + GetDirMetadata + GetFileMetadata
+   * are explicit cases (previously they silently fell through to the
+   * 'Read' default, losing the metadata-vs-content distinction).
+   */
   _opCategory(op) {
     switch (op) {
-      case 'CreateDir': case 'CreateFile': case 'WriteFile': case 'Rename': case 'Write': return 'Write';
-      case 'DeleteFile': case 'DeleteDir': case 'Delete': return 'Delete';
-      case 'Read': case 'List': case 'Exists': return 'Read';
-      default: return 'Read';
+      case 'CreateDir':
+      case 'CreateFile':
+      case 'WriteFile':
+      case 'Rename':
+      case 'Write':
+        return 'Write';
+      case 'DeleteFile':
+      case 'DeleteDir':
+      case 'Delete':
+        return 'Delete';
+      case 'Read':
+        return 'Read';
+      case 'List':
+      case 'ListFilesWithMetadata':
+        return 'List';
+      case 'Exists':
+        return 'Exists';
+      case 'GetDirMetadata':
+      case 'GetFileMetadata':
+        return 'Metadata';
+      default:
+        return 'Read';
     }
   }
 
