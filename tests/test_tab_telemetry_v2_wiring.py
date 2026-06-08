@@ -190,15 +190,6 @@ class TestPublicApiPreserved:
 # ── 2. Channel field consumed ────────────────────────────────────────────────
 
 class TestChannelFieldConsumed:
-    def test_explicit_additional_channel(self, state_src, tab_src):
-        data = _run(
-            _make_tab() +
-            f"tab.addEvent({_make_event(ch='additional')});" +
-            "return { ch: tab._events[0].channel };",
-            state_src, tab_src,
-        )
-        assert data["ch"] == "additional"
-
     def test_missing_channel_defaults_to_ssr(self, state_src, tab_src):
         """Backward compat: events without channel field → 'ssr'."""
         data = _run(
@@ -232,77 +223,67 @@ class TestChannelFieldConsumed:
         )
 
 
-# ── 3. Channel filter works ──────────────────────────────────────────────────
+# ── 3. SSR-only stream (channel filter removed) ──────────────────────────────
 
-class TestChannelFilterWorks:
-    def test_filter_additional_shows_only_additional(self, state_src, tab_src):
-        add_events = "".join(
-            f"tab.addEvent({_make_event(name='RunDag', ch='ssr', corr_id='s' + str(j), iter_id='iter1')});"
-            for j in range(3)
-        )
-        add_addl = "".join(
-            f"tab.addEvent({_make_event(name='GetLatestDAG', ch='additional', corr_id='a' + str(j), iter_id='iter1')});"
-            for j in range(3)
-        )
-        script = (
-            _make_tab() + add_events + add_addl +
-            "tab._channelFilter = 'additional';" +
-            "tab._render();" +
-            "const cards = container.querySelectorAll('.tt-card');" +
-            "return { count: cards.length };"
-        )
-        data = _run(script, state_src, tab_src)
-        assert data["count"] == 3, f"Expected 3 additional cards, got {data['count']}"
+class TestSsrOnlyStream:
+    """SSR-only stream — replaces the deleted channel-filter feature.
 
-    def test_filter_ssr_shows_only_ssr(self, state_src, tab_src):
-        add_ssr = "".join(
-            f"tab.addEvent({_make_event(name='RunDag', ch='ssr', corr_id='s' + str(j), iter_id='iter2')});"
-            for j in range(3)
-        )
-        add_addl = "".join(
-            f"tab.addEvent({_make_event(name='GetLatestDAG', ch='additional', corr_id='a' + str(j), iter_id='iter2')});"
-            for j in range(3)
-        )
-        script = (
-            _make_tab() + add_ssr + add_addl +
-            "tab._channelFilter = 'ssr';" +
-            "tab._render();" +
-            "return { count: container.querySelectorAll('.tt-card').length };"
-        )
-        data = _run(script, state_src, tab_src)
-        assert data["count"] == 3
+    Ground truth: every Additional (+TEL) emit is a TRUE MIRROR of an SSR emit
+    (same activityName + correlationId; FLT NodeExecutor.cs:390 SSR / :417
+    Additional). The tab drops +TEL at ingest and folds its unique retry-metric
+    attributes into the SSR twin. There is no user-facing channel dimension any
+    more — rendering +TEL as its own row was the root of the
+    'unknown'-status / 'mirror' / 'older ones get redacted' bugs. These tests
+    are the DOM-level twin of the B7/B8 source-scan regressions.
+    """
 
-    def test_filter_all_shows_all(self, state_src, tab_src):
-        add_ssr = "".join(
-            f"tab.addEvent({_make_event(name='RunDag', ch='ssr', corr_id='s' + str(j), iter_id='iter3')});"
-            for j in range(3)
+    def test_additional_without_twin_is_dropped(self, state_src, tab_src):
+        data = _run(
+            _make_tab() +
+            f"tab.addEvent({_make_event(ch='additional', corr_id='lonely')});" +
+            "return { count: tab._events.length };",
+            state_src, tab_src,
         )
-        add_addl = "".join(
-            f"tab.addEvent({_make_event(name='GetLatestDAG', ch='additional', corr_id='a' + str(j), iter_id='iter3')});"
-            for j in range(3)
+        assert data["count"] == 0, (
+            "An Additional (+TEL) event with no SSR twin must be dropped, not "
+            "pushed as a row. Rendering it produced empty-status 'unknown' "
+            "duplicates — the exact MESS the user reported."
         )
-        script = (
-            _make_tab() + add_ssr + add_addl +
-            "tab._channelFilter = 'all';" +
+
+    def test_additional_merges_into_ssr_twin(self, state_src, tab_src):
+        data = _run(
+            _make_tab() +
+            f"tab.addEvent({_make_event(name='RunDag', ch='ssr', corr_id='shared')});" +
+            "tab.addEvent({ activityName: 'RunDag', activityStatus: 'succeeded', durationMs: 1000, "
+            "channel: 'additional', iterationId: 'iter-aaa', correlationId: 'shared', "
+            "attributes: { retryCount: '2' }, userId: '' });" +
+            "return { count: tab._events.length, retry: tab._events[0].attributes.retryCount };",
+            state_src, tab_src,
+        )
+        assert data["count"] == 1, "SSR twin + its +TEL mirror must collapse to ONE row."
+        assert data["retry"] == "2", (
+            "The +TEL mirror's unique attributes (retry metrics) must be merged "
+            "into the SSR twin so nothing is lost when the mirror is dropped."
+        )
+
+    def test_ssr_and_additional_same_corr_render_one_card(self, state_src, tab_src):
+        data = _run(
+            _make_tab() +
+            f"tab.addEvent({_make_event(name='RunDag', ch='ssr', corr_id='x1', iter_id='it')});" +
+            f"tab.addEvent({_make_event(name='RunDag', ch='additional', corr_id='x1', iter_id='it')});" +
             "tab._render();" +
-            "return { count: container.querySelectorAll('.tt-card').length };"
+            "return { count: container.querySelectorAll('.tt-card').length };",
+            state_src, tab_src,
         )
-        data = _run(script, state_src, tab_src)
-        assert data["count"] == 6
+        assert data["count"] == 1, (
+            "An SSR event and its +TEL mirror (same correlationId) must render "
+            "as a single card — the SSR-only stream."
+        )
 
 
 # ── 4. Studio-state proxies write through ────────────────────────────────────
 
 class TestStudioStateProxies:
-    def test_channel_proxy_writes_to_studio_state(self, state_src, tab_src):
-        data = _run(
-            _make_tab() +
-            "tab._channelFilter = 'additional';" +
-            "return { v: window.studioState.get().filters.telemetry.channel };",
-            state_src, tab_src,
-        )
-        assert data["v"] == "additional"
-
     def test_window_proxy_writes_to_studio_state(self, state_src, tab_src):
         data = _run(
             _make_tab() +

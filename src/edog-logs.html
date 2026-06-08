@@ -66127,6 +66127,21 @@ class TelemetryTab {
     const dMin = this._durMin;
     const iterId = this._iter;
 
+    /* Stale iteration filter guard.
+     * iterationId is an ephemeral per-DAG-run GUID, but `iter` is persisted
+     * to localStorage + URL (studio-state titer). After a new run — or a fresh
+     * studio session — the restored value matches NONE of the current events,
+     * which would strand the stream on an empty "0 of N" view while the status
+     * pills (computed over all events) still read 9. That is the exact failure
+     * the user hit: "by default it should show these 9 events, not only after I
+     * click an iteration." Same class as the dmax slider strand.
+     * Fix: if the selected iteration isn't present in the current event set,
+     * treat it as cleared so the default shows ALL events. This is self-healing
+     * (re-evaluated every render) — drill-down still works the moment the
+     * iteration's events are live. DO NOT remove without making `iter`
+     * non-persistent instead. */
+    const iterActive = iterId && this._events.some(e => e.iterationId === iterId);
+
     /* Time-window cutoff — computed once per render */
     const now = Date.now();
     let cutoff = 0;
@@ -66143,7 +66158,7 @@ class TelemetryTab {
       if (cutoff > 0 && a.timestampMs < cutoff) continue;
 
       /* Iteration */
-      if (iterId && a.iterationId !== iterId) continue;
+      if (iterActive && a.iterationId !== iterId) continue;
 
       /* Status */
       if (sf !== 'all' && a.status !== sf) continue;

@@ -470,3 +470,58 @@ class TestB7SsrOnlyStream:
         assert re.search(r"Object\.assign\s*\(\s*twin\.attributes", body), (
             "_mergeAdditionalIntoTwin must Object.assign the mirror's attributes onto the SSR twin's attributes."
         )
+
+
+# ════════════════════════════════════════════════════════════════════
+# B8 — Stale iteration filter must never strand the stream on "0 of N"
+# ════════════════════════════════════════════════════════════════════
+
+
+class TestB8StaleIterationFilter:
+    """Regression for "by default it should show these 9 events, not only
+    after I click an iteration in the left."
+
+    Root cause: `iter` is persisted to localStorage + URL (studio-state
+    titer), but iterationId is an ephemeral per-DAG-run GUID. After a new run
+    or a fresh studio session the restored value matches NONE of the current
+    events, so _getVisible filtered all of them out -> "showing 0 of N" even
+    though the status pills (which scan every event) read N. Clicking the live
+    iteration set a matching id, which is why events only appeared on click.
+
+    Fix: _getVisible must ignore the iteration filter when no current event
+    carries that iterationId (self-healing, re-checked every render). Same
+    failure class as the dmax slider strand (B6).
+    """
+
+    def test_getvisible_ignores_iteration_with_no_matching_event(self):
+        src = _read(TAB_TELEMETRY_JS)
+        m = re.search(r"_getVisible\s*\(\s*\)\s*\{(.*?)\n  \}", src, re.DOTALL)
+        assert m, "Could not locate _getVisible method body."
+        body = _strip_comments_js(m.group(1))
+
+        # Must derive an "is this iteration actually present?" guard, not use
+        # the raw persisted iterId directly in the row filter.
+        guard = re.search(
+            r"this\._events\.some\s*\(\s*\w+\s*=>\s*\w+\.iterationId\s*===\s*iterId\s*\)",
+            body,
+        )
+        assert guard, (
+            "_getVisible must compute whether any current event matches the "
+            "selected iterationId (e.g. `this._events.some(e => e.iterationId "
+            "=== iterId)`) so a stale persisted iter auto-clears instead of "
+            "stranding the stream on 'showing 0 of N'."
+        )
+
+        # The row-level continue must gate on the presence-checked flag, NOT on
+        # the raw iterId. `if (iterId && a.iterationId !== iterId) continue;`
+        # is the exact bug shape — reject it.
+        raw_gate = re.search(
+            r"if\s*\(\s*iterId\s*&&\s*\w+\.iterationId\s*!==\s*iterId\s*\)\s*continue",
+            body,
+        )
+        assert not raw_gate, (
+            "_getVisible still gates the row filter on the raw persisted "
+            "iterId. A stale ephemeral iteration GUID will hide every event "
+            "(the 'showing 0 of 9' bug). Gate on the presence-checked flag "
+            "(iterActive) instead."
+        )
