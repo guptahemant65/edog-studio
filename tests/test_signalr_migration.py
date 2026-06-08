@@ -155,7 +155,10 @@ class TestEdogLogServerMigration:
         assert "IHubContext<EdogPlaygroundHub>" in logserver_source
 
     def test_adds_signalr_services(self, logserver_source: str) -> None:
-        assert "AddSignalR()" in logserver_source
+        # Match both AddSignalR() and the options overload AddSignalR(opts => ...).
+        # EdogLogServer configures MaximumReceiveMessageSize (2 MB) for large QA
+        # submissions, so the call is AddSignalR(hubOptions => { ... }).
+        assert "AddSignalR(" in logserver_source
 
     def test_uses_json_protocol(self, logserver_source: str) -> None:
         # JSON protocol is default — no AddMessagePackProtocol needed

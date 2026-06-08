@@ -181,7 +181,7 @@ class TestPrBFilterStore:
         assert f["telemetry"]["q"] == ""
         assert f["telemetry"]["status"] == "all"
         assert f["telemetry"]["dmin"] == 0
-        assert f["telemetry"]["dmax"] == 120
+        assert f["telemetry"]["dmax"] == 5000
 
     def test_logs_filter_url_hydrates(self, studio_state_source):
         """#tab=logs&q=error&levels=Warning,Error&preset=dag&since=15&corr=abc → state."""
@@ -251,7 +251,7 @@ class TestPrBFilterStore:
         assert "tq=span" in h
         assert "tstatus=failed" in h
         assert "dmin=2" in h
-        # Default dmax=120 must be omitted.
+        # Default dmax=5000 must be omitted.
         assert "dmax=" not in h
 
     def test_setfilter_omits_defaults_on_round_trip(self, studio_state_source):

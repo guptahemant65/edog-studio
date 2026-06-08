@@ -131,6 +131,7 @@ EXPECTED_BROADCAST_EVENTS: set[str] = {
     "QaScenarioCompleted",
     "QaRunCompleted",
     "QaError",
+    "QaTestingGuidance",
 }
 
 EXPECTED_JS_INVOKES: set[str] = {
@@ -157,6 +158,7 @@ EXPECTED_JS_EVENT_CASES: set[str] = {
     "QaScenarioCompleted",
     "QaRunCompleted",
     "QaError",
+    "QaTestingGuidance",
 }
 
 # Hub methods we deliberately call only from the server side (or future JS).
