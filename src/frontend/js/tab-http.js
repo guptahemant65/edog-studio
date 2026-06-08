@@ -70,6 +70,13 @@ class HttpPipelineTab {
     if (this._signalr) {
       this._signalr.on('http', this._onEvent);
       this._signalr.subscribeTopic('http');
+      // M3 fix — subscribe to the mitm topic in the constructor too.
+      // Previously this was lazy (inside activate()) which meant
+      // breakpointHit events that fired while the user was on Logs/
+      // Telemetry/anywhere-else were silently dropped — the backend
+      // pauses the request and times out after 30s with the UI showing
+      // nothing. Eager subscription mirrors the http pattern.
+      this._subscribeMitmTopic();
     }
   }
 
@@ -81,8 +88,10 @@ class HttpPipelineTab {
   activate() {
     if (this._active) return;
     this._active = true;
-    // SignalR subscription is done in constructor — no need to re-subscribe here
-    this._subscribeMitmTopic();
+    // M3 fix — SignalR subscription moved to constructor. Re-sync state
+    // here so the toolbar/panels reflect anything that changed while we
+    // were hidden.
+    this._resyncMitmState();
     document.addEventListener('keydown', this._globalKeyHandler);
     document.addEventListener('click', this._onDocClick);
     this._scheduleRender();
@@ -180,6 +189,18 @@ class HttpPipelineTab {
     // Toolbar
     root.appendChild(this._buildToolbar());
 
+    // M2: rules panel — collapsible host that sits between toolbar and
+    // content. Renders this._mitmRules. Created in DOM so SignalR
+    // ruleCreated/ruleDeleted events that arrive before activate() still
+    // have a target to write to (matches the lazy-render-into-host
+    // pattern used by other tabs).
+    var rulesPanel = document.createElement('div');
+    rulesPanel.className = 'http-mitm-rules http-mitm-rules--collapsed';
+    rulesPanel.setAttribute('role', 'region');
+    rulesPanel.setAttribute('aria-label', 'MITM rules');
+    root.appendChild(rulesPanel);
+    this._els.mitmRulesPanel = rulesPanel;
+
     // Content area
     var content = document.createElement('div');
     content.className = 'http-content';
@@ -230,6 +251,41 @@ class HttpPipelineTab {
       '<span class="http-it-label">Intercept OFF</span>';
     row1.appendChild(intercept);
     this._els.interceptToggle = intercept;
+
+    // M2: rules badge — opens the rules panel. Counter updates live.
+    var rulesBtn = document.createElement('button');
+    rulesBtn.type = 'button';
+    rulesBtn.className = 'http-rules-btn';
+    rulesBtn.setAttribute('aria-label', 'Show MITM rules');
+    rulesBtn.title = 'MITM rules';
+    rulesBtn.innerHTML =
+      '<span class="http-rules-btn-label">Rules</span>' +
+      ' <span class="http-rules-btn-count" data-rules-count>0</span>';
+    row1.appendChild(rulesBtn);
+    this._els.rulesBtn = rulesBtn;
+
+    // M1: "+ Rule" button opens the rule-creation modal directly.
+    var addRuleBtn = document.createElement('button');
+    addRuleBtn.type = 'button';
+    addRuleBtn.className = 'http-add-rule-btn';
+    addRuleBtn.setAttribute('aria-label', 'Create MITM rule');
+    addRuleBtn.title = 'Create a rule';
+    addRuleBtn.innerHTML = '+ Rule';
+    row1.appendChild(addRuleBtn);
+    this._els.addRuleBtn = addRuleBtn;
+
+    // M4: kill switch button. Backend method + frontend handler already
+    // existed, but the only way to invoke them was the Ctrl+Shift+K
+    // keyboard shortcut. Zero discovery. The button mirrors the shortcut.
+    var killBtn = document.createElement('button');
+    killBtn.type = 'button';
+    killBtn.className = 'http-mitm-kill-btn';
+    killBtn.setAttribute('aria-label', 'Kill switch — resume all and clear rules');
+    killBtn.title = 'Kill switch — resume all intercepts and clear rules (Ctrl+Shift+K)';
+    killBtn.innerHTML = '\u26A0 Kill';
+    row1.appendChild(killBtn);
+    this._els.killSwitchBtn = killBtn;
+
     row1.appendChild(this._makeSep());
 
     // Search box
@@ -536,6 +592,24 @@ class HttpPipelineTab {
     if (this._els.interceptToggle) {
       this._els.interceptToggle.addEventListener('click', function() {
         self._onMitmToggle();
+      });
+    }
+    // M4: kill switch button (mirrors Ctrl+Shift+K).
+    if (this._els.killSwitchBtn) {
+      this._els.killSwitchBtn.addEventListener('click', function() {
+        self._onMitmKillSwitch();
+      });
+    }
+    // M2: Rules button opens/closes the rules panel.
+    if (this._els.rulesBtn) {
+      this._els.rulesBtn.addEventListener('click', function() {
+        self._toggleMitmRulesPanel();
+      });
+    }
+    // M1: "+ Rule" button opens the rule-creation modal directly.
+    if (this._els.addRuleBtn) {
+      this._els.addRuleBtn.addEventListener('click', function() {
+        self._openRuleCreator(null);
       });
     }
 
@@ -1538,8 +1612,451 @@ class HttpPipelineTab {
   _refreshMitmRules() {
     var self = this;
     this._invokeMitm('MitmListRules').then(function(res) {
-      if (res && res.rules) self._mitmRules = res.rules;
+      if (res && res.rules) {
+        self._mitmRules = res.rules;
+        self._renderMitmRulesPanel();
+      }
     }).catch(function() {});
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // M2 — RULES PANEL
+  // ═══════════════════════════════════════════════════════════════════
+
+  /** Toggle the rules panel open/closed. */
+  _toggleMitmRulesPanel() {
+    var p = this._els.mitmRulesPanel;
+    if (!p) return;
+    var collapsed = p.classList.toggle('http-mitm-rules--collapsed');
+    // Render fresh contents whenever opened so the panel reflects the
+    // latest rule store. Cheap — rule lists rarely exceed dozens.
+    if (!collapsed) this._renderMitmRulesPanel();
+  }
+
+  /**
+   * Render the rules list inside this._els.mitmRulesPanel. Re-rendered
+   * after every ruleCreated / ruleDeleted / ruleList refresh so the panel
+   * never goes stale.
+   *
+   * The header always renders (it carries the rule count + the inline
+   * "+ Rule" link). The body renders only when the panel is open — when
+   * collapsed we still update the count badge so the toolbar Rules button
+   * stays accurate.
+   */
+  _renderMitmRulesPanel() {
+    var p = this._els.mitmRulesPanel;
+    if (!p) return;
+    var rules = this._mitmRules || [];
+    // Update toolbar count badge unconditionally — visible even when
+    // the panel is collapsed.
+    if (this._els.rulesBtn) {
+      var cnt = this._els.rulesBtn.querySelector('[data-rules-count]');
+      if (cnt) cnt.textContent = String(rules.length);
+    }
+    // If collapsed, skip the heavy body render.
+    if (p.classList.contains('http-mitm-rules--collapsed')) {
+      p.innerHTML = '';
+      return;
+    }
+    var rowsHtml = '';
+    if (rules.length === 0) {
+      rowsHtml =
+        '<div class="http-mitm-rules-empty">' +
+          'No MITM rules. ' +
+          '<button class="http-mitm-rules-empty-cta" data-rules-act="create">Create one</button>' +
+        '</div>';
+    } else {
+      for (var i = 0; i < rules.length; i++) {
+        var r = rules[i] || {};
+        var match = r.match || {};
+        var action = r.action || {};
+        var actionType = (action.type || '').toLowerCase();
+        var phase = (match.phase || 'request').toLowerCase();
+        var methods = Array.isArray(match.methods) && match.methods.length
+          ? match.methods.join('/')
+          : 'ANY';
+        var pattern = match.urlPattern && match.urlPattern.value
+          ? this._esc(match.urlPattern.value)
+          : '(any)';
+        var patternKind = match.urlPattern && match.urlPattern.kind
+          ? match.urlPattern.kind
+          : '';
+        var priorityHtml = typeof r.priority === 'number'
+          ? '<span class="http-mitm-rule-prio">p' + r.priority + '</span>'
+          : '';
+        var enabledClass = r.enabled === false
+          ? 'http-mitm-rule--disabled'
+          : '';
+        rowsHtml +=
+          '<div class="http-mitm-rule ' + enabledClass + '" data-rule-id="' + this._esc(r.id || '') + '">' +
+            '<div class="http-mitm-rule-head">' +
+              '<span class="http-mitm-rule-act http-mitm-rule-act--' + this._esc(actionType) + '">' + this._esc(actionType || 'rule') + '</span>' +
+              '<span class="http-mitm-rule-name">' + this._esc(r.name || r.id || '(unnamed)') + '</span>' +
+              priorityHtml +
+              '<button class="http-mitm-rule-del" data-rules-act="delete" data-rule-id="' + this._esc(r.id || '') + '" title="Delete rule" aria-label="Delete rule">\u2715</button>' +
+            '</div>' +
+            '<div class="http-mitm-rule-meta">' +
+              '<span class="http-mitm-rule-phase">' + this._esc(phase) + '</span>' +
+              '<span class="http-mitm-rule-methods">' + this._esc(methods) + '</span>' +
+              '<span class="http-mitm-rule-pattern" title="' + this._esc(patternKind) + '">' + pattern + '</span>' +
+            '</div>' +
+          '</div>';
+      }
+    }
+    p.innerHTML =
+      '<div class="http-mitm-rules-head">' +
+        '<span class="http-mitm-rules-head-title">MITM rules <span class="http-mitm-rules-head-count">' + rules.length + '</span></span>' +
+        '<button class="http-mitm-rules-head-close" data-rules-act="close" aria-label="Close rules panel" title="Close">\u2715</button>' +
+      '</div>' +
+      '<div class="http-mitm-rules-body">' + rowsHtml + '</div>';
+
+    // Wire delegated actions. Listener attached fresh each render — the
+    // innerHTML reset above guarantees no double-binding.
+    var self = this;
+    p.addEventListener('click', function(ev) {
+      var btn = ev.target && ev.target.closest && ev.target.closest('[data-rules-act]');
+      if (!btn) return;
+      var act = btn.getAttribute('data-rules-act');
+      if (act === 'delete') {
+        var id = btn.getAttribute('data-rule-id');
+        if (id) self._deleteMitmRule(id);
+      } else if (act === 'create') {
+        self._openRuleCreator(null);
+      } else if (act === 'close') {
+        self._toggleMitmRulesPanel();
+      }
+    });
+  }
+
+  /** Invoke MitmDeleteRule and optimistically remove from local mirror. */
+  _deleteMitmRule(ruleId) {
+    var self = this;
+    this._invokeMitm('MitmDeleteRule', ruleId).then(function(res) {
+      if (res && res.success !== false) {
+        self._mitmRules = self._mitmRules.filter(function(r) { return r.id !== ruleId; });
+        self._renderMitmRulesPanel();
+        if (window.edogToast) window.edogToast('Rule deleted', 'info');
+      } else if (window.edogToast) {
+        window.edogToast((res && res.message) || 'Delete failed', 'error');
+      }
+    }).catch(function() {
+      if (window.edogToast) window.edogToast('Delete failed', 'error');
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // M1 — RULE CREATION MODAL
+  // ═══════════════════════════════════════════════════════════════════
+
+  /**
+   * Open the rule-creation modal. When invoked with a row entry, the
+   * URL + method are pre-filled — call sites: the "+ Rule" toolbar
+   * button (no prefill), the row context-menu "Create rule from this"
+   * (prefills from the clicked row).
+   *
+   * Action types exposed: breakpoint, forge, modify, block, latency.
+   * Each maps 1:1 to MitmActionType on the backend.
+   */
+  _openRuleCreator(rowEntry) {
+    // Tear down any leftover modal — defensive against double-open.
+    this._closeRuleCreator();
+
+    var prefillUrl = rowEntry && rowEntry.url ? rowEntry.url : '';
+    var prefillMethod = rowEntry && rowEntry.method ? rowEntry.method : '';
+
+    var backdrop = document.createElement('div');
+    backdrop.className = 'http-mitm-modal-backdrop';
+
+    var modal = document.createElement('div');
+    modal.className = 'http-mitm-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', 'Create MITM rule');
+
+    modal.innerHTML =
+      '<div class="http-mitm-modal-drag" data-modal-drag></div>' +
+      '<div class="http-mitm-modal-body">' +
+        '<h3 class="http-mitm-modal-title">Create MITM rule</h3>' +
+
+        '<label class="http-mitm-field">' +
+          '<span class="http-mitm-field-label">Name</span>' +
+          '<input type="text" data-rule-field="name" placeholder="e.g. Block flaky catalog endpoint" maxlength="120" />' +
+        '</label>' +
+
+        '<div class="http-mitm-field-row">' +
+          '<label class="http-mitm-field">' +
+            '<span class="http-mitm-field-label">Priority</span>' +
+            '<input type="number" data-rule-field="priority" value="100" min="0" max="999" />' +
+          '</label>' +
+          '<label class="http-mitm-field">' +
+            '<span class="http-mitm-field-label">Phase</span>' +
+            '<select data-rule-field="phase">' +
+              '<option value="request" selected>request</option>' +
+              '<option value="response">response</option>' +
+            '</select>' +
+          '</label>' +
+          '<label class="http-mitm-field">' +
+            '<span class="http-mitm-field-label">Methods</span>' +
+            '<input type="text" data-rule-field="methods" placeholder="GET,POST (blank = any)" value="' + this._esc(prefillMethod) + '" />' +
+          '</label>' +
+        '</div>' +
+
+        '<div class="http-mitm-field-row">' +
+          '<label class="http-mitm-field">' +
+            '<span class="http-mitm-field-label">URL match kind</span>' +
+            '<select data-rule-field="urlKind">' +
+              '<option value="substring" selected>substring</option>' +
+              '<option value="prefix">prefix</option>' +
+              '<option value="exact">exact</option>' +
+              '<option value="regex">regex</option>' +
+            '</select>' +
+          '</label>' +
+          '<label class="http-mitm-field http-mitm-field--grow">' +
+            '<span class="http-mitm-field-label">URL pattern</span>' +
+            '<input type="text" data-rule-field="urlValue" placeholder="https://onelake.dfs.fabric.microsoft.com/..." value="' + this._esc(prefillUrl) + '" />' +
+          '</label>' +
+        '</div>' +
+
+        '<label class="http-mitm-field">' +
+          '<span class="http-mitm-field-label">Action</span>' +
+          '<select data-rule-field="actionType">' +
+            '<option value="breakpoint" selected>breakpoint (pause for user decision)</option>' +
+            '<option value="block">block (synthesize error response)</option>' +
+            '<option value="forge">forge (synthesize custom response)</option>' +
+            '<option value="modify">modify (rewrite headers/body in flight)</option>' +
+            '<option value="latency">latency (inject delay)</option>' +
+          '</select>' +
+        '</label>' +
+
+        // Per-action config block — visibility toggled by the actionType select.
+        '<div class="http-mitm-action-config" data-action-config></div>' +
+
+        '<div class="http-mitm-modal-actions">' +
+          '<button class="http-mitm-modal-cancel" data-modal-act="cancel">Cancel</button>' +
+          '<button class="http-mitm-modal-create" data-modal-act="create">Create rule</button>' +
+        '</div>' +
+
+        '<div class="http-mitm-modal-error" data-modal-error hidden></div>' +
+      '</div>';
+
+    backdrop.appendChild(modal);
+    document.body.appendChild(backdrop);
+    this._els.mitmModal = modal;
+    this._els.mitmModalBackdrop = backdrop;
+
+    var self = this;
+    var actionSelect = modal.querySelector('[data-rule-field="actionType"]');
+    var configHost = modal.querySelector('[data-action-config]');
+    function renderActionConfig() {
+      configHost.innerHTML = self._buildRuleActionConfigHtml(actionSelect.value);
+    }
+    actionSelect.addEventListener('change', renderActionConfig);
+    renderActionConfig();
+
+    modal.querySelector('[data-modal-act="cancel"]').addEventListener('click', function() {
+      self._closeRuleCreator();
+    });
+    modal.querySelector('[data-modal-act="create"]').addEventListener('click', function() {
+      self._submitRuleCreator();
+    });
+    backdrop.addEventListener('click', function(ev) {
+      if (ev.target === backdrop) self._closeRuleCreator();
+    });
+    this._modalKeyHandler = function(ev) {
+      if (ev.key === 'Escape') self._closeRuleCreator();
+    };
+    document.addEventListener('keydown', this._modalKeyHandler);
+
+    // Focus first field for keyboard-driven entry.
+    var firstInput = modal.querySelector('input[data-rule-field="name"]');
+    if (firstInput) firstInput.focus();
+  }
+
+  _closeRuleCreator() {
+    if (this._modalKeyHandler) {
+      document.removeEventListener('keydown', this._modalKeyHandler);
+      this._modalKeyHandler = null;
+    }
+    if (this._els.mitmModalBackdrop && this._els.mitmModalBackdrop.parentNode) {
+      this._els.mitmModalBackdrop.parentNode.removeChild(this._els.mitmModalBackdrop);
+    }
+    this._els.mitmModal = null;
+    this._els.mitmModalBackdrop = null;
+  }
+
+  /** Per-action HTML — only fields the user needs for that action type. */
+  _buildRuleActionConfigHtml(actionType) {
+    switch ((actionType || '').toLowerCase()) {
+      case 'block':
+        return (
+          '<label class="http-mitm-field http-mitm-field--inline">' +
+            '<span class="http-mitm-field-label">Status</span>' +
+            '<input type="number" data-rule-field="block.statusCode" value="503" min="100" max="599" />' +
+          '</label>' +
+          '<label class="http-mitm-field">' +
+            '<span class="http-mitm-field-label">Body</span>' +
+            '<textarea data-rule-field="block.body" rows="3">{"error":"blocked by edog"}</textarea>' +
+          '</label>'
+        );
+      case 'forge':
+        return (
+          '<label class="http-mitm-field http-mitm-field--inline">' +
+            '<span class="http-mitm-field-label">Status</span>' +
+            '<input type="number" data-rule-field="forge.statusCode" value="200" min="100" max="599" />' +
+          '</label>' +
+          '<label class="http-mitm-field">' +
+            '<span class="http-mitm-field-label">Reason phrase</span>' +
+            '<input type="text" data-rule-field="forge.reasonPhrase" value="OK" />' +
+          '</label>' +
+          '<label class="http-mitm-field">' +
+            '<span class="http-mitm-field-label">Body</span>' +
+            '<textarea data-rule-field="forge.body" rows="4" placeholder=\'{"forged":true}\'></textarea>' +
+          '</label>'
+        );
+      case 'modify':
+        return (
+          '<label class="http-mitm-field">' +
+            '<span class="http-mitm-field-label">Set headers (one per line, name: value)</span>' +
+            '<textarea data-rule-field="modify.setHeaders" rows="3" placeholder="X-Edog: 1"></textarea>' +
+          '</label>' +
+          '<label class="http-mitm-field">' +
+            '<span class="http-mitm-field-label">Remove headers (one per line)</span>' +
+            '<textarea data-rule-field="modify.removeHeaders" rows="2" placeholder="If-Match"></textarea>' +
+          '</label>'
+        );
+      case 'latency':
+        return (
+          '<label class="http-mitm-field http-mitm-field--inline">' +
+            '<span class="http-mitm-field-label">Delay (ms)</span>' +
+            '<input type="number" data-rule-field="latency.delayMs" value="1000" min="0" max="60000" />' +
+          '</label>'
+        );
+      case 'breakpoint':
+      default:
+        return (
+          '<div class="http-mitm-modal-hint">' +
+            'Matching requests will pause until you click Forward / Modify / Block / Forge in the request detail panel.' +
+          '</div>' +
+          '<label class="http-mitm-field http-mitm-field--inline">' +
+            '<span class="http-mitm-field-label">Timeout (ms, 1000\u201360000)</span>' +
+            '<input type="number" data-rule-field="breakpoint.timeoutMs" value="30000" min="1000" max="60000" />' +
+          '</label>'
+        );
+    }
+  }
+
+  /**
+   * Read the modal's field values, build a MitmRuleInput payload, and
+   * invoke MitmCreateRule. On success the SignalR ruleCreated event
+   * will trigger _renderMitmRulesPanel; we also close the modal here.
+   */
+  _submitRuleCreator() {
+    var modal = this._els.mitmModal;
+    if (!modal) return;
+    function v(name) {
+      var el = modal.querySelector('[data-rule-field="' + name + '"]');
+      return el ? el.value : '';
+    }
+    var name = v('name').trim();
+    var priority = parseInt(v('priority'), 10);
+    var phase = v('phase') || 'request';
+    var methodsRaw = v('methods').trim();
+    var methods = methodsRaw
+      ? methodsRaw.split(',').map(function(m) { return m.trim().toUpperCase(); }).filter(Boolean)
+      : [];
+    var urlKind = v('urlKind') || 'substring';
+    var urlValue = v('urlValue').trim();
+    var actionType = v('actionType') || 'breakpoint';
+
+    var errEl = modal.querySelector('[data-modal-error]');
+    function showErr(msg) {
+      errEl.textContent = msg;
+      errEl.hidden = false;
+    }
+
+    if (!name) { showErr('Name is required.'); return; }
+    if (!urlValue) { showErr('URL pattern is required.'); return; }
+
+    var action = { type: actionType, config: {} };
+    switch (actionType) {
+      case 'block':
+        action.config = {
+          statusCode: parseInt(v('block.statusCode'), 10) || 503,
+          body: v('block.body') || '',
+        };
+        break;
+      case 'forge':
+        action.config = {
+          statusCode: parseInt(v('forge.statusCode'), 10) || 200,
+          reasonPhrase: v('forge.reasonPhrase') || 'OK',
+          body: v('forge.body') || '',
+        };
+        break;
+      case 'modify':
+        action.config = {
+          setHeaders: this._parseHeaderLines(v('modify.setHeaders')),
+          removeHeaders: v('modify.removeHeaders')
+            .split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
+        };
+        break;
+      case 'latency':
+        action.config = { delayMs: parseInt(v('latency.delayMs'), 10) || 0 };
+        break;
+      case 'breakpoint':
+      default:
+        var tmo = parseInt(v('breakpoint.timeoutMs'), 10);
+        if (!isNaN(tmo) && tmo > 0) action.config = { timeoutMs: tmo };
+        break;
+    }
+
+    var payload = {
+      id: 'r-' + Date.now() + '-' + Math.floor(Math.random() * 1e6),
+      name: name,
+      enabled: true,
+      priority: !isNaN(priority) ? priority : 100,
+      match: {
+        urlPattern: { kind: urlKind, value: urlValue },
+        methods: methods,
+        phase: phase,
+      },
+      action: action,
+    };
+
+    var self = this;
+    this._invokeMitm('MitmCreateRule', payload).then(function(res) {
+      if (res && res.success === false) {
+        showErr((res && res.message) || 'Create failed');
+        return;
+      }
+      self._closeRuleCreator();
+      if (window.edogToast) window.edogToast('Rule created', 'success');
+      // Ensure local mirror is up-to-date even if the SignalR event is
+      // slow — the panel renders from this._mitmRules immediately.
+      var exists = self._mitmRules.some(function(r) { return r.id === payload.id; });
+      if (!exists) self._mitmRules.push(payload);
+      // Open the panel so the user immediately sees what they created.
+      if (self._els.mitmRulesPanel) {
+        self._els.mitmRulesPanel.classList.remove('http-mitm-rules--collapsed');
+      }
+      self._renderMitmRulesPanel();
+    }).catch(function() {
+      showErr('Network error — could not reach server.');
+    });
+  }
+
+  _parseHeaderLines(text) {
+    var out = {};
+    var lines = (text || '').split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].trim();
+      if (!line) continue;
+      var idx = line.indexOf(':');
+      if (idx <= 0) continue;
+      var k = line.substring(0, idx).trim();
+      var val = line.substring(idx + 1).trim();
+      if (k) out[k] = val;
+    }
+    return out;
   }
 
   /** SignalR `mitm` topic handler. */
@@ -1560,11 +2077,13 @@ class HttpPipelineTab {
           var existing = this._mitmRules.findIndex(function(r) { return r.id === d.rule.id; });
           if (existing >= 0) this._mitmRules[existing] = d.rule;
           else this._mitmRules.push(d.rule);
+          this._renderMitmRulesPanel();
         }
         break;
       case 'ruleDeleted':
         if (d.ruleId) {
           this._mitmRules = this._mitmRules.filter(function(r) { return r.id !== d.ruleId; });
+          this._renderMitmRulesPanel();
         }
         break;
       case 'breakpointHit':
@@ -1579,6 +2098,8 @@ class HttpPipelineTab {
         this._editBuffers.clear();
         this._editBuffer = null;
         this._resetEditSummary();
+        this._mitmRules = [];
+        this._renderMitmRulesPanel();
         this._scheduleRender();
         if (window.edogToast) window.edogToast('All breakpoints cleared', 'success');
         break;
@@ -2385,6 +2906,11 @@ class HttpPipelineTab {
               res && res.success === false ? 'error' : 'success');
           }
         });
+      },
+      onCreateRule: function() {
+        // M1: open the rule-creator modal pre-filled with this row's
+        // URL + method. The user picks the action type + match details.
+        self._openRuleCreator(rowData);
       },
       onHar: function() {
         self._exportAs('har');

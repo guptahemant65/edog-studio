@@ -190,30 +190,57 @@ namespace Microsoft.LiveTable.Service.DevMode
             HttpResponseMessage response;
             var synthesized = false;
 
-            if (mitmForgedResponse != null)
+            try
             {
-                response = mitmForgedResponse;
-                synthesized = true;
-            }
-            else if (chaosFault != null
-                && string.Equals(chaosFault.Fault, "http_error", StringComparison.OrdinalIgnoreCase))
-            {
-                response = SynthesizeErrorResponse(request, chaosFault);
-                synthesized = true;
-            }
-            else if (chaosFault != null
-                && string.Equals(chaosFault.Fault, "latency", StringComparison.OrdinalIgnoreCase))
-            {
-                if (chaosFault.LatencyMs > 0)
+                if (mitmForgedResponse != null)
                 {
-                    await Task.Delay(chaosFault.LatencyMs, cancellationToken).ConfigureAwait(false);
+                    response = mitmForgedResponse;
+                    synthesized = true;
                 }
-                response = await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
+                else if (chaosFault != null
+                    && string.Equals(chaosFault.Fault, "http_error", StringComparison.OrdinalIgnoreCase))
+                {
+                    response = SynthesizeErrorResponse(request, chaosFault);
+                    synthesized = true;
+                }
+                else if (chaosFault != null
+                    && string.Equals(chaosFault.Fault, "latency", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (chaosFault.LatencyMs > 0)
+                    {
+                        await Task.Delay(chaosFault.LatencyMs, cancellationToken).ConfigureAwait(false);
+                    }
+                    response = await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    response = await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
+                }
             }
-            else
+            catch (Exception sendEx)
             {
-                response = await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
+                // H1 fix: failed HTTP calls (DNS, timeout, socket reset,
+                // cert error) used to escape silently — base.SendAsync
+                // threw, the catch at line 220-ish never fired because
+                // we never reached it, and the HTTP tab showed nothing.
+                // Now we publish a synthetic event tagged with success=false
+                // before rethrowing. FLT behaviour is preserved exactly:
+                // the exception still propagates to the original caller.
+                sw.Stop();
+                PublishHttpEvent(
+                    method, url, statusCode: 0,
+                    durationMs: Math.Round(sw.Elapsed.TotalMilliseconds, 2),
+                    requestHeaders: requestHeaders, responseHeaders: null,
+                    responseBodyPreview: null, correlationId: correlationId,
+                    requestBodyPreview: requestBodyPreview,
+                    requestSizeBytes: requestSizeBytes, responseSizeBytes: 0,
+                    chaosFault: chaosFault, synthesized: synthesized,
+                    success: false,
+                    errorMessage: sendEx.Message,
+                    errorType: sendEx.GetType().FullName);
+                throw;
             }
+
             sw.Stop();
 
             // STEP 3: Capture response and publish
@@ -370,12 +397,27 @@ namespace Microsoft.LiveTable.Service.DevMode
             string mitmInterceptId = null,
             string mitmVerdict = null,
             MitmPhase mitmPhase = MitmPhase.Request,
-            double mitmDurationMsPaused = 0)
+            double mitmDurationMsPaused = 0,
+            // H1 fix — failure capture fields. Default success=true keeps
+            // every existing call site unchanged on the happy path.
+            bool success = true,
+            string errorMessage = null,
+            string errorType = null)
         {
             try
             {
-                // Fast path: no chaos, no mitm → pre-F27/F28 wire shape (identical to baseline).
-                if (chaosFault == null && mitmAction == null)
+                // H2 fix — read ambient context at publish time so every
+                // http event tags the RAID and (best-effort) iteration of
+                // the request that triggered the call. Same pattern as
+                // EdogFileSystemInterceptor + EdogAdditionalTelemetryInterceptor.
+                var rootActivityId = MonitoredScope.RootActivityId.ToString();
+                var iterationId = EdogLogInterceptor.TryGetIterationForRootActivity(rootActivityId);
+
+                // Fast path: no chaos, no mitm, no failure → pre-F27/F28
+                // wire shape PLUS the new rootActivityId/iterationId fields
+                // and the success=true marker (additive; existing consumers
+                // ignore unknown keys).
+                if (chaosFault == null && mitmAction == null && success)
                 {
                     EdogTopicRouter.Publish("http", new
                     {
@@ -391,12 +433,16 @@ namespace Microsoft.LiveTable.Service.DevMode
                         responseSizeBytes,
                         httpClientName = _httpClientName,
                         correlationId,
+                        rootActivityId,
+                        iterationId,
+                        success = true,
                     });
                     return;
                 }
 
-                // Either chaos or mitm (or both). Build a dictionary so we can
-                // conditionally include `chaos` and `mitm` without emitting nulls.
+                // Either chaos, mitm, or failure (or any combination). Build
+                // a dictionary so we can conditionally include `chaos`/`mitm`
+                // without emitting nulls.
                 var payload = new Dictionary<string, object>(StringComparer.Ordinal)
                 {
                     ["method"] = method,
@@ -411,7 +457,16 @@ namespace Microsoft.LiveTable.Service.DevMode
                     ["responseSizeBytes"] = responseSizeBytes,
                     ["httpClientName"] = _httpClientName,
                     ["correlationId"] = correlationId,
+                    ["rootActivityId"] = rootActivityId,
+                    ["iterationId"] = iterationId,
+                    ["success"] = success,
                 };
+
+                if (!success)
+                {
+                    payload["errorMessage"] = errorMessage;
+                    payload["errorType"] = errorType;
+                }
 
                 if (chaosFault != null)
                 {

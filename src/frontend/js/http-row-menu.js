@@ -51,6 +51,7 @@ class HttpRowMenu {
       { id: 'copyFetch', label: 'Copy as fetch',       shortcut: '',           cb: 'onCopyFetch' },
       { sep: true },
       { id: 'block',     label: 'Block this URL',      shortcut: 'B',  cb: 'onBlock' },
+      { id: 'createRule',label: 'Create rule from this\u2026', shortcut: 'R', cb: 'onCreateRule' },
       { sep: true },
       { id: 'har',       label: 'Save as HAR',         shortcut: '',   cb: 'onHar' },
       { id: 'delete',    label: 'Delete',              shortcut: 'Del', cb: 'onDelete', danger: true }

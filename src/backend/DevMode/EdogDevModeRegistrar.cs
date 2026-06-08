@@ -68,6 +68,26 @@ namespace Microsoft.LiveTable.Service.DevMode
                 RegisterCatalogInterceptor();
                 RegisterFltOpsInterceptors();
 
+                // Telemetry — Additional channel
+                // (ILiveTableAdditionalTelemetryReporter).  SSR is wrapped early
+                // in WorkloadApp.cs via edog.py patch; Additional is wrapped
+                // here because LiveTableAdditionalTelemetryReporter's
+                // constructor resolves IRolloutConfigParametersProvider, which
+                // is only available after MWC platform init.  Wrapping in
+                // RegisterAll (post-InitializeAsync) is safe.
+                RegisterAdditionalTelemetryInterceptor();
+
+                // HTTP capture — IWorkloadCommunicationProvider wrap.
+                // Closes the "only OneLake captured" gap: GTS/Spark control
+                // plane, Notebook API, and Trident throttling all reach into
+                // the MWC platform via IWorkloadCommunicationProvider instead
+                // of IHttpClientFactory. Without this wrap they are invisible.
+                // GTS + Notebook also need edog.py call-site patches because
+                // they read the provider via this.workloadContext.WorkloadCommunicationProvider
+                // (bypassing WireUp); LiveTableCommunicationClient picks the
+                // wrap up automatically through constructor injection.
+                RegisterWorkloadCommunicationProviderInterceptor();
+
                 // DAG execution hook (EdogDagExecutionHook) is wired via edog.py
                 // patch to DagExecutionHandlerV2.cs — adds our hook to the inline hook list.
                 // NodeExecutor wrapping needs a patch at the creation point. See gaps-roadmap.md Gap 2.
@@ -539,6 +559,118 @@ namespace Microsoft.LiveTable.Service.DevMode
                 "TableMaintenance",
                 inner => inner is EdogTableMaintenanceFactoryWrapper,
                 inner => new EdogTableMaintenanceFactoryWrapper(inner));
+        }
+
+        /// <summary>
+        /// Wraps ILiveTableAdditionalTelemetryReporter with
+        /// EdogAdditionalTelemetryInterceptor so the Additional telemetry
+        /// channel — NodeExecution events, DagExecutionHandlerV2 RunDag
+        /// feature-usage, every controller's feature-usage emission — is
+        /// captured into the same TelemetryEvent stream as SSR events
+        /// (distinguished by Channel="additional").
+        ///
+        /// Late-DI (RegisterAll, not WorkloadApp.cs constructor) because the
+        /// inner reporter's ctor resolves IRolloutConfigParametersProvider,
+        /// only available after MWC platform init.
+        /// </summary>
+        private static void RegisterAdditionalTelemetryInterceptor()
+        {
+            TryWrap<Microsoft.LiveTable.Service.Telemetry.ILiveTableAdditionalTelemetryReporter>(
+                "AdditionalTelemetry",
+                inner => inner is EdogAdditionalTelemetryInterceptor,
+                inner => new EdogAdditionalTelemetryInterceptor(
+                    inner,
+                    Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<EdogLogServer>()));
+        }
+
+        /// <summary>
+        /// Wraps IWorkloadCommunicationProvider with
+        /// EdogWorkloadCommunicationProviderWrapper so every HttpClient
+        /// returned by Get*HttpClient*Async carries the EDOG handler chain.
+        /// Closes the major "only OneLake captured" gap — GTS / Spark control
+        /// plane, Notebook API, Trident throttling, and any other MWC-platform
+        /// HTTP traffic becomes visible on the HTTP tab.
+        ///
+        /// Resolution: the provider is registered in FLT's WorkloadApp.cs (the
+        /// initialization callback line that calls
+        /// WireUp.RegisterInstance(workloadContext.WorkloadCommunicationProvider)).
+        /// That registration runs during MWC platform init, BEFORE our
+        /// RegisterAll() runs, so TryWrap can replace it cleanly.
+        /// </summary>
+        private static void RegisterWorkloadCommunicationProviderInterceptor()
+        {
+            // CRITICAL — DO NOT use TryWrap here. ──────────────────────────────
+            // The concrete WorkloadCommunicationProvider implements IDisposable
+            // (verified 2026-06-07 via a read-only MetadataLoadContext probe of
+            // Microsoft.MWC.Workload.Client.Library). TryWrap's blanket
+            // IDisposable guard therefore REFUSES to wrap it and records Failed,
+            // so GTS / Spark control-plane / Notebook HTTP traffic never receives
+            // the EDOG handler chain — which is exactly why the HTTP tab showed
+            // ONLY OneLake (OneLake is captured via the separate
+            // IHttpClientFactory path, not via this provider).
+            //
+            // Unlike RegisterTokenLifecycleInterceptor we cannot build a FRESH
+            // inner: WorkloadCommunicationProvider is MWC-internal (no accessible
+            // ctor) and is a process-wide singleton exposed as
+            // workloadContext.WorkloadCommunicationProvider. We therefore wrap
+            // the EXISTING instance via the DispatchProxy. The host keeps a
+            // strong reference to that same singleton for the entire app
+            // lifetime and uses it directly (bypassing WireUp), so the object
+            // stays alive even if Unity drops the lifetime manager of the
+            // registration we replace — our proxy's _inner remains valid.
+            // If a future MWC version makes Dispose() destructive to
+            // Get*HttpClientAsync, the symptom is an ObjectDisposedException on
+            // the first GTS/Notebook call; fall back to call-site HttpClient
+            // wrapping in that case.
+            const string name = "WorkloadCommunicationProvider";
+            try
+            {
+                var inner = Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<
+                    Microsoft.MWC.Workload.Client.Library.Providers.IWorkloadCommunicationProvider>();
+
+                // DispatchProxy.Create<T, TProxy>() returns an instance that
+                // derives from TProxy at runtime — so `is` against our proxy
+                // class works correctly.
+                if (inner is EdogWorkloadCommunicationProviderWrapper)
+                {
+                    Console.WriteLine($"[EDOG] ✓ {name} interceptor already wrapped");
+                    EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.AlreadyWrapped);
+                    return;
+                }
+
+                var wrapper = EdogWorkloadCommunicationProviderWrapper.Create(inner);
+
+                Exception regException = null;
+                try
+                {
+                    Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.RegisterInstance<
+                        Microsoft.MWC.Workload.Client.Library.Providers.IWorkloadCommunicationProvider>(wrapper);
+                }
+                catch (Exception ex)
+                {
+                    // Unity set-then-throw — instance is written even if the
+                    // registration validator throws.
+                    regException = ex;
+                }
+
+                var after = Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<
+                    Microsoft.MWC.Workload.Client.Library.Providers.IWorkloadCommunicationProvider>();
+                if (after is EdogWorkloadCommunicationProviderWrapper)
+                {
+                    Console.WriteLine($"[EDOG] ✓ {name} interceptor registered");
+                    EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.Ok);
+                    return;
+                }
+
+                var msg = regException?.Message ?? "wrapper not present after RegisterInstance";
+                Console.WriteLine($"[EDOG] ✗ {name} interceptor failed: {msg}");
+                EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.Failed, msg);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[EDOG] ✗ {name} interceptor failed: {ex.Message}");
+                EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.Failed, ex.Message);
+            }
         }
 
         private static void StartNexusAggregator()

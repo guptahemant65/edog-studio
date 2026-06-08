@@ -1769,6 +1769,297 @@
   padding: var(--space-3) var(--space-4);
 }
 
+/* ── M1 — Rule creator modal fields (built on existing modal shell) ─ */
+.http-mitm-modal-title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  margin: 0 0 var(--space-3) 0;
+  color: var(--text);
+}
+.http-mitm-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: var(--space-3);
+}
+.http-mitm-field--inline { max-width: 200px; }
+.http-mitm-field--grow { flex: 1; }
+.http-mitm-field-label {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+.http-mitm-field input[type="text"],
+.http-mitm-field input[type="number"],
+.http-mitm-field select,
+.http-mitm-field textarea {
+  background: var(--surface-2);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-md);
+  padding: 6px 10px;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: var(--text-md);
+  transition: border-color var(--transition-fast);
+}
+.http-mitm-field textarea {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  resize: vertical;
+}
+.http-mitm-field input:focus,
+.http-mitm-field select:focus,
+.http-mitm-field textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--shadow-glow);
+}
+.http-mitm-field-row {
+  display: flex;
+  gap: var(--space-3);
+}
+.http-mitm-field-row .http-mitm-field { flex: 1; margin-bottom: var(--space-3); }
+.http-mitm-action-config {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+.http-mitm-modal-hint {
+  font-size: var(--text-sm);
+  color: var(--text-dim);
+  margin-bottom: var(--space-2);
+  line-height: 1.5;
+}
+.http-mitm-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+.http-mitm-modal-cancel,
+.http-mitm-modal-create {
+  padding: 6px 16px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-md);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+.http-mitm-modal-cancel {
+  background: transparent;
+  border: 1px solid var(--border-bright);
+  color: var(--text-dim);
+}
+.http-mitm-modal-cancel:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.http-mitm-modal-create {
+  background: var(--accent);
+  border: 1px solid transparent;
+  color: #fff;
+}
+.http-mitm-modal-create:hover { background: #5b4aff; }
+.http-mitm-modal-error {
+  margin-top: var(--space-2);
+  padding: 8px 12px;
+  background: rgba(229, 69, 59, 0.08);
+  border: 1px solid rgba(229, 69, 59, 0.3);
+  border-radius: var(--radius-md);
+  color: var(--level-error);
+  font-size: var(--text-sm);
+}
+
+/* ── M2 — Rules panel ──────────────────────────────────────────────── */
+.http-mitm-rules {
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  max-height: 320px;
+  overflow-y: auto;
+  transition: max-height var(--transition-normal);
+}
+.http-mitm-rules--collapsed { max-height: 0; overflow: hidden; }
+.http-mitm-rules-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.http-mitm-rules-head-title {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+.http-mitm-rules-head-count {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-family: var(--font-mono);
+}
+.http-mitm-rules-head-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+}
+.http-mitm-rules-head-close:hover { background: var(--surface-3); color: var(--text); }
+.http-mitm-rules-body { padding: 6px 8px; }
+.http-mitm-rules-empty {
+  padding: 14px 16px;
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+}
+.http-mitm-rules-empty-cta {
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  margin-left: 4px;
+  text-decoration: underline;
+}
+.http-mitm-rule {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 6px 8px;
+  margin-bottom: 4px;
+}
+.http-mitm-rule--disabled { opacity: 0.55; }
+.http-mitm-rule-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.http-mitm-rule-act {
+  display: inline-flex;
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.http-mitm-rule-act--breakpoint { background: var(--accent-dim); color: var(--accent); }
+.http-mitm-rule-act--block      { background: rgba(229,69,59,0.10); color: var(--level-error); }
+.http-mitm-rule-act--forge      { background: rgba(45,127,249,0.10); color: var(--level-message); }
+.http-mitm-rule-act--modify     { background: rgba(229,148,12,0.10); color: var(--level-warning); }
+.http-mitm-rule-act--latency    { background: var(--surface-3); color: var(--text-dim); }
+.http-mitm-rule-name {
+  font-weight: 500;
+  font-size: var(--text-md);
+  color: var(--text);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.http-mitm-rule-prio {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.http-mitm-rule-del {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+}
+.http-mitm-rule-del:hover {
+  background: rgba(229,69,59,0.08);
+  color: var(--level-error);
+}
+.http-mitm-rule-meta {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: 4px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.http-mitm-rule-pattern {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+/* ── M4 — Kill switch button + Rules button + Add Rule button ───── */
+.http-mitm-kill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+}
+.http-mitm-kill-btn:hover {
+  background: rgba(229,69,59,0.06);
+  border-color: var(--level-error);
+  color: var(--level-error);
+}
+.http-rules-btn,
+.http-add-rule-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.http-rules-btn:hover,
+.http-add-rule-btn:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.http-rules-btn-count {
+  display: inline-block;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-full);
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-align: center;
+}
+
 /* ── Status bar MITM indicator ───────────────────────────────────── */
 .http-mitm-status {
   display: inline-flex;
