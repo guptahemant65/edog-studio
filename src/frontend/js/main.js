@@ -117,6 +117,14 @@ class EdogLogViewer {
     this.raidDebounceTimeout = null;
     this._execRefreshPending = false;
 
+    // Cluster A (2026-06-07) — IterationCorrelator backs the RAID filter
+    // and the lifecycle drawer. Exposed on window so renderer.passesFilter
+    // and summary.compute can reach it without prop-drilling.
+    this.iterationCorrelator = new IterationCorrelator(this.state);
+    if (typeof window !== 'undefined') {
+      window.edogIterationCorrelator = this.iterationCorrelator;
+    }
+
     // Cockpit modules
     this.apiClient = new FabricApiClient();
     this.topbar = new TopBar();
@@ -466,6 +474,29 @@ class EdogLogViewer {
       searchInput.addEventListener('input', (e) => {
         this.filter.setSearch(e.target.value);
       });
+      // #2 (2026-06-07): Enter / Shift+Enter cycle matches; Esc clears.
+      // Each handler short-circuits the debounce via setSearchImmediate so
+      // the user gets navigation feedback in the same keystroke. Enter while
+      // search is empty is a no-op (no debounce in flight is acceptable).
+      searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          // Apply whatever the user has typed (cancels any pending debounce)
+          // then cycle to next match. Shift+Enter goes to previous.
+          this.filter.setSearchImmediate(e.target.value);
+          if (e.shiftKey) {
+            this.renderer.navigateMatch('prev');
+          } else if (this.state.searchText) {
+            // setSearchImmediate already landed on 'first'; if the user
+            // hits Enter again on the same search, advance.
+            this.renderer.navigateMatch('next');
+          }
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          e.target.value = '';
+          this.filter.setSearchImmediate('');
+        }
+      });
     }
     
     // Endpoint filter (W0.2)
@@ -544,15 +575,8 @@ class EdogLogViewer {
       });
     });
     
-    // Preset buttons
-    document.querySelectorAll('.preset-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        const preset = btn.dataset.preset;
-        if (preset) this.filter.applyPreset(preset);
-      });
-    });
+    // #3 (2026-06-07): preset bar removed. FLT baseline lives in
+    // Renderer.passesFilter directly — no preset wiring here.
     
     // Time filter buttons
     document.querySelectorAll('.time-btn').forEach(btn => {
@@ -671,9 +695,7 @@ class EdogLogViewer {
         if (lvl) btn.classList.toggle('active', this.state.activeLevels.has(lvl));
       });
 
-      document.querySelectorAll('.preset-btn').forEach((btn) => {
-        btn.classList.toggle('active', btn.dataset.preset === this.state.activePreset);
-      });
+      // #3 (2026-06-07): preset-btn toolbar sync removed.
 
       const since = this.state.timeRangeSeconds || 0;
       document.querySelectorAll('.time-btn').forEach((btn) => {
@@ -757,6 +779,10 @@ class EdogLogViewer {
         this.extractEndpointFromLog(data);
         this.extractComponentFromLog(data);
         this.extractIterationIdFromLog(data);
+        // Cluster A: refresh the IterationCorrelator's RAID set for any
+        // newly-arrived logs. Cheap — scans only seqs added since last
+        // check. No-op when no iteration is active.
+        if (this.iterationCorrelator) this.iterationCorrelator.onNewLogs();
         this.scheduleExecutionRefresh();
         // Throttle cluster refresh — rebuild at most once per second
         if (this.logsEnhancements && !this._clusterRefreshPending) {
@@ -807,6 +833,8 @@ class EdogLogViewer {
     }
 
     if (logs.length > 0 || telemetry.length > 0) {
+      // Cluster A: nudge the IterationCorrelator after a batch arrival too.
+      if (this.iterationCorrelator) this.iterationCorrelator.onNewLogs();
       this.scheduleExecutionRefresh();
       this.renderer.scheduleRender();
     }
@@ -861,6 +889,13 @@ class EdogLogViewer {
       // drop the entire fresh snapshot. setStatus dedupes, so this only runs
       // on genuine reconnects.
       this._topicHighWater = {};
+      // Cluster A: drop any resolved-RAID state too — the new buffer is
+      // a fresh snapshot, the old RAIDs don't apply.
+      if (this.iterationCorrelator && this.iterationCorrelator.activeIteration) {
+        const wasActive = this.iterationCorrelator.activeIteration;
+        this.iterationCorrelator.setActiveIteration(null);
+        this.iterationCorrelator.setActiveIteration(wasActive);
+      }
       this.renderer.scheduleRender();
     }
   }
@@ -885,8 +920,10 @@ class EdogLogViewer {
       this.updateEndpointDropdown();
       this.updateComponentDropdown();
       
-      // Apply FLT preset (populates excludedComponents from loaded logs, then renders)
-      this.filter.applyPreset('flt');
+      // #3 (2026-06-07): FLT baseline is applied unconditionally in
+      // Renderer.passesFilter. Just render once with whatever filters
+      // were hydrated from URL/localStorage.
+      this.filter.applyFilters();
       
       // Auto-populate RAID with latest execution
       if (this.state.recentExecutions.length > 0) {
@@ -1193,6 +1230,12 @@ class EdogLogViewer {
 
   applyRaidFilter = (value) => {
     this.state.raidFilter = value;
+    // Cluster A (2026-06-07): keep the IterationCorrelator in sync.
+    // Resolving an iteration to its full RAID chain is what makes the
+    // RAID filter actually useful (vs ~4% naive substring recall).
+    if (this.iterationCorrelator) {
+      this.iterationCorrelator.setActiveIteration(value || null);
+    }
     if (value) {
       this.showExecutionBadge(value);
       this.filter.applyFilters();
@@ -1205,6 +1248,9 @@ class EdogLogViewer {
 
   clearRaidFilter = () => {
     this.state.raidFilter = '';
+    if (this.iterationCorrelator) {
+      this.iterationCorrelator.setActiveIteration(null);
+    }
     const raidInput = document.getElementById('raid-filter-input');
     if (raidInput) raidInput.value = '';
     this.hideExecutionBadge();

@@ -356,15 +356,19 @@ namespace Microsoft.LiveTable.Service.DevMode
         {
             // GTS poll response shape: HTTP 200 with "Failed" state and an
             // "error" block (DataMember Name="error" on TransformExecutionResponse.ErrorDetails).
-            // FLT reads error.errorCode and surfaces it as the MLV_* code.
+            // FLT parses the MLV_* code primarily by regex-extracting it from the message
+            // string. It expects the format: "[MLV_CODE] message failureType: X errorDetails: Y".
+            var errorSource = entry.ErrorSource ?? "System";
+            var message = $"[{entry.Code}] {entry.Description ?? entry.Code} failureType: {errorSource}Error errorDetails: Simulated GTS status failure";
+
             var sb = new System.Text.StringBuilder();
             sb.Append('{');
             sb.Append("\"id\":\"00000000-0000-0000-0000-000000000000\"");
             sb.Append(",\"state\":\"Failed\"");
             sb.Append(",\"error\":{");
             sb.Append("\"errorCode\":\"").Append(JsonEncode(entry.Code)).Append('"');
-            sb.Append(",\"message\":\"").Append(JsonEncode(entry.Description ?? entry.Code)).Append('"');
-            sb.Append(",\"errorSource\":\"").Append(JsonEncode(entry.ErrorSource ?? "System")).Append('"');
+            sb.Append(",\"message\":\"").Append(JsonEncode(message)).Append('"');
+            sb.Append(",\"errorSource\":\"").Append(JsonEncode(errorSource)).Append('"');
             sb.Append('}');
             sb.Append('}');
             return sb.ToString();
@@ -373,10 +377,13 @@ namespace Microsoft.LiveTable.Service.DevMode
         private static string BuildGtsSubmitErrorBody(ErrorCodeEntry entry)
         {
             // GTS submit error shape: non-200 HTTP with an "error" envelope.
+            // We inject "edogErrorCode" so EdogSparkClientWrapper can extract the exact 
+            // enum string to bypass fallback logic, without breaking the GTS response shape.
             var sb = new System.Text.StringBuilder();
             sb.Append("{\"error\":{");
             sb.Append("\"code\":\"").Append(JsonEncode(ShortGtsCode(entry))).Append('"');
             sb.Append(",\"message\":\"").Append(JsonEncode(entry.Description ?? entry.Code)).Append('"');
+            sb.Append(",\"edogErrorCode\":\"").Append(JsonEncode(entry.Code)).Append('"');
             sb.Append("}}");
             return sb.ToString();
         }

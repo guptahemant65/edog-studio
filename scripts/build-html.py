@@ -84,6 +84,7 @@ JS_MODULES = [
     "js/render-scheduler.js",
     "js/studio-state.js",
     "js/state.js",
+    "js/iteration-correlator.js",
     "js/toast.js",
     "js/signalr-manager.js",
     "js/connection-supervisor.js",

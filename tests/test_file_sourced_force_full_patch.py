@@ -58,32 +58,35 @@ finally:
 # anchors on `bool isFullRefreshMode = string.Equals(\n` and the closing
 # `node.FileSourceInfo?.RefreshMode, "FULL", ...);` line, then redirects the
 # two `if (isFullRefreshMode)` / `if (!isFullRefreshMode)` usages.
+#
+# NOTE: the opener line ("bool isFullRefreshMode") and the closing
+# continuation line have DIFFERENT indents in real FLT source (the
+# continuation is indented deeper for readability). The patcher must
+# use the OPENER's indent for new sibling declarations or StyleCop
+# SA1137 will fail the build. The fixture mirrors that asymmetric shape.
 
 _FORCE_FULL_FIXTURE = """\
-private async Task<NodeExecutionStatus> ExecuteFileSourcedNodeAsync(
-    Node node, DagExecutionInstance dagExecInstance, CancellationToken token)
-{
-    bool isFullRefreshMode = string.Equals(
-        node.FileSourceInfo?.RefreshMode, "FULL", StringComparison.OrdinalIgnoreCase);
+                // Check refresh mode — FULL skips change detection entirely.
+                bool isFullRefreshMode = string.Equals(
+                    node.FileSourceInfo?.RefreshMode, "FULL", StringComparison.OrdinalIgnoreCase);
 
-    if (isFullRefreshMode)
-    {
-        await this.fileIngestionHandler.SubmitFullRefreshAsync(node, dagExecInstance, token);
-        return NodeExecutionStatus.Completed;
-    }
+                if (isFullRefreshMode)
+                {
+                    await this.fileIngestionHandler.SubmitFullRefreshAsync(node, dagExecInstance, token);
+                    return NodeExecutionStatus.Completed;
+                }
 
-    var refreshResult = await this.fileIngestionHandler.ExecuteAsync(node, dagExecInstance, token);
-    if (refreshResult == null || !refreshResult.HasChanges)
-    {
-        return NodeExecutionStatus.Completed;
-    }
+                var refreshResult = await this.fileIngestionHandler.ExecuteAsync(node, dagExecInstance, token);
+                if (refreshResult == null || !refreshResult.HasChanges)
+                {
+                    return NodeExecutionStatus.Completed;
+                }
 
-    if (!isFullRefreshMode)
-    {
-        await this.fileIngestionHandler.FinalizeAppendAsync(node, dagExecInstance, token);
-    }
-    return NodeExecutionStatus.Completed;
-}
+                if (!isFullRefreshMode)
+                {
+                    await this.fileIngestionHandler.FinalizeAppendAsync(node, dagExecInstance, token);
+                }
+                return NodeExecutionStatus.Completed;
 """
 
 
@@ -172,6 +175,39 @@ class TestForceFullPatchGenerator:
         # context that explains why this OR exists.
         assert "EDOG DevMode" in patched
         assert "Error Simulator" in patched
+
+    def test_inserted_lines_share_opener_indent(self, patched):
+        """SA1137 regression pin.
+
+        StyleCop SA1137 fails the FLT build when sibling statements use
+        different indents. The opener `bool isFullRefreshMode = ...` sits at
+        16 spaces in the real FLT source; the continuation line is indented
+        deeper (20 spaces) for readability. The patcher MUST use the OPENER's
+        indent for the new sibling declarations — using the continuation
+        line's indent (the old bug) produces:
+            DagExecutionHandlerV2.cs(1494,1): error SA1137
+        """
+        # Pull the opener indent from the fixture directly.
+        opener_line = next(
+            line for line in _FORCE_FULL_FIXTURE.splitlines()
+            if "bool isFullRefreshMode = string.Equals(" in line
+        )
+        opener_indent = opener_line[: len(opener_line) - len(opener_line.lstrip(" "))]
+
+        # The two new bools must start at the SAME column as the opener.
+        for marker in ("bool edogForceFullRefresh =", "bool effectiveFullRefreshMode ="):
+            line = next(
+                (line for line in patched.splitlines() if marker in line),
+                None,
+            )
+            assert line is not None, f"Patched output missing: {marker}"
+            actual_indent = line[: len(line) - len(line.lstrip(" "))]
+            assert actual_indent == opener_indent, (
+                f"SA1137 regression: `{marker}` is indented {len(actual_indent)} "
+                f"spaces but the opener (`bool isFullRefreshMode`) is indented "
+                f"{len(opener_indent)} spaces. Sibling statements MUST share "
+                f"indentation or StyleCop fails the FLT build."
+            )
 
 
 class TestForceFullPatchIdempotent:

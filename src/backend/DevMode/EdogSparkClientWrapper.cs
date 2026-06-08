@@ -615,7 +615,7 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             var errorDetails = new TransformErrorDetails(
                 errorCode: errorCodeString ?? "MLV_UNKNOWN_ERROR",
-                message: message ?? "Simulated GTS status failure (EDOG Error Code Simulator)",
+                message: message ?? $"[{errorCodeString ?? "MLV_UNKNOWN_ERROR"}] Simulated GTS status failure (EDOG Error Code Simulator) failureType: {errorSource}Error",
                 errorSource: errorSource);
 
             return new TransformExecutionResponse(transformationId, TransformationState.Failed, errorDetails);
@@ -646,7 +646,12 @@ namespace Microsoft.LiveTable.Service.DevMode
                     || errorElem.ValueKind != JsonValueKind.Object) return;
 
                 // Channel 1 uses "errorCode"; Channel 2 uses "code".
-                if (errorElem.TryGetProperty("errorCode", out var ec) && ec.ValueKind == JsonValueKind.String)
+                // Channel 2 now includes "edogErrorCode" which holds the exact FLT enum name.
+                if (errorElem.TryGetProperty("edogErrorCode", out var eec) && eec.ValueKind == JsonValueKind.String)
+                {
+                    errorCode = eec.GetString();
+                }
+                else if (errorElem.TryGetProperty("errorCode", out var ec) && ec.ValueKind == JsonValueKind.String)
                 {
                     errorCode = ec.GetString();
                 }

@@ -72,6 +72,7 @@ FILES = {
     "DagExecutionHandlerV2": SERVICE_PATH / "Core/V2/DagExecutionHandlerV2.cs",
     "NodeExecutionUtils": SERVICE_PATH / "Utils/NodeExecutionUtils.cs",
     "ControllersConfig": SERVICE_PATH / "Initialization/ControllersConfig.cs",
+    "NotebookApiClient": SERVICE_PATH / "Notebook/NotebookHttp/NotebookApiClient.cs",
 }
 
 # DevMode log viewer files (created, not patched)
@@ -83,6 +84,8 @@ DEVMODE_FILES = {
     "EdogLogInterceptor": SERVICE_PATH / "DevMode/EdogLogInterceptor.cs",
     "BlocklistFilter": SERVICE_PATH / "DevMode/BlocklistFilter.cs",
     "EdogTelemetryInterceptor": SERVICE_PATH / "DevMode/EdogTelemetryInterceptor.cs",
+    "EdogAdditionalTelemetryInterceptor": SERVICE_PATH / "DevMode/EdogAdditionalTelemetryInterceptor.cs",
+    "EdogWorkloadCommunicationProviderWrapper": SERVICE_PATH / "DevMode/EdogWorkloadCommunicationProviderWrapper.cs",
     "TopicEvent": SERVICE_PATH / "DevMode/TopicEvent.cs",
     "TopicBuffer": SERVICE_PATH / "DevMode/TopicBuffer.cs",
     "EdogTopicRouter": SERVICE_PATH / "DevMode/EdogTopicRouter.cs",
@@ -1396,8 +1399,16 @@ def apply_gts_spark_client_change(content, token, repo_root=None):
         if repo_root:
             try:
                 file_rel_path = FILES["GTSBasedSparkClient"]
+                # encoding="utf-8" is REQUIRED on Windows. Without it,
+                # subprocess.run(text=True) decodes git's stdout with the
+                # OS default (cp1252), corrupting UTF-8 source characters
+                # like em-dashes (`—` → `â€"`) and ellipses (`…` → `â€¦`)
+                # in FLT comments. The corruption is then written back to
+                # disk by the recursive apply_gts_spark_client_change call,
+                # leaving permanent mojibake in unrelated lines of the file.
                 result = subprocess.run(
-                    ["git", "show", f"HEAD:{file_rel_path}"], cwd=str(repo_root), capture_output=True, text=True
+                    ["git", "show", f"HEAD:{file_rel_path}"], cwd=str(repo_root),
+                    capture_output=True, text=True, encoding="utf-8"
                 )
                 if result.returncode == 0:
                     git_content = result.stdout
@@ -1563,8 +1574,10 @@ def revert_gts_spark_client_change(content, repo_root=None):
     if repo_root:
         try:
             file_rel_path = str(FILES["GTSBasedSparkClient"]).replace("\\", "/")
+            # encoding="utf-8" required — see comment in apply_gts_spark_client_change
             result = subprocess.run(
-                ["git", "show", f"HEAD:{file_rel_path}"], cwd=str(repo_root), capture_output=True, text=True
+                ["git", "show", f"HEAD:{file_rel_path}"], cwd=str(repo_root),
+                capture_output=True, text=True, encoding="utf-8"
             )
             if result.returncode == 0:
                 print("   ℹ️  Restored from git HEAD (no stored original found)")  # noqa: RUF001
@@ -2065,6 +2078,80 @@ def revert_log_viewer_registration_workloadapp_cs(content):
     replacement = "WireUp.RegisterSingletonType<ICustomLiveTableTelemetryReporter, CustomLiveTableTelemetryReporter>();"
 
     new_content = re.sub(pattern, replacement, content)
+    return new_content
+
+
+def apply_workload_comm_provider_bypass_gts(content):
+    """Patch GTSBasedSparkClient.cs to resolve IWorkloadCommunicationProvider
+    via WireUp instead of through this.workloadContext.WorkloadCommunicationProvider.
+
+    Why this exists: EdogWorkloadCommunicationProviderWrapper is registered
+    in WireUp during EdogDevModeRegistrar.RegisterAll. GTSBasedSparkClient
+    reads the provider via the IWorkloadContext property on its private
+    field — that path bypasses our WireUp registration entirely, so the
+    wrap is invisible to GTS without this rewrite.
+
+    Result: every GTS call (job submit, status poll, cancel) routes through
+    EdogHttpPipelineHandler and shows up on the HTTP tab.
+    """
+    original = (
+        "this.gtsHttpClient = await this.workloadContext.WorkloadCommunicationProvider.Get1PWorkloadHttpClientAsync(\n"
+        "                        LakehouseWorkloadName,"
+    )
+    modified = (
+        "// EDOG DevMode - route through WireUp so EdogWorkloadCommunicationProviderWrapper sees the call\n"
+        "            this.gtsHttpClient = await Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<Microsoft.MWC.Workload.Client.Library.Providers.IWorkloadCommunicationProvider>().Get1PWorkloadHttpClientAsync(\n"
+        "                        LakehouseWorkloadName,"
+    )
+    return apply_simple_pattern(content, original, modified, "GTS WireUp routing")
+
+
+def revert_workload_comm_provider_bypass_gts(content):
+    """Revert the GTS WireUp routing patch."""
+    original = (
+        "this.gtsHttpClient = await this.workloadContext.WorkloadCommunicationProvider.Get1PWorkloadHttpClientAsync(\n"
+        "                        LakehouseWorkloadName,"
+    )
+    modified = (
+        "// EDOG DevMode - route through WireUp so EdogWorkloadCommunicationProviderWrapper sees the call\n"
+        "            this.gtsHttpClient = await Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<Microsoft.MWC.Workload.Client.Library.Providers.IWorkloadCommunicationProvider>().Get1PWorkloadHttpClientAsync(\n"
+        "                        LakehouseWorkloadName,"
+    )
+    new_content, _ = revert_simple_pattern(content, original, modified, "GTS WireUp routing")
+    return new_content
+
+
+def apply_workload_comm_provider_bypass_notebook(content):
+    """Patch NotebookApiClient.cs to route through WireUp.
+
+    Same rationale as the GTS patch — NotebookApiClient also reads the
+    provider via this.workloadContext, bypassing our wrap. Without this,
+    notebook API calls remain invisible on the HTTP tab.
+    """
+    original = (
+        "this.notebookHttpClient = await this.workloadContext.WorkloadCommunicationProvider.Get1PWorkloadHttpClientAsync(\n"
+        "                        Constants.NotebookArtifactType,"
+    )
+    modified = (
+        "// EDOG DevMode - route through WireUp so EdogWorkloadCommunicationProviderWrapper sees the call\n"
+        "            this.notebookHttpClient = await Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<Microsoft.MWC.Workload.Client.Library.Providers.IWorkloadCommunicationProvider>().Get1PWorkloadHttpClientAsync(\n"
+        "                        Constants.NotebookArtifactType,"
+    )
+    return apply_simple_pattern(content, original, modified, "Notebook WireUp routing")
+
+
+def revert_workload_comm_provider_bypass_notebook(content):
+    """Revert the Notebook WireUp routing patch."""
+    original = (
+        "this.notebookHttpClient = await this.workloadContext.WorkloadCommunicationProvider.Get1PWorkloadHttpClientAsync(\n"
+        "                        Constants.NotebookArtifactType,"
+    )
+    modified = (
+        "// EDOG DevMode - route through WireUp so EdogWorkloadCommunicationProviderWrapper sees the call\n"
+        "            this.notebookHttpClient = await Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<Microsoft.MWC.Workload.Client.Library.Providers.IWorkloadCommunicationProvider>().Get1PWorkloadHttpClientAsync(\n"
+        "                        Constants.NotebookArtifactType,"
+    )
+    new_content, _ = revert_simple_pattern(content, original, modified, "Notebook WireUp routing")
     return new_content
 
 
@@ -3590,6 +3677,42 @@ def apply_all_changes(token, repo_root):
             modified_contents[rel_path] = content
             warnings.append("⚠️  DAG execution hook: pattern not found in DagExecutionHandlerV2.cs")
 
+    # 4b-WCP. Patches for IWorkloadCommunicationProvider WireUp routing — GTS + Notebook.
+    # Without these, EdogWorkloadCommunicationProviderWrapper is registered in
+    # WireUp but the two highest-volume MWC HTTP surfaces bypass it (they read
+    # the provider via this.workloadContext.WorkloadCommunicationProvider) so
+    # the HTTP tab still shows only OneLake.
+    for label, file_key, apply_fn, revert_fn in [
+        ("GTS WireUp routing (GTSBasedSparkClient.cs)",
+         "GTSBasedSparkClient",
+         apply_workload_comm_provider_bypass_gts,
+         revert_workload_comm_provider_bypass_gts),
+        ("Notebook WireUp routing (NotebookApiClient.cs)",
+         "NotebookApiClient",
+         apply_workload_comm_provider_bypass_notebook,
+         revert_workload_comm_provider_bypass_notebook),
+    ]:
+        rel_path = FILES[file_key]
+        filepath = repo_root / rel_path
+        content = read_file(filepath)
+        if not content:
+            warnings.append(f"⚠️  {label}: source file missing")
+            continue
+        new_content, was_changed, was_already_applied = apply_fn(content)
+        if was_changed:
+            original_contents[rel_path] = content
+            write_file(filepath, new_content)
+            modified_contents[rel_path] = new_content
+            changes_made.append(f"✅ {label}")
+        elif was_already_applied:
+            reverted = revert_fn(content)
+            if reverted != content:
+                original_contents[rel_path] = reverted
+                modified_contents[rel_path] = content
+            changes_made.append(f"⏭️  {label} (already)")
+        else:
+            warnings.append(f"⚠️  {label}: pattern not found")
+
     # 4b-2. Patch DagExecutionHandlerV2.cs to wrap NodeExecutor with EdogNodeExecutorWrapper
     # Reuses the same file (may already be read above). Re-read to pick up hook patch.
     rel_path = FILES["DagExecutionHandlerV2"]
@@ -3954,6 +4077,34 @@ def revert_all_changes(repo_root):
     except Exception as e:
         print(f"   ⚠️ Error reverting GTSBasedSparkClient: {e}")
         all_success = False
+
+    # 2b. Revert IWorkloadCommunicationProvider WireUp-routing patches.
+    # The apply orchestration lives at the matching ✅ block in the apply
+    # path; without this revert loop, `edog --revert` leaves both files
+    # dirty after a deploy and the user has to git checkout manually.
+    for label, file_key, revert_fn in [
+        ("GTS WireUp routing (GTSBasedSparkClient.cs)",
+         "GTSBasedSparkClient",
+         revert_workload_comm_provider_bypass_gts),
+        ("Notebook WireUp routing (NotebookApiClient.cs)",
+         "NotebookApiClient",
+         revert_workload_comm_provider_bypass_notebook),
+    ]:
+        try:
+            rel_path = FILES[file_key]
+            filepath = repo_root / rel_path
+            content = read_file(filepath)
+            if not content:
+                continue
+            reverted = revert_fn(content)
+            if reverted != content:
+                write_file(filepath, reverted)
+                print(f"   ✅ Reverted {label}")
+            else:
+                print(f"   ⏭️  {label} (clean)")
+        except Exception as e:
+            print(f"   ⚠️ Error reverting {label}: {e}")
+            all_success = False
 
     # 4. Revert Program.cs registration
     try:
