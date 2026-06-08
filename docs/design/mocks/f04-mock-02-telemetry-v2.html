@@ -1,0 +1,1691 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDOG Studio — Telemetry v2 (F04)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ─── tokens ─────────────────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --accent:#6d5cff;
+  --accent-dim:rgba(109,92,255,0.07);
+  --accent-hover:rgba(109,92,255,0.04);
+  --accent-glow:rgba(109,92,255,0.15);
+  --accent-strong:rgba(109,92,255,0.18);
+  --teal:#0d9488; --teal-dim:rgba(13,148,136,0.10);
+  --green:#18a058; --green-dim:rgba(24,160,88,0.08);
+  --amber:#e5940c; --amber-dim:rgba(229,148,12,0.10);
+  --red:#e5453b;   --red-dim:rgba(229,69,59,0.09);
+  --blue:#2d7ff9;  --blue-dim:rgba(45,127,249,0.08);
+  --grey-dim:rgba(142,149,165,0.10);
+  --font:'Inter',-apple-system,'Segoe UI',system-ui,sans-serif;
+  --mono:'JetBrains Mono','Cascadia Code','Consolas',monospace;
+  --r-sm:4px; --r-md:6px; --r-lg:10px; --r-full:100px;
+  --t-fast:80ms ease-out;
+  --t-norm:150ms ease-out;
+  --topbar-h:44px;
+  --subtabs-h:36px;
+  --metric-h:56px;
+  --toolbar-h:42px;
+  --statusbar-h:26px;
+  --spine-w:236px;
+  --catalog-w:308px;
+  --row-h:28px;
+}
+[data-theme="light"]{
+  --bg:#f4f5f7; --surface:#ffffff; --surface-2:#f8f9fb; --surface-3:#ebedf0;
+  --text:#1a1d23; --text-dim:#5a6070; --text-muted:#8e95a5;
+  --border:rgba(0,0,0,0.06); --border-bright:rgba(0,0,0,0.12);
+  --shadow-sm:0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md:0 2px 8px rgba(0,0,0,0.06),0 1px 2px rgba(0,0,0,0.04);
+  --shadow-lg:0 4px 16px rgba(0,0,0,0.08),0 2px 4px rgba(0,0,0,0.04);
+  --scrollbar:rgba(0,0,0,0.18);
+  --grid-line:rgba(0,0,0,0.04);
+  --spark-bg:rgba(0,0,0,0.04);
+}
+[data-theme="dark"]{
+  --bg:#0c0e14; --surface:#14171f; --surface-2:#1c2029; --surface-3:#282d3a;
+  --text:#e4e7ed; --text-dim:#8a91a3; --text-muted:#555d70;
+  --border:rgba(255,255,255,0.06); --border-bright:rgba(255,255,255,0.10);
+  --shadow-sm:0 1px 2px rgba(0,0,0,0.3);
+  --shadow-md:0 2px 8px rgba(0,0,0,0.4);
+  --shadow-lg:0 4px 16px rgba(0,0,0,0.5);
+  --accent:#8577ff;
+  --accent-dim:rgba(133,119,255,0.08);
+  --accent-glow:rgba(133,119,255,0.20);
+  --green:#34d399; --amber:#f0b429; --red:#ff6b6b; --blue:#5b9bff; --teal:#2dd4bf;
+  --green-dim:rgba(52,211,153,0.10); --amber-dim:rgba(240,180,41,0.10);
+  --red-dim:rgba(255,107,107,0.10); --blue-dim:rgba(91,155,255,0.10);
+  --teal-dim:rgba(45,212,191,0.10);
+  --scrollbar:rgba(255,255,255,0.14);
+  --grid-line:rgba(255,255,255,0.04);
+  --spark-bg:rgba(255,255,255,0.04);
+}
+/* ─── base ───────────────────────────────────────────────────────── */
+html,body{height:100%;overflow:hidden}
+body{font-family:var(--font);font-size:13px;line-height:1.4;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+button,input,select{font-family:inherit;font-size:inherit;color:inherit;background:none;border:none;outline:none}
+button{cursor:pointer}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:var(--scrollbar);border-radius:4px}
+::-webkit-scrollbar-track{background:transparent}
+.mono{font-family:var(--mono)}
+.dim{color:var(--text-dim)}
+.muted{color:var(--text-muted)}
+[hidden]{display:none!important}/* ─── app shell ──────────────────────────────────────────────────── */
+#app{display:grid;grid-template-rows:var(--topbar-h) var(--subtabs-h) var(--metric-h) var(--toolbar-h) 1fr var(--statusbar-h);height:100vh}
+/* topbar */
+.topbar{display:flex;align-items:center;gap:14px;padding:0 14px;background:var(--surface);border-bottom:1px solid var(--border);box-shadow:var(--shadow-sm);z-index:100}
+.brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px;letter-spacing:-0.01em}
+.brand-mark{width:18px;height:18px;border-radius:5px;background:linear-gradient(135deg,var(--accent) 0%,#a08fff 100%);display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;box-shadow:0 0 0 0.5px rgba(0,0,0,0.05),0 1px 2px rgba(109,92,255,0.3)}
+.brand-sub{font-size:11px;font-weight:500;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;padding:2px 6px;border:1px solid var(--border);border-radius:var(--r-sm)}
+.crumb{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim)}
+.crumb .sep{color:var(--text-muted);font-size:10px}
+.crumb .cur{color:var(--text);font-weight:500}
+.runtime-pill{display:flex;align-items:center;gap:6px;padding:3px 10px;border-radius:var(--r-full);font-family:var(--mono);font-size:11px;font-weight:600;background:var(--green-dim);color:var(--green);border:1px solid transparent}
+.runtime-pill .dot{width:6px;height:6px;border-radius:50%;background:currentColor;box-shadow:0 0 6px currentColor}
+.runtime-pill.live .dot{animation:livePulse 1.6s ease-in-out infinite}
+.runtime-pill.amber{background:var(--amber-dim);color:var(--amber)}
+.runtime-pill.red{background:var(--red-dim);color:var(--red)}
+.runtime-pill.grey{background:var(--grey-dim);color:var(--text-muted)}
+.runtime-pill.blue{background:var(--blue-dim);color:var(--blue)}
+.spacer{flex:1}
+.topbar-actions{display:flex;align-items:center;gap:4px}
+.icon-btn{width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:var(--r-md);color:var(--text-dim);transition:background var(--t-fast),color var(--t-fast)}
+.icon-btn:hover{background:var(--surface-2);color:var(--text)}
+.icon-btn.active{background:var(--accent-dim);color:var(--accent)}
+.icon-btn svg{width:15px;height:15px}
+.user-chip{display:flex;align-items:center;gap:6px;padding:3px 8px 3px 4px;border-radius:var(--r-full);border:1px solid var(--border);font-size:12px;color:var(--text-dim);margin-left:6px}
+.avatar{width:20px;height:20px;border-radius:50%;background:linear-gradient(135deg,#6d5cff,#0d9488);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center}
+/* subtabs */
+.subtabs{display:flex;align-items:end;padding:0 14px;background:var(--surface);border-bottom:1px solid var(--border);gap:0;position:relative}
+.subtab{position:relative;padding:8px 14px 9px;font-size:13px;color:var(--text-dim);display:flex;align-items:center;gap:6px;transition:color var(--t-fast)}
+.subtab:hover{color:var(--text)}
+.subtab.active{color:var(--text);font-weight:600}
+.subtab.active::after{content:"";position:absolute;left:8px;right:8px;bottom:-1px;height:2px;background:var(--accent);border-radius:1px 1px 0 0}
+.subtab .badge{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 5px;border-radius:var(--r-full);font-family:var(--mono);font-size:10px;font-weight:600;background:var(--surface-3);color:var(--text-dim)}
+.subtab .badge.err{background:var(--red-dim);color:var(--red)}
+.subtab .badge.fresh{background:var(--blue-dim);color:var(--blue);width:6px;height:6px;min-width:6px;padding:0;border-radius:50%}
+.subtab .chev{font-size:9px;color:var(--text-muted);margin-left:2px}/* ─── metric strip ──────────────────────────────────────────────── */
+.metric-strip{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--border);border-bottom:1px solid var(--border)}
+.metric{background:var(--surface);padding:8px 14px;display:flex;flex-direction:column;justify-content:center;gap:3px;position:relative;overflow:hidden}
+.metric:hover{background:var(--surface-2)}
+.metric .label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);display:flex;align-items:center;gap:6px}
+.metric .value{font-family:var(--mono);font-size:18px;font-weight:600;color:var(--text);letter-spacing:-0.02em;line-height:1;display:flex;align-items:baseline;gap:6px}
+.metric .value .unit{font-size:11px;font-weight:500;color:var(--text-muted);letter-spacing:0}
+.metric .delta{font-family:var(--mono);font-size:10px;font-weight:600;color:var(--text-muted)}
+.metric .delta.up{color:var(--green)}
+.metric .delta.down{color:var(--red)}
+.metric .spark{position:absolute;right:10px;top:8px;width:54px;height:18px;opacity:0.9}
+.metric .split-bar{height:4px;border-radius:2px;overflow:hidden;display:flex;background:var(--surface-3);margin-top:2px}
+.metric .split-bar > div{height:100%}
+.metric .split-bar .ssr{background:var(--accent)}
+.metric .split-bar .add{background:var(--teal)}
+.metric .split-legend{font-size:10px;font-family:var(--mono);color:var(--text-muted);display:flex;gap:8px;align-items:center}
+.metric .split-legend .lg{display:inline-flex;align-items:center;gap:3px}
+.metric .split-legend .sw{width:6px;height:6px;border-radius:1px}
+.metric .tick{position:absolute;top:6px;right:6px;width:5px;height:5px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);opacity:0}
+.metric .tick.on{opacity:1;transition:opacity var(--t-norm)}
+/* ─── toolbar ───────────────────────────────────────────────────── */
+.toolbar{display:flex;align-items:center;gap:10px;padding:0 14px;background:var(--surface);border-bottom:1px solid var(--border);z-index:90;flex-wrap:nowrap;overflow:hidden}
+.search{position:relative;flex:0 0 240px}
+.search input{width:100%;padding:5px 10px 5px 28px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-md);font-size:12px;transition:border-color var(--t-fast),box-shadow var(--t-fast)}
+.search input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow)}
+.search input::placeholder{color:var(--text-muted)}
+.search .ico{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:11px;pointer-events:none}
+.search .kbd{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-family:var(--mono);font-size:10px;color:var(--text-muted);background:var(--surface);border:1px solid var(--border);border-radius:3px;padding:1px 4px;pointer-events:none}
+.pills{display:flex;align-items:center;gap:1px;background:var(--border);border-radius:var(--r-md);padding:1px;border:1px solid var(--border)}
+.pill{padding:3px 9px;font-size:11px;font-weight:500;color:var(--text-dim);background:var(--surface-2);border-radius:var(--r-sm);display:flex;align-items:center;gap:5px;transition:background var(--t-fast),color var(--t-fast)}
+.pill:hover{background:var(--surface-3);color:var(--text)}
+.pill.active{background:var(--surface);color:var(--text);font-weight:600;box-shadow:0 0 0 1px var(--border-bright) inset}
+.pill .cnt{font-family:var(--mono);font-size:10px;color:var(--text-muted);font-weight:500}
+.pill.active .cnt{color:var(--text-dim)}
+.pill .dot{width:6px;height:6px;border-radius:50%}
+.pill .dot.r{background:var(--red)} .pill .dot.g{background:var(--green)} .pill .dot.a{background:var(--amber)} .pill .dot.b{background:var(--blue)} .pill .dot.x{background:var(--text-muted)}
+.pill.chan-ssr.active{box-shadow:inset 0 0 0 1px var(--accent),0 0 0 1px var(--accent-glow)}
+.pill.chan-add.active{box-shadow:inset 0 0 0 1px var(--teal)}
+.divider{width:1px;height:18px;background:var(--border)}
+.range{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-dim)}
+.range-slider{position:relative;width:140px;height:18px;display:flex;align-items:center}
+.range-track{width:100%;height:3px;border-radius:2px;background:var(--surface-3);position:relative}
+.range-fill{position:absolute;height:100%;background:var(--accent);border-radius:2px;left:0;right:30%}
+.range-thumb{position:absolute;top:50%;width:10px;height:10px;border-radius:50%;background:var(--surface);border:2px solid var(--accent);transform:translate(-50%,-50%);cursor:grab;box-shadow:var(--shadow-sm)}
+.range-thumb:active{cursor:grabbing}
+.range-val{font-family:var(--mono);font-size:11px;color:var(--text);min-width:46px;text-align:right}
+.window-sel{display:flex;align-items:center;gap:1px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-md);padding:1px}
+.window-sel button{padding:3px 8px;font-size:11px;font-family:var(--mono);color:var(--text-dim);border-radius:var(--r-sm);transition:background var(--t-fast),color var(--t-fast)}
+.window-sel button:hover{background:var(--surface-3);color:var(--text)}
+.window-sel button.active{background:var(--surface);color:var(--text);font-weight:600;box-shadow:0 0 0 1px var(--border-bright) inset}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;font-size:12px;font-weight:500;border-radius:var(--r-md);border:1px solid var(--border-bright);color:var(--text-dim);background:transparent;transition:background var(--t-fast),color var(--t-fast),border-color var(--t-fast)}
+.btn:hover{background:var(--surface-2);color:var(--text);border-color:var(--border-bright)}
+.btn.primary{background:var(--accent);color:#fff;border-color:transparent}
+.btn.primary:hover{background:#5b4aff;color:#fff}
+.btn .ico{font-size:11px}
+.btn.sm{padding:2px 8px;font-size:11px}
+.btn.danger{color:var(--red);border-color:var(--red-dim)}/* ─── body 3-col ─────────────────────────────────────────────────── */
+.body3{display:grid;grid-template-columns:var(--spine-w) 1fr var(--catalog-w);min-height:0;overflow:hidden;position:relative;background:var(--bg)}
+.panel{background:var(--surface);overflow:hidden;display:flex;flex-direction:column;min-height:0}
+.panel-h{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);border-bottom:1px solid var(--border);background:var(--surface)}
+.panel-h .hcount{font-family:var(--mono);color:var(--text-dim);font-weight:600;letter-spacing:0}
+.panel-h .hacts{display:flex;gap:2px}
+.panel-h .hacts button{font-family:var(--mono);font-size:10px;padding:2px 5px;color:var(--text-muted);border-radius:3px}
+.panel-h .hacts button:hover{background:var(--surface-2);color:var(--text)}
+.panel-h .hacts button.on{color:var(--accent);background:var(--accent-dim)}
+.panel-body{flex:1;overflow-y:auto;overflow-x:hidden;min-height:0}
+.spine{border-right:1px solid var(--border)}
+.catalog{border-left:1px solid var(--border)}
+/* ─── iteration spine ───────────────────────────────────────────── */
+.iter{padding:6px 10px 8px;cursor:pointer;border-left:2px solid transparent;transition:background var(--t-fast),border-color var(--t-fast);position:relative}
+.iter:hover{background:var(--surface-2)}
+.iter.sel{background:var(--accent-dim);border-left-color:var(--accent)}
+.iter.sel .iter-id{color:var(--accent)}
+.iter-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.iter-id{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--text);letter-spacing:-0.01em}
+.iter-status{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-family:var(--mono);font-weight:600;padding:1px 6px;border-radius:var(--r-full)}
+.iter-status.running{background:var(--blue-dim);color:var(--blue)}
+.iter-status.succeeded{background:var(--green-dim);color:var(--green)}
+.iter-status.failed{background:var(--red-dim);color:var(--red)}
+.iter-status.cancelled{background:var(--amber-dim);color:var(--amber)}
+.iter-status .d{width:5px;height:5px;border-radius:50%;background:currentColor}
+.iter-status.running .d{animation:livePulse 1.5s ease-in-out infinite}
+.iter-meta{display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);font-family:var(--mono);margin-bottom:5px}
+.iter-track{position:relative;height:14px;background:var(--surface-3);border-radius:2px;overflow:hidden;display:flex}
+.iter-track > span{height:100%;display:block;min-width:2px;border-right:1px solid var(--surface);transition:opacity var(--t-fast)}
+.iter-track > span:last-child{border-right:none}
+.iter-track .ssr{background:var(--accent);opacity:0.65}
+.iter-track .add{background:var(--teal);opacity:0.65}
+.iter-track .fail{background:var(--red)}
+.iter-events{font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-top:4px;display:flex;gap:8px}
+.iter-events span{display:inline-flex;align-items:center;gap:3px}
+.iter-events .sw{width:6px;height:6px;border-radius:1px}
+.iter-events .sw.ssr{background:var(--accent)} .iter-events .sw.add{background:var(--teal)}
+.spine-empty{padding:20px;text-align:center;color:var(--text-muted);font-size:11px}
+/* ─── stream ─────────────────────────────────────────────────────── */
+.stream{position:relative;display:flex;flex-direction:column;min-height:0;background:var(--surface)}
+.stream-toolbar{display:flex;align-items:center;justify-content:space-between;padding:6px 14px;border-bottom:1px solid var(--border);background:var(--surface-2);font-size:11px;color:var(--text-dim)}
+.stream-toolbar .left{display:flex;gap:14px;align-items:center}
+.stream-toolbar .live-tag{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;font-weight:600;color:var(--green)}
+.stream-toolbar .live-tag .d{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:livePulse 1.6s ease-in-out infinite}
+.stream-toolbar.paused .live-tag{color:var(--text-muted)}
+.stream-toolbar.paused .live-tag .d{background:var(--text-muted);box-shadow:none;animation:none}
+.stream-toolbar .filter-summary{font-family:var(--mono);font-size:11px;color:var(--text-dim)}
+.stream-toolbar .filter-summary .k{color:var(--text)}
+.stream-list{flex:1;overflow-y:auto;min-height:0;position:relative}
+.stream-list.scrolling-paused{outline:1px solid var(--amber)}
+.card{display:grid;grid-template-columns:34px 22px 1fr 110px 92px 100px 38px 28px;align-items:center;gap:10px;padding:7px 14px 7px 0;border-bottom:1px solid var(--grid-line);cursor:pointer;font-size:12px;transition:background var(--t-fast);position:relative}
+.card:hover{background:var(--surface-2)}
+.card.sel{background:var(--accent-dim)}
+.card.sel::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--accent)}
+.card.failed::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--red)}
+.card.warning::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--amber)}
+.card .seq{font-family:var(--mono);font-size:10px;color:var(--text-muted);text-align:right;user-select:none}
+.card .chan{display:inline-flex;align-items:center;justify-content:center;width:22px;height:18px;border-radius:3px;font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:0.04em}
+.chan.ssr{background:var(--accent-dim);color:var(--accent);border:1px solid rgba(109,92,255,0.18)}
+.chan.add{background:var(--teal-dim);color:var(--teal);border:1px solid rgba(13,148,136,0.20);border-radius:3px 7px 3px 3px}
+.card .name{display:flex;align-items:center;gap:8px;min-width:0}
+.card .name .label{font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .name .iter-ref{font-family:var(--mono);font-size:10px;color:var(--text-muted);background:var(--surface-3);padding:1px 5px;border-radius:3px;flex-shrink:0}
+.card .name .attr-cnt{font-family:var(--mono);font-size:10px;color:var(--text-muted);flex-shrink:0}
+.status-pill{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;font-weight:600;padding:2px 8px;border-radius:var(--r-full);text-transform:lowercase}
+.status-pill .d{width:5px;height:5px;border-radius:50%;background:currentColor}
+.status-pill.running{background:var(--blue-dim);color:var(--blue)} .status-pill.running .d{animation:livePulse 1.4s ease-in-out infinite}
+.status-pill.succeeded{background:var(--green-dim);color:var(--green)}
+.status-pill.failed{background:var(--red-dim);color:var(--red)}
+.status-pill.warning{background:var(--amber-dim);color:var(--amber)}
+.status-pill.cancelled{background:var(--grey-dim);color:var(--text-muted)}
+.duration-cell{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;color:var(--text-dim)}
+.duration-bar{position:relative;width:62px;height:5px;background:var(--surface-3);border-radius:2px;overflow:hidden}
+.duration-bar > span{display:block;height:100%;background:var(--accent);border-radius:2px;transition:width var(--t-norm)}
+.duration-bar.long > span{background:var(--amber)}
+.duration-bar.fail > span{background:var(--red)}
+.duration-num{min-width:32px;text-align:right;color:var(--text);font-weight:500}
+.card .ts{font-family:var(--mono);font-size:10px;color:var(--text-muted);text-align:right}
+.logs-pill{display:inline-flex;align-items:center;gap:3px;font-family:var(--mono);font-size:10px;color:var(--text-dim);background:var(--surface-3);padding:2px 6px;border-radius:var(--r-full);transition:background var(--t-fast),color var(--t-fast)}
+.logs-pill:hover{background:var(--blue-dim);color:var(--blue)}
+.logs-pill .ico{font-size:9px;opacity:0.7}
+.card .more{color:var(--text-muted);font-size:14px;line-height:1;text-align:center;opacity:0;transition:opacity var(--t-fast)}
+.card:hover .more{opacity:1}
+.section-h{display:flex;align-items:center;justify-content:space-between;padding:5px 14px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.10em;color:var(--text-muted);background:var(--surface-2);border-bottom:1px solid var(--border);border-top:1px solid var(--border);position:sticky;top:0;z-index:5}
+.section-h .count{font-family:var(--mono);color:var(--text-dim);font-weight:600;letter-spacing:0}
+.section-h.act{background:linear-gradient(to right,var(--accent-dim) 0%,transparent 60%)}/* ─── catalog ────────────────────────────────────────────────────── */
+.cat-row{padding:8px 12px;border-bottom:1px solid var(--grid-line);cursor:pointer;transition:background var(--t-fast);position:relative}
+.cat-row:hover{background:var(--surface-2)}
+.cat-row.sel{background:var(--accent-dim)}
+.cat-row.sel::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--accent)}
+.cat-h{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:5px}
+.cat-name{font-weight:600;font-size:12px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px}
+.cat-name .chan-mini{width:8px;height:8px;border-radius:1px;flex-shrink:0}
+.cat-name .chan-mini.ssr{background:var(--accent)}
+.cat-name .chan-mini.add{background:var(--teal)}
+.cat-name .chan-mini.dual{background:linear-gradient(135deg,var(--accent) 50%,var(--teal) 50%)}
+.cat-count{font-family:var(--mono);font-size:11px;color:var(--text-dim);font-weight:600}
+.cat-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-family:var(--mono);font-size:10px;color:var(--text-muted);margin-bottom:5px}
+.cat-stats .k{font-weight:500;color:var(--text-muted)}
+.cat-stats .v{color:var(--text);font-weight:600}
+.cat-stats .v.err{color:var(--red)}
+.cat-stats .v.warn{color:var(--amber)}
+.cat-spark{height:18px;width:100%;background:var(--spark-bg);border-radius:2px;position:relative;overflow:hidden}
+.cat-spark svg{display:block;width:100%;height:100%}
+.cat-spark .baseline{stroke:var(--border-bright);stroke-width:0.5;stroke-dasharray:1 2}
+/* ─── detail panel ───────────────────────────────────────────────── */
+.detail{position:absolute;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--border);box-shadow:var(--shadow-lg);z-index:200;display:flex;flex-direction:column;max-height:62%;min-height:200px;transition:transform var(--t-norm),opacity var(--t-norm)}
+.detail[hidden]{display:none!important}
+.detail.entering{transform:translateY(8px);opacity:0}
+.detail-grab{height:6px;cursor:ns-resize;background:transparent;display:flex;align-items:center;justify-content:center;position:relative}
+.detail-grab::after{content:"";width:32px;height:2px;border-radius:2px;background:var(--border-bright)}
+.detail-grab:hover::after{background:var(--accent)}
+.detail-h{display:flex;align-items:center;justify-content:space-between;padding:10px 16px 8px;border-bottom:1px solid var(--border)}
+.detail-title{display:flex;align-items:center;gap:10px;min-width:0}
+.detail-title .name{font-weight:600;font-size:14px;color:var(--text);letter-spacing:-0.01em}
+.detail-title .iter-ref{font-family:var(--mono);font-size:11px;color:var(--text-dim);background:var(--surface-2);padding:2px 7px;border-radius:var(--r-sm);border:1px solid var(--border)}
+.detail-actions{display:flex;gap:6px}
+.detail-body{flex:1;overflow-y:auto;display:grid;grid-template-columns:1.4fr 1fr;gap:1px;background:var(--border);min-height:0}
+.detail-col{background:var(--surface);padding:14px 16px;overflow-y:auto;min-height:0}
+.detail-col h3{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+.detail-col h3 .pill-cnt{font-family:var(--mono);font-size:10px;color:var(--text-dim);background:var(--surface-2);border:1px solid var(--border);padding:1px 6px;border-radius:var(--r-full)}
+.attr-grid{display:grid;grid-template-columns:160px 1fr;gap:4px 12px;font-family:var(--mono);font-size:11px;margin-bottom:14px}
+.attr-grid .k{color:var(--text-muted);padding:3px 0;display:flex;align-items:center;gap:5px}
+.attr-grid .k .typ{font-size:8px;font-weight:700;color:var(--text-muted);background:var(--surface-2);padding:1px 4px;border-radius:2px;text-transform:uppercase;letter-spacing:0.05em}
+.attr-grid .v{color:var(--text);padding:3px 0;word-break:break-all;display:flex;align-items:center;gap:6px;min-width:0}
+.attr-grid .v.id .val{font-family:var(--mono);font-size:11px}
+.attr-grid .v.dur{display:flex;align-items:center;gap:8px}
+.attr-grid .v.dur .num{flex-shrink:0;min-width:50px}
+.attr-grid .v.dur .bar{flex:1;max-width:120px;height:4px;background:var(--surface-3);border-radius:2px;overflow:hidden}
+.attr-grid .v.dur .bar > span{display:block;height:100%;background:var(--accent)}
+.attr-grid .v.code{font-family:var(--mono)}
+.attr-grid .v .copy-mini{opacity:0;background:var(--surface-2);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-size:9px;color:var(--text-muted);cursor:pointer;transition:opacity var(--t-fast),background var(--t-fast)}
+.attr-grid .v:hover .copy-mini{opacity:1}
+.attr-grid .v .copy-mini:hover{background:var(--surface-3);color:var(--text)}
+.attr-grid .v .copy-mini.done{color:var(--green);opacity:1}
+.json-tree{font-family:var(--mono);font-size:11px;line-height:1.55;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 12px;color:var(--text);max-height:280px;overflow:auto}
+.jt{padding-left:14px;border-left:1px dashed var(--border)}
+.jt > div{position:relative}
+.jt .tog{cursor:pointer;display:inline-block;width:10px;font-size:8px;color:var(--text-muted);text-align:center;margin-left:-12px;margin-right:2px}
+.jt .key{color:var(--accent)} 
+.jt .str{color:var(--green)} 
+.jt .num{color:var(--blue)} 
+.jt .bool{color:var(--amber)} 
+.jt .null{color:var(--text-muted)}
+.jt .punc{color:var(--text-muted)}
+.jt.folded > div:not(:first-child){display:none}
+.related-list{display:flex;flex-direction:column;gap:4px;margin-bottom:14px}
+.related-row{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:var(--r-sm);font-size:11px;color:var(--text-dim);cursor:pointer;transition:background var(--t-fast)}
+.related-row:hover{background:var(--surface-2);color:var(--text)}
+.related-row .chan{flex-shrink:0}
+.related-row .lvl{display:inline-block;width:46px;font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase}
+.related-row .lvl.error{color:var(--red)} .related-row .lvl.warning{color:var(--amber)} .related-row .lvl.message{color:var(--blue)} .related-row .lvl.verbose{color:var(--text-muted)}
+.related-row .msg{flex:1;font-family:var(--mono);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.related-row .ts{font-family:var(--mono);font-size:10px;color:var(--text-muted)}
+.timeline{display:flex;align-items:center;height:32px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-md);padding:6px 10px;position:relative;margin-bottom:14px;overflow:hidden}
+.timeline .scale{position:absolute;left:10px;right:10px;top:50%;height:1px;background:var(--border-bright)}
+.timeline .marker{position:absolute;top:50%;width:8px;height:8px;border-radius:50%;border:2px solid var(--surface);transform:translate(-50%,-50%)}
+.timeline .marker.ssr{background:var(--accent)}
+.timeline .marker.add{background:var(--teal)}
+.timeline .marker.cur{outline:2px solid var(--accent);outline-offset:2px;width:10px;height:10px}/* ─── state demo dock ───────────────────────────────────────────── */
+.state-dock{position:fixed;right:18px;bottom:38px;width:300px;background:var(--surface);border:1px solid var(--border-bright);border-radius:var(--r-lg);box-shadow:var(--shadow-lg);z-index:300;font-size:12px;overflow:hidden;transition:transform var(--t-norm),opacity var(--t-norm)}
+.state-dock.collapsed{transform:translateY(calc(100% - 38px))}
+.state-dock-h{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--surface-2);border-bottom:1px solid var(--border);cursor:pointer;user-select:none}
+.state-dock-h .title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text);display:flex;align-items:center;gap:6px}
+.state-dock-h .title .pulse{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px var(--accent-glow);animation:livePulse 2s ease-in-out infinite}
+.state-dock-h .chev{font-size:11px;color:var(--text-muted);transition:transform var(--t-norm)}
+.state-dock.collapsed .chev{transform:rotate(180deg)}
+.state-dock-body{max-height:380px;overflow-y:auto;padding:8px 0}
+.state-group{padding:4px 0}
+.state-group-h{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.10em;color:var(--text-muted);padding:6px 12px 4px}
+.state-btn{display:flex;align-items:center;gap:8px;width:100%;padding:5px 12px;text-align:left;font-size:12px;color:var(--text-dim);border-radius:0;transition:background var(--t-fast),color var(--t-fast)}
+.state-btn:hover{background:var(--surface-2);color:var(--text)}
+.state-btn.cur{background:var(--accent-dim);color:var(--accent);font-weight:600}
+.state-btn .ix{font-family:var(--mono);font-size:10px;color:var(--text-muted);min-width:60px}
+.state-btn.cur .ix{color:var(--accent)}
+.state-btn .nm{flex:1;font-size:12px}
+.state-btn .badge-sm{font-family:var(--mono);font-size:9px;padding:0 5px;height:14px;border-radius:var(--r-full);display:inline-flex;align-items:center;background:var(--surface-3);color:var(--text-muted)}
+/* ─── statusbar ──────────────────────────────────────────────────── */
+.statusbar{display:flex;align-items:center;gap:14px;padding:0 14px;background:var(--surface);border-top:1px solid var(--border);font-size:11px;color:var(--text-dim);font-family:var(--mono)}
+.statusbar .sb-item{display:flex;align-items:center;gap:5px}
+.statusbar .sb-item .d{width:5px;height:5px;border-radius:50%;background:var(--text-muted)}
+.statusbar .sb-item .d.g{background:var(--green)} .statusbar .sb-item .d.a{background:var(--amber)} .statusbar .sb-item .d.r{background:var(--red)} .statusbar .sb-item .d.b{background:var(--blue)}
+.statusbar .right{margin-left:auto;display:flex;gap:14px;align-items:center}
+/* ─── banners + overlays ─────────────────────────────────────────── */
+.banner{display:flex;align-items:center;gap:10px;padding:8px 14px;font-size:12px;border-bottom:1px solid var(--border);background:var(--amber-dim);color:var(--amber);font-weight:500}
+.banner.red{background:var(--red-dim);color:var(--red)}
+.banner.blue{background:var(--blue-dim);color:var(--blue)}
+.banner .ico{font-size:13px}
+.banner .spacer{flex:1}
+.banner button{font-size:11px;color:inherit;text-decoration:underline;font-weight:600}
+.banner.amber .dot{width:6px;height:6px;border-radius:50%;background:var(--amber);box-shadow:0 0 4px var(--amber);animation:livePulse 1s ease-in-out infinite}
+.fullscreen-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;flex:1;color:var(--text-muted);padding:40px;text-align:center;background:var(--surface)}
+.fullscreen-empty .icn{width:64px;height:64px;border-radius:14px;background:var(--surface-2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:28px}
+.fullscreen-empty h2{font-size:15px;font-weight:600;color:var(--text);margin-bottom:2px}
+.fullscreen-empty p{font-size:12px;color:var(--text-dim);max-width:360px}
+.fullscreen-empty .actions{margin-top:6px;display:flex;gap:8px}
+.skeleton-list{padding:0}
+.sk-row{display:grid;grid-template-columns:34px 22px 1fr 110px 92px 100px 38px 28px;gap:10px;padding:8px 14px;border-bottom:1px solid var(--grid-line);align-items:center}
+.sk-block{height:10px;border-radius:3px;background:linear-gradient(90deg,var(--surface-2) 0%,var(--surface-3) 50%,var(--surface-2) 100%);background-size:200% 100%;animation:shimmer 1.2s ease-in-out infinite}
+.sk-block.s{height:8px;width:60%}
+.sk-block.m{height:12px;width:80%}
+.sk-block.dot{height:14px;width:14px;border-radius:50%}
+.idle-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text-muted);gap:18px;padding:40px}
+.orbit{position:relative;width:96px;height:96px}
+.orbit .ring{position:absolute;inset:0;border:1px dashed var(--border-bright);border-radius:50%}
+.orbit .ring.r2{inset:14px}
+.orbit .core{position:absolute;left:50%;top:50%;width:14px;height:14px;background:var(--accent);border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 12px var(--accent-glow)}
+.orbit .sat{position:absolute;left:50%;top:50%;width:8px;height:8px;background:var(--teal);border-radius:50%;margin-left:-4px;margin-top:-4px;animation:orbit 4s linear infinite}
+.orbit .sat.s2{background:var(--accent);animation:orbit 6s linear infinite reverse;width:6px;height:6px;margin-left:-3px;margin-top:-3px}
+.idle-empty h2{font-size:14px;font-weight:600;color:var(--text);margin-bottom:2px}
+.idle-empty p{font-size:12px;color:var(--text-dim);max-width:340px;text-align:center}
+.toast-host{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:400;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{padding:8px 14px;border-radius:var(--r-md);background:var(--surface);border:1px solid var(--border-bright);box-shadow:var(--shadow-lg);font-size:12px;color:var(--text);display:flex;align-items:center;gap:8px;pointer-events:auto;animation:toastIn 150ms ease-out}
+.toast .d{width:6px;height:6px;border-radius:50%;background:var(--green)}
+.toast.error .d{background:var(--red)}
+.toast.info .d{background:var(--blue)}
+/* ─── animations (all ≤150ms except slow indicators) ─────────────── */
+@keyframes livePulse{0%,100%{opacity:1}50%{opacity:0.35}}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+@keyframes orbit{from{transform:translate(-50%,-50%) rotate(0deg) translateX(36px) rotate(0deg)}to{transform:translate(-50%,-50%) rotate(360deg) translateX(36px) rotate(-360deg)}}
+@keyframes toastIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+/* ─── responsive (>=1000px enforced) ─────────────────────────────── */
+@media (max-width:1340px){
+  .body3{grid-template-columns:var(--spine-w) 1fr 0}
+  .catalog{display:none}
+}
+@media (max-width:1100px){
+  .body3{grid-template-columns:0 1fr 0}
+  .spine{display:none}
+}
+</style>
+</head>
+<body><div id="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">E</div>
+      EDOG Studio
+      <div class="brand-sub">MOCK · F04 · v2</div>
+    </div>
+    <div class="crumb">
+      <span>Workspace</span><span class="sep">▸</span>
+      <span>flt-dev-eastus</span><span class="sep">▸</span>
+      <span>Runtime View</span><span class="sep">▸</span>
+      <span class="cur">Telemetry</span>
+    </div>
+    <div class="runtime-pill live" id="runtimePill">
+      <span class="dot"></span>
+      <span id="runtimePillText">FLT · CONNECTED · 7m 14s</span>
+    </div>
+    <div class="spacer"></div>
+    <div class="topbar-actions">
+      <button class="icon-btn" title="Help"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 0 1 5 0c0 1.7-2.5 1.8-2.5 3.5"/><circle cx="12" cy="17" r="0.5" fill="currentColor"/></svg></button>
+      <button class="icon-btn" id="themeBtn" title="Toggle theme">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      </button>
+      <button class="icon-btn" title="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+      <div class="user-chip"><div class="avatar">HG</div>hemant</div>
+    </div>
+  </header>
+
+  <nav class="subtabs" role="tablist">
+    <button class="subtab" role="tab"><span>Logs</span><span class="badge fresh"></span></button>
+    <button class="subtab active" role="tab" aria-selected="true"><span>Telemetry</span><span class="badge" id="tabCount">0</span></button>
+    <button class="subtab" role="tab"><span>System Files</span></button>
+    <button class="subtab" role="tab"><span>Spark Sessions</span></button>
+    <button class="subtab" role="tab"><span>Internals</span><span class="chev">▾</span></button>
+    <div style="flex:1"></div>
+    <div style="padding:6px 0;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-muted);font-family:var(--mono)">
+      <span>SSR · ICustomLiveTableTelemetryReporter</span><span style="color:var(--text-muted)">+</span><span>Additional · ILiveTableAdditionalTelemetryReporter</span>
+    </div>
+  </nav>
+
+  <div class="metric-strip" id="metricStrip">
+    <div class="metric"><div class="label">Events / min<span class="tick" id="tick1"></span></div><div class="value" id="mEvents">—<span class="unit">/min</span></div><div class="delta up" id="mEventsDelta">+0%</div><svg class="spark" id="sparkEvents" viewBox="0 0 60 20" preserveAspectRatio="none"></svg></div>
+    <div class="metric"><div class="label">Error rate</div><div class="value" id="mErr">—<span class="unit">%</span></div><div class="delta" id="mErrDelta">—</div><svg class="spark" id="sparkErr" viewBox="0 0 60 20" preserveAspectRatio="none"></svg></div>
+    <div class="metric"><div class="label">Active iterations</div><div class="value" id="mActive">—</div><div class="delta dim" id="mActiveSub">0 queued</div></div>
+    <div class="metric"><div class="label">Channel split · SSR / +TEL</div><div class="value" id="mSplit" style="font-size:14px">— · —</div><div class="split-bar"><div class="ssr" id="splitSsr" style="width:50%"></div><div class="add" id="splitAdd" style="width:50%"></div></div><div class="split-legend"><span class="lg"><span class="sw" style="background:var(--accent)"></span>SSR</span><span class="lg"><span class="sw" style="background:var(--teal)"></span>+TEL</span></div></div>
+    <div class="metric"><div class="label">p95 duration</div><div class="value" id="mP95">—<span class="unit">ms</span></div><div class="delta" id="mP95Delta">p50 — ms</div><svg class="spark" id="sparkP95" viewBox="0 0 60 20" preserveAspectRatio="none"></svg></div>
+    <div class="metric"><div class="label">Total · since open</div><div class="value" id="mTotal">—</div><div class="delta dim" id="mTotalSub">— ssr · — add</div></div>
+  </div>
+
+  <div class="toolbar">
+    <div class="search">
+      <span class="ico">⌕</span>
+      <input id="searchInput" type="text" placeholder="Filter activity, attribute, or correlation ID…" autocomplete="off">
+      <span class="kbd">/</span>
+    </div>
+    <div class="pills" id="chanPills">
+      <button class="pill active" data-chan="all">All <span class="cnt" id="cntAll">0</span></button>
+      <button class="pill chan-ssr" data-chan="ssr">SSR <span class="cnt" id="cntSsr">0</span></button>
+      <button class="pill chan-add" data-chan="additional">+TEL <span class="cnt" id="cntAdd">0</span></button>
+    </div>
+    <div class="pills" id="statusPills">
+      <button class="pill active" data-st="all"><span>All</span></button>
+      <button class="pill" data-st="running"><span class="dot b"></span>Running <span class="cnt" id="cntRun">0</span></button>
+      <button class="pill" data-st="succeeded"><span class="dot g"></span>Succeeded <span class="cnt" id="cntSucc">0</span></button>
+      <button class="pill" data-st="failed"><span class="dot r"></span>Failed <span class="cnt" id="cntFail">0</span></button>
+      <button class="pill" data-st="warning"><span class="dot a"></span>Warning <span class="cnt" id="cntWarn">0</span></button>
+      <button class="pill" data-st="cancelled"><span class="dot x"></span>Cancelled <span class="cnt" id="cntCanc">0</span></button>
+    </div>
+    <div class="divider"></div>
+    <div class="range">
+      <span>Duration</span>
+      <div class="range-slider" id="durSlider">
+        <div class="range-track"><div class="range-fill" id="durFill"></div></div>
+        <div class="range-thumb" id="durThumb" style="left:70%"></div>
+      </div>
+      <span class="range-val" id="durVal">≤ 3500 ms</span>
+    </div>
+    <div class="divider"></div>
+    <div class="window-sel" id="windowSel">
+      <button data-w="1m">1m</button>
+      <button data-w="5m" class="active">5m</button>
+      <button data-w="15m">15m</button>
+      <button data-w="all">all</button>
+    </div>
+    <div style="flex:1"></div>
+    <button class="btn sm" id="pauseBtn"><span class="ico">⏸</span>Pause</button>
+    <button class="btn sm" id="exportBtn"><span class="ico">↓</span>Export</button>
+  </div>
+
+  <main class="body3" id="body3">
+    <aside class="panel spine">
+      <div class="panel-h"><span>Iterations · Spine</span><span class="hcount" id="iterCount">0</span></div>
+      <div class="panel-body" id="spineBody"></div>
+    </aside>
+    <section class="stream" id="streamPanel">
+      <div class="stream-toolbar" id="streamToolbar">
+        <div class="left">
+          <span class="live-tag"><span class="d"></span><span id="liveLabel">LIVE</span></span>
+          <span class="filter-summary" id="filterSummary">showing <span class="k">0</span> of <span class="k">0</span> events</span>
+        </div>
+        <div class="left">
+          <span id="streamHint" style="font-size:11px;color:var(--text-muted)">↑/↓ navigate · ⏎ open · / search · Esc close</span>
+        </div>
+      </div>
+      <div class="stream-list" id="streamList" tabindex="0"></div>
+    </section>
+    <aside class="panel catalog">
+      <div class="panel-h">
+        <span>Activity Catalog</span>
+        <div class="hacts">
+          <button class="on" data-sort="cnt">cnt</button>
+          <button data-sort="p95">p95</button>
+          <button data-sort="err">err</button>
+        </div>
+      </div>
+      <div class="panel-body" id="catalogBody"></div>
+    </aside>
+
+    <div class="detail" id="detail" hidden>
+      <div class="detail-grab" id="detailGrab"></div>
+      <div class="detail-h">
+        <div class="detail-title">
+          <span class="chan" id="dChan">SSR</span>
+          <span class="name" id="dName">—</span>
+          <span class="status-pill" id="dStatus"><span class="d"></span>—</span>
+          <span class="iter-ref mono" id="dIter">—</span>
+          <span class="mono" style="font-size:11px;color:var(--text-muted)" id="dCorr">cid:—</span>
+        </div>
+        <div class="detail-actions">
+          <button class="btn sm" id="dCopyCid">Copy correlation</button>
+          <button class="btn sm" id="dFilterIter">Filter iteration</button>
+          <button class="btn sm" id="dViewLogs">View logs ↗</button>
+          <button class="btn sm" id="dOpenLife">Open in lifecycle ↗</button>
+          <button class="icon-btn" id="dClose" title="Close (Esc)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6 18 18M18 6 6 18"/></svg></button>
+        </div>
+      </div>
+      <div class="detail-body">
+        <div class="detail-col">
+          <h3>Attributes <span class="pill-cnt" id="dAttrCount">0</span></h3>
+          <div class="attr-grid" id="dAttrGrid"></div>
+          <h3>Raw payload <button class="btn sm" id="dFoldBtn" style="float:right">Fold all</button></h3>
+          <div class="json-tree" id="dJson"></div>
+        </div>
+        <div class="detail-col">
+          <h3>Iteration timeline <span class="pill-cnt" id="dTlCount">0</span></h3>
+          <div class="timeline" id="dTimeline"></div>
+          <h3>Related telemetry <span class="pill-cnt" id="dRelTelCount">0</span></h3>
+          <div class="related-list" id="dRelTel"></div>
+          <h3>Related logs <span class="pill-cnt" id="dRelLogCount">0</span></h3>
+          <div class="related-list" id="dRelLog"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="statusbar">
+    <div class="sb-item"><span class="d g" id="sbDot"></span><span id="sbConn">connected · ws://localhost:5555/runtime/telemetry</span></div>
+    <div class="sb-item"><span id="sbBuffer">buffer 0 / 5000</span></div>
+    <div class="sb-item"><span id="sbMem">mem 18 MB</span></div>
+    <div class="right">
+      <div class="sb-item"><span id="sbTz">UTC</span></div>
+      <div class="sb-item"><span id="sbClock">—</span></div>
+    </div>
+  </footer>
+
+  <div class="state-dock" id="stateDock">
+    <div class="state-dock-h" id="stateDockH">
+      <div class="title"><span class="pulse"></span>State Matrix · demo</div>
+      <span class="chev">▾</span>
+    </div>
+    <div class="state-dock-body" id="stateDockBody"></div>
+  </div>
+
+  <div class="toast-host" id="toastHost"></div>
+</div>
+
+<script>"use strict";
+/* ═══════════════════════════════════════════════════════════════════
+   EDOG STUDIO · TELEMETRY v2 · functional mock
+   single file, vanilla JS, channel-aware (SSR + Additional)
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ─── activity catalog (real FLT names) ──────────────────────────── */
+const ACTIVITY_DEFS = [
+  // dual-channel: SSR wraps + Additional feature-usage
+  { name:"RunDag",                  ch:["ssr","additional"], avg:1850, dev:600, errRate:0.06, controller:"DagExecutionHandlerV2", weight:8 },
+  { name:"GetLatestDAG",            ch:["ssr","additional"], avg:140,  dev:60,  errRate:0.02, controller:"DagFetchController",    weight:6 },
+  { name:"RegisterCatalog",         ch:["ssr","additional"], avg:380,  dev:120, errRate:0.03, controller:"CatalogController",     weight:4 },
+  { name:"LoadIngressManifest",     ch:["ssr"],              avg:95,   dev:30,  errRate:0.01, controller:"IngressController",     weight:5 },
+  { name:"RefreshTriggers",         ch:["ssr","additional"], avg:220,  dev:80,  errRate:0.02, controller:"TriggerController",     weight:3 },
+  { name:"GenerateExecutionPlan",   ch:["ssr","additional"], avg:540,  dev:180, errRate:0.04, controller:"PlannerController",     weight:5 },
+  { name:"MLVExecutionDefinition",  ch:["ssr","additional"], avg:310,  dev:90,  errRate:0.02, controller:"MlvController",         weight:4 },
+  { name:"CreateSchedulerRun",      ch:["ssr","additional"], avg:175,  dev:55,  errRate:0.01, controller:"SchedulerController",   weight:3 },
+  // Additional-only (per-node, fine-grained)
+  { name:"NodeExecution",           ch:["additional"],       avg:680,  dev:280, errRate:0.07, nodeType:"Materialize",             weight:18 },
+  { name:"WriteToFabricSpark",      ch:["additional"],       avg:1450, dev:520, errRate:0.05, nodeType:"Sink",                    weight:6 },
+  { name:"DataQualityCheck",        ch:["additional"],       avg:240,  dev:90,  errRate:0.04, nodeType:"Validate",                weight:5 },
+];
+
+/* ─── state ──────────────────────────────────────────────────────── */
+const state = {
+  events:[],          // newest first
+  iterations:[],      // insertion order
+  iterMap:new Map(),  // iterId -> iter obj
+  catMap:new Map(),   // activityName -> agg
+  seq:0,
+  filters:{ search:"", chan:"all", status:"all", durMax:3500, window:"5m", iter:null, activity:null },
+  selIdx:0,
+  selDetailId:null,
+  paused:false,
+  catSort:"cnt",
+  runtimeState:"connected-running", // see RUNTIME_STATES
+  teleState:"streaming",            // see TELE_STATES
+  metricHistory:{ events:[], err:[], p95:[] },
+  tickOn:false,
+  showCatalog:true,
+  jsonFolded:true,
+};
+
+/* ─── utilities ──────────────────────────────────────────────────── */
+const $ = (id)=>document.getElementById(id);
+const el = (tag, cls, html)=>{ const e=document.createElement(tag); if(cls) e.className=cls; if(html!=null) e.innerHTML=html; return e; };
+const rnd = (min,max)=> min + Math.random()*(max-min);
+const irnd = (min,max)=> Math.floor(rnd(min,max+1));
+const pick = (a)=> a[irnd(0,a.length-1)];
+const guid = ()=> [8,4,4,4,12].map(n=>{ let s=""; for(let i=0;i<n;i++) s+="0123456789abcdef"[irnd(0,15)]; return s; }).join("-");
+const cid  = ()=> guid();
+const shortId = (s,n)=>{ n=n||8; return s.slice(0,n); };
+const fmtDur = (ms)=>{
+  if(ms<1000) return ms.toFixed(0)+" ms";
+  if(ms<10000) return (ms/1000).toFixed(2)+" s";
+  if(ms<60000) return (ms/1000).toFixed(1)+" s";
+  return Math.floor(ms/60000)+"m "+Math.floor((ms%60000)/1000)+"s";
+};
+const fmtAgo = (then,now)=>{
+  now = now || Date.now();
+  const s = Math.floor((now-then)/1000);
+  if(s<2) return "just now";
+  if(s<60) return s+"s ago";
+  if(s<3600) return Math.floor(s/60)+"m"+(s%60>0?" "+(s%60)+"s":"")+" ago";
+  return Math.floor(s/3600)+"h ago";
+};
+const fmtClock = (t)=>{ const d=new Date(t); return d.toISOString().substring(11,23); };
+const debounce = (fn,ms)=>{ let h; return function(){ clearTimeout(h); const a=arguments; h=setTimeout(()=>fn.apply(null,a),ms); }; };
+const quantile = (arr,q)=>{ if(!arr.length) return 0; const s=arr.slice().sort((a,b)=>a-b); const p=(s.length-1)*q; const b=Math.floor(p); const r=p-b; return s[b+1]!==undefined ? s[b]+r*(s[b+1]-s[b]) : s[b]; };
+
+/* ─── data generation ───────────────────────────────────────────── */
+function newIteration(){
+  const id = guid();
+  const startedAt = Date.now() - irnd(2000, 90_000);
+  const it = { id, startedAt, status:"running", events:[], ssrCount:0, addCount:0, failed:false, runDagDef: pick(["sales_hourly","weather_daily","churn_v3","inventory_5min","kpi_realtime","clickstream_15m","gold_dim_user"]) };
+  state.iterations.push(it);
+  state.iterMap.set(id, it);
+  if(state.iterations.length > 12){
+    const removed = state.iterations.shift();
+    state.iterMap.delete(removed.id);
+  }
+  return it;
+}
+
+function maybeCompleteIteration(it){
+  if(it.events.length >= irnd(8, 28) && Math.random() < 0.18){
+    it.status = it.failed ? "failed" : (Math.random()<0.12 ? "cancelled" : "succeeded");
+    it.completedAt = Date.now();
+  }
+}
+
+function buildEventFor(activity, iter, opts){
+  opts = opts || {};
+  const channel = opts.channel || pick(activity.ch);
+  const now = opts.timestamp || Date.now();
+  const dur = Math.max(8, activity.avg + (Math.random()-0.5)*activity.dev*2);
+  const willFail = (opts.forceFail !== undefined) ? opts.forceFail : (Math.random() < activity.errRate);
+  const willWarn = !willFail && Math.random() < 0.04;
+  const status = opts.status || (willFail ? "failed" : (willWarn ? "warning" : "succeeded"));
+  const isRunning = opts.running === true;
+  const ev = {
+    id: "tel-" + (state.seq++),
+    seq: state.seq,
+    channel,
+    activityName: activity.name,
+    activityStatus: isRunning ? "Running" : (status==="failed"?"Failed":status==="warning"?"SucceededWithErrors":status==="cancelled"?"Cancelled":"Succeeded"),
+    status: isRunning ? "running" : status,
+    durationMs: isRunning ? 0 : Math.round(dur),
+    timestamp: now,
+    correlationId: opts.correlationId || cid(),
+    iterationId: iter.id,
+    userId: "hemant@contoso.com",
+    resultCode: status==="failed" ? pick(["E_AUTH_EXPIRED","E_FABRIC_503","E_SPARK_TIMEOUT","E_SCHEMA_MISMATCH","E_THROTTLED"]) : null,
+    eventId: channel==="additional" ? (activity.name + "Completed") : null,
+    attributes: {}
+  };
+  if(activity.name === "NodeExecution"){
+    ev.attributes.NodeName = pick(["raw_to_bronze","bronze_to_silver","silver_to_gold","dim_customer","fact_sales","kpi_rollup","quality_gate","schema_diff"]);
+    ev.attributes.NodeType = pick(["Materialize","Validate","Sink","Transform","Lookup"]);
+    ev.attributes.NodeStatus = status==="running"?"Running":(status==="failed"?"Failed":"Succeeded");
+    ev.attributes.DurationMs = ev.durationMs;
+    ev.attributes.RowsRead = irnd(1200, 850_000);
+    ev.attributes.RowsWritten = irnd(800, 720_000);
+    ev.attributes.OutputSizeBytes = irnd(10_000, 80_000_000);
+  } else if(activity.name === "RunDag"){
+    ev.attributes.DagDefinitionId = iter.runDagDef;
+    ev.attributes.DagVersion = irnd(11, 47);
+    ev.attributes.NodeCount = irnd(4, 18);
+    ev.attributes.TriggerType = pick(["Manual","Scheduled","DataDriven","ChainedRun"]);
+    ev.attributes.WorkspaceId = guid();
+    ev.attributes.LakehouseId = guid();
+    if(channel==="additional"){ ev.attributes.FeatureName="RunDagExecution"; ev.attributes.FeatureVersion="v2"; ev.attributes.HandlerType="DagExecutionHandlerV2"; }
+  } else if(activity.name === "GetLatestDAG"){
+    ev.attributes.LakehouseId = guid();
+    ev.attributes.IncludeSoftDeleted = pick([true,false]);
+    ev.attributes.CacheHit = Math.random()<0.7;
+    if(channel==="additional"){ ev.attributes.FeatureName="GetLatestDAG"; ev.attributes.FeatureVersion="v1"; }
+  } else if(activity.name === "RegisterCatalog"){
+    ev.attributes.CatalogName = pick(["bronze","silver","gold","staging"]);
+    ev.attributes.TableCount = irnd(2,42);
+    ev.attributes.PartitionStrategy = pick(["date","customer_id","region","none"]);
+  } else if(activity.name === "WriteToFabricSpark"){
+    ev.attributes.SparkSessionId = "spark-" + shortId(guid(), 12);
+    ev.attributes.JobId = irnd(1,180);
+    ev.attributes.PartitionCount = irnd(1, 128);
+    ev.attributes.OutputRows = irnd(5000, 12_000_000);
+  } else if(activity.name === "DataQualityCheck"){
+    ev.attributes.RuleSetName = pick(["pii_strict","fk_referential","not_null_core","schema_contract","cardinality_smoke"]);
+    ev.attributes.RulesEvaluated = irnd(4,38);
+    ev.attributes.RulesFailed = status==="failed"?irnd(1,5):(status==="warning"?irnd(1,2):0);
+  } else {
+    ev.attributes.Controller = activity.controller || "Unknown";
+    ev.attributes.Version = "v" + irnd(1,3);
+  }
+  if(status === "failed"){
+    ev.error = ev.resultCode || "Operation failed";
+    ev.attributes.ExceptionType = pick(["FabricApiException","SparkJobAbortedException","CatalogResolveException","TimeoutException","HttpRequestException"]);
+    ev.attributes.ExceptionMessage = pick(["Token expired (401) — re-acquire via WAM.","Spark session evicted after 10m idle.","Catalog 'silver' has no resolvable lakehouse binding.","Upstream Fabric API returned 503 after 4 retries.","Throttled: 429 Too Many Requests, retry-after 12s."]);
+    ev.attributes.RetryAttempt = irnd(0,3);
+  }
+  if(channel === "additional"){
+    ev.attributes.FeatureName = ev.attributes.FeatureName || activity.name;
+    ev.attributes.FeatureVersion = ev.attributes.FeatureVersion || "v1";
+  }
+  ev.attributes.CorrelationId = ev.correlationId;
+  ev.attributes.IterationId = ev.iterationId;
+  ev.relatedLogs = irnd(2, 84);
+  return ev;
+}
+
+function seedInitialData(){
+  state.iterations = []; state.iterMap.clear(); state.events = []; state.catMap.clear(); state.seq = 0;
+  for(let i=0;i<5;i++) newIteration();
+  state.iterations.slice(0,2).forEach(it=>{ it.status="succeeded"; it.completedAt = it.startedAt + irnd(20_000, 90_000); });
+  const totalTarget = 120;
+  let produced = 0;
+  while(produced < totalTarget){
+    const it = pick(state.iterations);
+    const activity = weightedPick(ACTIVITY_DEFS);
+    const sharedCid = cid();
+    const isDual = activity.ch.length > 1 && Math.random() < 0.85;
+    const ts = (it.completedAt ? rnd(it.startedAt, it.completedAt) : rnd(it.startedAt, Date.now()));
+    if(isDual){
+      const e1 = buildEventFor(activity, it, { channel:"ssr", correlationId:sharedCid, timestamp: ts });
+      const e2 = buildEventFor(activity, it, { channel:"additional", correlationId:sharedCid, timestamp: ts + rnd(2,40), status:e1.status });
+      addRawEvent(e1); addRawEvent(e2); produced += 2;
+    } else {
+      const e = buildEventFor(activity, it, { timestamp: ts });
+      addRawEvent(e); produced += 1;
+    }
+  }
+  // ensure some running tail
+  state.iterations.filter(i=>i.status==="running").slice(0,2).forEach(it=>{
+    const activity = pick(ACTIVITY_DEFS.filter(a=>a.name==="NodeExecution"));
+    const e = buildEventFor(activity, it, { running:true, timestamp: Date.now() - irnd(500,4000) });
+    addRawEvent(e);
+  });
+  state.events.sort((a,b)=> b.timestamp - a.timestamp);
+}
+
+function weightedPick(defs){
+  const total = defs.reduce((s,d)=>s+d.weight,0);
+  let r = Math.random()*total;
+  for(const d of defs){ r -= d.weight; if(r<=0) return d; }
+  return defs[defs.length-1];
+}
+
+function addRawEvent(ev){
+  state.events.push(ev);
+  const it = state.iterMap.get(ev.iterationId);
+  if(it){
+    it.events.push(ev.id);
+    if(ev.channel==="ssr") it.ssrCount++; else it.addCount++;
+    if(ev.status==="failed") it.failed = true;
+  }
+  // catalog agg
+  let agg = state.catMap.get(ev.activityName);
+  if(!agg){
+    agg = { name: ev.activityName, count:0, errCount:0, warnCount:0, durations:[], channels:new Set(), spark:[] };
+    state.catMap.set(ev.activityName, agg);
+  }
+  agg.count++;
+  if(ev.status==="failed") agg.errCount++;
+  if(ev.status==="warning") agg.warnCount++;
+  if(ev.durationMs>0) agg.durations.push(ev.durationMs);
+  agg.channels.add(ev.channel);
+  agg.spark.push(ev.durationMs);
+  if(agg.spark.length>16) agg.spark.shift();
+}
+/* ─── filtering ──────────────────────────────────────────────────── */
+function filtered(){
+  const f = state.filters;
+  const now = Date.now();
+  const winMs = f.window==="1m"?60_000 : f.window==="5m"?300_000 : f.window==="15m"?900_000 : Infinity;
+  const sLower = f.search.trim().toLowerCase();
+  return state.events.filter(ev=>{
+    if(now - ev.timestamp > winMs) return false;
+    if(f.chan!=="all" && ev.channel!==f.chan) return false;
+    if(f.status!=="all" && ev.status!==f.status) return false;
+    if(f.iter && ev.iterationId !== f.iter) return false;
+    if(f.activity && ev.activityName !== f.activity) return false;
+    if(ev.durationMs > f.durMax) return false;
+    if(sLower){
+      const hay = (ev.activityName + " " + ev.correlationId + " " + ev.iterationId + " " + JSON.stringify(ev.attributes)).toLowerCase();
+      if(hay.indexOf(sLower) === -1) return false;
+    }
+    return true;
+  });
+}
+
+/* ─── stream render ──────────────────────────────────────────────── */
+function renderStream(){
+  const list = $("streamList");
+  if(state.teleState === "empty"){ list.innerHTML = ""; renderEmptyTele(list); return; }
+  if(state.teleState === "loading"){ list.innerHTML = ""; renderSkeleton(list); return; }
+  const data = filtered();
+  $("filterSummary").innerHTML = "showing <span class='k'>"+data.length+"</span> of <span class='k'>"+state.events.length+"</span> events";
+  if(!data.length){
+    list.innerHTML = '<div class="fullscreen-empty"><div class="icn">⌕</div><h2>No events match the current filter</h2><p>Loosen the filter, widen the time window, or clear the iteration selection.</p><div class="actions"><button class="btn sm" onclick="clearFilters()">Clear filters</button></div></div>';
+    return;
+  }
+  // optionally split running vs completed when many concurrent
+  const running = data.filter(e=>e.status==="running");
+  const completed = data.filter(e=>e.status!=="running");
+  const splitMode = running.length > 4;
+  list.innerHTML = "";
+  if(splitMode){
+    list.appendChild(sectionHeader("Active", running.length, true));
+    running.forEach(ev => list.appendChild(renderCard(ev)));
+    list.appendChild(sectionHeader("Completed", completed.length, false));
+    completed.forEach(ev => list.appendChild(renderCard(ev)));
+  } else {
+    data.forEach(ev => list.appendChild(renderCard(ev)));
+  }
+  // restore selection highlight
+  syncSelectionVisual();
+}
+function sectionHeader(label, count, isActive){
+  const s = el("div", "section-h" + (isActive?" act":""));
+  s.innerHTML = "<span>"+label+"</span><span class='count'>"+count+"</span>";
+  return s;
+}
+function renderCard(ev){
+  const card = el("div","card " + (ev.status==="failed"?"failed":ev.status==="warning"?"warning":""));
+  card.dataset.id = ev.id;
+  const dur = ev.durationMs;
+  const isLong = dur > 30_000;
+  const durBarPct = Math.min(100, Math.max(2, dur / 4000 * 100));
+  const barCls = ev.status==="failed"?"fail" : (isLong?"long":"");
+  card.innerHTML =
+    '<div class="seq">#'+ev.seq+'</div>'+
+    '<div class="chan '+ev.channel+'">'+(ev.channel==="ssr"?"SSR":"+TEL")+'</div>'+
+    '<div class="name"><span class="label">'+escapeHtml(ev.activityName)+'</span>'+
+      (ev.attributes.NodeName ? '<span class="iter-ref">node:'+escapeHtml(ev.attributes.NodeName)+'</span>' : '')+
+      (ev.attributes.DagDefinitionId ? '<span class="iter-ref">dag:'+escapeHtml(ev.attributes.DagDefinitionId)+'</span>' : '')+
+      '<span class="attr-cnt">'+Object.keys(ev.attributes).length+' attrs</span>'+
+      (ev.status==="failed" && ev.attributes.ExceptionMessage ? '<span class="mono" style="font-size:10px;color:var(--red);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px">· '+escapeHtml(ev.attributes.ExceptionMessage)+'</span>':'')+
+    '</div>'+
+    '<div><span class="status-pill '+ev.status+'"><span class="d"></span>'+ev.status+'</span></div>'+
+    '<div class="duration-cell"><div class="duration-bar '+barCls+'"><span style="width:'+(ev.status==="running"?"30%":durBarPct+"%")+'"></span></div><span class="duration-num">'+(ev.status==="running"?"…":fmtDur(dur))+'</span></div>'+
+    '<div class="ts mono">'+fmtClock(ev.timestamp)+'<br><span class="muted">'+fmtAgo(ev.timestamp)+'</span></div>'+
+    '<div><span class="logs-pill" title="View related logs"><span class="ico">▤</span>'+ev.relatedLogs+'</span></div>'+
+    '<div class="more">⋯</div>';
+  card.addEventListener("click", ()=> openDetail(ev.id));
+  return card;
+}
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
+
+function renderSkeleton(host){
+  for(let i=0;i<14;i++){
+    const r = el("div","sk-row");
+    r.innerHTML = '<div class="sk-block s"></div><div class="sk-block dot"></div><div class="sk-block m"></div><div class="sk-block s"></div><div class="sk-block s"></div><div class="sk-block s"></div><div class="sk-block s"></div><div class="sk-block s"></div>';
+    host.appendChild(r);
+  }
+}
+function renderEmptyTele(host){
+  const e = el("div","idle-empty");
+  e.innerHTML = '<div class="orbit"><div class="ring"></div><div class="ring r2"></div><div class="core"></div><div class="sat"></div><div class="sat s2"></div></div>'+
+    '<div><h2>Waiting for telemetry events…</h2><p>SSR + Additional telemetry will appear here the instant FLT emits its first event. Both reporter interfaces are wired and listening.</p></div>'+
+    '<div style="display:flex;gap:14px;font-size:11px;font-family:var(--mono);color:var(--text-muted)"><span><span style="display:inline-block;width:8px;height:8px;background:var(--accent);border-radius:1px;margin-right:5px"></span>SSR · 0 events</span><span><span style="display:inline-block;width:8px;height:8px;background:var(--teal);border-radius:1px;margin-right:5px"></span>+TEL · 0 events</span></div>';
+  host.appendChild(e);
+}
+
+/* ─── spine render ──────────────────────────────────────────────── */
+function renderSpine(){
+  const host = $("spineBody");
+  host.innerHTML = "";
+  $("iterCount").textContent = state.iterations.length;
+  if(!state.iterations.length){
+    host.innerHTML = '<div class="spine-empty">No iterations yet — events grouped by IterationId will appear here.</div>';
+    return;
+  }
+  // newest at top
+  const its = state.iterations.slice().reverse();
+  its.forEach(it=>{
+    const total = it.events.length;
+    const dur = (it.completedAt || Date.now()) - it.startedAt;
+    const wrap = el("div","iter" + (state.filters.iter===it.id?" sel":""));
+    wrap.dataset.iter = it.id;
+    // track segments
+    let segs = '';
+    const events = it.events.map(eid => state.events.find(e=>e.id===eid)).filter(Boolean);
+    const ssr = events.filter(e=>e.channel==="ssr").length;
+    const add = events.filter(e=>e.channel==="additional").length;
+    const fail = events.filter(e=>e.status==="failed").length;
+    const denom = Math.max(1, ssr+add);
+    const ssrPct = (ssr/denom)*100, addPct = (add/denom)*100;
+    segs = (ssrPct>0?'<span class="ssr" style="width:'+ssrPct+'%"></span>':'') + (addPct>0?'<span class="add" style="width:'+addPct+'%"></span>':'');
+    wrap.innerHTML =
+      '<div class="iter-h"><span class="iter-id">'+shortId(it.id,8)+'</span>'+
+      '<span class="iter-status '+it.status+'"><span class="d"></span>'+it.status+'</span></div>'+
+      '<div class="iter-meta"><span>'+(it.runDagDef||'-')+'</span><span>'+fmtDur(dur)+'</span></div>'+
+      '<div class="iter-track">'+segs+'</div>'+
+      '<div class="iter-events"><span><span class="sw ssr"></span>SSR '+ssr+'</span><span><span class="sw add"></span>+TEL '+add+'</span>'+(fail>0?'<span style="color:var(--red)">✕ '+fail+'</span>':'')+'<span style="margin-left:auto;color:var(--text-muted)">'+total+' total</span></div>';
+    wrap.addEventListener("click", ()=>{
+      state.filters.iter = (state.filters.iter===it.id) ? null : it.id;
+      state.filters.activity = null;
+      state.selIdx = 0;
+      render();
+    });
+    host.appendChild(wrap);
+  });
+}
+
+/* ─── catalog render ─────────────────────────────────────────────── */
+function renderCatalog(){
+  const host = $("catalogBody");
+  host.innerHTML = "";
+  const rows = Array.from(state.catMap.values());
+  const sort = state.catSort;
+  rows.sort((a,b)=>{
+    if(sort==="cnt") return b.count - a.count;
+    if(sort==="p95") return quantile(b.durations,0.95) - quantile(a.durations,0.95);
+    if(sort==="err") return (b.errCount/b.count) - (a.errCount/a.count);
+    return 0;
+  });
+  rows.forEach(r=>{
+    const p50 = Math.round(quantile(r.durations,0.5));
+    const p95 = Math.round(quantile(r.durations,0.95));
+    const errPct = r.count ? (r.errCount/r.count*100) : 0;
+    const warnPct = r.count ? (r.warnCount/r.count*100) : 0;
+    const chans = Array.from(r.channels);
+    const chanCls = chans.length===2 ? "dual" : chans[0];
+    const row = el("div","cat-row" + (state.filters.activity===r.name?" sel":""));
+    row.dataset.act = r.name;
+    row.innerHTML =
+      '<div class="cat-h"><div class="cat-name"><span class="chan-mini '+chanCls+'" title="'+chans.join(" + ")+'"></span>'+escapeHtml(r.name)+'</div><div class="cat-count">'+r.count+'</div></div>'+
+      '<div class="cat-stats"><span><span class="k">p50</span> <span class="v mono">'+p50+'ms</span></span><span><span class="k">p95</span> <span class="v mono">'+p95+'ms</span></span><span><span class="k">err</span> <span class="v '+(errPct>5?"err":warnPct>3?"warn":"")+' mono">'+errPct.toFixed(1)+'%</span></span></div>'+
+      '<div class="cat-spark">'+sparklineSvg(r.spark)+'</div>';
+    row.addEventListener("click", ()=>{
+      state.filters.activity = (state.filters.activity===r.name) ? null : r.name;
+      state.filters.iter = null;
+      state.selIdx = 0;
+      render();
+    });
+    host.appendChild(row);
+  });
+}
+function sparklineSvg(values){
+  if(!values || values.length<2) return "";
+  const w = 260, h = 18;
+  const max = Math.max.apply(null, values) || 1;
+  const step = w / (values.length-1);
+  let d = "";
+  values.forEach((v,i)=>{ const x=i*step; const y=h - (v/max)*(h-4) - 2; d += (i===0?"M":"L")+x.toFixed(1)+","+y.toFixed(1)+" "; });
+  let bars = "";
+  values.forEach((v,i)=>{ const x=i*step - 1; const hh = Math.max(1,(v/max)*(h-4)); const y=h-hh-1; const last = i===values.length-1; bars += '<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="2" height="'+hh.toFixed(1)+'" fill="'+(last?"var(--accent)":"var(--text-muted)")+'" opacity="'+(last?1:0.5)+'"/>'; });
+  return '<svg viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="none">'+
+    '<line class="baseline" x1="0" y1="'+(h-1)+'" x2="'+w+'" y2="'+(h-1)+'"/>'+
+    bars+
+    '<path d="'+d+'" stroke="var(--accent)" stroke-width="1.2" fill="none" opacity="0.85"/></svg>';
+}
+/* ─── metric strip render ────────────────────────────────────────── */
+function renderMetrics(){
+  const evs = state.events;
+  const recentWindow = 60_000;
+  const now = Date.now();
+  const lastMin = evs.filter(e=> now - e.timestamp < recentWindow);
+  const eventsPerMin = lastMin.length;
+  const errInMin = lastMin.filter(e=>e.status==="failed").length;
+  const errRate = lastMin.length ? (errInMin/lastMin.length*100) : 0;
+  const activeIters = state.iterations.filter(i=>i.status==="running").length;
+  const ssrCount = evs.filter(e=>e.channel==="ssr").length;
+  const addCount = evs.filter(e=>e.channel==="additional").length;
+  const total = ssrCount + addCount;
+  const ssrPct = total ? (ssrCount/total*100) : 50;
+  const addPct = 100 - ssrPct;
+  const durs = evs.filter(e=>e.durationMs>0).map(e=>e.durationMs);
+  const p95 = Math.round(quantile(durs, 0.95));
+  const p50 = Math.round(quantile(durs, 0.5));
+
+  $("mEvents").innerHTML = eventsPerMin + '<span class="unit">/min</span>';
+  $("mErr").innerHTML = errRate.toFixed(1) + '<span class="unit">%</span>';
+  $("mErr").style.color = errRate>5 ? "var(--red)" : errRate>2 ? "var(--amber)" : "var(--text)";
+  $("mActive").textContent = activeIters;
+  $("mActiveSub").textContent = state.iterations.length + " total · " + state.iterations.filter(i=>i.failed).length + " errored";
+  $("mSplit").innerHTML = ssrCount + ' <span style="color:var(--text-muted)">·</span> ' + addCount;
+  $("splitSsr").style.width = ssrPct + "%";
+  $("splitAdd").style.width = addPct + "%";
+  $("mP95").innerHTML = p95 + '<span class="unit">ms</span>';
+  $("mP95Delta").textContent = "p50 " + p50 + " ms";
+  $("mTotal").textContent = total.toLocaleString();
+  $("mTotalSub").textContent = ssrCount + " ssr · " + addCount + " +tel";
+  $("tabCount").textContent = total;
+  $("cntAll").textContent = total;
+  $("cntSsr").textContent = ssrCount;
+  $("cntAdd").textContent = addCount;
+  $("cntRun").textContent = evs.filter(e=>e.status==="running").length;
+  $("cntSucc").textContent = evs.filter(e=>e.status==="succeeded").length;
+  $("cntFail").textContent = evs.filter(e=>e.status==="failed").length;
+  $("cntWarn").textContent = evs.filter(e=>e.status==="warning").length;
+  $("cntCanc").textContent = evs.filter(e=>e.status==="cancelled").length;
+  // history sparks
+  state.metricHistory.events.push(eventsPerMin); if(state.metricHistory.events.length>30) state.metricHistory.events.shift();
+  state.metricHistory.err.push(errRate); if(state.metricHistory.err.length>30) state.metricHistory.err.shift();
+  state.metricHistory.p95.push(p95); if(state.metricHistory.p95.length>30) state.metricHistory.p95.shift();
+  $("sparkEvents").innerHTML = miniSparkPath(state.metricHistory.events, "var(--accent)");
+  $("sparkErr").innerHTML    = miniSparkPath(state.metricHistory.err,    "var(--red)");
+  $("sparkP95").innerHTML    = miniSparkPath(state.metricHistory.p95,    "var(--blue)");
+  // status bar
+  $("sbBuffer").textContent = "buffer " + total + " / 5000";
+  $("sbMem").textContent = "mem " + (18 + Math.round(total/40)) + " MB";
+}
+function miniSparkPath(values, color){
+  if(!values || values.length<2) return "";
+  const w = 60, h = 20;
+  const max = Math.max.apply(null, values) || 1;
+  const step = w / (values.length-1);
+  let d = "";
+  values.forEach((v,i)=>{ const x=i*step; const y = h - (v/max)*(h-3) - 1.5; d += (i===0?"M":"L")+x.toFixed(1)+","+y.toFixed(1)+" "; });
+  const fill = d + "L"+w+","+h+" L0,"+h+" Z";
+  return '<path d="'+fill+'" fill="'+color+'" opacity="0.10"/><path d="'+d+'" stroke="'+color+'" stroke-width="1.2" fill="none" opacity="0.8"/>';
+}
+
+/* ─── selection + keyboard ───────────────────────────────────────── */
+function syncSelectionVisual(){
+  const list = $("streamList");
+  const cards = list.querySelectorAll(".card");
+  cards.forEach(c=> c.classList.remove("sel"));
+  const c = cards[state.selIdx];
+  if(c){ c.classList.add("sel"); c.scrollIntoView({ block:"nearest" }); }
+}
+function moveSelection(delta){
+  const cards = $("streamList").querySelectorAll(".card");
+  if(!cards.length) return;
+  state.selIdx = Math.max(0, Math.min(cards.length-1, state.selIdx + delta));
+  syncSelectionVisual();
+}
+function activateSelection(){
+  const cards = $("streamList").querySelectorAll(".card");
+  const c = cards[state.selIdx];
+  if(c) openDetail(c.dataset.id);
+}
+
+/* ─── detail panel ───────────────────────────────────────────────── */
+function openDetail(id){
+  const ev = state.events.find(e=>e.id===id);
+  if(!ev) return;
+  state.selDetailId = id;
+  const d = $("detail");
+  d.hidden = false;
+  d.classList.add("entering");
+  requestAnimationFrame(()=>{ requestAnimationFrame(()=> d.classList.remove("entering")); });
+
+  $("dChan").className = "chan " + ev.channel;
+  $("dChan").textContent = ev.channel==="ssr" ? "SSR" : "+TEL";
+  $("dName").textContent = ev.activityName;
+  const sp = $("dStatus");
+  sp.className = "status-pill " + ev.status;
+  sp.innerHTML = '<span class="d"></span>' + ev.status;
+  $("dIter").textContent = "iter:" + shortId(ev.iterationId, 8);
+  $("dCorr").textContent = "cid:" + shortId(ev.correlationId, 12);
+
+  // attribute grid (typed)
+  const grid = $("dAttrGrid");
+  grid.innerHTML = "";
+  const entries = Object.entries(ev.attributes);
+  $("dAttrCount").textContent = entries.length;
+  entries.forEach(([k,v])=>{
+    const typ = inferType(k, v);
+    const keyDiv = el("div","k"); keyDiv.innerHTML = '<span>'+escapeHtml(k)+'</span><span class="typ">'+typ+'</span>';
+    const valDiv = el("div","v " + typeCls(typ));
+    valDiv.innerHTML = renderValueHtml(typ, v) + ' <button class="copy-mini" data-copy="'+escapeHtml(String(v))+'">copy</button>';
+    grid.appendChild(keyDiv); grid.appendChild(valDiv);
+  });
+
+  // raw json tree
+  state.jsonFolded = true;
+  renderJsonTree($("dJson"), ev, state.jsonFolded);
+  $("dFoldBtn").textContent = state.jsonFolded ? "Expand all" : "Fold all";
+
+  // related telemetry (same iteration, excluding self)
+  const rel = state.events.filter(e=>e.iterationId===ev.iterationId && e.id!==ev.id).slice(0,10);
+  $("dRelTelCount").textContent = state.events.filter(e=>e.iterationId===ev.iterationId).length - 1;
+  $("dRelTel").innerHTML = rel.map(r=>{
+    return '<div class="related-row" data-id="'+r.id+'"><span class="chan '+r.channel+'">'+(r.channel==="ssr"?"SSR":"+TEL")+'</span><span class="lvl '+r.status+'">'+r.status+'</span><span class="msg">'+escapeHtml(r.activityName)+'</span><span class="ts">'+fmtClock(r.timestamp)+'</span></div>';
+  }).join("");
+  $("dRelTel").querySelectorAll(".related-row").forEach(r=> r.addEventListener("click", ()=> openDetail(r.dataset.id)));
+
+  // related logs (synthetic)
+  const logs = generateRelatedLogs(ev, Math.min(8, ev.relatedLogs));
+  $("dRelLogCount").textContent = ev.relatedLogs;
+  $("dRelLog").innerHTML = logs.map(l=>{
+    return '<div class="related-row"><span class="lvl '+l.level+'">'+l.level+'</span><span class="msg">'+escapeHtml(l.msg)+'</span><span class="ts">'+fmtClock(l.ts)+'</span></div>';
+  }).join("");
+
+  // iteration timeline
+  renderIterationTimeline(ev);
+
+  syncSelectionVisual();
+}
+
+function inferType(k, v){
+  if(typeof v === "number") return "num";
+  if(typeof v === "boolean") return "bool";
+  if(/Id$/.test(k) || /id$/.test(k.toLowerCase())) return "id";
+  if(/DurationMs|Duration|TimeoutMs|ElapsedMs/.test(k)) return "dur";
+  if(/Code|Status|Type|Name|Version|Strategy|Hit/.test(k)) return "code";
+  if(/Bytes|Size/.test(k)) return "bytes";
+  if(/Rows|Count|Attempt/.test(k)) return "num";
+  if(typeof v === "string" && v.length > 40) return "long";
+  return "str";
+}
+function typeCls(t){
+  if(t==="id" || t==="code") return "id";
+  if(t==="dur") return "dur";
+  return "";
+}
+function renderValueHtml(typ, v){
+  if(typ === "dur"){
+    const ms = Number(v);
+    const pct = Math.min(100, ms/3000*100);
+    return '<span class="num mono">'+ms+' ms</span><div class="bar"><span style="width:'+pct+'%"></span></div>';
+  }
+  if(typ === "bytes"){
+    const n = Number(v);
+    const mb = n / 1_000_000;
+    return '<span class="mono">'+(mb>=1?mb.toFixed(2)+' MB':n.toLocaleString()+' B')+'</span>';
+  }
+  if(typ === "bool"){
+    return '<span class="mono" style="color:'+(v?'var(--green)':'var(--text-muted)')+'">'+String(v)+'</span>';
+  }
+  if(typ === "num"){
+    return '<span class="mono">'+Number(v).toLocaleString()+'</span>';
+  }
+  if(typ === "id"){
+    return '<span class="val mono" style="color:var(--text)">'+escapeHtml(String(v))+'</span>';
+  }
+  if(typ === "code"){
+    return '<span class="mono" style="color:var(--accent)">'+escapeHtml(String(v))+'</span>';
+  }
+  return '<span>'+escapeHtml(String(v))+'</span>';
+}
+
+function renderJsonTree(host, obj, folded){
+  host.className = "json-tree";
+  host.innerHTML = "";
+  host.appendChild(buildJsonNode(obj, folded, true));
+}
+function buildJsonNode(value, folded, isRoot){
+  const wrap = el("div", "jt" + (folded?" folded":""));
+  if(value === null){ wrap.innerHTML = '<span class="null">null</span>'; return wrap; }
+  if(Array.isArray(value)){
+    const head = el("div");
+    head.innerHTML = '<span class="tog">'+(folded?"▸":"▾")+'</span><span class="punc">[ </span><span class="muted">'+value.length+' items</span><span class="punc"> ]</span>';
+    wrap.appendChild(head);
+    value.forEach((v,i)=>{
+      const child = el("div");
+      child.innerHTML = '<span class="key">'+i+'</span><span class="punc">: </span>';
+      child.appendChild(formatLeaf(v));
+      wrap.appendChild(child);
+    });
+    bindToggle(head, wrap);
+    return wrap;
+  }
+  if(typeof value === "object"){
+    const head = el("div");
+    head.innerHTML = '<span class="tog">'+(folded?"▸":"▾")+'</span><span class="punc">{ </span><span class="muted">'+Object.keys(value).length+' keys</span><span class="punc"> }</span>';
+    wrap.appendChild(head);
+    Object.entries(value).forEach(([k,v])=>{
+      const child = el("div");
+      child.innerHTML = '<span class="key">"'+escapeHtml(k)+'"</span><span class="punc">: </span>';
+      if(v && typeof v === "object"){
+        child.appendChild(buildJsonNode(v, true, false));
+      } else {
+        child.appendChild(formatLeaf(v));
+      }
+      wrap.appendChild(child);
+    });
+    bindToggle(head, wrap);
+    return wrap;
+  }
+  // leaf
+  wrap.appendChild(formatLeaf(value));
+  return wrap;
+}
+function formatLeaf(v){
+  const s = el("span");
+  if(typeof v === "string"){ s.className="str"; s.textContent = '"'+v+'"'; }
+  else if(typeof v === "number"){ s.className="num"; s.textContent = v; }
+  else if(typeof v === "boolean"){ s.className="bool"; s.textContent = String(v); }
+  else if(v === null){ s.className="null"; s.textContent="null"; }
+  else { s.textContent = String(v); }
+  return s;
+}
+function bindToggle(head, wrap){
+  const tog = head.querySelector(".tog");
+  if(!tog) return;
+  head.style.cursor = "pointer";
+  head.addEventListener("click", (e)=>{
+    e.stopPropagation();
+    wrap.classList.toggle("folded");
+    tog.textContent = wrap.classList.contains("folded") ? "▸" : "▾";
+  });
+}
+
+function renderIterationTimeline(curEv){
+  const it = state.iterMap.get(curEv.iterationId);
+  const tl = $("dTimeline");
+  if(!it){ tl.innerHTML = "<span class='muted'>iteration not in buffer</span>"; $("dTlCount").textContent = "0"; return; }
+  const events = it.events.map(eid => state.events.find(e=>e.id===eid)).filter(Boolean).sort((a,b)=>a.timestamp-b.timestamp);
+  $("dTlCount").textContent = events.length;
+  if(events.length < 2){ tl.innerHTML = '<span class="muted" style="font-family:var(--mono);font-size:11px;padding:0 12px">single event in iteration so far</span>'; return; }
+  const t0 = events[0].timestamp;
+  const t1 = events[events.length-1].timestamp;
+  const span = Math.max(1, t1-t0);
+  let html = '<div class="scale"></div>';
+  events.forEach(e=>{
+    const pct = (e.timestamp - t0)/span;
+    const left = 10 + pct * (300 - 20);
+    const isCur = e.id === curEv.id;
+    html += '<div class="marker '+(e.channel==="ssr"?"ssr":"add")+(isCur?" cur":"")+'" style="left:'+left+'px" title="'+e.activityName+' · '+fmtDur(e.durationMs)+'"></div>';
+  });
+  html += '<div style="position:absolute;left:10px;bottom:2px;font-size:10px;color:var(--text-muted);font-family:var(--mono)">t0 '+fmtClock(t0)+'</div>';
+  html += '<div style="position:absolute;right:10px;bottom:2px;font-size:10px;color:var(--text-muted);font-family:var(--mono)">+'+fmtDur(span)+'</div>';
+  tl.innerHTML = html;
+}
+
+function generateRelatedLogs(ev, n){
+  const out = [];
+  const levels = ["verbose","verbose","message","message","message","warning",ev.status==="failed"?"error":"message"];
+  const templates = [
+    "Entering "+ev.activityName+" handler",
+    "Authenticating against Fabric API (token TTL 47m)",
+    "Resolved lakehouse: " + (ev.attributes.LakehouseId ? shortId(ev.attributes.LakehouseId,8) : "n/a"),
+    "Catalog cache hit · " + (ev.attributes.CatalogName||"silver"),
+    "Spark session reused · idle 3.2s",
+    "Wrote "+(ev.attributes.RowsWritten||0).toLocaleString()+" rows",
+    "Marker emitted · " + ev.activityName + " complete",
+  ];
+  for(let i=0;i<n;i++){
+    out.push({
+      level: pick(levels),
+      msg: templates[i%templates.length] + " · " + shortId(ev.correlationId,6),
+      ts: ev.timestamp + (i-n/2)*irnd(30,400),
+    });
+  }
+  return out;
+}
+function closeDetail(){
+  $("detail").hidden = true;
+  state.selDetailId = null;
+}
+/* ─── runtime + tele state matrix ────────────────────────────────── */
+const RUNTIME_STATES = [
+  { id:"disconnected",       label:"Disconnected",       pillCls:"grey", text:"FLT · DISCONNECTED" },
+  { id:"connecting",         label:"Connecting",         pillCls:"amber",text:"FLT · CONNECTING…" },
+  { id:"connected-idle",     label:"Connected · Idle",   pillCls:"blue", text:"FLT · IDLE · 0 ev/min" },
+  { id:"connected-running",  label:"Connected · Running",pillCls:"live", text:"FLT · LIVE · 7m 14s" },
+  { id:"reconnecting",       label:"Reconnecting",       pillCls:"amber",text:"FLT · RECONNECT · attempt 3" },
+  { id:"faulted",            label:"Faulted",            pillCls:"red",  text:"FLT · FAULT · last good 14s ago" },
+  { id:"stopped",            label:"Stopped",            pillCls:"grey", text:"FLT · STOPPED" },
+];
+const TELE_STATES = [
+  { id:"empty",              label:"TELE-001 · Empty" },
+  { id:"first-event",        label:"TELE-002 · First event" },
+  { id:"streaming",          label:"TELE-003 · Streaming" },
+  { id:"completed",          label:"TELE-004 · Activity completed" },
+  { id:"failed",             label:"TELE-005 · Activity failed" },
+  { id:"long-running",       label:"TELE-006 · Long-running" },
+  { id:"many-concurrent",    label:"TELE-007 · Many concurrent" },
+  { id:"detail-open",        label:"TELE-008 · Detail panel" },
+  { id:"cross-tab",          label:"TELE-009 · Cross-tab correlate" },
+  { id:"filtered",           label:"TELE-010 · Filter by name" },
+  { id:"export",             label:"RV-010 · Export dropdown" },
+  { id:"loading",            label:"Skeleton · loading" },
+];
+
+function applyRuntimeState(id){
+  state.runtimeState = id;
+  const s = RUNTIME_STATES.find(x=>x.id===id) || RUNTIME_STATES[3];
+  const pill = $("runtimePill");
+  pill.className = "runtime-pill " + s.pillCls;
+  $("runtimePillText").textContent = s.text;
+  // banners
+  removeBanners();
+  const main = $("body3");
+  if(id === "disconnected" || id === "stopped"){
+    showFullEmpty("Runtime View requires a running FLT service", id==="stopped" ? "Service stopped — telemetry will resume when FLT is running" : "Deploy to a lakehouse to enable logs, telemetry, and debugging tools.", id==="stopped" ? "Restart" : "Go to Workspace Explorer");
+    $("sbDot").className = "d";
+    $("sbConn").textContent = id === "stopped" ? "stopped · waiting for service" : "disconnected · service not started";
+    return;
+  }
+  if(id === "connecting"){
+    showBanner("blue","◐ Connecting to FLT service…","");
+    state.teleState = "loading";
+    render();
+    $("sbDot").className = "d b"; $("sbConn").textContent = "connecting · ws://localhost:5555/runtime/telemetry";
+    return;
+  }
+  if(id === "reconnecting"){
+    showBanner("amber","◑ Reconnecting to FLT service…  attempt 3 of 5","Stream paused at last good frame");
+    $("sbDot").className = "d a"; $("sbConn").textContent = "reconnecting · attempt 3/5";
+    state.paused = true;
+    updateStreamToolbar();
+    render();
+    return;
+  }
+  if(id === "faulted"){
+    showBanner("red","✕ FLT service faulted · 'TaskCanceledException' in DagExecutionHandlerV2","Stream frozen at last good frame · 14s ago");
+    $("sbDot").className = "d r"; $("sbConn").textContent = "faulted · last frame 14s ago";
+    state.paused = true;
+    updateStreamToolbar();
+    render();
+    return;
+  }
+  if(id === "connected-idle"){
+    state.teleState = "empty";
+    state.paused = false;
+    $("sbDot").className = "d b"; $("sbConn").textContent = "connected · idle · 0 ev/min";
+    render();
+    return;
+  }
+  // connected-running default
+  state.teleState = "streaming";
+  state.paused = false;
+  $("sbDot").className = "d g"; $("sbConn").textContent = "connected · ws://localhost:5555/runtime/telemetry";
+  if(state.events.length === 0) seedInitialData();
+  render();
+}
+
+function applyTeleState(id){
+  state.teleState = id;
+  if(id === "empty"){ state.events = []; state.iterations = []; state.iterMap.clear(); state.catMap.clear(); render(); toast("Tele · empty","info"); return; }
+  if(id === "first-event"){
+    state.events = []; state.iterations = []; state.iterMap.clear(); state.catMap.clear();
+    const it = newIteration();
+    const a = ACTIVITY_DEFS.find(x=>x.name==="RunDag");
+    const e = buildEventFor(a, it, { channel:"ssr" });
+    addRawEvent(e); state.events.sort((a,b)=>b.timestamp-a.timestamp); render();
+    toast("First event arrived","info");
+    return;
+  }
+  if(id === "failed"){
+    const it = state.iterations[0] || newIteration();
+    const a = ACTIVITY_DEFS.find(x=>x.name==="WriteToFabricSpark");
+    const e = buildEventFor(a, it, { forceFail:true, channel:"additional", status:"failed" });
+    addRawEvent(e); state.events.unshift(state.events.pop()); render(); toast("Injected failed activity","error");
+    return;
+  }
+  if(id === "long-running"){
+    const it = state.iterations[0] || newIteration();
+    const a = ACTIVITY_DEFS.find(x=>x.name==="WriteToFabricSpark");
+    const e = buildEventFor(a, it, { channel:"additional", running:true });
+    e.timestamp = Date.now() - 38_000; e.durationMs = 38_000;
+    addRawEvent(e); state.events.sort((a,b)=>b.timestamp-a.timestamp); render(); toast("Injected long-running activity","info");
+    return;
+  }
+  if(id === "many-concurrent"){
+    for(let i=0;i<14;i++){
+      const it = pick(state.iterations) || newIteration();
+      const a = pick(ACTIVITY_DEFS);
+      const e = buildEventFor(a, it, { running:true, timestamp:Date.now() - irnd(200,4000) });
+      addRawEvent(e);
+    }
+    state.events.sort((a,b)=>b.timestamp-a.timestamp); render(); toast("Injected 14 concurrent activities","info");
+    return;
+  }
+  if(id === "detail-open"){ render(); const first = state.events[0]; if(first) openDetail(first.id); return; }
+  if(id === "cross-tab"){ toast("Cross-tab → would switch to Logs tab filtered to this IterationId","info"); return; }
+  if(id === "filtered"){ state.filters.activity = "NodeExecution"; render(); toast("Filtered to NodeExecution","info"); return; }
+  if(id === "export"){ showExportMenu(); return; }
+  if(id === "loading"){ render(); return; }
+  if(id === "streaming" || id === "completed"){ if(!state.events.length) seedInitialData(); render(); return; }
+}
+
+function removeBanners(){
+  document.querySelectorAll(".banner").forEach(b=>b.remove());
+}
+function showBanner(cls, text, sub){
+  removeBanners();
+  const b = el("div","banner "+cls);
+  b.innerHTML = '<span class="ico">●</span><span>'+escapeHtml(text)+'</span>' + (sub ? '<span style="opacity:0.7;font-weight:400">· '+escapeHtml(sub)+'</span>' : '') + '<span class="spacer"></span><button id="bannerAct">Retry now</button>';
+  document.querySelector(".toolbar").after(b);
+  b.querySelector("#bannerAct").addEventListener("click", ()=>{ applyRuntimeState("connected-running"); toast("Reconnected","info"); });
+}
+function showFullEmpty(title, body, action){
+  const main = $("body3");
+  removeBanners();
+  // hide the 3 columns content, show fullscreen empty
+  $("spineBody").innerHTML = "";
+  $("catalogBody").innerHTML = "";
+  $("streamList").innerHTML = '<div class="fullscreen-empty"><div class="icn">▦</div><h2>'+escapeHtml(title)+'</h2><p>'+escapeHtml(body)+'</p><div class="actions"><button class="btn primary">'+escapeHtml(action)+'</button><button class="btn" onclick="applyRuntimeState(\u0027connected-running\u0027)">Simulate connect</button></div></div>';
+  $("filterSummary").innerHTML = '';
+  renderMetrics();
+}
+
+function showExportMenu(){
+  toast("Exported 120 events · telemetry-2026-04-09.json (38 KB)", "info");
+}
+
+/* ─── streaming loop ─────────────────────────────────────────────── */
+let streamTimer = null;
+function startStream(){
+  if(streamTimer) clearInterval(streamTimer);
+  streamTimer = setInterval(()=>{
+    if(state.paused) return;
+    if(state.runtimeState !== "connected-running") return;
+    if(state.teleState !== "streaming" && state.teleState !== "completed" && state.teleState !== "first-event") return;
+    // Maybe new iteration
+    if(Math.random() < 0.05) newIteration();
+    // 1-2 new events
+    const n = Math.random() < 0.3 ? 2 : 1;
+    for(let i=0;i<n;i++){
+      const it = pick(state.iterations.filter(x=>x.status==="running")) || pick(state.iterations) || newIteration();
+      const a = weightedPick(ACTIVITY_DEFS);
+      const sharedCid = cid();
+      const isDual = a.ch.length>1 && Math.random()<0.85;
+      if(isDual){
+        const e1 = buildEventFor(a, it, { channel:"ssr", correlationId:sharedCid });
+        const e2 = buildEventFor(a, it, { channel:"additional", correlationId:sharedCid, status:e1.status });
+        state.events.unshift(e2); state.events.unshift(e1);
+        updateAggsForNew(e1); updateAggsForNew(e2);
+      } else {
+        const e = buildEventFor(a, it);
+        state.events.unshift(e);
+        updateAggsForNew(e);
+      }
+      maybeCompleteIteration(it);
+    }
+    if(state.events.length > 1000) state.events.length = 1000;
+    render();
+    pingTick();
+  }, 700);
+}
+function updateAggsForNew(ev){
+  const it = state.iterMap.get(ev.iterationId);
+  if(it){
+    it.events.push(ev.id);
+    if(ev.channel==="ssr") it.ssrCount++; else it.addCount++;
+    if(ev.status==="failed") it.failed = true;
+  }
+  let agg = state.catMap.get(ev.activityName);
+  if(!agg){
+    agg = { name:ev.activityName, count:0, errCount:0, warnCount:0, durations:[], channels:new Set(), spark:[] };
+    state.catMap.set(ev.activityName, agg);
+  }
+  agg.count++;
+  if(ev.status==="failed") agg.errCount++;
+  if(ev.status==="warning") agg.warnCount++;
+  if(ev.durationMs>0) agg.durations.push(ev.durationMs);
+  agg.channels.add(ev.channel);
+  agg.spark.push(ev.durationMs); if(agg.spark.length>16) agg.spark.shift();
+}
+function pingTick(){
+  const t = $("tick1"); if(!t) return;
+  t.classList.add("on");
+  setTimeout(()=> t.classList.remove("on"), 140);
+}
+
+/* ─── master render ──────────────────────────────────────────────── */
+let renderScheduled = false;
+function render(){
+  if(renderScheduled) return;
+  renderScheduled = true;
+  requestAnimationFrame(()=>{
+    renderScheduled = false;
+    renderMetrics();
+    renderSpine();
+    renderCatalog();
+    renderStream();
+    updateStreamToolbar();
+    updateFilterChips();
+    updateDurationLabel();
+  });
+}
+function updateStreamToolbar(){
+  const tb = $("streamToolbar");
+  if(state.paused){ tb.classList.add("paused"); $("liveLabel").textContent = "PAUSED"; }
+  else { tb.classList.remove("paused"); $("liveLabel").textContent = state.runtimeState === "connected-running" ? "LIVE" : "IDLE"; }
+}
+function updateFilterChips(){
+  document.querySelectorAll("#chanPills .pill").forEach(p=> p.classList.toggle("active", p.dataset.chan === state.filters.chan));
+  document.querySelectorAll("#statusPills .pill").forEach(p=> p.classList.toggle("active", p.dataset.st === state.filters.status));
+  document.querySelectorAll("#windowSel button").forEach(b=> b.classList.toggle("active", b.dataset.w === state.filters.window));
+}
+function updateDurationLabel(){ $("durVal").textContent = "≤ " + state.filters.durMax + " ms"; }
+function clearFilters(){
+  state.filters = { search:"", chan:"all", status:"all", durMax:5000, window:"all", iter:null, activity:null };
+  $("searchInput").value = "";
+  $("durThumb").style.left = "100%";
+  $("durFill").style.right = "0%";
+  render(); toast("Filters cleared","info");
+}
+window.clearFilters = clearFilters;
+window.applyRuntimeState = applyRuntimeState;
+/* ─── toasts ─────────────────────────────────────────────────────── */
+function toast(msg, kind){
+  const t = el("div","toast "+(kind||""));
+  t.innerHTML = '<span class="d"></span>'+escapeHtml(msg);
+  $("toastHost").appendChild(t);
+  setTimeout(()=>{ t.style.opacity = "0"; t.style.transform = "translateY(6px)"; }, 2400);
+  setTimeout(()=> t.remove(), 2700);
+}
+
+/* ─── state dock ─────────────────────────────────────────────────── */
+function buildStateDock(){
+  const body = $("stateDockBody");
+  body.innerHTML = "";
+  const g1 = el("div","state-group");
+  g1.appendChild(elHTML('div','state-group-h','RUNTIME · 7 states'));
+  RUNTIME_STATES.forEach(s=>{
+    const b = el("button", "state-btn" + (state.runtimeState===s.id?" cur":""));
+    b.innerHTML = '<span class="ix">RT-'+pad(RUNTIME_STATES.indexOf(s)+1,2)+'</span><span class="nm">'+s.label+'</span>';
+    b.addEventListener("click", ()=>{ applyRuntimeState(s.id); buildStateDock(); });
+    g1.appendChild(b);
+  });
+  body.appendChild(g1);
+  const g2 = el("div","state-group");
+  g2.appendChild(elHTML('div','state-group-h','TELEMETRY · TELE-NNN states'));
+  TELE_STATES.forEach(s=>{
+    const b = el("button", "state-btn" + (state.teleState===s.id?" cur":""));
+    b.innerHTML = '<span class="ix">'+s.label.split(' · ')[0]+'</span><span class="nm">'+(s.label.split(' · ')[1]||s.label)+'</span>';
+    b.addEventListener("click", ()=>{ applyTeleState(s.id); buildStateDock(); });
+    g2.appendChild(b);
+  });
+  body.appendChild(g2);
+}
+function pad(n,len){ const s = String(n); return s.length>=len?s:"0".repeat(len-s.length)+s; }
+function elHTML(tag,cls,html){ const e=el(tag,cls); e.innerHTML=html; return e; }
+
+/* ─── duration slider ────────────────────────────────────────────── */
+function bindDurationSlider(){
+  const slider = $("durSlider");
+  const thumb  = $("durThumb");
+  const fill   = $("durFill");
+  let dragging = false;
+  function setFromX(clientX){
+    const rect = slider.getBoundingClientRect();
+    let pct = (clientX - rect.left) / rect.width;
+    pct = Math.max(0, Math.min(1, pct));
+    thumb.style.left = (pct*100).toFixed(1) + "%";
+    fill.style.right = ((1-pct)*100).toFixed(1) + "%";
+    state.filters.durMax = Math.round(50 + pct * 4950);
+    updateDurationLabel();
+    render();
+  }
+  thumb.addEventListener("mousedown", e=>{ dragging=true; e.preventDefault(); });
+  window.addEventListener("mousemove", e=>{ if(dragging) setFromX(e.clientX); });
+  window.addEventListener("mouseup", ()=>{ dragging=false; });
+  slider.addEventListener("click", e=>{ setFromX(e.clientX); });
+}
+
+/* ─── detail panel resize ────────────────────────────────────────── */
+function bindDetailResize(){
+  const grab = $("detailGrab");
+  const detail = $("detail");
+  let dragging = false, startY = 0, startH = 0;
+  grab.addEventListener("mousedown", e=>{ dragging=true; startY=e.clientY; startH=detail.offsetHeight; e.preventDefault(); document.body.style.userSelect="none"; });
+  window.addEventListener("mousemove", e=>{
+    if(!dragging) return;
+    const dy = startY - e.clientY;
+    const h = Math.max(200, Math.min(window.innerHeight*0.8, startH + dy));
+    detail.style.maxHeight = h + "px";
+    detail.style.height = h + "px";
+  });
+  window.addEventListener("mouseup", ()=>{ dragging=false; document.body.style.userSelect=""; });
+}
+
+/* ─── interactions ───────────────────────────────────────────────── */
+function bindInteractions(){
+  $("searchInput").addEventListener("input", debounce((e)=>{ state.filters.search = e.target.value; state.selIdx=0; render(); }, 120));
+  document.querySelectorAll("#chanPills .pill").forEach(p=> p.addEventListener("click", ()=>{ state.filters.chan = p.dataset.chan; state.selIdx=0; render(); }));
+  document.querySelectorAll("#statusPills .pill").forEach(p=> p.addEventListener("click", ()=>{ state.filters.status = p.dataset.st; state.selIdx=0; render(); }));
+  document.querySelectorAll("#windowSel button").forEach(b=> b.addEventListener("click", ()=>{ state.filters.window = b.dataset.w; render(); }));
+  document.querySelectorAll(".catalog .panel-h .hacts button").forEach(b=> b.addEventListener("click", ()=>{
+    document.querySelectorAll(".catalog .panel-h .hacts button").forEach(x=> x.classList.remove("on"));
+    b.classList.add("on");
+    state.catSort = b.dataset.sort; renderCatalog();
+  }));
+  $("pauseBtn").addEventListener("click", ()=>{
+    state.paused = !state.paused;
+    $("pauseBtn").innerHTML = state.paused ? '<span class="ico">▶</span>Resume' : '<span class="ico">⏸</span>Pause';
+    updateStreamToolbar(); toast(state.paused ? "Stream paused" : "Stream resumed","info");
+  });
+  $("exportBtn").addEventListener("click", showExportMenu);
+  $("themeBtn").addEventListener("click", ()=>{
+    const cur = document.documentElement.getAttribute("data-theme") || "light";
+    const next = cur === "light" ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", next);
+    try{ localStorage.setItem("edog-theme", next); }catch(e){}
+    render();
+  });
+  $("dClose").addEventListener("click", closeDetail);
+  $("dCopyCid").addEventListener("click", ()=>{ const ev=state.events.find(e=>e.id===state.selDetailId); if(ev){ navigator.clipboard && navigator.clipboard.writeText(ev.correlationId); toast("Copied · "+shortId(ev.correlationId,12),"info"); } });
+  $("dFilterIter").addEventListener("click", ()=>{ const ev=state.events.find(e=>e.id===state.selDetailId); if(ev){ state.filters.iter = ev.iterationId; render(); toast("Filtered to iteration "+shortId(ev.iterationId,8),"info"); } });
+  $("dViewLogs").addEventListener("click", ()=>{ toast("Cross-tab → Logs filtered to this IterationId","info"); });
+  $("dOpenLife").addEventListener("click", ()=>{ toast("Opening Lifecycle Inspector for this DAG run…","info"); });
+  $("dFoldBtn").addEventListener("click", ()=>{
+    const tree = $("dJson");
+    const folded = !state.jsonFolded;
+    state.jsonFolded = folded;
+    tree.querySelectorAll(".jt").forEach(n=>{
+      if(folded) n.classList.add("folded"); else n.classList.remove("folded");
+      const t = n.querySelector(":scope > div > .tog");
+      if(t) t.textContent = folded ? "▸" : "▾";
+    });
+    $("dFoldBtn").textContent = folded ? "Expand all" : "Fold all";
+  });
+  document.body.addEventListener("click", e=>{
+    const c = e.target.closest(".copy-mini");
+    if(c){ const val = c.dataset.copy; navigator.clipboard && navigator.clipboard.writeText(val); c.classList.add("done"); c.textContent="copied"; setTimeout(()=>{ c.classList.remove("done"); c.textContent="copy"; }, 1100); }
+  });
+  $("stateDockH").addEventListener("click", ()=> $("stateDock").classList.toggle("collapsed"));
+
+  document.addEventListener("keydown", e=>{
+    const inInput = e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA";
+    if(e.key === "/" && !inInput){ e.preventDefault(); $("searchInput").focus(); return; }
+    if(e.key === "Escape"){ if(!$("detail").hidden){ closeDetail(); return; } if(state.filters.iter || state.filters.activity){ state.filters.iter=null; state.filters.activity=null; render(); return; } }
+    if(inInput) return;
+    if(e.key === "j" || e.key === "ArrowDown"){ e.preventDefault(); moveSelection(1); }
+    if(e.key === "k" || e.key === "ArrowUp"){ e.preventDefault(); moveSelection(-1); }
+    if(e.key === "Enter"){ e.preventDefault(); activateSelection(); }
+    if(e.key === " "){ e.preventDefault(); $("pauseBtn").click(); }
+    if(e.key >= "1" && e.key <= "5"){
+      const map = { "1":"running","2":"succeeded","3":"failed","4":"warning","5":"cancelled" };
+      state.filters.status = map[e.key]; render();
+    }
+    if(e.key === "0"){ state.filters.status = "all"; render(); }
+    if((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "e"){ e.preventDefault(); showExportMenu(); }
+  });
+
+  // theme persistence
+  try{ const saved = localStorage.getItem("edog-theme"); if(saved) document.documentElement.setAttribute("data-theme", saved); }catch(e){}
+}
+
+/* ─── 1Hz tick (for clock + activity tick light) ─────────────────── */
+function startTicks(){
+  setInterval(()=>{
+    $("sbClock").textContent = new Date().toISOString().substring(11,19) + "Z";
+    if(state.runtimeState === "connected-running"){
+      const t = $("tick1"); if(t){ t.classList.add("on"); setTimeout(()=>t.classList.remove("on"), 130); }
+    }
+    // refresh "ago" texts cheaply by re-rendering metric numbers
+    renderMetrics();
+  }, 1000);
+}
+
+/* ─── boot ───────────────────────────────────────────────────────── */
+function boot(){
+  bindInteractions();
+  bindDurationSlider();
+  bindDetailResize();
+  buildStateDock();
+  applyRuntimeState("connected-running");
+  startStream();
+  startTicks();
+  // initial keyboard focus on stream
+  setTimeout(()=>{ $("streamList").focus(); }, 50);
+}
+boot();
+</script>
+</body>
+</html>

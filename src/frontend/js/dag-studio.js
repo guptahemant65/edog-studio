@@ -75,6 +75,17 @@ class ExecutionStateManager {
       console.log('[ESM-DIAG] Telemetry skipped — no activityName:', t);
       return;
     }
+    // 2026-06-07 telemetry-correctness fix: skip Additional channel
+    // events. The DAG visualizer needs lifecycle status — that's the
+    // SSR channel's job. Additional events are fire-and-forget mirrors
+    // (FLT emits SSR + Additional in lockstep for every RunDag,
+    // NodeExecution, controller feature-usage). The Additional mirror
+    // has no real status (the backend now emits empty); processing it
+    // here was overwriting the real SSR status and driving nodes to
+    // 'completed' while still running.
+    if ((t.channel || 'ssr') === 'additional') {
+      return;
+    }
     // Check iterationId from multiple sources (FLT may use attributes or correlationId)
     var evtIterId = t.iterationId || (t.attributes && (t.attributes.iterationId || t.attributes.IterationId)) || null;
     if (evtIterId && evtIterId !== this._activeIterationId) {
@@ -236,7 +247,7 @@ class ExecutionStateManager {
         errorCode: null,
         source: 'telemetry',
       };
-    } else if (activityStatus === 'succeeded' || activityStatus === 'completed') {
+    } else if (activityStatus === 'succeeded') {
       newState = {
         status: 'completed',
         startedAt: inferredStart,
@@ -287,7 +298,7 @@ class ExecutionStateManager {
         this._startedAt = Date.now();
         this._emitExecutionState();
       }
-    } else if (activityStatus === 'succeeded' || activityStatus === 'completed') {
+    } else if (activityStatus === 'succeeded') {
       this._executionStatus = 'completed';
       this._endedAt = Date.now();
       this._emitExecutionState();
@@ -1169,7 +1180,11 @@ class DagStudio {
 
   _onTelemetryEvent(event) {
     if (!this._esm.activeIterationId) return;
-    console.log('[DAG-DIAG] Telemetry event:', event && event.data ? event.data.activityName : 'no-data', event);
+    // 2026-06-07 telemetry-correctness fix: skip Additional channel
+    // mirrors. See processTelemetry for full rationale.
+    var t = event && event.data ? event.data : event;
+    if (t && (t.channel || 'ssr') === 'additional') return;
+    console.log('[DAG-DIAG] Telemetry event:', t ? t.activityName : 'no-data', event);
     this._esm.processTelemetry(event);
   }
 

@@ -141,7 +141,10 @@
     q: '',
     status: 'all',
     dmin: 0,
-    dmax: 120,
+    dmax: 5000,
+    channel: 'all',
+    window: 'all',
+    iter: null,
   };
 
   // (URL key) -> (tab, internal key, type)
@@ -156,10 +159,13 @@
     ep:      { tab: 'logs',      key: 'ep',     type: 'str' },
     comp:    { tab: 'logs',      key: 'comp',   type: 'str' },
     raid:    { tab: 'logs',      key: 'raid',   type: 'str' },
-    tq:      { tab: 'telemetry', key: 'q',      type: 'str' },
-    tstatus: { tab: 'telemetry', key: 'status', type: 'str' },
-    dmin:    { tab: 'telemetry', key: 'dmin',   type: 'num' },
-    dmax:    { tab: 'telemetry', key: 'dmax',   type: 'num' },
+    tq:      { tab: 'telemetry', key: 'q',       type: 'str' },
+    tstatus: { tab: 'telemetry', key: 'status',  type: 'str' },
+    dmin:    { tab: 'telemetry', key: 'dmin',    type: 'num' },
+    dmax:    { tab: 'telemetry', key: 'dmax',    type: 'num' },
+    tchan:   { tab: 'telemetry', key: 'channel', type: 'str' },
+    twin:    { tab: 'telemetry', key: 'window',  type: 'str' },
+    titer:   { tab: 'telemetry', key: 'iter',    type: 'nullable_str' },
   };
 
   // Inverse: (tab, internalKey) -> urlKey

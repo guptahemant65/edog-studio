@@ -167,6 +167,16 @@ class AutoDetector {
    * If no IterationId but has correlationId → RAID-based API call tracking.
    */
   processTelemetry = (event) => {
+    // 2026-06-07 telemetry-correctness fix: skip Additional channel
+    // mirrors. auto-detect drives the execution-detection map used by
+    // smart-context + dag-studio bootstrap — lifecycle is the SSR
+    // channel's job. The Additional channel emits a mirror for every
+    // RunDag / NodeExecution / controller event; the backend used to
+    // invent 'Completed' on those mirrors, which drove exec.status to
+    // 'Completed' while the DAG was still running.
+    if ((event.channel || 'ssr') === 'additional') {
+      return;
+    }
     const iterationId = event.iterationId || (event.attributes && event.attributes.IterationId);
     if (iterationId) {
       this.ensureExecution(iterationId);

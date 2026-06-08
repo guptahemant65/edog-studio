@@ -88,5 +88,32 @@ namespace Microsoft.LiveTable.Service.DevMode
         public string UserId { get; }
 
         public string IterationId { get; set; }
+
+        /// <summary>
+        /// Telemetry source channel. Default "ssr" for events produced by
+        /// EdogTelemetryInterceptor (ICustomLiveTableTelemetryReporter). Set
+        /// to "additional" by EdogAdditionalTelemetryInterceptor for events
+        /// emitted via ILiveTableAdditionalTelemetryReporter — NodeExecutor,
+        /// DagExecutionHandlerV2 feature-usage, controller feature-usage, etc.
+        /// </summary>
+        public string Channel { get; set; } = "ssr";
+
+        /// <summary>
+        /// Original event identifier from the Additional channel
+        /// (ILiveTableAdditionalTelemetryReporter passes eventId as the first
+        /// arg, separate from the activity name). Null for SSR events.
+        /// </summary>
+        public string EventId { get; set; }
+
+        /// <summary>
+        /// True when this event mirrors an SSR event with the same
+        /// correlationId — Additional channel events are fire-and-forget
+        /// feature-usage emissions that have NO native status / duration.
+        /// FLT's DagExecutionHandlerV2 emits SSR + Additional in lockstep;
+        /// the Additional one is a mirror. The frontend uses this flag to
+        /// derive lifecycle state from the paired SSR event instead of
+        /// trusting an invented status. Always false for SSR events.
+        /// </summary>
+        public bool IsMirror { get; set; }
     }
 }
