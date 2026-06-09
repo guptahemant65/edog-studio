@@ -139,3 +139,60 @@ def test_count_unpushed_no_upstream_is_zero(git_repo: Path):
     gb = _load_git_branches()
     # No remote configured -> no upstream -> 0 (never crash).
     assert gb.count_unpushed(str(git_repo)) == 0
+
+
+def test_user_dirty_paths_excludes_edog(git_repo: Path):
+    gb = _load_git_branches()
+    (git_repo / "README.md").write_text("user edit\n", encoding="utf-8")
+    (git_repo / "edog.cs").write_text("edog edit\n", encoding="utf-8")
+    _git(git_repo, "add", "edog.cs")
+    paths = gb._user_dirty_paths(str(git_repo), {"edog.cs"})
+    assert "README.md" in paths
+    assert "edog.cs" not in paths
+
+
+def test_checkout_clean_tree(git_repo: Path):
+    gb = _load_git_branches()
+    res = gb.checkout_branch(str(git_repo), "feature", "carry", set())
+    assert res["ok"] is True
+    assert res["branch"] == "feature"
+    assert res["leftBranch"] == "main"
+    name, _ = gb.get_current_branch(str(git_repo))
+    assert name == "feature"
+
+
+def test_checkout_blocks_unknown_branch(git_repo: Path):
+    gb = _load_git_branches()
+    res = gb.checkout_branch(str(git_repo), "ghost", "carry", set())
+    assert res["ok"] is False
+    assert res["error"] == "unknown_branch"
+
+
+def test_checkout_stash_names_and_returns_ref(git_repo: Path):
+    gb = _load_git_branches()
+    (git_repo / "README.md").write_text("base\nWIP\n", encoding="utf-8")
+    res = gb.checkout_branch(str(git_repo), "feature", "stash", set())
+    assert res["ok"] is True
+    assert res["stashed"]  # a stash ref was returned
+    # The named stash exists and mentions the route.
+    out = _git(git_repo, "stash", "list")
+    assert "edog-switch/main->feature" in out
+
+
+def test_checkout_discard_drops_user_changes(git_repo: Path):
+    gb = _load_git_branches()
+    (git_repo / "README.md").write_text("base\nTHROWAWAY\n", encoding="utf-8")
+    res = gb.checkout_branch(str(git_repo), "feature", "discard", set())
+    assert res["ok"] is True
+    # On feature branch, README is the feature version, not THROWAWAY.
+    assert "THROWAWAY" not in (git_repo / "README.md").read_text()
+
+
+def test_stash_apply_restores(git_repo: Path):
+    gb = _load_git_branches()
+    (git_repo / "README.md").write_text("base\nWIP\n", encoding="utf-8")
+    res = gb.checkout_branch(str(git_repo), "main", "stash", set())
+    ref = res["stashed"]
+    applied = gb.stash_apply(str(git_repo), ref)
+    assert applied["ok"] is True
+    assert "WIP" in (git_repo / "README.md").read_text()

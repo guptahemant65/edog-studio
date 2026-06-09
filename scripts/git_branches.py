@@ -8,6 +8,7 @@ resolution; this module owns the git mechanics.
 from __future__ import annotations
 
 import subprocess
+import time
 from pathlib import Path
 
 # Phases during which the working tree is bound to a running/deploying FLT
@@ -221,3 +222,87 @@ def fetch_remotes(repo_path: str) -> bool:
         repo_path, ["fetch", "--all", "--prune"], timeout=60
     )
     return code == 0
+
+
+def _user_dirty_paths(repo_path: str, edog_patched: set[str]) -> list[str]:
+    """Repo-relative paths with working-tree/index changes that are NOT
+    EDOG-managed. Untracked files are included."""
+    code, out, _ = _run_git(repo_path, ["status", "--porcelain", "-uall"])
+    if code != 0:
+        return []
+    paths: list[str] = []
+    for raw in out.splitlines():
+        if len(raw) < 4:
+            continue
+        path = raw[3:].strip().replace("\\", "/")
+        if path in edog_patched:
+            continue
+        paths.append(path)
+    return paths
+
+
+def stash_apply(repo_path: str, ref: str) -> dict:
+    """Apply (not pop) a stash ref onto the current tree."""
+    if not ref:
+        return {"ok": False, "error": "missing_ref"}
+    code, _, err = _run_git(repo_path, ["stash", "apply", ref])
+    if code != 0:
+        return {"ok": False, "error": "apply_failed", "message": err.strip()}
+    return {"ok": True}
+
+
+def checkout_branch(
+    repo_path: str, branch: str, on_dirty: str, edog_patched: set[str]
+) -> dict:
+    """Switch to *branch*, handling the user's non-EDOG dirty changes.
+
+    on_dirty:
+      - "stash":   stash only user paths under a named ref (recoverable).
+      - "carry":   leave changes; plain checkout (fails if it would conflict).
+      - "discard": restore user tracked paths to HEAD before checkout.
+
+    Returns {ok, branch, leftBranch, stashed, error?, message?}. On any
+    checkout failure the working tree is left as git left it and ok=False.
+    """
+    if on_dirty not in {"stash", "carry", "discard"}:
+        return {"ok": False, "error": "bad_on_dirty"}
+    if not branch_exists(repo_path, branch):
+        return {"ok": False, "error": "unknown_branch"}
+
+    left, _ = get_current_branch(repo_path)
+    user_paths = _user_dirty_paths(repo_path, edog_patched)
+    stashed_ref: str | None = None
+
+    if user_paths and on_dirty == "stash":
+        ts = time.strftime("%Y%m%dT%H%M%S")
+        msg = f"edog-switch/{left}->{branch}/{ts}"
+        code, _, err = _run_git(
+            repo_path, ["stash", "push", "-u", "-m", msg, "--", *user_paths]
+        )
+        if code != 0:
+            return {
+                "ok": False,
+                "error": "stash_failed",
+                "message": err.strip(),
+                "leftBranch": left,
+            }
+        stashed_ref = "stash@{0}"
+    elif user_paths and on_dirty == "discard":
+        # Restore only tracked user paths; untracked user files are left alone.
+        _run_git(repo_path, ["checkout", "--", *user_paths])
+
+    code, _, err = _run_git(repo_path, ["checkout", branch])
+    if code != 0:
+        return {
+            "ok": False,
+            "error": "checkout_conflict",
+            "message": err.strip(),
+            "leftBranch": left,
+            "stashed": stashed_ref,
+        }
+    return {
+        "ok": True,
+        "branch": branch,
+        "leftBranch": left,
+        "stashed": stashed_ref,
+    }
