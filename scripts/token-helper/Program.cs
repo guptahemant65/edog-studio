@@ -32,13 +32,21 @@ class Program
     {
         if (args.Length > 0 && args[0] == "--list-certs")
         {
-            using var store = new X509Store(StoreLocation.CurrentUser);
-            store.Open(OpenFlags.ReadOnly);
             var certs = new System.Collections.Generic.List<object>();
-            foreach (var c in store.Certificates)
+            var seen = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            // Scan BOTH stores. Devboxes provision CBA certs into LocalMachine\My, while
+            // dev workstations keep them in CurrentUser\My. Scanning only CurrentUser (the
+            // original bug) returned an empty list on devboxes -> onboarding showed "no certs"
+            // even though the certs existed. Dedupe by thumbprint for machines that have both.
+            foreach (var location in new[] { StoreLocation.CurrentUser, StoreLocation.LocalMachine })
             {
-                if (c.Subject.Contains("CBA"))
+                using var store = new X509Store(StoreName.My, location);
+                try { store.Open(OpenFlags.ReadOnly); }
+                catch { continue; } // LocalMachine read may be denied in locked-down envs
+                foreach (var c in store.Certificates)
                 {
+                    if (!c.Subject.Contains("CBA")) continue;
+                    if (c.Thumbprint == null || !seen.Add(c.Thumbprint)) continue;
                     certs.Add(new
                     {
                         thumbprint = c.Thumbprint,
@@ -68,18 +76,27 @@ class Program
         string resource = args.Length > 4 ? args[4] : DefaultResource;
         string redirectUri = args.Length > 5 ? args[5] : DefaultRedirectUri;
 
-        // Load certificate from Windows cert store (supports non-exportable CNG keys)
+        // Load certificate from Windows cert store (supports non-exportable CNG keys).
+        // Search BOTH CurrentUser\My and LocalMachine\My — devboxes provision CBA certs
+        // into LocalMachine, so a CurrentUser-only lookup would fail to mint on those boxes
+        // even after --list-certs (which also scans both) surfaced the cert to the picker.
         X509Certificate2 cert = null;
-        using (var store = new X509Store(StoreLocation.CurrentUser))
+        foreach (var location in new[] { StoreLocation.CurrentUser, StoreLocation.LocalMachine })
         {
-            store.Open(OpenFlags.ReadOnly);
+            using var store = new X509Store(StoreName.My, location);
+            try { store.Open(OpenFlags.ReadOnly); }
+            catch { continue; }
             var certs = store.Certificates.Find(X509FindType.FindByThumbprint, thumbprint, false);
-            if (certs.Count == 0)
+            if (certs.Count > 0)
             {
-                Console.Error.WriteLine($"ERROR: Certificate with thumbprint {thumbprint} not found");
-                Environment.Exit(1);
+                cert = certs[0];
+                break;
             }
-            cert = certs[0];
+        }
+        if (cert == null)
+        {
+            Console.Error.WriteLine($"ERROR: Certificate with thumbprint {thumbprint} not found");
+            Environment.Exit(1);
         }
         Console.Error.WriteLine($"Cert: {cert.Subject}");
 
