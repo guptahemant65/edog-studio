@@ -177,6 +177,8 @@ def list_branches(
         "detached": detached,
         "local": local,
         "remote": remote,
+        "unpushed": count_unpushed(repo_path),
+        "stashes": count_stashes(repo_path),
     }
 
 

@@ -5747,7 +5747,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._json_response(
                 200,
                 {"configured": False, "valid": False, "current": "",
-                 "detached": False, "local": [], "remote": []},
+                 "detached": False, "local": [], "remote": [],
+                 "unpushed": 0, "stashes": 0},
             )
             return
         qs = parse_qs(urlparse(self.path).query)

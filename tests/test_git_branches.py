@@ -141,6 +141,18 @@ def test_count_unpushed_no_upstream_is_zero(git_repo: Path):
     assert gb.count_unpushed(str(git_repo)) == 0
 
 
+def test_list_branches_includes_current_branch_counts(git_repo: Path):
+    gb = _load_git_branches()
+    data = gb.list_branches(str(git_repo), set())
+    assert data["unpushed"] == 0
+    assert data["stashes"] == 0
+
+    (git_repo / "README.md").write_text("dirty\n", encoding="utf-8")
+    _git(git_repo, "stash", "push", "-m", "x")
+    data = gb.list_branches(str(git_repo), set())
+    assert data["stashes"] == 1
+
+
 def test_user_dirty_paths_excludes_edog(git_repo: Path):
     gb = _load_git_branches()
     (git_repo / "README.md").write_text("user edit\n", encoding="utf-8")
