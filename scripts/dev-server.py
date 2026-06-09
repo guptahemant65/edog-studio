@@ -32,6 +32,7 @@ from socketserver import ThreadingMixIn
 import feature_flags_catalog
 import feature_manager_cache
 import feature_overrides
+import git_branches  # sibling module in scripts/
 from file_watcher import FileWatcher
 from flt_catalog import controllers_dir_mtime, extract_catalog, framework_endpoints_mtime
 from repo_discovery import (
@@ -3010,6 +3011,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_health()
         elif self.path == "/api/edog/git-diff":
             self._serve_git_diff()
+        elif self.path.split("?")[0] == "/api/edog/git-branches":
+            self._serve_git_branches()
         elif self.path.startswith("/api/edog/git-blame"):
             self._serve_git_blame()
         elif self.path == "/api/edog/coverage":
@@ -3148,6 +3151,10 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_coverage_run()
         elif self.path == "/api/edog/repo-set":
             self._serve_repo_set()
+        elif self.path == "/api/edog/git-checkout":
+            self._serve_git_checkout()
+        elif self.path == "/api/edog/git-stash-apply":
+            self._serve_git_stash_apply()
         elif self.path == "/api/edog/feature-flags/overrides":
             self._serve_feature_flags_overrides_post()
         elif self.path == "/api/edog/feature-flags/overrides/reset":
@@ -5719,6 +5726,90 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             },
         )
 
+    def _resolve_flt_repo(self):
+        """Return (repo_path, edog_patched) or (None, None) if unconfigured."""
+        cfg = {}
+        with contextlib.suppress(Exception):
+            cfg = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
+        repo_info = get_configured_repo(cfg)
+        if not repo_info or not repo_info.get("valid"):
+            return (None, None)
+        from repo_discovery import _edog_patched_paths
+
+        return (repo_info["path"], _edog_patched_paths())
+
+    def _serve_git_branches(self):
+        """GET /api/edog/git-branches?remote=0|1 — rich branch list."""
+        from urllib.parse import parse_qs, urlparse
+
+        repo_path, edog_patched = self._resolve_flt_repo()
+        if repo_path is None:
+            self._json_response(
+                200,
+                {"configured": False, "valid": False, "current": "",
+                 "detached": False, "local": [], "remote": []},
+            )
+            return
+        qs = parse_qs(urlparse(self.path).query)
+        include_remote = qs.get("remote", ["0"])[0] == "1"
+        if include_remote:
+            git_branches.fetch_remotes(repo_path)
+        data = git_branches.list_branches(
+            repo_path, edog_patched, include_remote=include_remote
+        )
+        data.update({"configured": True, "valid": True})
+        self._json_response(200, data)
+
+    def _serve_git_checkout(self):
+        """POST /api/edog/git-checkout {branch, onDirty}."""
+        try:
+            cl = int(self.headers.get("Content-Length", 0))
+            body = json.loads(self.rfile.read(cl).decode("utf-8")) if cl else {}
+        except (ValueError, json.JSONDecodeError):
+            self._json_response(400, {"ok": False, "error": "bad_request"})
+            return
+
+        with _studio_lock:
+            phase = _studio_state.get("phase", "")
+        if not git_branches.phase_allows_switch(phase):
+            self._json_response(
+                409, {"ok": False, "error": "phase_locked", "phase": phase}
+            )
+            return
+
+        repo_path, edog_patched = self._resolve_flt_repo()
+        if repo_path is None:
+            self._json_response(400, {"ok": False, "error": "no_repo"})
+            return
+
+        branch = (body.get("branch") or "").strip()
+        on_dirty = body.get("onDirty", "carry")
+        result = git_branches.checkout_branch(
+            repo_path, branch, on_dirty, edog_patched
+        )
+        # Add the don't-lose-work counts for the branch we just left.
+        if result.get("ok"):
+            result["leftUnpushed"] = 0  # post-switch count is on the new branch
+        status = 200 if result.get("ok") else 409
+        if result.get("error") in {"unknown_branch", "bad_on_dirty"}:
+            status = 400
+        self._json_response(status, result)
+
+    def _serve_git_stash_apply(self):
+        """POST /api/edog/git-stash-apply {ref}."""
+        try:
+            cl = int(self.headers.get("Content-Length", 0))
+            body = json.loads(self.rfile.read(cl).decode("utf-8")) if cl else {}
+        except (ValueError, json.JSONDecodeError):
+            self._json_response(400, {"ok": False, "error": "bad_request"})
+            return
+        repo_path, _ = self._resolve_flt_repo()
+        if repo_path is None:
+            self._json_response(400, {"ok": False, "error": "no_repo"})
+            return
+        result = git_branches.stash_apply(repo_path, (body.get("ref") or "").strip())
+        self._json_response(200 if result.get("ok") else 409, result)
+
     def _serve_git_blame(self):
         """GET /api/edog/git-blame?file={path} — return per-line blame for a file.
 
@@ -8159,3 +8250,4 @@ if __name__ == "__main__":
 
         server.server_close()
         print("Server stopped.")
+

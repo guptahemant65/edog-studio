@@ -35,3 +35,19 @@ def test_phase_unknown_is_blocked_safely():
     # Unknown/empty phase must fail closed (treat as not-allowed).
     assert gb.phase_allows_switch("") is False
     assert gb.phase_allows_switch(None) is False
+
+
+def test_locked_phases_constant():
+    gb = _load_git_branches()
+    assert "running" in gb.LOCKED_PHASES
+    assert "deploying" in gb.LOCKED_PHASES
+    assert "idle" not in gb.LOCKED_PHASES
+
+
+def test_checkout_response_for_locked_phase():
+    """The handler maps a locked phase to a 409 envelope. We assert the
+    decision helper the handler uses."""
+    gb = _load_git_branches()
+    # phase_allows_switch is the gate the handler calls before any git op.
+    assert gb.phase_allows_switch("running") is False
+    assert gb.phase_allows_switch("idle") is True
