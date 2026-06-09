@@ -236,7 +236,10 @@ class DagCanvas {
       width: (overrides && overrides.width) || sizes.width,
       height: (overrides && overrides.height) || sizes.height,
       sequenceNumber: (overrides && overrides.sequenceNumber) || seq,
-      createdAt: (overrides && overrides.createdAt) || Date.now()
+      createdAt: (overrides && overrides.createdAt) || Date.now(),
+      viewText: (overrides && overrides.viewText) || '',
+      sourceRefs: (overrides && overrides.sourceRefs) || [],
+      codeImported: !!(overrides && overrides.codeImported)
     };
 
     // Track drag-start position for undo

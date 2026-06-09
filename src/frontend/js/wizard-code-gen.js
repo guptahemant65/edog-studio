@@ -501,6 +501,12 @@ class CodeGenerationEngine {
     var joinCol = (columns && columns[0]) ? columns[0].name : 'id';
     var lines = [];
 
+    // Imported MLVs carry their real definition — emit it verbatim instead of
+    // the synthesized template.
+    if (node.viewText && node.viewText.trim()) {
+      return this._generateImportedSqlMlvCell(node, schema);
+    }
+
     var parentNames = [];
     for (var p = 0; p < parentNodes.length; p++) {
       parentNames.push(
@@ -542,6 +548,38 @@ class CodeGenerationEngine {
                    ' ON t1.' + firstCol + ' = ' + alias + '.' + firstCol + term);
       }
     }
+
+    return {
+      type: 'sql-mlv',
+      language: 'sql',
+      nodeId: node.id,
+      nodeName: node.name,
+      content: lines.join('\n')
+    };
+  }
+
+  /**
+   * Emit a SQL MLV cell using an imported `viewText` definition verbatim.
+   * FLT `viewText` is the SELECT body, so it is wrapped in the
+   * ``CREATE MATERIALIZED LAKE VIEW … AS`` DDL — unless the captured text is
+   * already a full CREATE statement, in which case it is emitted as-is.
+   * @param {Object} node   DagNodeData with a non-empty viewText
+   * @param {string} schema resolved schema name
+   * @returns {Object} Cell object
+   */
+  _generateImportedSqlMlvCell(node, schema) {
+    var body = node.viewText.trim();
+    var lines = ['%%sql', '-- Materialized Lake View: ' + schema + '.' + node.name + ' (imported)'];
+    lines.push('CREATE SCHEMA IF NOT EXISTS ' + schema + ';');
+    lines.push('');
+
+    var upper = body.toUpperCase();
+    var isFullDdl = upper.indexOf('CREATE') !== -1 && upper.indexOf('MATERIALIZED LAKE VIEW') !== -1;
+    if (!isFullDdl) {
+      lines.push('CREATE MATERIALIZED LAKE VIEW IF NOT EXISTS ' + schema + '.' + node.name + ' AS');
+    }
+    if (body.charAt(body.length - 1) !== ';') body += ';';
+    lines.push(body);
 
     return {
       type: 'sql-mlv',

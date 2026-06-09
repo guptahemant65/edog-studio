@@ -73,6 +73,65 @@ function _ilSplitSchemaQualified(raw) {
   return { schema: null, name: clean };
 }
 
+function _ilNormalizeSourceRefs(src, currentLakehouseName) {
+  // FLT sourceEntities: [{ namespace: { schemaName, artifactName, workspaceName },
+  // tableName }]. Normalize to [{schema, table, lakehouse, crossLakehouse}].
+  var out = [];
+  if (!Array.isArray(src)) src = src ? [src] : [];
+  var curLh = String(currentLakehouseName || '').toLowerCase();
+  for (var i = 0; i < src.length; i++) {
+    var e = src[i] || {};
+    var ns = e.namespace || e.Namespace || {};
+    var table = e.tableName || e.TableName || e.name || e.Name || '';
+    if (!table) continue;
+    var schema = ns.schemaName || ns.SchemaName || e.schema || 'dbo';
+    var lh = ns.artifactName || ns.ArtifactName || '';
+    out.push({
+      schema: String(schema).toLowerCase(),
+      table: String(table).toLowerCase(),
+      lakehouse: lh,
+      crossLakehouse: !!(lh && curLh && String(lh).toLowerCase() !== curLh)
+    });
+  }
+  return out;
+}
+
+function _ilRewriteSourceRefs(viewText, importedList) {
+  // Rewrite QUALIFIED `schema.table` references in an imported MLV's SQL to the
+  // canonical (schema, name) of an imported node, fixing case/schema drift so
+  // the copied DAG is internally consistent. Only whole schema.table tokens are
+  // touched — bare identifiers (column names) are deliberately left alone, since
+  // FLT viewText always qualifies its FROM/JOIN sources.
+  if (!viewText || !importedList || !importedList.length) return viewText || '';
+
+  var byQualified = {};   // "schema.name" -> {schema, name}
+  var byBare = {};        // "name" -> {schema, name} | null when ambiguous
+  for (var i = 0; i < importedList.length; i++) {
+    var it = importedList[i];
+    if (!it || !it.name) continue;
+    var schema = String(it.schema || 'dbo').toLowerCase();
+    var name = String(it.name).toLowerCase();
+    byQualified[schema + '.' + name] = { schema: it.schema || 'dbo', name: it.name };
+    byBare[name] = Object.prototype.hasOwnProperty.call(byBare, name)
+      ? null  // duplicate bare name across schemas -> ambiguous, require qualified
+      : { schema: it.schema || 'dbo', name: it.name };
+  }
+
+  // Match optionally-bracketed `schema.table` tokens.
+  var re = /(\[?)([A-Za-z_][A-Za-z0-9_]*)(\]?)\.(\[?)([A-Za-z_][A-Za-z0-9_]*)(\]?)/g;
+  return viewText.replace(re, function(match, lb1, schemaTok, rb1, lb2, tableTok, rb2) {
+    var qkey = (schemaTok + '.' + tableTok).toLowerCase();
+    var hit = byQualified[qkey];
+    if (!hit) {
+      // Schema drift: same table name under a different schema, if unambiguous.
+      var bareHit = byBare[tableTok.toLowerCase()];
+      if (bareHit) hit = bareHit;
+    }
+    if (!hit) return match;  // not an imported node — leave verbatim
+    return hit.schema + '.' + hit.name;
+  });
+}
+
 function _ilSchemaLevel(schema) {
   var s = (schema || '').toLowerCase();
   if (s === 'gold') return 3;
@@ -114,6 +173,7 @@ class ImportLakehouseDialog {
     this._lakehouses = null;
     this._selectedWsId = null;
     this._selectedLhId = null;
+    this._selectedLhName = null;
     this._selectedCapId = null;
     this._tableItems = [];          // [{ name, schema, type, dependencies?, _checked }]
     this._dagPayload = null;        // raw getLatestDag response (when primary path succeeds)
@@ -263,6 +323,8 @@ class ImportLakehouseDialog {
 
     lhSel.addEventListener('change', function() {
       self._selectedLhId = lhSel.value || null;
+      var opt = lhSel.options[lhSel.selectedIndex];
+      self._selectedLhName = (opt && opt.textContent) || '';
       nextBtn.disabled = !(self._selectedWsId && self._selectedLhId);
     });
 
@@ -861,25 +923,42 @@ class ImportLakehouseDialog {
       self._finishDialog({ nodeCount: nodeCount, connCount: connCount });
     };
 
-    // For the fallback path, enrich MLV connections via per-table metadata
-    // (best-effort, bounded concurrency). Then run the import.
-    if (this._dagSource === 'tables') {
-      this._enrichDependenciesFromMetadata(selected).then(doImport).catch(doImport);
-    } else {
+    // Enrich every selected MLV with its definition (viewText) + source refs via
+    // per-table metadata, then rewrite intra-DAG refs to the imported node names
+    // before creating nodes. The tables-fallback path additionally derives
+    // connection dependencies here (captureDeps=true).
+    var finalize = function() {
+      self._rewriteImportedRefs(selected);
       doImport();
+    };
+    this._enrichFromMetadata(selected, this._dagSource === 'tables')
+      .then(finalize).catch(finalize);
+  }
+
+  _rewriteImportedRefs(selected) {
+    var importedList = [];
+    for (var i = 0; i < selected.length; i++) {
+      importedList.push({ schema: selected[i].schema, name: selected[i].name });
+    }
+    for (var j = 0; j < selected.length; j++) {
+      var it = selected[j];
+      if (it.viewText) {
+        it.viewText = _ilRewriteSourceRefs(it.viewText, importedList);
+      }
     }
   }
 
-  _enrichDependenciesFromMetadata(selected) {
+  _enrichFromMetadata(selected, captureDeps) {
     var self = this;
     var api = this._api;
     if (!api || typeof api.getTableMetadata !== 'function') return Promise.resolve();
 
     var queue = [];
     for (var i = 0; i < selected.length; i++) {
-      // Only fetch for items that might be MLVs (cheap) — but we don't know
-      // for certain in the fallback path. Probe everything; metadata returns
-      // null for plain tables which is fine.
+      // On the DAG path types are known — skip plain source tables (no code,
+      // no viewText) to save a round-trip. On the tables-fallback path types
+      // are unknown, so probe everything (metadata is null for plain tables).
+      if (!captureDeps && selected[i].type === 'sql-table') continue;
       queue.push(selected[i]);
     }
 
@@ -887,17 +966,26 @@ class ImportLakehouseDialog {
     var workers = [];
     var wsId = this._selectedWsId;
     var lhId = this._selectedLhId;
+    var lhName = this._selectedLhName || '';
 
     var pump = function() {
       if (index >= queue.length) return Promise.resolve();
       var item = queue[index++];
       return api.getTableMetadata(wsId, lhId, item.schema, item.name)
         .then(function(md) {
-          if (self._destroyed) return;
-          if (!md) return;
+          if (self._destroyed || !md) return;
           var src = md.sourceEntities || md.SourceEntities || [];
+          var viewText = md.viewText || md.ViewText || '';
+          // Capture the real definition (SQL MLVs only carry viewText; PySpark
+          // MLVs leave it empty — handled by the notebook path, shipping later).
+          if (viewText) {
+            item.viewText = viewText;
+            item.codeImported = true;
+          }
           if (src && src.length) {
-            // Upgrade type to MLV
+            item.sourceRefs = _ilNormalizeSourceRefs(src, lhName);
+          }
+          if (captureDeps && src && src.length) {
             var isPySpark = !!(md.language && String(md.language).toLowerCase().indexOf('pyspark') !== -1);
             item.type = isPySpark ? 'pyspark-mlv' : 'sql-mlv';
             item.dependencies = src;
@@ -939,7 +1027,10 @@ class ImportLakehouseDialog {
         var it = selected[i];
         var created = canvas.addNode(it.type, null, {
           name: it.name,
-          schema: it.schema || 'dbo'
+          schema: it.schema || 'dbo',
+          viewText: it.viewText || '',
+          sourceRefs: it.sourceRefs || [],
+          codeImported: !!it.codeImported
         });
         if (created && created.id) {
           nameToId[it.name.toLowerCase()] = created.id;
