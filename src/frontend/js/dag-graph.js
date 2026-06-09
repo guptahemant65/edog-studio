@@ -32,6 +32,10 @@ class DagCanvasRenderer {
     this._animFrame = 0;
     this._rafId = null;
     this._paused = false;
+    this._dirty = true;       // a repaint is pending
+    this._lastLOD = -1;       // last level-of-detail applied to node DOM
+    this._nodeEls = null;     // cached .dag-node element list (refreshed on rebuild)
+    this._renderBound = this._render.bind(this);  // bind once, not per frame
 
     // Callbacks
     this.onNodeSelected = null;
@@ -118,6 +122,7 @@ class DagCanvasRenderer {
     this._camera.x = (cw - rangeX * this._camera.scale) / 2 - (minX - pad) * this._camera.scale;
     this._camera.y = (ch - rangeY * this._camera.scale) / 2 - (minY - pad) * this._camera.scale;
     if (this.onViewportChanged) this.onViewportChanged({ x: this._camera.x, y: this._camera.y, scale: this._camera.scale });
+    this._requestRender();
   }
 
   updateNodeState(nodeId, status) {
@@ -126,12 +131,19 @@ class DagCanvasRenderer {
     node.status = status;
     var el = this._nodesLayer.querySelector('[data-id="' + nodeId + '"]');
     if (el) {
-      el.className = 'dag-node status-' + status;
-      if (this._selectedNodeId === nodeId) el.classList.add('selected');
-      if (this._highlightedNodeId === nodeId) el.classList.add('highlighted');
+      // Rebuild className but preserve the classes the (now LOD-gated) render
+      // loop no longer re-applies every frame: non-executable + current LOD.
+      var cls = 'dag-node status-' + status;
+      if (node.executable === false) cls += ' non-executable';
+      if (this._lastLOD === 1) cls += ' lod-mini';
+      else if (this._lastLOD === 2) cls += ' lod-detail';
+      if (this._selectedNodeIds.has(nodeId)) cls += ' selected';
+      if (this._highlightedNodeId === nodeId) cls += ' highlighted';
+      el.className = cls;
       var dot = el.querySelector('.dag-node-status-dot');
       if (dot) dot.style.background = this._statusColor(status);
     }
+    this._requestRender();
   }
 
   highlightNode(nodeId) {
@@ -139,6 +151,7 @@ class DagCanvasRenderer {
     this._highlightedNodeId = nodeId;
     var el = this._nodesLayer.querySelector('[data-id="' + nodeId + '"]');
     if (el) el.classList.add('highlighted');
+    this._requestRender();
   }
 
   clearHighlight() {
@@ -146,6 +159,7 @@ class DagCanvasRenderer {
       var el = this._nodesLayer.querySelector('[data-id="' + this._highlightedNodeId + '"]');
       if (el) el.classList.remove('highlighted');
       this._highlightedNodeId = null;
+      this._requestRender();
     }
   }
 
@@ -265,6 +279,7 @@ class DagCanvasRenderer {
             nodeEl.style.top = (node.y - node.h / 2) + 'px';
             // Update edge points that reference this node
             self._updateEdgesForNode(nodeId);
+            self._requestRender();
           }
           function onUp() {
             document.removeEventListener('mousemove', onMove);
@@ -297,6 +312,9 @@ class DagCanvasRenderer {
 
       this._nodesLayer.appendChild(el);
     }
+    // Refresh the cached element list + force LOD re-apply for the new node set.
+    this._nodeEls = this._nodesLayer.querySelectorAll('.dag-node');
+    this._lastLOD = -1;
   }
 
   /* ── Transform & LOD ── */
@@ -306,8 +324,15 @@ class DagCanvasRenderer {
     this._nodesLayer.style.transform = 'translate(' + cam.x + 'px,' + cam.y + 'px) scale(' + cam.scale + ')';
     this._nodesLayer.style.transformOrigin = '0 0';
 
+    // LOD only changes when the scale crosses a threshold. Re-applying the
+    // per-node opacity/pointer/class writes every frame was the second-worst
+    // lag source; gate it so the O(nodes) DOM loop runs only on LOD change.
     var lod = this._getLOD(cam.scale);
-    var nodeEls = this._nodesLayer.querySelectorAll('.dag-node');
+    if (lod === this._lastLOD) return;
+    this._lastLOD = lod;
+
+    var nodeEls = this._nodeEls ||
+      (this._nodeEls = this._nodesLayer.querySelectorAll('.dag-node'));
     for (const el of nodeEls) {
       if (lod === 0) {
         el.style.opacity = '0';
@@ -536,8 +561,20 @@ class DagCanvasRenderer {
 
   /* ── Render loop ── */
 
+  /**
+   * Render one frame. The loop is demand-driven: it only re-schedules itself
+   * while something is actually animating (a running node drives the flowing
+   * edge-dash via _animFrame) or another frame was explicitly requested via
+   * _requestRender(). When the DAG is idle it stops entirely instead of
+   * burning a full canvas repaint at 60fps forever.
+   */
   _render() {
+    this._rafId = null;
     if (this._paused) return;
+
+    var animating = this._anyRunning();
+    if (!this._dirty && !animating) return;  // idle — sleep until _requestRender()
+    this._dirty = false;
 
     this._animFrame++;
     var w = this._canvas.width / this._dpr;
@@ -554,13 +591,33 @@ class DagCanvasRenderer {
     // Minimap every 3rd frame
     if (this._animFrame % 3 === 0) this._drawMinimap();
 
-    this._rafId = requestAnimationFrame(this._render.bind(this));
+    // Keep looping only while a node is running (flowing-dash animation) or a
+    // frame was requested mid-render; otherwise fall idle.
+    if (animating || this._dirty) {
+      this._rafId = requestAnimationFrame(this._renderBound);
+    }
+  }
+
+  /** Request a single repaint, waking the render loop if it is asleep. */
+  _requestRender() {
+    this._dirty = true;
+    if (!this._rafId && !this._paused) {
+      this._rafId = requestAnimationFrame(this._renderBound);
+    }
+  }
+
+  /** True while any node is running (drives the per-frame edge animation). */
+  _anyRunning() {
+    var nodes = this._nodes;
+    for (var i = 0; i < nodes.length; i++) {
+      if (nodes[i].status === 'running') return true;
+    }
+    return false;
   }
 
   _startRenderLoop() {
-    if (this._rafId) cancelAnimationFrame(this._rafId);
     this._paused = false;
-    this._rafId = requestAnimationFrame(this._render.bind(this));
+    this._requestRender();
   }
 
   /* ── Event handling ── */
@@ -594,12 +651,14 @@ class DagCanvasRenderer {
     this._nodesLayer.querySelectorAll('.dag-node.selected').forEach(function(el) { el.classList.remove('selected'); });
     if (this.onNodeSelected) this.onNodeSelected(null);
     if (this.onSelectionChanged) this.onSelectionChanged([]);
+    this._requestRender();
   }
 
   _onMouseMove(e) {
     if (this._isPanning) {
       this._camera.x = this._camStart.x + (e.clientX - this._panStart.x);
       this._camera.y = this._camStart.y + (e.clientY - this._panStart.y);
+      this._requestRender();
     }
   }
 
@@ -628,10 +687,12 @@ class DagCanvasRenderer {
     this._camera.y = my - (my - this._camera.y) * ratio;
     this._camera.scale = newScale;
     if (this.onViewportChanged) this.onViewportChanged({ x: this._camera.x, y: this._camera.y, scale: this._camera.scale });
+    this._requestRender();
   }
 
   _onResize() {
     this._resize();
+    this._requestRender();
   }
 
   _zoomAt(factor) {
@@ -643,6 +704,7 @@ class DagCanvasRenderer {
     this._camera.y = ch - (ch - this._camera.y) * ratio;
     this._camera.scale = newScale;
     if (this.onViewportChanged) this.onViewportChanged({ x: this._camera.x, y: this._camera.y, scale: this._camera.scale });
+    this._requestRender();
   }
 
   /* ── Helpers ── */
@@ -683,6 +745,7 @@ class DagCanvasRenderer {
     });
     if (this.onNodeSelected) this.onNodeSelected(this._selectedNodeId);
     if (this.onSelectionChanged) this.onSelectionChanged(Array.from(ids));
+    this._requestRender();
   }
 
   /** Returns the current multi-selection as a plain array (may be empty). */
