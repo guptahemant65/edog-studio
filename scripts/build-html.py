@@ -109,6 +109,7 @@ JS_MODULES = [
     "js/dag-studio.js",
     "js/control-panel.js",
     "js/topbar.js",
+    "js/branch-switcher.js",
     "js/deploy-strip.js",
     "js/patch-warnings-banner.js",
     "js/edog-health-chip.js",
