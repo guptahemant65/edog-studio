@@ -1260,14 +1260,62 @@ def _capacity_base_path(cap_id: str, ws_id: str) -> str:
     return f"/webapi/capacities/{cap_id}/workloads/Lakehouse/LakehouseService/automatic/v1/workspaces/{ws_id}"
 
 
-def _find_token_helper() -> Path | None:
-    """Locate the compiled token-helper.exe, preferring net8.0 then net472."""
+# One-time lazy build of token-helper. The default `edog` launch opens the browser
+# UI and never runs the CLI auth path (edog.py `_acquire_token_silent_cba`), which is
+# the ONLY place that built the helper. So on a fresh devbox the helper exe never
+# existed and onboarding's /api/edog/certs returned "token-helper not built". We build
+# it here, on first lookup, guarded so concurrent requests don't race `dotnet build`.
+_token_helper_build_lock = threading.Lock()
+_token_helper_build_attempted = False
+
+
+def _find_token_helper(auto_build: bool = True) -> Path | None:
+    """Locate the compiled token-helper.exe, preferring net8.0 then net472.
+
+    On first call, if no exe exists and ``auto_build`` is set, lazily build it via
+    ``dotnet build`` (once per process). Returns None if it cannot be located or built.
+    """
     base = PROJECT_DIR / "scripts" / "token-helper" / "bin" / "Debug"
-    for tfm in ("net8.0", "net472"):
-        candidate = base / tfm / "token-helper.exe"
-        if candidate.exists():
-            return candidate
-    return None
+
+    def _locate() -> Path | None:
+        for tfm in ("net8.0", "net472"):
+            candidate = base / tfm / "token-helper.exe"
+            if candidate.exists():
+                return candidate
+        return None
+
+    found = _locate()
+    if found is not None or not auto_build:
+        return found
+
+    global _token_helper_build_attempted
+    with _token_helper_build_lock:
+        # Re-check inside the lock: another thread may have just built it.
+        found = _locate()
+        if found is not None:
+            return found
+        if _token_helper_build_attempted:
+            return None
+        _token_helper_build_attempted = True
+        csproj = PROJECT_DIR / "scripts" / "token-helper" / "token-helper.csproj"
+        if not csproj.exists():
+            return None
+        print("[AUTH] token-helper not built — building once via dotnet...")
+        try:
+            build = subprocess.run(
+                ["dotnet", "build", str(csproj), "-v", "q"],
+                capture_output=True,
+                text=True,
+                timeout=300,
+            )
+        except (subprocess.SubprocessError, FileNotFoundError, OSError) as exc:
+            print(f"[AUTH] token-helper build failed to start: {exc}")
+            return None
+        if build.returncode != 0:
+            print(f"[AUTH] token-helper build failed:\n{build.stderr.strip()[:500]}")
+            return None
+        print("[AUTH] token-helper built.")
+        return _locate()
 
 
 def _parse_jwt_expiry(jwt: str) -> float:
@@ -5311,13 +5359,17 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         self._json_response(200, envelope_out)
 
     def _serve_certs(self):
-        """List CBA certs from Windows cert store."""
-        helper = PROJECT_DIR / "scripts" / "token-helper" / "bin" / "Debug" / "net8.0" / "token-helper.exe"
-        if not helper.exists():
-            # Try net472 fallback
-            helper = PROJECT_DIR / "scripts" / "token-helper" / "bin" / "Debug" / "net472" / "token-helper.exe"
-        if not helper.exists():
-            self._json_response(500, {"error": "token-helper not built"})
+        """List CBA certs from Windows cert store.
+
+        Routes through _find_token_helper() so a fresh devbox builds the helper on the
+        first onboarding cert scan instead of returning "token-helper not built".
+        """
+        helper = _find_token_helper()
+        if helper is None:
+            self._json_response(
+                500,
+                {"error": "token-helper unavailable — build failed or .NET SDK (dotnet) not on PATH"},
+            )
             return
         try:
             result = subprocess.run(
