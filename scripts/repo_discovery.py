@@ -204,13 +204,21 @@ def get_configured_swagger_path(config: dict) -> Path | None:
     return get_flt_swagger_path(repo_info["path"])
 
 
+# Microsoft Dev Box guarantees a dedicated local dev drive mounted at Q:\ —
+# devbox users clone repos there, not under C:\Users (the OS disk). The scan
+# below is otherwise home-rooted (C:), so without this a devbox user gets an
+# empty auto-scan and has to paste the path by hand. Existence-gated at search
+# time, so on a non-devbox machine (no Q:\) it's a zero-cost no-op.
+DEVBOX_DRIVE_ROOT = Path("Q:/")
+
+
 def find_flt_repos(
     *,
     max_depth: int = 4,
     limit: int = 10,
     timeout_sec: float = 5.0,
 ) -> dict:
-    """Scan home directory for FLT repos.
+    """Scan for FLT repos under the home dir and the devbox Q:\\ drive.
 
     Returns dict: {found: [str], partial: bool, timedOut: bool}
     """
@@ -244,7 +252,10 @@ def find_flt_repos(
         except (PermissionError, OSError):
             pass
 
-    # Prioritize common dev directories before broad home scan
+    # Prioritize common dev directories before broad home scan. C:-home roots
+    # come first so the common (laptop) case returns instantly; the devbox Q:\
+    # root is appended so a devbox — whose repos live on Q:, not C: — still
+    # auto-detects without falling through to the slower broad scans.
     priority_dirs = [
         home / "source" / "repos",
         home / "repos",
@@ -253,6 +264,8 @@ def find_flt_repos(
         home / "projects",
         home / "code",
         Path.cwd(),
+        DEVBOX_DRIVE_ROOT / "src",
+        DEVBOX_DRIVE_ROOT,
     ]
     for d in priority_dirs:
         if d.exists() and d.is_dir():
@@ -260,9 +273,12 @@ def find_flt_repos(
         if found or timed_out:
             break
 
-    # If nothing found in priority dirs, scan home (broader)
+    # If nothing found in priority dirs, scan home (broader), then — for a
+    # devbox whose layout didn't match the priority roots — the Q:\ drive.
     if not found and not timed_out:
         _search(home)
+    if not found and not timed_out and DEVBOX_DRIVE_ROOT.exists():
+        _search(DEVBOX_DRIVE_ROOT)
 
     return {
         "found": found,
