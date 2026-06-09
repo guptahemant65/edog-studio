@@ -196,3 +196,21 @@ def test_stash_apply_restores(git_repo: Path):
     applied = gb.stash_apply(str(git_repo), ref)
     assert applied["ok"] is True
     assert "WIP" in (git_repo / "README.md").read_text()
+
+
+def test_stash_apply_uses_specific_ref_after_newer_stash(git_repo: Path):
+    gb = _load_git_branches()
+    (git_repo / "OTHER.md").write_text("other\n", encoding="utf-8")
+    _git(git_repo, "add", "OTHER.md")
+    _git(git_repo, "commit", "-q", "-m", "other file")
+
+    (git_repo / "README.md").write_text("base\nIMPORTANT_WIP\n", encoding="utf-8")
+    res = gb.checkout_branch(str(git_repo), "main", "stash", set())
+    ref = res["stashed"]
+
+    (git_repo / "OTHER.md").write_text("unrelated\n", encoding="utf-8")
+    _git(git_repo, "stash", "push", "-m", "unrelated")
+
+    applied = gb.stash_apply(str(git_repo), ref)
+    assert applied["ok"] is True
+    assert "IMPORTANT_WIP" in (git_repo / "README.md").read_text()

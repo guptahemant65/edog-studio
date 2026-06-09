@@ -5787,9 +5787,6 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         result = git_branches.checkout_branch(
             repo_path, branch, on_dirty, edog_patched
         )
-        # Add the don't-lose-work counts for the branch we just left.
-        if result.get("ok"):
-            result["leftUnpushed"] = 0  # post-switch count is on the new branch
         status = 200 if result.get("ok") else 409
         if result.get("error") in {"unknown_branch", "bad_on_dirty"}:
             status = 400

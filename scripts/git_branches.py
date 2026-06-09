@@ -287,6 +287,10 @@ def checkout_branch(
                 "leftBranch": left,
             }
         stashed_ref = "stash@{0}"
+        _, sha, _ = _run_git(repo_path, ["rev-parse", "stash@{0}"])
+        sha = sha.strip()
+        if sha:
+            stashed_ref = sha
     elif user_paths and on_dirty == "discard":
         # Restore only tracked user paths; untracked user files are left alone.
         _run_git(repo_path, ["checkout", "--", *user_paths])
