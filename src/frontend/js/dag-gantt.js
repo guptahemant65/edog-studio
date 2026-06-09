@@ -174,6 +174,28 @@ var DagGantt = (function() {
     this._endTime = null;
   };
 
+  /**
+   * Pause live updates without losing bars (e.g. when the DAG tab is hidden).
+   * Stops the 200ms interval so it doesn't keep firing off-screen.
+   */
+  DagGantt.prototype.pause = function() {
+    this._stopLiveTimer();
+  };
+
+  /** Resume live updates, but only if a node is still running. */
+  DagGantt.prototype.resume = function() {
+    if (this._liveTimer) return;
+    var iter = this._bars.values();
+    var next = iter.next();
+    while (!next.done) {
+      if (next.value.status === 'running') {
+        this._startLiveTimer();
+        return;
+      }
+      next = iter.next();
+    }
+  };
+
   // --- Private ---
 
   /** Recalculate all bar positions and widths based on the time range. */

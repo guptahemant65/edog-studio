@@ -7,6 +7,18 @@
  * State machine: pending -> running -> completed|failed|cancelled|skipped
  * Special: pending -> skipped (dependency failed), running -> cancelling -> cancelled
  */
+
+// Diagnostic logging gate. OFF by default so the per-telemetry-event logs
+// below cost nothing (no string building, no JSON.stringify) on the hot path.
+// Enable from the browser console: localStorage.setItem('edog.dag.debug','1')
+var DAG_DEBUG = (function () {
+  try {
+    return typeof localStorage !== 'undefined' && localStorage.getItem('edog.dag.debug') === '1';
+  } catch (e) {
+    return false;
+  }
+})();
+
 class ExecutionStateManager {
   constructor() {
     this._activeIterationId = null;
@@ -72,7 +84,7 @@ class ExecutionStateManager {
     // Telemetry topic streams {sequenceId, timestamp, topic, data} — unwrap
     var t = event.data || event;
     if (!t || !t.activityName) {
-      console.log('[ESM-DIAG] Telemetry skipped — no activityName:', t);
+      if (DAG_DEBUG) console.log('[ESM-DIAG] Telemetry skipped — no activityName:', t);
       return;
     }
     // 2026-06-07 telemetry-correctness fix: skip Additional channel
@@ -89,10 +101,10 @@ class ExecutionStateManager {
     // Check iterationId from multiple sources (FLT may use attributes or correlationId)
     var evtIterId = t.iterationId || (t.attributes && (t.attributes.iterationId || t.attributes.IterationId)) || null;
     if (evtIterId && evtIterId !== this._activeIterationId) {
-      console.log('[ESM-DIAG] Telemetry skipped — iteration mismatch:', evtIterId, 'vs', this._activeIterationId);
+      if (DAG_DEBUG) console.log('[ESM-DIAG] Telemetry skipped — iteration mismatch:', evtIterId, 'vs', this._activeIterationId);
       return;
     }
-    console.log('[ESM-DIAG] Processing telemetry:', t.activityName, t.activityStatus, 'attrs:', JSON.stringify(t.attributes || {}).substring(0, 200));
+    if (DAG_DEBUG) console.log('[ESM-DIAG] Processing telemetry:', t.activityName, t.activityStatus, 'attrs:', JSON.stringify(t.attributes || {}).substring(0, 200));
     // Execution-level telemetry (RunDAG / RunDag — case-insensitive)
     if (t.activityName.toLowerCase() === 'rundag') {
       this._processExecutionTelemetry(t);
@@ -101,7 +113,7 @@ class ExecutionStateManager {
     // Node-level telemetry
     var ts = this._toMs(event.timestamp || t.timestamp);
     var nodeId = this._resolveNodeId(t);
-    console.log('[ESM-DIAG] Resolved nodeId:', nodeId, 'for activity:', t.activityName);
+    if (DAG_DEBUG) console.log('[ESM-DIAG] Resolved nodeId:', nodeId, 'for activity:', t.activityName);
     if (nodeId) this._processNodeTelemetry(nodeId, t, ts);
   }
 
@@ -513,6 +525,8 @@ class DagStudio {
     // Lazy init gantt
     if (!this._gantt) {
       this._gantt = new DagGantt(this._ganttContainer);
+    } else {
+      this._gantt.resume();
     }
     // Cross-highlighting: renderer → gantt
     var self = this;
@@ -606,6 +620,13 @@ class DagStudio {
     // user is on another tab.
     // Pause rendering
     if (this._renderer) this._renderer.pauseRendering();
+    // Stop the gantt live timer so it doesn't keep firing on a hidden tab
+    if (this._gantt) this._gantt.pause();
+    // Drop any pending summary frame so it doesn't fire off-screen
+    if (this._summaryRaf) {
+      cancelAnimationFrame(this._summaryRaf);
+      this._summaryRaf = null;
+    }
     // Remove keyboard listener
     document.removeEventListener('keydown', this._onKeyDown);
     // Stop intervals
@@ -1184,7 +1205,7 @@ class DagStudio {
     // mirrors. See processTelemetry for full rationale.
     var t = event && event.data ? event.data : event;
     if (t && (t.channel || 'ssr') === 'additional') return;
-    console.log('[DAG-DIAG] Telemetry event:', t ? t.activityName : 'no-data', event);
+    if (DAG_DEBUG) console.log('[DAG-DIAG] Telemetry event:', t ? t.activityName : 'no-data', event);
     this._esm.processTelemetry(event);
   }
 
@@ -1195,12 +1216,12 @@ class DagStudio {
     var msg = log.message || '';
     // Only log DAG-relevant messages to avoid flooding
     if (msg.includes('DAG') || msg.includes('Executing') || msg.includes('Executed') || msg.includes('node') || msg.includes('faulted')) {
-      console.log('[DAG-DIAG] Log entry:', msg.substring(0, 120), 'iterationId:', log.iterationId);
+      if (DAG_DEBUG) console.log('[DAG-DIAG] Log entry:', msg.substring(0, 120), 'iterationId:', log.iterationId);
     }
     this._autoDetector.processLog(log);
     var exec = this._autoDetector.detectedExecutions.get(this._esm.activeIterationId);
     if (exec) {
-      console.log('[DAG-DIAG] AutoDetector match for', this._esm.activeIterationId, 'status:', exec.status, 'nodes:', exec.nodes ? exec.nodes.size : 0);
+      if (DAG_DEBUG) console.log('[DAG-DIAG] AutoDetector match for', this._esm.activeIterationId, 'status:', exec.status, 'nodes:', exec.nodes ? exec.nodes.size : 0);
       this._esm.processAutoDetectorUpdate(exec);
     }
   }
@@ -1216,7 +1237,7 @@ class DagStudio {
     if (!this._active) return;
     this._renderControls(status);
     this._renderStatus(status);
-    this._updateSummary();
+    this._scheduleSummaryUpdate();
     if (status !== 'running') {
       this._stopElapsedTimer();
       if (this._statusTimer) this._statusTimer.style.display = 'none';
@@ -1224,11 +1245,11 @@ class DagStudio {
   }
 
   _onNodeStateChanged(nodeId, state) {
-    console.log('[DAG-DIAG] Node state changed:', nodeId.substring(0, 8), state.status, state.source);
+    if (DAG_DEBUG) console.log('[DAG-DIAG] Node state changed:', nodeId.substring(0, 8), state.status, state.source);
     if (!this._active) return;
     if (this._renderer) this._renderer.updateNodeState(nodeId, state.status);
     if (this._gantt) this._gantt.updateBar(nodeId, state);
-    this._updateSummary();
+    this._scheduleSummaryUpdate();
   }
 
   _onExecutionComplete(iterationId, finalStatus) {
@@ -1632,7 +1653,26 @@ class DagStudio {
     return 'var(--status-pending)';
   }
 
+  /**
+   * Coalesce summary refreshes to one per animation frame. During a telemetry
+   * burst many node-state events land in a single frame; without this each one
+   * triggered a full nodeStates scan plus 5 DOM writes (O(N^2) over a run).
+   */
+  _scheduleSummaryUpdate() {
+    if (this._summaryRaf) return;
+    var self = this;
+    this._summaryRaf = requestAnimationFrame(function () {
+      self._summaryRaf = null;
+      self._updateSummary();
+    });
+  }
+
   _updateSummary() {
+    // A direct call supersedes any pending debounced frame.
+    if (this._summaryRaf) {
+      cancelAnimationFrame(this._summaryRaf);
+      this._summaryRaf = null;
+    }
     var total = this._esm.nodeStates.size;
     var ok = 0;
     var fail = 0;
