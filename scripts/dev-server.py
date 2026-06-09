@@ -289,6 +289,26 @@ EDOG_CONTROL_TOKEN = secrets.token_urlsafe(32)
 _FM_CACHE = feature_manager_cache.FeatureManagementCache()
 
 
+def _seed_and_sync_fm_cache(flt_repo_path: str) -> None:
+    """Seed the FM cache's wire-key allowlist from FLT, then kick a sync.
+
+    Shared by the catalog HTTP handler (lazy, on tab-open) and the boot-time
+    warm-up thread so the two never drift. Seeding the declared keys first
+    caps indexing to the ~30-50 FLT-declared flags instead of the full ~13K
+    FM repo. Both steps are best-effort and non-blocking — ``ensure_synced``
+    returns immediately and the actual clone/index runs on a daemon thread.
+    """
+    try:
+        declared = feature_flags_catalog.parse_feature_names(Path(flt_repo_path))
+        _FM_CACHE.set_declared_keys(e["wireKey"] for e in declared)
+    except Exception:
+        traceback.print_exc()
+    try:
+        _FM_CACHE.ensure_synced()
+    except Exception:
+        traceback.print_exc()
+
+
 def _is_edog_patch_warning(line: str) -> bool:
     """True if a deploy stdout line represents an edog.py regex-anchor failure.
 
@@ -6086,25 +6106,11 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             return
 
         overrides_snapshot, _, _ = feature_overrides.get_snapshot()
-        # Seed the FM cache with the wire keys declared by FLT before the
-        # background sync runs. This caps indexing to ~30-50 files instead
-        # of the full ~13K FM repo. parse_feature_names is cheap (one .cs
-        # file read + regex) so calling it here in addition to inside
-        # build_catalog is acceptable.
-        try:
-            declared = feature_flags_catalog.parse_feature_names(Path(flt_repo_path))
-            _FM_CACHE.set_declared_keys(e["wireKey"] for e in declared)
-        except FileNotFoundError as e:
-            self._json_response(500, {"error": "feature_names_missing", "detail": str(e)})
-            return
-        except Exception:
-            traceback.print_exc()
-        # Non-blocking: ensure a background sync is in flight when we're cold
-        # or past TTL. UI gets stale=true in the response and re-polls.
-        try:
-            _FM_CACHE.ensure_synced()
-        except Exception:
-            traceback.print_exc()
+        # Seed the FM cache's wire-key allowlist from FLT and kick a non-blocking
+        # sync. Caps indexing to ~30-50 declared flags; UI gets stale=true while
+        # the clone runs and re-polls. (Missing FeatureNames.cs surfaces as a 500
+        # from build_catalog below.)
+        _seed_and_sync_fm_cache(flt_repo_path)
         try:
             payload = feature_flags_catalog.build_catalog(
                 Path(flt_repo_path),
@@ -8055,10 +8061,30 @@ if __name__ == "__main__":
             except Exception as e:
                 print(f"  ⚠ Drift detection tick failed: {e}")
 
+    # ── Feature-flag FM-cache warm-up ────────────────────────────────
+    # Front-run the cold-start tax: instead of waiting for the first
+    # Environment-tab open to trigger the FM-repo clone (~10s, shows
+    # stale=true while it lands), kick the seed+sync at boot. Idempotent
+    # with the lazy path — if the tab opens mid-clone, ensure_synced
+    # no-ops on the in-flight guard and the same clone is reused. Skips
+    # cleanly when flt_repo_path isn't configured yet (disconnected phase),
+    # in which case the lazy on-tab-open path still covers it.
+    def _warm_fm_cache():
+        try:
+            cfg = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
+        except (OSError, json.JSONDecodeError):
+            return
+        flt_repo_path = cfg.get("flt_repo_path", "")
+        if not flt_repo_path or not Path(flt_repo_path).is_dir():
+            return  # disconnected phase — defer to lazy on-tab-open sync
+        print("  ▸ Warming FeatureManagement cache in the background…")
+        _seed_and_sync_fm_cache(flt_repo_path)
+
     # Cold-start clear runs once in a daemon thread (defers ConnectionRefused
     # latency away from the main listen path).
     threading.Thread(target=_coldstart_clear_flt_overrides, daemon=True, name="edog-coldstart").start()
     threading.Thread(target=_drift_detection_loop, daemon=True, name="edog-drift").start()
+    threading.Thread(target=_warm_fm_cache, daemon=True, name="edog-fm-warmup").start()
 
     try:
         server.serve_forever()
