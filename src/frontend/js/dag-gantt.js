@@ -196,6 +196,27 @@ var DagGantt = (function() {
     }
   };
 
+  /** Loading state while execution metrics are being fetched. */
+  DagGantt.prototype.renderLoading = function() {
+    this._stopLiveTimer();
+    this._bars.clear();
+    this._startTime = null;
+    this._endTime = null;
+    this._container.innerHTML =
+      '<div class="dag-empty-hint gantt-loading"><span class="dag-loading-spinner"></span>Loading timeline\u2026</div>';
+  };
+
+  /** Error state when execution metrics fail to load. */
+  DagGantt.prototype.renderError = function(message) {
+    this._stopLiveTimer();
+    this._bars.clear();
+    this._startTime = null;
+    this._endTime = null;
+    var safe = String(message || 'Failed to load timeline')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    this._container.innerHTML = '<div class="dag-empty-hint gantt-error">\u26A0 ' + safe + '</div>';
+  };
+
   // --- Private ---
 
   /** Recalculate all bar positions and widths based on the time range. */

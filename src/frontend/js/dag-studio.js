@@ -49,6 +49,7 @@ class ExecutionStateManager {
   setDag(dag) {
     this._dagNodes.clear();
     this._nodeNameIndex.clear();
+    this._downstream = new Map(); // nodeId -> [childNodeId] for skip-cascade
     if (!dag || !dag.nodes) return;
     for (var i = 0; i < dag.nodes.length; i++) {
       var node = dag.nodes[i];
@@ -56,6 +57,13 @@ class ExecutionStateManager {
       if (node.name) {
         this._nodeNameIndex.set(node.name.toLowerCase(), node.nodeId);
       }
+    }
+    var edges = Array.isArray(dag.edges) ? dag.edges : [];
+    for (var j = 0; j < edges.length; j++) {
+      var from = edges[j].from, to = edges[j].to;
+      if (!from || !to) continue;
+      if (!this._downstream.has(from)) this._downstream.set(from, []);
+      this._downstream.get(from).push(to);
     }
   }
 
@@ -243,6 +251,8 @@ class ExecutionStateManager {
     var activityStatus = (t.activityStatus || '').toLowerCase();
     var attrs = t.attributes || {};
     var errorCode = t.errorCode || attrs.errorCode || attrs.ErrorCode || null;
+    var errorMessage = t.errorMessage || attrs.errorMessage || attrs.ErrorMessage ||
+      attrs.exceptionMessage || attrs.message || null;
     // Infer startedAt from duration if this is a terminal event and we have no prior start
     var inferredStart = current.startedAt;
     if (!inferredStart && t.durationMs) {
@@ -273,6 +283,7 @@ class ExecutionStateManager {
         startedAt: inferredStart,
         endedAt: timestamp || Date.now(),
         errorCode: errorCode,
+        errorMessage: errorMessage,
         source: 'telemetry',
       };
     } else if (activityStatus === 'cancelled' || activityStatus === 'canceled') {
@@ -336,9 +347,10 @@ class ExecutionStateManager {
     if (!current) return;
     var validTransitions = {
       // FLT may emit terminal-only events (e.g., Succeeded without prior Started)
-      pending: ['running', 'completed', 'failed', 'cancelled', 'skipped'],
-      running: ['completed', 'failed', 'cancelled', 'cancelling'],
-      cancelling: ['cancelled'],
+      pending: ['running', 'completed', 'failed', 'cancelled', 'skipped', 'cancelling'],
+      running: ['completed', 'failed', 'cancelled', 'cancelling', 'skipped'],
+      // A node can race to a terminal result after cancel was requested.
+      cancelling: ['cancelled', 'completed', 'failed'],
     };
     var allowed = validTransitions[current.status];
     if (!allowed || allowed.indexOf(state.status) === -1) {
@@ -349,7 +361,44 @@ class ExecutionStateManager {
     }
     this._nodeStates.set(nodeId, state);
     if (this.onNodeStateChanged) this.onNodeStateChanged(nodeId, state);
+    if (state.status === 'failed') this.applyFailureCascade();
     this._checkCompletion();
+  }
+
+  /**
+   * Propagate skips downstream of every failed node. A node that still has a
+   * faulted ancestor will never run, so any 'pending' descendant is marked
+   * 'skipped' with skipCause set to the originating failed node (so the detail
+   * panel can explain *why* it was skipped). Idempotent — safe to call after
+   * telemetry or a metrics poll.
+   */
+  applyFailureCascade() {
+    if (!this._downstream || this._downstream.size === 0) return;
+    var queue = [];
+    for (var entry of this._nodeStates) {
+      if (entry[1].status === 'failed') queue.push({ id: entry[0], cause: entry[0] });
+    }
+    if (queue.length === 0) return;
+    var visited = new Set();
+    while (queue.length) {
+      var cur = queue.shift();
+      var kids = this._downstream.get(cur.id) || [];
+      for (var k = 0; k < kids.length; k++) {
+        var childId = kids[k];
+        if (visited.has(childId)) continue;
+        visited.add(childId);
+        var st = this._nodeStates.get(childId);
+        if (st && st.status === 'pending') {
+          var skipState = {
+            status: 'skipped', startedAt: null, endedAt: null,
+            errorCode: null, errorMessage: null, skipCause: cur.cause, source: 'cascade',
+          };
+          this._nodeStates.set(childId, skipState);
+          if (this.onNodeStateChanged) this.onNodeStateChanged(childId, skipState);
+        }
+        queue.push({ id: childId, cause: cur.cause });
+      }
+    }
   }
 
   /** Check if all nodes reached terminal state. */
@@ -458,6 +507,9 @@ class DagStudio {
     this._sumFail = document.getElementById('dagSumFail');
     this._sumRun = document.getElementById('dagSumRun');
     this._sumDur = document.getElementById('dagSumDur');
+    this._sumSkip = document.getElementById('dagSumSkip');
+    this._sumCancel = document.getElementById('dagSumCancel');
+    this._sumPend = document.getElementById('dagSumPend');
 
     // Bind event handlers
     this._onTelemetryEvent = this._onTelemetryEvent.bind(this);
@@ -467,6 +519,7 @@ class DagStudio {
     this._onRefreshClick = this._onRefreshClick.bind(this);
     this._onUnlockClick = this._onUnlockClick.bind(this);
     this._onKeyDown = this._onKeyDown.bind(this);
+    this._onSignalRStatus = this._onSignalRStatus.bind(this);
 
     // ESM callbacks
     this._esm.onNodeStateChanged = this._onNodeStateChanged.bind(this);
@@ -592,6 +645,11 @@ class DagStudio {
     this._signalR.subscribeTopic('telemetry');
     this._signalR.on('log', this._onLogEntry);
     this._signalR.subscribeTopic('log');
+    // Watch the transport so a drop+reconnect mid-run reconciles via REST
+    // instead of freezing the graph at the last event we received.
+    if (typeof this._signalR.addStatusListener === 'function') {
+      this._signalR.addStatusListener(this._onSignalRStatus);
+    }
     // Keyboard shortcuts
     document.addEventListener('keydown', this._onKeyDown);
     // Snapshot execution state before async work
@@ -629,10 +687,56 @@ class DagStudio {
     }
     // Remove keyboard listener
     document.removeEventListener('keydown', this._onKeyDown);
+    // Stop watching the transport + clear any connection banner
+    if (this._signalR && typeof this._signalR.removeStatusListener === 'function') {
+      this._signalR.removeStatusListener(this._onSignalRStatus);
+    }
+    this._showConnBanner(false);
     // Stop intervals
     this._stopLockCheck();
     this._stopElapsedTimer();
     this._stopExecPoller();
+  }
+
+  /**
+   * React to SignalR transport changes. While a run is live, surface a banner
+   * during reconnect/disconnect and, once reconnected, reconcile node state
+   * via REST so we don't sit on a frozen graph.
+   */
+  _onSignalRStatus(status) {
+    if (!this._active) return;
+    var running = this._esm.status === 'running' || this._esm.status === 'cancelling';
+    if (status === 'reconnecting' || status === 'disconnected') {
+      if (running) {
+        this._connLost = true;
+        this._showConnBanner(true, status === 'reconnecting'
+          ? 'Reconnecting\u2026' : 'Connection lost \u2014 retrying\u2026');
+      }
+    } else if (status === 'connected') {
+      var wasLost = this._connLost;
+      this._connLost = false;
+      this._showConnBanner(false);
+      if (wasLost && running) {
+        this._lastMetricsReconcile = Date.now();
+        this._pollExecMetrics();
+      }
+    }
+  }
+
+  /** Show/hide a small connection banner over the graph panel. */
+  _showConnBanner(show, text) {
+    if (!this._graphPanel) return;
+    var el = this._graphPanel.querySelector('.dag-conn-banner');
+    if (!show) {
+      if (el) el.remove();
+      return;
+    }
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'dag-conn-banner';
+      this._graphPanel.appendChild(el);
+    }
+    el.innerHTML = '<span class="dag-conn-dot"></span>' + this._escapeHtml(text || 'Reconnecting\u2026');
   }
 
   async _loadDag() {
@@ -709,7 +813,7 @@ class DagStudio {
       this._updateSummary();
     } catch (err) {
       console.error('[DagStudio] Failed to load DAG:', err);
-      this._renderEmpty('Failed to load DAG: ' + (err.message || err));
+      this._renderError('Failed to load DAG: ' + (err.message || err));
     }
   }
 
@@ -977,7 +1081,8 @@ class DagStudio {
     this._stopExecPoller();
     var self = this;
     this._execPollInterval = setInterval(function() {
-      if (!self._esm.activeIterationId || self._esm.status !== 'running') {
+      var st = self._esm.status;
+      if (!self._esm.activeIterationId || (st !== 'running' && st !== 'cancelling')) {
         self._stopExecPoller();
         return;
       }
@@ -1014,8 +1119,24 @@ class DagStudio {
         await this._pollExecMetrics();
         return;
       }
-      // Still running — update summary
+      if (status === 'notfound') {
+        // The iteration is gone (expired/purged). Stop polling and tell the
+        // user explicitly instead of spinning on a phantom "running".
+        this._stopExecPoller();
+        this._renderControls('notfound');
+        this._renderStatus('notfound');
+        return;
+      }
+      // Still running — refresh counts, and periodically re-fetch full node
+      // metrics so a node that silently got stuck (no telemetry, e.g. after a
+      // dropped socket) self-heals via REST instead of hanging forever.
       this._updateSummary();
+      if (Date.now() - (this._lastMetricsReconcile || 0) > 15000) {
+        this._lastMetricsReconcile = Date.now();
+        this._pollInFlight = false;
+        await this._pollExecMetrics();
+        return;
+      }
     } catch (err) {
       console.log('[DAG-DIAG] Status poll failed:', err.message);
     } finally {
@@ -1059,11 +1180,15 @@ class DagStudio {
             startedAt: startMs,
             endedAt: endMs,
             errorCode: nm.errorCode || null,
+            errorMessage: nm.errorMessage || nm.exceptionMessage || null,
             source: 'poll',
           });
           if (this._esm.onNodeStateChanged) this._esm.onNodeStateChanged(nid, this._esm._nodeStates.get(nid));
         }
       }
+      // Poll results are applied directly (bypassing _updateNodeState), so run
+      // the skip-cascade here too for any failures the poll surfaced.
+      this._esm.applyFailureCascade();
 
       // Always refresh overall execution status — even when nodes haven't
       // populated yet (FLT may report `notStarted` for several seconds after
@@ -1317,16 +1442,21 @@ class DagStudio {
   _renderToolbarState(status, opts) {
     opts = opts || {};
     var isLocked = opts.locked || false;
-    var isIdle = status === 'idle' || status === 'completed' || status === 'failed' || status === 'cancelled' || status === 'skipped';
+    var isIdle = status === 'idle' || status === 'completed' || status === 'failed' ||
+      status === 'cancelled' || status === 'skipped' || status === 'notstarted' ||
+      status === 'notfound';
     var isRunning = status === 'running' || status === 'cancelling';
 
     // --- Buttons ---
     this._runBtn.style.display = isIdle && !isLocked ? '' : 'none';
     this._runBtn.disabled = false;
     this._runBtn.innerHTML = (status === 'failed') ? '&#9654; Re-run DAG' : '&#9654; Run DAG';
-    this._cancelBtn.style.display = (status === 'running') ? '' : 'none';
-    this._cancelBtn.disabled = false;
-    this._refreshBtn.disabled = isRunning;
+    // Keep Cancel visible during 'cancelling' but disabled — confirms the
+    // request is in flight without leaving the user with no controls at all.
+    this._cancelBtn.style.display = (status === 'running' || status === 'cancelling') ? '' : 'none';
+    this._cancelBtn.disabled = (status === 'cancelling');
+    // Refresh stays usable while cancelling (escape hatch) and for notFound.
+    this._refreshBtn.disabled = (status === 'running');
     // Unlock: show only when locked
     this._unlockBtn.style.display = isLocked ? '' : 'none';
 
@@ -1352,7 +1482,13 @@ class DagStudio {
       this._statusText.textContent = 'Cancelling...';
     } else if (status === 'skipped') {
       dot.style.background = 'var(--status-pending)';
-      this._statusText.textContent = opts.message || 'Skipped (lock conflict)';
+      this._statusText.textContent = opts.message || 'Skipped';
+    } else if (status === 'notfound') {
+      dot.style.background = 'var(--status-failed)';
+      this._statusText.textContent = opts.message || 'Execution not found — refresh to reload';
+    } else if (status === 'notstarted') {
+      dot.style.background = 'var(--status-pending)';
+      this._statusText.textContent = opts.message || 'Not started';
     } else if (isLocked) {
       dot.style.background = 'var(--status-cancelled)';
       this._statusText.textContent = 'Locked';
@@ -1427,6 +1563,11 @@ class DagStudio {
     if (canvas) canvas.style.opacity = '0';
     var minimap = this._graphPanel ? this._graphPanel.querySelector('.dag-minimap') : null;
     if (minimap) minimap.style.opacity = '0';
+    // Only spin the gantt when an execution is actually being (re)loaded.
+    // On the idle activate path there's no iteration to populate it, so leave
+    // the gantt on its "Run a DAG to see the timeline" empty hint instead of a
+    // spinner that would never resolve.
+    if (this._gantt && this._esm.activeIterationId) this._gantt.renderLoading();
   }
 
   _renderEmpty(message) {
@@ -1434,6 +1575,37 @@ class DagStudio {
     if (nodesLayer) {
       nodesLayer.innerHTML = '<div class="dag-empty-hint">' + message + '</div>';
     }
+  }
+
+  /** Error state for a failed load — message plus a Retry button. */
+  _renderError(message) {
+    var loadingEl = this._graphPanel ? this._graphPanel.querySelector('.dag-loading') : null;
+    if (loadingEl) loadingEl.remove();
+    var canvas = this._graphPanel ? this._graphPanel.querySelector('canvas') : null;
+    if (canvas) canvas.style.opacity = '0';
+    var nodesLayer = this._graphPanel ? this._graphPanel.querySelector('#dagNodesLayer') : null;
+    if (!nodesLayer) return;
+    nodesLayer.innerHTML =
+      '<div class="dag-error-state">' +
+      '<div class="dag-error-icon">&#9888;</div>' +
+      '<div class="dag-error-msg">' + this._escapeHtml(message) + '</div>' +
+      '<button class="dag-error-retry" id="dagErrorRetry">Retry</button>' +
+      '</div>';
+    var self = this;
+    var retryBtn = document.getElementById('dagErrorRetry');
+    if (retryBtn) {
+      retryBtn.addEventListener('click', function () {
+        // Re-run the structure load, then re-hydrate the live execution view if
+        // a run is still active — otherwise a retry during a live run would
+        // leave the gantt stuck on its loading spinner.
+        self._loadDag().then(function () {
+          if (self._esm.activeIterationId && self._esm.status !== 'idle') {
+            self._restoreExecutionState();
+          }
+        });
+      });
+    }
+    if (this._gantt) this._gantt.renderError(message);
   }
 
   _renderHistory(iterations) {
@@ -1519,6 +1691,14 @@ class DagStudio {
     }
     if (state && state.errorCode) {
       html += '<dt>Error</dt><dd class="error-text">' + this._escapeHtml(state.errorCode) + '</dd>';
+    }
+    if (state && state.errorMessage) {
+      html += '<dt>Message</dt><dd class="error-text">' + this._escapeHtml(String(state.errorMessage)) + '</dd>';
+    }
+    if (state && state.status === 'skipped' && state.skipCause) {
+      var causeNode = this._findNodeById(state.skipCause);
+      var causeName = causeNode ? (causeNode.name || causeNode.nodeId || state.skipCause) : state.skipCause;
+      html += '<dt>Skipped</dt><dd class="skip-cause">Upstream <strong>' + this._escapeHtml(String(causeName)) + '</strong> failed</dd>';
     }
     // Active error injections (F-ESIM)
     if (this._errorSim && this._errorSim.hasInjection(nodeId)) {
@@ -1650,6 +1830,7 @@ class DagStudio {
     if (status === 'failed') return 'var(--status-failed)';
     if (status === 'running') return 'var(--accent)';
     if (status === 'cancelled' || status === 'cancelling') return 'var(--status-cancelled)';
+    if (status === 'skipped') return 'var(--text-muted)';
     return 'var(--status-pending)';
   }
 
@@ -1677,16 +1858,27 @@ class DagStudio {
     var ok = 0;
     var fail = 0;
     var run = 0;
+    var skip = 0;
+    var cancel = 0;
+    var pend = 0;
     for (var entry of this._esm.nodeStates) {
       var state = entry[1];
       if (state.status === 'completed') ok += 1;
-      if (state.status === 'failed') fail += 1;
-      if (state.status === 'running') run += 1;
+      else if (state.status === 'failed') fail += 1;
+      else if (state.status === 'running') run += 1;
+      else if (state.status === 'skipped') skip += 1;
+      else if (state.status === 'cancelled' || state.status === 'cancelling') cancel += 1;
+      else pend += 1; // pending / none / anything not terminal
     }
     if (this._sumTotal) this._sumTotal.textContent = String(total);
     if (this._sumOk) this._sumOk.textContent = String(ok);
     if (this._sumFail) this._sumFail.textContent = String(fail);
     if (this._sumRun) this._sumRun.textContent = String(run);
+    // Skipped/cancelled/pending only shown when relevant so the strip stays
+    // calm on a clean run but always reconciles (ok+fail+run+skip+cancel+pend = total).
+    if (this._sumSkip) this._toggleSumChip(this._sumSkip, skip);
+    if (this._sumCancel) this._toggleSumChip(this._sumCancel, cancel);
+    if (this._sumPend) this._toggleSumChip(this._sumPend, pend);
     if (this._ganttCount) this._ganttCount.textContent = total ? String(total) : '';
 
     var durationText = '--';
@@ -1696,6 +1888,13 @@ class DagStudio {
       durationText = ((Date.now() - this._esm.startedAt) / 1000).toFixed(1) + 's';
     }
     if (this._sumDur) this._sumDur.textContent = durationText;
+  }
+
+  /** Show a summary chip with its count, or hide the whole stat when zero. */
+  _toggleSumChip(valEl, count) {
+    valEl.textContent = String(count);
+    var stat = valEl.parentElement;
+    if (stat) stat.style.display = count > 0 ? '' : 'none';
   }
 
   /** Escape HTML entities for safe insertion. */

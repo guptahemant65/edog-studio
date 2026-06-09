@@ -419,6 +419,14 @@ window.onerror = function(msg, src, line, col, err) {
                 <div class="gantt-chart" id="dagGanttContainer">
                   <div class="dag-empty-hint">Run a DAG to see the timeline</div>
                 </div>
+                <div class="gantt-legend" id="dagGanttLegend">
+                  <span class="gantt-legend-item"><i class="gl-swatch gl-completed"></i>Succeeded</span>
+                  <span class="gantt-legend-item"><i class="gl-swatch gl-running"></i>Running</span>
+                  <span class="gantt-legend-item"><i class="gl-swatch gl-failed"></i>Failed</span>
+                  <span class="gantt-legend-item"><i class="gl-swatch gl-cancelled"></i>Cancelled</span>
+                  <span class="gantt-legend-item"><i class="gl-swatch gl-skipped"></i>Skipped</span>
+                  <span class="gantt-legend-item"><i class="gl-swatch gl-pending"></i>Pending</span>
+                </div>
               </div>
               <div class="dag-history-section">
                 <div class="dag-section-title">Execution History <button class="dag-btn-inline" id="dagHistoryRefresh" title="Refresh history">&#8635;</button></div>
@@ -438,6 +446,9 @@ window.onerror = function(msg, src, line, col, err) {
             <span>Succeeded: <span class="stat-val ok" id="dagSumOk">0</span></span>
             <span>Failed: <span class="stat-val fail" id="dagSumFail">0</span></span>
             <span>Running: <span class="stat-val run" id="dagSumRun">0</span></span>
+            <span style="display:none">Skipped: <span class="stat-val skip" id="dagSumSkip">0</span></span>
+            <span style="display:none">Cancelled: <span class="stat-val cancel" id="dagSumCancel">0</span></span>
+            <span style="display:none">Pending: <span class="stat-val pend" id="dagSumPend">0</span></span>
             <span>Duration: <span class="stat-val" id="dagSumDur">--</span></span>
           </div>
         </div>

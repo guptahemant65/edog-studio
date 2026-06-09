@@ -71,7 +71,8 @@ class DagCanvasRenderer {
   _statusColor(status) {
     return {
       pending: '#8e95a5', running: '#6d5cff', completed: '#18a058',
-      failed: '#e5453b', cancelled: '#e5940c', skipped: '#8e95a5'
+      failed: '#e5453b', cancelled: '#e5940c', cancelling: '#e5940c',
+      skipped: '#b08d57', none: '#5b6170'
     }[status] || '#8e95a5';
   }
 
@@ -79,7 +80,8 @@ class DagCanvasRenderer {
     return {
       pending: 'rgba(142,149,165,0.06)', running: 'rgba(109,92,255,0.08)',
       completed: 'rgba(24,160,88,0.06)', failed: 'rgba(229,69,59,0.06)',
-      cancelled: 'rgba(229,148,12,0.06)', skipped: 'rgba(142,149,165,0.04)'
+      cancelled: 'rgba(229,148,12,0.06)', cancelling: 'rgba(229,148,12,0.08)',
+      skipped: 'rgba(176,141,87,0.05)', none: 'rgba(91,97,112,0.04)'
     }[status] || 'rgba(142,149,165,0.06)';
   }
 
@@ -430,6 +432,11 @@ class DagCanvasRenderer {
         (edge.from === this._highlightedNodeId || edge.to === this._highlightedNodeId);
       var isFailed = (fromNode && fromNode.status === 'failed') || (toNode && toNode.status === 'failed');
       var isRunning = (fromNode && fromNode.status === 'running') || (toNode && toNode.status === 'running');
+      // Downstream of a terminal non-success node: convey the cascade by fading
+      // the edge so skipped/cancelled branches read as "did not run".
+      var isInert = !isFailed && !isRunning && (
+        (fromNode && (fromNode.status === 'skipped' || fromNode.status === 'cancelled')) ||
+        (toNode && (toNode.status === 'skipped' || toNode.status === 'cancelled')));
 
       if (isSelected || isHighlighted) {
         ctx.strokeStyle = '#6d5cff';
@@ -447,6 +454,11 @@ class DagCanvasRenderer {
         ctx.globalAlpha = 0.5;
         ctx.setLineDash([6 * cam.scale, 3 * cam.scale]);
         ctx.lineDashOffset = -this._animFrame * 0.5;
+      } else if (isInert) {
+        ctx.strokeStyle = '#6b7280';
+        ctx.lineWidth = 1.3 * cam.scale;
+        ctx.globalAlpha = 0.28;
+        ctx.setLineDash([3 * cam.scale, 3 * cam.scale]);
       } else {
         ctx.strokeStyle = '#6b7280';
         ctx.lineWidth = 1.4 * cam.scale;
