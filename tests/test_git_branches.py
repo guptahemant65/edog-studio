@@ -77,3 +77,45 @@ def test_detached_head(git_repo: Path):
     name, detached = gb.get_current_branch(str(git_repo))
     assert detached is True
     assert sha.startswith(name)  # short sha
+
+
+def test_ahead_behind(git_repo: Path):
+    gb = _load_git_branches()
+    # 'feature' is 1 commit ahead of 'main'; 'main' is 0 ahead of 'feature'.
+    ahead, behind = gb._ahead_behind(str(git_repo), "main", "feature")
+    assert ahead == 1   # feature has 1 commit main lacks
+    assert behind == 0  # main has 0 commits feature lacks
+
+
+def test_edog_surface_diff_flags_touched_file(git_repo: Path):
+    gb = _load_git_branches()
+    # README.md differs between main and feature; treat it as an EDOG file.
+    touched = gb._edog_surface_diff(
+        str(git_repo), "main", "feature", {"README.md"}
+    )
+    assert touched == ["README.md"]
+
+
+def test_edog_surface_diff_empty_set_is_noop(git_repo: Path):
+    gb = _load_git_branches()
+    assert gb._edog_surface_diff(str(git_repo), "main", "feature", set()) == []
+
+
+def test_list_branches_rich_rows(git_repo: Path):
+    gb = _load_git_branches()
+    data = gb.list_branches(str(git_repo), edog_patched={"README.md"})
+    assert data["current"] == "main"
+    assert data["detached"] is False
+    names = {r["name"] for r in data["local"]}
+    assert names == {"main", "feature"}
+    feat = next(r for r in data["local"] if r["name"] == "feature")
+    assert feat["ahead"] == 1
+    assert feat["behind"] == 0
+    assert feat["subject"] == "feature change"
+    assert feat["author"] == "Tester"
+    assert feat["relativeDate"]  # non-empty relative string
+    assert feat["touchesEdogSurface"] is True
+    assert feat["edogSurfaceFiles"] == ["README.md"]
+    # The current branch row never flags itself.
+    main_row = next(r for r in data["local"] if r["name"] == "main")
+    assert main_row["touchesEdogSurface"] is False
