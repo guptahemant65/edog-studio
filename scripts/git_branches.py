@@ -100,6 +100,65 @@ def _edog_surface_diff(
     return [line.strip() for line in out.splitlines() if line.strip()]
 
 
+def _edog_surface_batch(
+    repo_path: str, branches: list[str], edog_patched: set[str], baseline: str = "HEAD"
+) -> dict[str, list[str]]:
+    """Map each branch -> the edog-patched files that differ from *baseline*.
+
+    Replaces a per-branch ``git diff`` (N subprocess spawns) with a single
+    ``git cat-file --batch-check`` process: we ask for the blob OID of every
+    (ref, file) pair at once and a file is "touched" when its OID on the branch
+    differs from the baseline (HEAD). No-op ({}) when *edog_patched* is empty.
+    """
+    files = sorted(edog_patched)
+    if not files or not branches or not repo_path or not Path(repo_path).is_dir():
+        return {}
+
+    # Build one query line per (ref, file). First block is the baseline, then
+    # one block per branch — order is preserved in --batch-check output.
+    refs = [baseline, *branches]
+    query = "\n".join(f"{ref}:{f}" for ref in refs for f in files) + "\n"
+
+    _MISSING = "\x00missing"  # sentinel that can never equal a real OID
+
+    try:
+        result = subprocess.run(
+            ["git", "cat-file", "--batch-check=%(objectname)"],
+            cwd=repo_path,
+            input=query,
+            capture_output=True,
+            text=True,
+            timeout=20,
+            check=False,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return {}
+    if result.returncode != 0:
+        return {}
+
+    out_lines = result.stdout.splitlines()
+    expected = len(refs) * len(files)
+    if len(out_lines) != expected:
+        return {}
+
+    def _oid(line: str) -> str:
+        # "<oid>" on success, or "<spec> missing" when the path is absent.
+        return _MISSING if line.endswith("missing") else line.split()[0]
+
+    oids = [_oid(line) for line in out_lines]
+    base = oids[: len(files)]  # baseline block
+
+    surface: dict[str, list[str]] = {}
+    for bi, branch in enumerate(branches):
+        block = oids[(bi + 1) * len(files) : (bi + 2) * len(files)]
+        touched = [files[fi] for fi in range(len(files)) if block[fi] != base[fi]]
+        if touched:
+            surface[branch] = touched
+    return surface
+
+
 # Tab-separated for-each-ref format. Field order:
 #   name \t relative-date \t author \t ahead-behind \t subject
 # The %(ahead-behind:HEAD) token computes each ref's ahead/behind relative to
@@ -168,9 +227,12 @@ def _enrich(
     """Add edog-surface fields to each ref row.
 
     ahead/behind are already populated by ``_list_refs`` via the single
-    for-each-ref ``ahead-behind`` token, so this only normalises the current
-    row to 0/0 and computes the (gated, usually-empty) edog-surface diff.
+    for-each-ref ``ahead-behind`` token; the edog-surface diff for every branch
+    is resolved in one ``git cat-file --batch-check`` call. So this whole
+    enrichment costs O(1) git processes regardless of branch count.
     """
+    targets = [r["name"] for r in rows if r["name"] != current]
+    surface = _edog_surface_batch(repo_path, targets, edog_patched)
     for r in rows:
         if r["name"] == current:
             r["ahead"], r["behind"] = 0, 0
@@ -179,7 +241,7 @@ def _enrich(
             continue
         r.setdefault("ahead", 0)
         r.setdefault("behind", 0)
-        touched = _edog_surface_diff(repo_path, current, r["name"], edog_patched)
+        touched = surface.get(r["name"], [])
         r["touchesEdogSurface"] = bool(touched)
         r["edogSurfaceFiles"] = touched
     return rows

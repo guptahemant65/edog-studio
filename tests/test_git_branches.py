@@ -101,6 +101,22 @@ def test_edog_surface_diff_empty_set_is_noop(git_repo: Path):
     assert gb._edog_surface_diff(str(git_repo), "main", "feature", set()) == []
 
 
+def test_edog_surface_batch_matches_per_branch_diff(git_repo: Path):
+    gb = _load_git_branches()
+    # HEAD is 'main'; README.md differs on 'feature' but not on 'main'.
+    # The batched cat-file path must agree with the per-branch diff.
+    surface = gb._edog_surface_batch(
+        str(git_repo), ["feature", "main"], {"README.md"}, baseline="HEAD"
+    )
+    assert surface == {"feature": ["README.md"]}  # 'main' == baseline -> omitted
+
+
+def test_edog_surface_batch_empty_inputs_are_noop(git_repo: Path):
+    gb = _load_git_branches()
+    assert gb._edog_surface_batch(str(git_repo), ["feature"], set()) == {}
+    assert gb._edog_surface_batch(str(git_repo), [], {"README.md"}) == {}
+
+
 def test_list_branches_rich_rows(git_repo: Path):
     gb = _load_git_branches()
     data = gb.list_branches(str(git_repo), edog_patched={"README.md"})
