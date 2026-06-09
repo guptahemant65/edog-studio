@@ -123,7 +123,7 @@ class FeatureFlagsMatrix {
         catalog: this._catalog,
         overrides: this._overrides,
         onClose: () => this.closeInspector(),
-        onOverrideSet: (k) => this.setOverride(k, true).then(() => this._refreshInspector()),
+        onOverrideSet: (k, v = true) => this.setOverride(k, v).then(() => this._refreshInspector()),
         onOverrideClear: (k) => this.clearOverride(k).then(() => this._refreshInspector()),
       });
     }
@@ -216,7 +216,7 @@ class FeatureFlagsMatrix {
   }
 
   async setOverride(wireKey, value) {
-    // V1: only force-ON. Cleared via DELETE, not value=false.
+    // Force-ON (value=true) or force-OFF (value=false). Cleared via DELETE.
     if (this._mutationsInFlight.has(wireKey)) return; // guard against double-click races
     const prev = Object.prototype.hasOwnProperty.call(this._overrides, wireKey)
       ? this._overrides[wireKey]
@@ -226,7 +226,7 @@ class FeatureFlagsMatrix {
     // before the HTTP round-trip + FLT push completes (~50-300 ms).
     this._overrides = { ...this._overrides, [wireKey]: !!value };
     this._lastOverrideMutationAt = Date.now();
-    this._patchRowOverride(wireKey, !!value);
+    this._patchRowOverride(wireKey, true, !!value);
     this._render();
     try {
       const resp = await fetch('/api/edog/feature-flags/overrides', {
@@ -294,17 +294,18 @@ class FeatureFlagsMatrix {
 
   /* Mutate the in-memory catalog row so subsequent renders reflect the
    * current override map without re-fetching /catalog. The server stamps
-   * isOverridden + effectiveForMyWorkspace at catalog-build time and we
-   * mirror the same logic client-side here. */
-  _patchRowOverride(wireKey, overridden) {
+   * isOverridden + effectiveForMyWorkspace + overrideValue at catalog-build
+   * time and we mirror the same logic client-side here. ``value`` is the
+   * forced boolean when ``overridden`` is true (ignored otherwise). */
+  _patchRowOverride(wireKey, overridden, value) {
     if (!this._catalog || !Array.isArray(this._catalog.rows)) return;
     const row = this._catalog.rows.find(r => r && r.wireKey === wireKey);
     if (!row) return;
     row.isOverridden = !!overridden;
     if (overridden) {
       row._preOverrideEffective = row._preOverrideEffective ?? row.effectiveForMyWorkspace;
-      row.effectiveForMyWorkspace = true;
-      row.overrideValue = true;
+      row.overrideValue = !!value;
+      row.effectiveForMyWorkspace = !!value;
     } else {
       row.overrideValue = null;
       if (row._preOverrideEffective != null) {
@@ -317,8 +318,8 @@ class FeatureFlagsMatrix {
   _syncCatalogOverrideFlags() {
     if (!this._catalog || !Array.isArray(this._catalog.rows)) return;
     for (const row of this._catalog.rows) {
-      const isOn = !!this._overrides[row.wireKey];
-      this._patchRowOverride(row.wireKey, isOn);
+      const has = Object.prototype.hasOwnProperty.call(this._overrides, row.wireKey);
+      this._patchRowOverride(row.wireKey, has, this._overrides[row.wireKey]);
     }
   }
 
@@ -330,7 +331,7 @@ class FeatureFlagsMatrix {
       this._patchRowOverride(wireKey, false);
     } else {
       this._overrides = { ...this._overrides, [wireKey]: prev };
-      this._patchRowOverride(wireKey, !!prev);
+      this._patchRowOverride(wireKey, true, prev);
     }
     this._render();
   }
@@ -777,12 +778,14 @@ class FeatureFlagsMatrix {
     const sovCells = sovereign.map(env => this._renderCell(row.perEnv[env] || { state: 'missing' }, 'sov')).join('');
     const sovRollup = `<td class="ff-cell ff-sov-rollup col-sov-rollup" title="${this._sovTooltip(row, sovereign)}">${this._sovGlyph(row, sovereign)}</td>`;
 
-    const effective = row.effectiveForMyWorkspace;
+    const effective = !!row.effectiveForMyWorkspace;
     const effectiveLabel = overridden
-      ? '<span class="ff-effective forced">FORCED</span>'
+      ? `<span class="ff-effective forced">FORCED ${effective ? 'ON' : 'OFF'}</span>`
       : (effective ? '<span class="ff-effective on">on</span>' : '<span class="ff-effective off">off</span>');
     const inFlight = this._mutationsInFlight.has(row.wireKey);
-    const switchCls = `ff-switch${overridden ? ' on' : ''}${inFlight ? ' is-loading' : ''}`;
+    // Switch reflects EFFECTIVE state, not just override presence — a
+    // force-OFF override leaves the switch OFF, a force-ON leaves it ON.
+    const switchCls = `ff-switch${effective ? ' on' : ''}${overridden ? ' forced' : ''}${inFlight ? ' is-loading' : ''}`;
     const switchAria = inFlight ? ' aria-busy="true" aria-disabled="true"' : '';
 
     const obsClass = this._observationClassFor(row.wireKey);
@@ -805,7 +808,7 @@ class FeatureFlagsMatrix {
         ${sovCells}
         <td class="col-state">
           <div class="ff-toggle">
-            <span class="${switchCls}" role="switch" aria-checked="${overridden}" tabindex="0" data-flag="${this._escape(row.wireKey)}" title="${inFlight ? 'Working…' : `Click to ${overridden ? 'clear' : 'force-ON'} override`}"${switchAria}></span>
+            <span class="${switchCls}" role="switch" aria-checked="${effective}" tabindex="0" data-flag="${this._escape(row.wireKey)}" title="${inFlight ? 'Working…' : `Click to force ${effective ? 'OFF' : 'ON'}${overridden ? ' (currently forced ' + (effective ? 'ON' : 'OFF') + ')' : ''}`}"${switchAria}></span>
             ${effectiveLabel}
           </div>
         </td>
@@ -877,9 +880,21 @@ class FeatureFlagsMatrix {
   _onSwitchClick(sw) {
     if (sw.getAttribute('aria-disabled') === 'true') return;
     const flag = sw.dataset.flag;
-    const currentlyOn = sw.classList.contains('on');
-    if (currentlyOn) this.clearOverride(flag);
-    else this.setOverride(flag, true);
+    const row = (this._catalog && Array.isArray(this._catalog.rows))
+      ? this._catalog.rows.find(r => r && r.wireKey === flag)
+      : null;
+    if (!row) return;
+
+    const effective = !!row.effectiveForMyWorkspace;
+    const target = !effective; // clicking always flips the effective state
+    // base = what the flag would be with NO override (FM/env-derived state).
+    const base = row.isOverridden && row._preOverrideEffective != null
+      ? !!row._preOverrideEffective
+      : effective;
+    // Flipping back to the underlying default clears the override rather
+    // than stamping a redundant one; otherwise force the new value.
+    if (target === base) this.clearOverride(flag);
+    else this.setOverride(flag, target);
   }
 
   /* ── SignalR event + observation classification ───────────────────── */

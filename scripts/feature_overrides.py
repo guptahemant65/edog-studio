@@ -73,11 +73,11 @@ class PushResult:
 
 
 def compute_hash(snapshot: dict[str, bool]) -> str:
-    """SHA-256 of sorted ``"key=true\\n"`` lines, lower-case hex.
+    """SHA-256 of sorted ``"key=true|false\\n"`` lines, lower-case hex.
 
-    Mirrors ``EdogFeatureOverrideStore.ComputeHash`` exactly. Force-OFF would
-    serialize as ``"key=false\\n"``, but the dev-server rejects ``value=false``
-    at the validation layer so only ``true`` values reach this point.
+    Mirrors ``EdogFeatureOverrideStore.ComputeHash`` exactly — both force-ON
+    (``"key=true\\n"``) and force-OFF (``"key=false\\n"``) entries serialize
+    verbatim, so the round-trip hash check holds for either direction.
     """
     if not snapshot:
         return hashlib.sha256(b"").hexdigest()
@@ -125,13 +125,15 @@ def _validate_flag_name(flag: str) -> None:
 
 
 def set_override(flag: str, value: bool) -> tuple[dict[str, bool], int]:
-    """Set ``flag`` to ``value`` (must be True). Returns (snapshot, revision)."""
+    """Set ``flag`` to ``value`` (True=force-ON, False=force-OFF). Returns
+    (snapshot, revision). Both directions are supported on this control plane;
+    clear an override entirely via :func:`delete_override`."""
     _validate_flag_name(flag)
-    if value is not True:
-        raise ValueError("force-OFF is not supported in V1")
+    if not isinstance(value, bool):
+        raise ValueError("override value must be a bool (True=force-ON, False=force-OFF)")
     global _revision
     with _lock:
-        _overrides[flag] = True
+        _overrides[flag] = value
         _revision += 1
         return dict(_overrides), _revision
 

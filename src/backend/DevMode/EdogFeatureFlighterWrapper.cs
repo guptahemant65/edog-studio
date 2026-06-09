@@ -22,8 +22,9 @@ namespace Microsoft.LiveTable.Service.DevMode
     ///   featureName, return its value WITHOUT calling the inner flighter
     ///   (per <c>F11/architecture.md §3.4</c>).</item>
     /// </list>
-    /// Force-ON only — the store enforces this. The wrapper trusts the store
-    /// and returns whatever value it has (always <c>true</c> in V1).
+    /// Force-ON or force-OFF — the wrapper trusts the store and returns whatever
+    /// boolean value it holds (<c>result = forced</c>), without calling the inner
+    /// flighter. A force-OFF override therefore disables a flag FM would enable.
     /// Thread-safe stateless decorator; _inner is readonly.
     /// </summary>
     public class EdogFeatureFlighterWrapper : IFeatureFlighter
@@ -59,8 +60,8 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             if (EdogFeatureOverrideStore.TryGet(featureName, out var forced))
             {
-                // Short-circuit: do NOT call _inner. Force-ON is the only path
-                // (the store enforces value == true at write time).
+                // Short-circuit: do NOT call _inner. Return the stored boolean
+                // verbatim — force-ON (true) or force-OFF (false).
                 result = forced;
                 overridden = true;
             }

@@ -6175,10 +6175,11 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         )
 
     def _serve_feature_flags_overrides_post(self):
-        """POST /api/edog/feature-flags/overrides — body {flag, value:true}.
+        """POST /api/edog/feature-flags/overrides — body {flag, value:bool}.
 
-        Sets a single force-ON override, then pushes the full map to FLT.
-        Returns the new snapshot and ``fltSync`` outcome (per architecture §3.6).
+        Sets a single override — ``value:true`` force-ON or ``value:false``
+        force-OFF — then pushes the full map to FLT. Returns the new snapshot
+        and ``fltSync`` outcome. Clear an override via DELETE, not value omission.
         """
         try:
             length = int(self.headers.get("Content-Length", 0))
@@ -6192,10 +6193,10 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         if not isinstance(flag, str) or not flag:
             self._json_response(400, {"error": "missing_flag"})
             return
-        if value is not True:
+        if not isinstance(value, bool):
             self._json_response(
                 400,
-                {"error": "force_off_not_supported", "message": "Only value=true is allowed in V1"},
+                {"error": "invalid_value", "message": "value must be a bool (true=force-ON, false=force-OFF)"},
             )
             return
 

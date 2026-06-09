@@ -78944,7 +78944,7 @@ class FeatureFlagsMatrix {
         catalog: this._catalog,
         overrides: this._overrides,
         onClose: () => this.closeInspector(),
-        onOverrideSet: (k) => this.setOverride(k, true).then(() => this._refreshInspector()),
+        onOverrideSet: (k, v = true) => this.setOverride(k, v).then(() => this._refreshInspector()),
         onOverrideClear: (k) => this.clearOverride(k).then(() => this._refreshInspector()),
       });
     }
@@ -79037,7 +79037,7 @@ class FeatureFlagsMatrix {
   }
 
   async setOverride(wireKey, value) {
-    // V1: only force-ON. Cleared via DELETE, not value=false.
+    // Force-ON (value=true) or force-OFF (value=false). Cleared via DELETE.
     if (this._mutationsInFlight.has(wireKey)) return; // guard against double-click races
     const prev = Object.prototype.hasOwnProperty.call(this._overrides, wireKey)
       ? this._overrides[wireKey]
@@ -79047,7 +79047,7 @@ class FeatureFlagsMatrix {
     // before the HTTP round-trip + FLT push completes (~50-300 ms).
     this._overrides = { ...this._overrides, [wireKey]: !!value };
     this._lastOverrideMutationAt = Date.now();
-    this._patchRowOverride(wireKey, !!value);
+    this._patchRowOverride(wireKey, true, !!value);
     this._render();
     try {
       const resp = await fetch('/api/edog/feature-flags/overrides', {
@@ -79115,17 +79115,18 @@ class FeatureFlagsMatrix {
 
   /* Mutate the in-memory catalog row so subsequent renders reflect the
    * current override map without re-fetching /catalog. The server stamps
-   * isOverridden + effectiveForMyWorkspace at catalog-build time and we
-   * mirror the same logic client-side here. */
-  _patchRowOverride(wireKey, overridden) {
+   * isOverridden + effectiveForMyWorkspace + overrideValue at catalog-build
+   * time and we mirror the same logic client-side here. ``value`` is the
+   * forced boolean when ``overridden`` is true (ignored otherwise). */
+  _patchRowOverride(wireKey, overridden, value) {
     if (!this._catalog || !Array.isArray(this._catalog.rows)) return;
     const row = this._catalog.rows.find(r => r && r.wireKey === wireKey);
     if (!row) return;
     row.isOverridden = !!overridden;
     if (overridden) {
       row._preOverrideEffective = row._preOverrideEffective ?? row.effectiveForMyWorkspace;
-      row.effectiveForMyWorkspace = true;
-      row.overrideValue = true;
+      row.overrideValue = !!value;
+      row.effectiveForMyWorkspace = !!value;
     } else {
       row.overrideValue = null;
       if (row._preOverrideEffective != null) {
@@ -79138,8 +79139,8 @@ class FeatureFlagsMatrix {
   _syncCatalogOverrideFlags() {
     if (!this._catalog || !Array.isArray(this._catalog.rows)) return;
     for (const row of this._catalog.rows) {
-      const isOn = !!this._overrides[row.wireKey];
-      this._patchRowOverride(row.wireKey, isOn);
+      const has = Object.prototype.hasOwnProperty.call(this._overrides, row.wireKey);
+      this._patchRowOverride(row.wireKey, has, this._overrides[row.wireKey]);
     }
   }
 
@@ -79151,7 +79152,7 @@ class FeatureFlagsMatrix {
       this._patchRowOverride(wireKey, false);
     } else {
       this._overrides = { ...this._overrides, [wireKey]: prev };
-      this._patchRowOverride(wireKey, !!prev);
+      this._patchRowOverride(wireKey, true, prev);
     }
     this._render();
   }
@@ -79598,12 +79599,14 @@ class FeatureFlagsMatrix {
     const sovCells = sovereign.map(env => this._renderCell(row.perEnv[env] || { state: 'missing' }, 'sov')).join('');
     const sovRollup = `<td class="ff-cell ff-sov-rollup col-sov-rollup" title="${this._sovTooltip(row, sovereign)}">${this._sovGlyph(row, sovereign)}</td>`;
 
-    const effective = row.effectiveForMyWorkspace;
+    const effective = !!row.effectiveForMyWorkspace;
     const effectiveLabel = overridden
-      ? '<span class="ff-effective forced">FORCED</span>'
+      ? `<span class="ff-effective forced">FORCED ${effective ? 'ON' : 'OFF'}</span>`
       : (effective ? '<span class="ff-effective on">on</span>' : '<span class="ff-effective off">off</span>');
     const inFlight = this._mutationsInFlight.has(row.wireKey);
-    const switchCls = `ff-switch${overridden ? ' on' : ''}${inFlight ? ' is-loading' : ''}`;
+    // Switch reflects EFFECTIVE state, not just override presence — a
+    // force-OFF override leaves the switch OFF, a force-ON leaves it ON.
+    const switchCls = `ff-switch${effective ? ' on' : ''}${overridden ? ' forced' : ''}${inFlight ? ' is-loading' : ''}`;
     const switchAria = inFlight ? ' aria-busy="true" aria-disabled="true"' : '';
 
     const obsClass = this._observationClassFor(row.wireKey);
@@ -79626,7 +79629,7 @@ class FeatureFlagsMatrix {
         ${sovCells}
         <td class="col-state">
           <div class="ff-toggle">
-            <span class="${switchCls}" role="switch" aria-checked="${overridden}" tabindex="0" data-flag="${this._escape(row.wireKey)}" title="${inFlight ? 'Working…' : `Click to ${overridden ? 'clear' : 'force-ON'} override`}"${switchAria}></span>
+            <span class="${switchCls}" role="switch" aria-checked="${effective}" tabindex="0" data-flag="${this._escape(row.wireKey)}" title="${inFlight ? 'Working…' : `Click to force ${effective ? 'OFF' : 'ON'}${overridden ? ' (currently forced ' + (effective ? 'ON' : 'OFF') + ')' : ''}`}"${switchAria}></span>
             ${effectiveLabel}
           </div>
         </td>
@@ -79698,9 +79701,21 @@ class FeatureFlagsMatrix {
   _onSwitchClick(sw) {
     if (sw.getAttribute('aria-disabled') === 'true') return;
     const flag = sw.dataset.flag;
-    const currentlyOn = sw.classList.contains('on');
-    if (currentlyOn) this.clearOverride(flag);
-    else this.setOverride(flag, true);
+    const row = (this._catalog && Array.isArray(this._catalog.rows))
+      ? this._catalog.rows.find(r => r && r.wireKey === flag)
+      : null;
+    if (!row) return;
+
+    const effective = !!row.effectiveForMyWorkspace;
+    const target = !effective; // clicking always flips the effective state
+    // base = what the flag would be with NO override (FM/env-derived state).
+    const base = row.isOverridden && row._preOverrideEffective != null
+      ? !!row._preOverrideEffective
+      : effective;
+    // Flipping back to the underlying default clears the override rather
+    // than stamping a redundant one; otherwise force the new value.
+    if (target === base) this.clearOverride(flag);
+    else this.setOverride(flag, target);
   }
 
   /* ── SignalR event + observation classification ───────────────────── */
@@ -80006,7 +80021,7 @@ class FlagInspector {
    *   catalog: any,
    *   overrides: Record<string, boolean>,
    *   onClose: () => void,
-   *   onOverrideSet: (wireKey: string) => Promise<void>,
+   *   onOverrideSet: (wireKey: string, value: boolean) => Promise<void>,
    *   onOverrideClear: (wireKey: string) => Promise<void>,
    * }} ctx
    */
@@ -80056,13 +80071,13 @@ class FlagInspector {
     if (!this._currentRow) return;
     const row = this._currentRow;
     const liveOverrides = (this._ctx && this._ctx.overrides) || {};
-    const overridden = !!liveOverrides[row.wireKey];
-    // Server stamps effectiveForMyWorkspace at catalog-build time; mirror
-    // the force-ON logic client-side so optimistic toggles render correctly
-    // without re-fetching the catalog.
+    const overridden = Object.prototype.hasOwnProperty.call(liveOverrides, row.wireKey);
+    // Server stamps effectiveForMyWorkspace at catalog-build time; mirror the
+    // override logic client-side so optimistic toggles render correctly
+    // without re-fetching the catalog. An override (ON or OFF) wins outright.
     const baseEffective = !!row.effectiveForMyWorkspace;
-    const effectiveOn = overridden ? true : baseEffective;
-    const effective = overridden ? 'FORCED ON' : (effectiveOn ? 'ON' : 'OFF');
+    const effectiveOn = overridden ? !!liveOverrides[row.wireKey] : baseEffective;
+    const effective = overridden ? `FORCED ${effectiveOn ? 'ON' : 'OFF'}` : (effectiveOn ? 'ON' : 'OFF');
     const effectiveCls = overridden ? 'forced' : (effectiveOn ? 'on' : 'off');
 
     const mainline = (this._ctx.catalog.workspace && this._ctx.catalog.workspace.mainlineEnvs) || [];
@@ -80090,7 +80105,7 @@ class FlagInspector {
               <div class="ov-row"><span class="ov-key">Name</span><span class="ov-val">${this._escape(row.name)}</span></div>
               <div class="ov-row"><span class="ov-key">Wire key</span><span class="ov-val mono">${this._escape(row.wireKey)}</span></div>
               ${row.summary ? `<div class="ov-row"><span class="ov-key">Summary</span><span class="ov-val">${this._escape(row.summary)}</span></div>` : ''}
-              <div class="ov-row"><span class="ov-key">Effective</span><span class="ov-val"><span class="ff-effective ${effectiveCls}">${effective}</span><span class="ov-effective-note">${overridden ? 'force-ON override active for this session' : (baseEffective ? 'enabled for your workspace via FM' : 'no env matches your workspace')}</span></span></div>
+              <div class="ov-row"><span class="ov-key">Effective</span><span class="ov-val"><span class="ff-effective ${effectiveCls}">${effective}</span><span class="ov-effective-note">${overridden ? `force-${effectiveOn ? 'ON' : 'OFF'} override active for this session` : (baseEffective ? 'enabled for your workspace via FM' : 'no env matches your workspace')}</span></span></div>
               ${row.missingReason === 'missing-in-fm'
                 ? `<div class="ov-row"><span class="ov-key">FM source</span><span class="ov-val warn">Not found in FeatureManagement repo</span></div>`
                 : `<div class="ov-row"><span class="ov-key">FM source</span><span class="ov-val"><span class="mono">${this._escape(sourcePath)}</span>${fmRepoLink ? ` <a class="inspector-link" href="${fmRepoLink}" target="_blank" rel="noopener">Open in repo &#8599;</a>` : ''}</span></div>`}
@@ -80112,10 +80127,15 @@ class FlagInspector {
             <h3 class="inspector-section-title">Session override</h3>
             <div class="inspector-override">
               ${overridden
-                ? `<div class="ov-row"><span class="ov-key">Status</span><span class="ov-val"><span class="ff-effective forced">FORCED ON</span></span></div>
-                   <button class="env-btn danger" id="fiClearOverride">Clear override</button>`
+                ? `<div class="ov-row"><span class="ov-key">Status</span><span class="ov-val"><span class="ff-effective forced">FORCED ${effectiveOn ? 'ON' : 'OFF'}</span></span></div>
+                   <div class="inspector-override-actions">
+                     <button class="env-btn" id="fiSetOverride" data-value="${effectiveOn ? 'false' : 'true'}">Force ${effectiveOn ? 'OFF' : 'ON'} instead</button>
+                     <button class="env-btn danger" id="fiClearOverride">Clear override</button>
+                   </div>`
                 : `<div class="ov-row"><span class="ov-key">Status</span><span class="ov-val muted">No override — effective state follows FM truth.</span></div>
-                   <button class="env-btn" id="fiSetOverride">Force ON for this session</button>`}
+                   <div class="inspector-override-actions">
+                     <button class="env-btn" id="fiSetOverride" data-value="${baseEffective ? 'false' : 'true'}">Force ${baseEffective ? 'OFF' : 'ON'} for this session</button>
+                   </div>`}
               <p class="inspector-hint">Overrides take effect on <strong>future</strong> evaluations. Code paths that cached <code>IsEnabled</code> at startup are unaffected until FLT restarts.</p>
             </div>
           </section>
@@ -80234,7 +80254,10 @@ class FlagInspector {
     if (back) back.addEventListener('click', () => this._ctx.onClose && this._ctx.onClose());
 
     const setBtn = this._mount.querySelector('#fiSetOverride');
-    if (setBtn) setBtn.addEventListener('click', () => this._ctx.onOverrideSet && this._ctx.onOverrideSet(row.wireKey));
+    if (setBtn) setBtn.addEventListener('click', () => {
+      const value = setBtn.getAttribute('data-value') !== 'false';
+      this._ctx.onOverrideSet && this._ctx.onOverrideSet(row.wireKey, value);
+    });
 
     const clearBtn = this._mount.querySelector('#fiClearOverride');
     if (clearBtn) clearBtn.addEventListener('click', () => this._ctx.onOverrideClear && this._ctx.onOverrideClear(row.wireKey));

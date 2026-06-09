@@ -229,10 +229,13 @@ def build_catalog(
             locked = False
 
         is_overridden = wire_key in overrides_snapshot
-        # Force-ON overrides flip the effective value to True regardless of
-        # underlying state (asymmetric model — V1 only supports force-ON).
-        if is_overridden and overrides_snapshot.get(wire_key) is True:
-            effective = True
+        # An override flips the effective value to whatever was forced —
+        # force-ON (True) or force-OFF (False). With force-OFF now possible,
+        # an FM-enabled flag is no longer "locked": forcing it OFF is a useful
+        # action, so the UI keeps the toggle interactive.
+        if is_overridden:
+            effective = bool(overrides_snapshot.get(wire_key))
+            locked = False
 
         rows.append(
             {

@@ -24,9 +24,9 @@ namespace Microsoft.LiveTable.Service.DevMode
     /// Design (per <c>F11/architecture.md §3</c>):
     ///   - <see cref="FrozenDictionary{TKey,TValue}"/> snapshot, replaced
     ///     atomically via <see cref="Volatile.Write"/>. Readers never block.
-    ///   - Force-ON only. <see cref="ReplaceAll"/> rejects entries with
-    ///     <c>value == false</c>; HTTP layer also rejects but defense in
-    ///     depth keeps the invariant local.
+    ///   - Force-ON or force-OFF via <see cref="ReplaceAll"/> (the human-driven
+    ///     dev-server control plane). <see cref="MergeOverrides"/> (automated
+    ///     QA-chaos path) stays force-ON only — narrower by design.
     ///   - <see cref="StringComparer.Ordinal"/>. FLT flag names are
     ///     case-sensitive (verified via <c>FeatureNames.cs</c>).
     ///   - Per-revision SHA-256 hash exposed for verify-on-replay.
@@ -86,10 +86,10 @@ namespace Microsoft.LiveTable.Service.DevMode
         }
 
         /// <summary>
-        /// Atomically replaces the entire override snapshot. Force-OFF
-        /// entries (<c>value == false</c>) are rejected at this layer
-        /// (defense in depth — HTTP also rejects). Returns the new revision
-        /// number and hash.
+        /// Atomically replaces the entire override snapshot. Accepts both
+        /// force-ON (<c>true</c>) and force-OFF (<c>false</c>) values — this is
+        /// the human-driven control plane. Returns the new revision number and
+        /// hash. (Contrast <see cref="MergeOverrides"/>, which is force-ON only.)
         /// </summary>
         /// <param name="overrides">New override map. Null is treated as empty.</param>
         /// <returns>Tuple of (revision, hash, count) after the write.</returns>
@@ -108,16 +108,11 @@ namespace Microsoft.LiveTable.Service.DevMode
                 }
                 else
                 {
-                    foreach (var kvp in overrides)
-                    {
-                        if (kvp.Value != true)
-                        {
-                            throw new ArgumentException(
-                                $"Force-OFF is not supported in V1. Flag '{kvp.Key}' was set to {kvp.Value}.",
-                                nameof(overrides));
-                        }
-                    }
-
+                    // Force-OFF (value:false) is permitted via ReplaceAll — the
+                    // human-driven control plane (dev-server bulk push). Both true
+                    // and false are stored verbatim and returned by the wrapper.
+                    // NOTE: MergeOverrides (QA-chaos path) keeps the force-ON-only
+                    // guard — do not collapse these two paths.
                     next = overrides.ToFrozenDictionary(
                         kvp => kvp.Key,
                         kvp => kvp.Value,

@@ -20,7 +20,7 @@ class FlagInspector {
    *   catalog: any,
    *   overrides: Record<string, boolean>,
    *   onClose: () => void,
-   *   onOverrideSet: (wireKey: string) => Promise<void>,
+   *   onOverrideSet: (wireKey: string, value: boolean) => Promise<void>,
    *   onOverrideClear: (wireKey: string) => Promise<void>,
    * }} ctx
    */
@@ -70,13 +70,13 @@ class FlagInspector {
     if (!this._currentRow) return;
     const row = this._currentRow;
     const liveOverrides = (this._ctx && this._ctx.overrides) || {};
-    const overridden = !!liveOverrides[row.wireKey];
-    // Server stamps effectiveForMyWorkspace at catalog-build time; mirror
-    // the force-ON logic client-side so optimistic toggles render correctly
-    // without re-fetching the catalog.
+    const overridden = Object.prototype.hasOwnProperty.call(liveOverrides, row.wireKey);
+    // Server stamps effectiveForMyWorkspace at catalog-build time; mirror the
+    // override logic client-side so optimistic toggles render correctly
+    // without re-fetching the catalog. An override (ON or OFF) wins outright.
     const baseEffective = !!row.effectiveForMyWorkspace;
-    const effectiveOn = overridden ? true : baseEffective;
-    const effective = overridden ? 'FORCED ON' : (effectiveOn ? 'ON' : 'OFF');
+    const effectiveOn = overridden ? !!liveOverrides[row.wireKey] : baseEffective;
+    const effective = overridden ? `FORCED ${effectiveOn ? 'ON' : 'OFF'}` : (effectiveOn ? 'ON' : 'OFF');
     const effectiveCls = overridden ? 'forced' : (effectiveOn ? 'on' : 'off');
 
     const mainline = (this._ctx.catalog.workspace && this._ctx.catalog.workspace.mainlineEnvs) || [];
@@ -104,7 +104,7 @@ class FlagInspector {
               <div class="ov-row"><span class="ov-key">Name</span><span class="ov-val">${this._escape(row.name)}</span></div>
               <div class="ov-row"><span class="ov-key">Wire key</span><span class="ov-val mono">${this._escape(row.wireKey)}</span></div>
               ${row.summary ? `<div class="ov-row"><span class="ov-key">Summary</span><span class="ov-val">${this._escape(row.summary)}</span></div>` : ''}
-              <div class="ov-row"><span class="ov-key">Effective</span><span class="ov-val"><span class="ff-effective ${effectiveCls}">${effective}</span><span class="ov-effective-note">${overridden ? 'force-ON override active for this session' : (baseEffective ? 'enabled for your workspace via FM' : 'no env matches your workspace')}</span></span></div>
+              <div class="ov-row"><span class="ov-key">Effective</span><span class="ov-val"><span class="ff-effective ${effectiveCls}">${effective}</span><span class="ov-effective-note">${overridden ? `force-${effectiveOn ? 'ON' : 'OFF'} override active for this session` : (baseEffective ? 'enabled for your workspace via FM' : 'no env matches your workspace')}</span></span></div>
               ${row.missingReason === 'missing-in-fm'
                 ? `<div class="ov-row"><span class="ov-key">FM source</span><span class="ov-val warn">Not found in FeatureManagement repo</span></div>`
                 : `<div class="ov-row"><span class="ov-key">FM source</span><span class="ov-val"><span class="mono">${this._escape(sourcePath)}</span>${fmRepoLink ? ` <a class="inspector-link" href="${fmRepoLink}" target="_blank" rel="noopener">Open in repo &#8599;</a>` : ''}</span></div>`}
@@ -126,10 +126,15 @@ class FlagInspector {
             <h3 class="inspector-section-title">Session override</h3>
             <div class="inspector-override">
               ${overridden
-                ? `<div class="ov-row"><span class="ov-key">Status</span><span class="ov-val"><span class="ff-effective forced">FORCED ON</span></span></div>
-                   <button class="env-btn danger" id="fiClearOverride">Clear override</button>`
+                ? `<div class="ov-row"><span class="ov-key">Status</span><span class="ov-val"><span class="ff-effective forced">FORCED ${effectiveOn ? 'ON' : 'OFF'}</span></span></div>
+                   <div class="inspector-override-actions">
+                     <button class="env-btn" id="fiSetOverride" data-value="${effectiveOn ? 'false' : 'true'}">Force ${effectiveOn ? 'OFF' : 'ON'} instead</button>
+                     <button class="env-btn danger" id="fiClearOverride">Clear override</button>
+                   </div>`
                 : `<div class="ov-row"><span class="ov-key">Status</span><span class="ov-val muted">No override — effective state follows FM truth.</span></div>
-                   <button class="env-btn" id="fiSetOverride">Force ON for this session</button>`}
+                   <div class="inspector-override-actions">
+                     <button class="env-btn" id="fiSetOverride" data-value="${baseEffective ? 'false' : 'true'}">Force ${baseEffective ? 'OFF' : 'ON'} for this session</button>
+                   </div>`}
               <p class="inspector-hint">Overrides take effect on <strong>future</strong> evaluations. Code paths that cached <code>IsEnabled</code> at startup are unaffected until FLT restarts.</p>
             </div>
           </section>
@@ -248,7 +253,10 @@ class FlagInspector {
     if (back) back.addEventListener('click', () => this._ctx.onClose && this._ctx.onClose());
 
     const setBtn = this._mount.querySelector('#fiSetOverride');
-    if (setBtn) setBtn.addEventListener('click', () => this._ctx.onOverrideSet && this._ctx.onOverrideSet(row.wireKey));
+    if (setBtn) setBtn.addEventListener('click', () => {
+      const value = setBtn.getAttribute('data-value') !== 'false';
+      this._ctx.onOverrideSet && this._ctx.onOverrideSet(row.wireKey, value);
+    });
 
     const clearBtn = this._mount.querySelector('#fiClearOverride');
     if (clearBtn) clearBtn.addEventListener('click', () => this._ctx.onOverrideClear && this._ctx.onOverrideClear(row.wireKey));

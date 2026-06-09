@@ -517,22 +517,13 @@ namespace Microsoft.LiveTable.Service.DevMode
                     return;
                 }
 
-                // Validate every value is true. Force-OFF rejected at HTTP.
-                if (body.Overrides != null)
-                {
-                    foreach (var kvp in body.Overrides)
-                    {
-                        if (kvp.Value != true)
-                        {
-                            context.Response.StatusCode = 400;
-                            context.Response.ContentType = "application/json";
-                            await context.Response.WriteAsync(
-                                $"{{\"error\":\"force-OFF not supported in V1\",\"flag\":\"{EscapeJson(kvp.Key)}\"}}");
-                            return;
-                        }
-                    }
-                }
-
+                // Force-OFF (value:false) is allowed here. This bulk endpoint is
+                // the human-driven F11 control plane — a developer deliberately
+                // forcing a flag ON *or* OFF to exercise either code path. The
+                // store schema, wrapper (result = forced), and hash are all
+                // boolean-native, so a false flows through cleanly. The automated
+                // QA-chaos path (EdogFeatureOverrideStore.MergeOverrides) stays
+                // force-ON only — different consumer, intentionally narrower.
                 var (rev, hash, count) = EdogFeatureOverrideStore.ReplaceAll(body.Overrides);
                 var payload = new
                 {
