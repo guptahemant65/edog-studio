@@ -100,11 +100,33 @@ def _edog_surface_diff(
     return [line.strip() for line in out.splitlines() if line.strip()]
 
 
-# Tab-separated for-each-ref format: name \t relative-date \t author \t subject
+# Tab-separated for-each-ref format. Field order:
+#   name \t relative-date \t author \t ahead-behind \t subject
+# The %(ahead-behind:HEAD) token computes each ref's ahead/behind relative to
+# HEAD in a SINGLE for-each-ref call. This replaces a per-branch fan-out of two
+# `git rev-list --count` subprocesses each (2N process spawns), which made the
+# branch list take ~28s on a 100-branch repo. Subject is last because it is free
+# text and may itself contain tabs (we re-join the trailing fields for it).
+# Requires git >= 2.41 for the ahead-behind token; older git yields an empty
+# field, which _parse_ahead_behind safely treats as (0, 0).
 _REF_FORMAT = (
     "%(refname:short)%09%(committerdate:relative)%09"
-    "%(authorname)%09%(contents:subject)"
+    "%(authorname)%09%(ahead-behind:HEAD)%09%(contents:subject)"
 )
+
+
+def _parse_ahead_behind(token: str) -> tuple[int, int]:
+    """Parse a `%(ahead-behind:HEAD)` token ("<ahead> <behind>") into ints.
+
+    Returns (0, 0) for empty/malformed tokens (older git, unborn refs).
+    """
+    parts = token.split()
+    if len(parts) != 2:
+        return (0, 0)
+    try:
+        return (int(parts[0]), int(parts[1]))
+    except ValueError:
+        return (0, 0)
 
 
 def _list_refs(repo_path: str, ref_glob: str) -> list[dict]:
@@ -125,12 +147,16 @@ def _list_refs(repo_path: str, ref_glob: str) -> list[dict]:
         parts = line.split("\t")
         if len(parts) < 4:
             continue
+        ahead, behind = _parse_ahead_behind(parts[3])
+        subject = "\t".join(parts[4:]) if len(parts) >= 5 else ""
         rows.append(
             {
                 "name": parts[0].strip(),
                 "relativeDate": parts[1].strip(),
                 "author": parts[2].strip(),
-                "subject": parts[3].strip(),
+                "subject": subject.strip(),
+                "ahead": ahead,
+                "behind": behind,
             }
         )
     return rows
@@ -139,14 +165,20 @@ def _list_refs(repo_path: str, ref_glob: str) -> list[dict]:
 def _enrich(
     repo_path: str, rows: list[dict], current: str, edog_patched: set[str]
 ) -> list[dict]:
-    """Add ahead/behind + edog-surface fields to each ref row."""
+    """Add edog-surface fields to each ref row.
+
+    ahead/behind are already populated by ``_list_refs`` via the single
+    for-each-ref ``ahead-behind`` token, so this only normalises the current
+    row to 0/0 and computes the (gated, usually-empty) edog-surface diff.
+    """
     for r in rows:
         if r["name"] == current:
             r["ahead"], r["behind"] = 0, 0
             r["touchesEdogSurface"] = False
             r["edogSurfaceFiles"] = []
             continue
-        r["ahead"], r["behind"] = _ahead_behind(repo_path, current, r["name"])
+        r.setdefault("ahead", 0)
+        r.setdefault("behind", 0)
         touched = _edog_surface_diff(repo_path, current, r["name"], edog_patched)
         r["touchesEdogSurface"] = bool(touched)
         r["edogSurfaceFiles"] = touched
