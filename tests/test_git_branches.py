@@ -153,6 +153,19 @@ def test_list_branches_includes_current_branch_counts(git_repo: Path):
     assert data["stashes"] == 1
 
 
+def test_list_branches_includes_dirty_counts(git_repo: Path):
+    gb = _load_git_branches()
+    data = gb.list_branches(str(git_repo), set())
+    assert data["userDirty"] == 0
+    assert data["edogDirty"] == 0
+
+    (git_repo / "README.md").write_text("user edit\n", encoding="utf-8")
+    (git_repo / "edog.cs").write_text("edog edit\n", encoding="utf-8")
+    data = gb.list_branches(str(git_repo), {"edog.cs"})
+    assert data["userDirty"] >= 1
+    assert data["edogDirty"] == 1
+
+
 def test_user_dirty_paths_excludes_edog(git_repo: Path):
     gb = _load_git_branches()
     (git_repo / "README.md").write_text("user edit\n", encoding="utf-8")

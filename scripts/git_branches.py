@@ -179,6 +179,8 @@ def list_branches(
         "remote": remote,
         "unpushed": count_unpushed(repo_path),
         "stashes": count_stashes(repo_path),
+        "userDirty": len(_user_dirty_paths(repo_path, edog_patched)),
+        "edogDirty": _count_edog_dirty(repo_path, edog_patched),
     }
 
 
@@ -241,6 +243,22 @@ def _user_dirty_paths(repo_path: str, edog_patched: set[str]) -> list[str]:
             continue
         paths.append(path)
     return paths
+
+
+def _count_edog_dirty(repo_path: str, edog_patched: set[str]) -> int:
+    """Count porcelain entries that ARE EDOG-managed (the complement of
+    _user_dirty_paths)."""
+    code, out, _ = _run_git(repo_path, ["status", "--porcelain", "-uall"])
+    if code != 0:
+        return 0
+    n = 0
+    for raw in out.splitlines():
+        if len(raw) < 4:
+            continue
+        path = raw[3:].strip().replace("\\", "/")
+        if path in edog_patched:
+            n += 1
+    return n
 
 
 def stash_apply(repo_path: str, ref: str) -> dict:

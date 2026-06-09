@@ -5748,7 +5748,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 200,
                 {"configured": False, "valid": False, "current": "",
                  "detached": False, "local": [], "remote": [],
-                 "unpushed": 0, "stashes": 0},
+                 "unpushed": 0, "stashes": 0,
+                 "userDirty": 0, "edogDirty": 0},
             )
             return
         qs = parse_qs(urlparse(self.path).query)
