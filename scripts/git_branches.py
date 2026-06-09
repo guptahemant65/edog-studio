@@ -177,3 +177,47 @@ def list_branches(
         "local": local,
         "remote": remote,
     }
+
+
+def branch_exists(repo_path: str, branch: str) -> bool:
+    """True if *branch* resolves as a local or remote ref."""
+    if not branch:
+        return False
+    code, _, _ = _run_git(
+        repo_path, ["rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"]
+    )
+    if code == 0:
+        return True
+    code, _, _ = _run_git(
+        repo_path,
+        ["rev-parse", "--verify", "--quiet", f"refs/remotes/{branch}"],
+    )
+    return code == 0
+
+
+def count_unpushed(repo_path: str) -> int:
+    """Commits on the current branch not present on its upstream. 0 if no
+    upstream is configured."""
+    code, out, _ = _run_git(repo_path, ["rev-list", "--count", "@{u}..HEAD"])
+    if code != 0:
+        return 0
+    try:
+        return int(out.strip())
+    except ValueError:
+        return 0
+
+
+def count_stashes(repo_path: str) -> int:
+    """Number of entries in the stash list."""
+    code, out, _ = _run_git(repo_path, ["stash", "list"])
+    if code != 0:
+        return 0
+    return sum(1 for line in out.splitlines() if line.strip())
+
+
+def fetch_remotes(repo_path: str) -> bool:
+    """Run `git fetch --all --prune`. Returns True on success."""
+    code, _, _ = _run_git(
+        repo_path, ["fetch", "--all", "--prune"], timeout=60
+    )
+    return code == 0

@@ -119,3 +119,23 @@ def test_list_branches_rich_rows(git_repo: Path):
     # The current branch row never flags itself.
     main_row = next(r for r in data["local"] if r["name"] == "main")
     assert main_row["touchesEdogSurface"] is False
+
+
+def test_branch_exists(git_repo: Path):
+    gb = _load_git_branches()
+    assert gb.branch_exists(str(git_repo), "feature") is True
+    assert gb.branch_exists(str(git_repo), "nope") is False
+
+
+def test_count_stashes(git_repo: Path):
+    gb = _load_git_branches()
+    assert gb.count_stashes(str(git_repo)) == 0
+    (git_repo / "README.md").write_text("dirty\n", encoding="utf-8")
+    _git(git_repo, "stash", "push", "-m", "x")
+    assert gb.count_stashes(str(git_repo)) == 1
+
+
+def test_count_unpushed_no_upstream_is_zero(git_repo: Path):
+    gb = _load_git_branches()
+    # No remote configured -> no upstream -> 0 (never crash).
+    assert gb.count_unpushed(str(git_repo)) == 0
