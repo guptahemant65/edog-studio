@@ -90093,11 +90093,27 @@ function _ilEsc(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-function _ilMapNodeType(dagType) {
-  var t = (dagType || '').toLowerCase();
-  if (t.indexOf('pyspark') !== -1) return 'pyspark-mlv';
-  if (t.indexOf('materialized') !== -1 || t.indexOf('mlv') !== -1 || t.indexOf('view') !== -1) return 'sql-mlv';
-  return 'sql-table';
+function _ilMapNodeType(node) {
+  // FLT getLatestDag emits `tableType` ("materialized_lake_view" | "managed")
+  // to separate MLVs from source tables, and `kind` ("sql" | "pyspark") to
+  // pick the language. Older/alternate shapes used a single `type`-style
+  // string, so fall back to that for forward/backward compatibility.
+  node = node || {};
+  var tableType = String(node.tableType || node.TableType || '').toLowerCase();
+  var kind = String(node.kind || node.Kind || '').toLowerCase();
+  var legacy = String(node.type || node.Type || node.nodeType || node.NodeType || '').toLowerCase();
+
+  var isMlv = tableType.indexOf('materialized') !== -1
+    || tableType.indexOf('mlv') !== -1
+    || legacy.indexOf('materialized') !== -1
+    || legacy.indexOf('mlv') !== -1
+    || legacy.indexOf('view') !== -1;
+  if (!isMlv) return 'sql-table';
+
+  var isPySpark = kind.indexOf('pyspark') !== -1
+    || kind.indexOf('python') !== -1
+    || legacy.indexOf('pyspark') !== -1;
+  return isPySpark ? 'pyspark-mlv' : 'sql-mlv';
 }
 
 function _ilCleanTableName(raw) {
@@ -90487,18 +90503,40 @@ class ImportLakehouseDialog {
 
   _buildItemsFromDag(nodes) {
     var items = [];
+    // FLT encodes the topology by node *id*: each node lists upstream `parents`
+    // (and downstream `children`) as nodeIds, mirrored in the top-level `edges`
+    // array. The downstream connection wiring matches by name, so resolve each
+    // parent nodeId back to its node name up front.
+    var idToName = {};
+    for (var p = 0; p < nodes.length; p++) {
+      var pn = nodes[p] || {};
+      var pid = pn.nodeId || pn.nodeID || pn.id || pn.Id;
+      var pname = pn.name || pn.Name || pn.nodeName || '';
+      if (pid) idToName[pid] = pname;
+    }
     for (var i = 0; i < nodes.length; i++) {
       var n = nodes[i] || {};
       var rawName = n.name || n.Name || n.nodeName || '';
       var parsed = _ilSplitSchemaQualified(rawName);
       var schema = (n.schema || n.Schema || n.schemaName || parsed.schema || 'dbo');
-      var dagType = n.type || n.Type || n.nodeType || n.NodeType || '';
-      var deps = n.dependencies || n.Dependencies || n.inputNodes || n.InputNodes || [];
+      // Upstream deps: real contract is `parents` (nodeIds). Resolve to names;
+      // fall back to legacy name-bearing fields for other DAG shapes.
+      var deps = [];
+      var parents = n.parents || n.Parents || [];
+      if (Array.isArray(parents) && parents.length) {
+        for (var pp = 0; pp < parents.length; pp++) {
+          var depName = idToName[parents[pp]];
+          if (depName) deps.push(depName);
+        }
+      } else {
+        var legacy = n.dependencies || n.Dependencies || n.inputNodes || n.InputNodes || [];
+        if (Array.isArray(legacy)) deps = legacy;
+      }
       items.push({
         name: parsed.name,
         schema: String(schema).toLowerCase(),
-        type: _ilMapNodeType(dagType),
-        dependencies: Array.isArray(deps) ? deps : [],
+        type: _ilMapNodeType(n),
+        dependencies: deps,
         _checked: true
       });
     }

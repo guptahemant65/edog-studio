@@ -165,11 +165,19 @@ same dismiss behavior).
 
 **From `getLatestDag()` response (primary):**
 
-| DAG node `type` field | Canvas Node Type |
-|----------------------|-----------------|
-| `SqlMaterializedView` / `sql_materialized_view` | `sql-mlv` |
-| `PySparkMaterializedView` / `pyspark_materialized_view` | `pyspark-mlv` |
-| `Table` / `Source` / `sql_table` / unknown | `sql-table` |
+FLT encodes type across **two** fields — `tableType` separates MLVs from
+source tables, `kind` picks the language. (The earlier single-`type`-string
+contract was wrong; the live service never emits it.)
+
+| `tableType` | `kind` | Canvas Node Type |
+|-------------|--------|-----------------|
+| `materialized_lake_view` | `pyspark` / `python` | `pyspark-mlv` |
+| `materialized_lake_view` | `sql` (or anything else) | `sql-mlv` |
+| `managed` / anything else | — | `sql-table` |
+
+Legacy fallback: a single `type` / `nodeType` string is still honored
+(`*materialized*`/`*mlv*`/`*view*` → MLV, `*pyspark*` → PySpark) for any
+alternate DAG shape.
 
 **From `getTableMetadata()` fallback:**
 
@@ -183,9 +191,11 @@ same dismiss behavior).
 ## 6. Connection Replication
 
 **Primary path (FLT connected):**
-1. Call `getLatestDag()` — returns all nodes with `dependencies` arrays
-2. For each node, `dependencies` lists upstream node names
-3. If both the node AND its dependency were imported → create connection
+1. Call `getLatestDag()` — every node lists upstream `parents` (and downstream
+   `children`) as **nodeIds**, mirrored in the top-level `edges` array.
+2. Resolve each `parents` nodeId back to its node **name** (the canvas wires
+   connections by name).
+3. If both the node AND its dependency were imported → create connection.
 4. One API call. Zero per-node fetching.
 
 **Fallback path (no FLT):**
