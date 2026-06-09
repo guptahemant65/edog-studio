@@ -31,10 +31,49 @@ class TopBar {
     this._createTokenInspector();
     this._createDeployTooltip();
     this._createGitDiffModal();
+    this._createBranchSwitcher();
     this._bindTokenClick();
     this._bindGitDiffClick();
     this._startConfigPolling();
     this._fetchUserIdentity();
+  }
+
+  /**
+   * Wire the FLT branch switcher to the git branch chip. The chip becomes the
+   * trigger; the popover only opens in pre-deploy phases (the lock). Toast +
+   * refresh are injected so branch-switcher.js never reaches for a global that
+   * might not exist — we use the real edogToast and a fetchConfig refresh.
+   */
+  _createBranchSwitcher() {
+    if (!window.BranchSwitcher || !this._branchEl) return;
+    var self = this;
+    this._branchSwitcher = new window.BranchSwitcher({
+      triggerEl: this._branchEl,
+      onToast: function (message, variant, action) {
+        if (window.edogToast) {
+          window.edogToast(message, variant, action ? { action: action } : undefined);
+        } else {
+          // Degrade gracefully if the toast manager isn't present.
+          if (window.console) window.console.log('[branch-switcher] ' + message);
+        }
+      },
+      onRefresh: function () { self.fetchConfig(); },
+    });
+    this._branchEl.classList.add('git-branch-trigger');
+    this._branchEl.setAttribute('role', 'button');
+    this._branchEl.setAttribute('tabindex', '0');
+    this._branchEl.addEventListener('click', function () { self._branchSwitcher.toggle(); });
+    this._branchEl.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); self._branchSwitcher.toggle(); }
+    });
+    // Reflect the initial (pre-deploy) phase onto the chip.
+    this._branchSwitcher.setPhase('idle');
+  }
+
+  /** Forward the studio phase to the branch switcher (drives the chip lock). */
+  setPhase(phase) {
+    this._phase = phase;
+    if (this._branchSwitcher) this._branchSwitcher.setPhase(phase || '');
   }
 
   /** Fetch OS identity from dev-server and populate the topbar chip. */
@@ -70,6 +109,7 @@ class TopBar {
         if (window.edogDeployStrip) window.edogDeployStrip.hide();
         if (window.edogPatchWarnings) window.edogPatchWarnings.hide();
         if (window.edogStatusBar) window.edogStatusBar.setPhase('disconnected');
+        this.setPhase('stopped');
         return null;
       }
 
@@ -111,6 +151,10 @@ class TopBar {
 
       // T8: Show git/patch meta only when real data exists
       this._updateGitVisibility(health || {});
+
+      // Drive the branch-switcher chip lock from the studio phase. The chip
+      // only unlocks in pre-deploy phases; a running/deploying FLT locks it.
+      this.setPhase(config.studioPhase || (config.fabricBaseUrl ? 'running' : 'stopped'));
 
       // Sync sidebar phase and WebSocket port from studio state.
       // Note: ConnectionSupervisor owns the SignalR lifecycle now. We only
@@ -166,6 +210,7 @@ class TopBar {
       if (window.edogDeployStrip) window.edogDeployStrip.hide();
       if (window.edogPatchWarnings) window.edogPatchWarnings.hide();
       if (window.edogStatusBar) window.edogStatusBar.setPhase('disconnected');
+      this.setPhase('stopped');
       return null;
     }
   }
