@@ -892,6 +892,14 @@
   flex-direction: column;
   gap: 10px;
 }
+/* Non-scrolling header wrapper (head + meta + tabs). Sits above the scrollable
+   .sp-detail-body, which owns the only vertical scroll in the detail pane. */
+.sp-detail-shell-head {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
 .sp-detail-head-row {
   display: flex;
   align-items: center;

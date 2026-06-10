@@ -24,6 +24,13 @@ class SparkSessionsTab {
     this._selectedTxfId = null;
     this._expanded = new Set();
     this._detailTab = "spans";
+    // Persistent detail-pane shell so per-tick re-renders don't reset the
+    // scrollable body (see _renderDetail/_renderDetailBody).
+    this._elDetailHead = null;
+    this._elDetailBody = null;
+    this._detailShellKey = null;
+    this._bodyKey = null;
+    this._bodyHtml = null;
     this._live = true;
     this._swimCollapsed = true;
     this._active = false;
@@ -1078,6 +1085,11 @@ class SparkSessionsTab {
     this._selectedTxfId = null;
     this._elContent.classList.remove("has-detail");
     this._elDetail.innerHTML = "";
+    this._elDetailHead = null;
+    this._elDetailBody = null;
+    this._detailShellKey = null;
+    this._bodyKey = null;
+    this._bodyHtml = null;
     this._scheduleRender();
   }
 
@@ -1132,7 +1144,26 @@ class SparkSessionsTab {
       tabs.splice(1, 0, { id: "attempts", label: "Retries", count: attemptCount });
     }
 
-    this._elDetail.innerHTML = `
+    // Persistent shell: build the head/body wrapper only when the selected
+    // session changes. ".sp-detail-body" is the scroll container — the old code
+    // rebuilt the ENTIRE pane (body included) on every 1s tick, which destroyed
+    // and recreated the scroller and reset scrollTop to 0, so the panel snapped
+    // back to the top while the user was scrolling (all 10 sub-tabs). Keeping
+    // the body element alive across ticks preserves scroll position; only the
+    // non-scrolling head is rebuilt each tick. See _renderDetailBody.
+    if (this._detailShellKey !== s.id || !this._elDetailHead || !this._elDetailBody) {
+      this._elDetail.innerHTML = `
+      <div class="sp-detail-shell-head" data-role="dhead"></div>
+      <div class="sp-detail-body" data-role="dbody"></div>
+    `;
+      this._elDetailHead = this._elDetail.querySelector('[data-role="dhead"]');
+      this._elDetailBody = this._elDetail.querySelector('[data-role="dbody"]');
+      this._detailShellKey = s.id;
+      this._bodyKey = null;
+      this._bodyHtml = null;
+    }
+
+    this._elDetailHead.innerHTML = `
       <div class="sp-detail-head">
         <div class="sp-detail-head-row">
           <div class="sp-status-icon" style="background:${this._statusColor(s.status)}">${this._statusIconSvg(s.status)}</div>
@@ -1160,7 +1191,6 @@ class SparkSessionsTab {
           ${tb.dot ? `<span class="sp-dtab-dot"></span>` : ""}${tb.label}${tb.count > 0 ? `<span class="sp-dtab-count">${tb.count}</span>` : ""}
         </button>`).join("")}
       </div>
-      <div class="sp-detail-body" data-role="dbody"></div>
     `;
     this._renderDetailBody(s, t);
   }
@@ -1177,20 +1207,35 @@ class SparkSessionsTab {
   }
 
   _renderDetailBody(s, t) {
-    const body = this._elDetail.querySelector('[data-role="dbody"]');
+    const body = this._elDetailBody;
     if (!body) return;
+    const key = `${this._selectedId}|${this._selectedTxfId || ""}|${this._detailTab}`;
+    const html = this._detailBodyHtml(s, t);
+    // Skip the rewrite entirely when nothing changed — this is what keeps scroll
+    // position AND text selection intact on terminal/static tabs across ticks.
+    if (key === this._bodyKey && html === this._bodyHtml) return;
+    // Preserve scroll only within the same view; switching tab or transform
+    // starts the new content at the top.
+    const prevScroll = key === this._bodyKey ? body.scrollTop : 0;
+    body.innerHTML = html;
+    body.scrollTop = prevScroll;
+    this._bodyKey = key;
+    this._bodyHtml = html;
+  }
+
+  _detailBodyHtml(s, t) {
     switch (this._detailTab) {
-      case "spans": body.innerHTML = this._renderSpansHtml(s); break;
-      case "state": body.innerHTML = this._renderStateMachineHtml(s, t); break;
-      case "polls": body.innerHTML = this._renderPollLogHtml(s, t); break;
-      case "repls": body.innerHTML = this._renderReplMapHtml(s); break;
-      case "output": body.innerHTML = this._renderOutputHtml(s, t); break;
-      case "code": body.innerHTML = this._renderCodeHtml(s, t); break;
-      case "conf": body.innerHTML = this._renderConfHtml(s); break;
-      case "attempts": body.innerHTML = this._renderAttemptsHtml(s, t); break;
-      case "error": body.innerHTML = this._renderErrorHtml(s, t); break;
-      case "raw": body.innerHTML = this._renderRawEventsHtml(s); break;
-      default: body.innerHTML = "";
+      case "spans": return this._renderSpansHtml(s);
+      case "state": return this._renderStateMachineHtml(s, t);
+      case "polls": return this._renderPollLogHtml(s, t);
+      case "repls": return this._renderReplMapHtml(s);
+      case "output": return this._renderOutputHtml(s, t);
+      case "code": return this._renderCodeHtml(s, t);
+      case "conf": return this._renderConfHtml(s);
+      case "attempts": return this._renderAttemptsHtml(s, t);
+      case "error": return this._renderErrorHtml(s, t);
+      case "raw": return this._renderRawEventsHtml(s);
+      default: return "";
     }
   }
 
