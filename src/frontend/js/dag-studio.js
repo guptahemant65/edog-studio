@@ -19,6 +19,31 @@ var DAG_DEBUG = (function () {
   }
 })();
 
+// How long a 'running' execution may go without any node-state activity before
+// the strip flags it stale. The REST poller fires every 5s and forces a full
+// metrics reconcile at 15s; 12s sits between those so the user sees the hint
+// just before the self-heal kicks in (dropped socket, silently stuck node).
+var DAG_STALE_MS = 12000;
+
+/**
+ * Format the execution duration for the summary strip. Pure + side-effect free
+ * so the rAF summary refresh and the 100ms elapsed tick share ONE definition —
+ * the strip can never disagree with the toolbar timer (#1) and a single clamped
+ * clock pair keeps it monotonic and non-negative under skew (#5).
+ *   - terminal (both timestamps): frozen final delta
+ *   - live (running|cancelling, started only): elapsed against `now`
+ *   - otherwise: '--'
+ */
+function dagFormatDuration(startedAt, endedAt, status, now) {
+  if (startedAt && endedAt) {
+    return (Math.max(0, endedAt - startedAt) / 1000).toFixed(1) + 's';
+  }
+  if (startedAt && (status === 'running' || status === 'cancelling')) {
+    return (Math.max(0, now - startedAt) / 1000).toFixed(1) + 's';
+  }
+  return '--';
+}
+
 class ExecutionStateManager {
   constructor() {
     this._activeIterationId = null;
@@ -139,9 +164,10 @@ class ExecutionStateManager {
     if (exec.status && this._executionStatus === 'running') {
       var mapped = this._mapAutoDetectorStatus(exec.status);
       if (this._isTerminal(mapped)) {
-        this._executionStatus = mapped;
-        this._endedAt = Date.now();
-        this._emitExecutionState();
+        // Route through markTerminal so the autodetector completion path fires
+        // the same atomic, once-only side-effects as telemetry (#3). Idempotent
+        // if telemetry/poll already resolved this run.
+        this.markTerminal(mapped);
       }
     }
     // Node-level updates
@@ -322,20 +348,11 @@ class ExecutionStateManager {
         this._emitExecutionState();
       }
     } else if (activityStatus === 'succeeded') {
-      this._executionStatus = 'completed';
-      this._endedAt = Date.now();
-      this._emitExecutionState();
-      if (this.onExecutionComplete) this.onExecutionComplete(this._activeIterationId, 'completed');
+      this.markTerminal('completed');
     } else if (activityStatus === 'failed' || activityStatus === 'faulted') {
-      this._executionStatus = 'failed';
-      this._endedAt = Date.now();
-      this._emitExecutionState();
-      if (this.onExecutionComplete) this.onExecutionComplete(this._activeIterationId, 'failed');
+      this.markTerminal('failed');
     } else if (activityStatus === 'cancelled' || activityStatus === 'canceled') {
-      this._executionStatus = 'cancelled';
-      this._endedAt = Date.now();
-      this._emitExecutionState();
-      if (this.onExecutionComplete) this.onExecutionComplete(this._activeIterationId, 'cancelled');
+      this.markTerminal('cancelled');
     }
   }
 
@@ -411,10 +428,7 @@ class ExecutionStateManager {
       if (state.status === 'cancelled') anyCancelled = true;
     }
     if (allTerminal && this._executionStatus === 'running') {
-      this._executionStatus = anyFailed ? 'failed' : anyCancelled ? 'cancelled' : 'completed';
-      this._endedAt = Date.now();
-      this._emitExecutionState();
-      if (this.onExecutionComplete) this.onExecutionComplete(this._activeIterationId, this._executionStatus);
+      this.markTerminal(anyFailed ? 'failed' : anyCancelled ? 'cancelled' : 'completed');
     }
   }
 
@@ -424,6 +438,29 @@ class ExecutionStateManager {
 
   _emitExecutionState() {
     if (this.onExecutionStateChanged) this.onExecutionStateChanged(this._executionStatus);
+  }
+
+  /**
+   * Idempotently drive the execution to a terminal status. Sets the status and
+   * a client-clock endedAt (so the final duration matches the live timer, #5),
+   * emits the state-change, and fires onExecutionComplete EXACTLY once. Returns
+   * true if it transitioned, false if already terminal (a no-op).
+   *
+   * Every terminal transition — telemetry, _checkCompletion, the AutoDetector,
+   * and the REST poller — funnels through here. Before this existed the poller
+   * poked _executionStatus/_endedAt directly and hand-rolled the callbacks,
+   * which could double-fire or silently skip onExecutionComplete. Do NOT
+   * reintroduce direct completion writes to those fields (#3).
+   */
+  markTerminal(status) {
+    if (this._executionStatus !== 'running' && this._executionStatus !== 'cancelling') {
+      return false;
+    }
+    this._executionStatus = status;
+    this._endedAt = Date.now();
+    this._emitExecutionState();
+    if (this.onExecutionComplete) this.onExecutionComplete(this._activeIterationId, status);
+    return true;
   }
 
   // ── Private: status mapping ──
@@ -517,6 +554,8 @@ class DagStudio {
     this._sumWarn = document.getElementById('dagSumWarn');
     this._sumCancel = document.getElementById('dagSumCancel');
     this._sumPend = document.getElementById('dagSumPend');
+    this._execSummary = document.getElementById('dagExecSummary');
+    this._stale = document.getElementById('dagStale');
 
     // Bind event handlers
     this._onTelemetryEvent = this._onTelemetryEvent.bind(this);
@@ -1063,6 +1102,7 @@ class DagStudio {
   _startElapsedTimer() {
     this._stopElapsedTimer();
     var startedAt = this._esm.startedAt || Date.now();
+    this._lastActivityAt = Date.now();
     var self = this;
     if (this._statusTimer) this._statusTimer.style.display = 'inline';
     this._elapsedInterval = setInterval(function() {
@@ -1073,6 +1113,15 @@ class DagStudio {
       var timeStr = m + ':' + (s < 10 ? '0' : '') + s;
       if (self._statusTimer) self._statusTimer.textContent = timeStr;
       self._statusText.textContent = 'Running';
+      // Keep the strip duration live every tick (single source, #1) so it never
+      // freezes between the 5s polls.
+      self._renderDuration();
+      // Flag a run that has gone quiet (dropped socket / stuck node) before the
+      // 15s metrics self-heal — clears automatically on the next node event.
+      if (self._esm.status === 'running') {
+        var quiet = Date.now() - (self._lastActivityAt || startedAt);
+        self._setStale(quiet > DAG_STALE_MS);
+      }
     }, 100);
   }
 
@@ -1118,8 +1167,9 @@ class DagStudio {
       if (!statusData) return;
       var status = (statusData.status || statusData.dagExecutionStatus || '').toLowerCase();
       if (status === 'completed' || status === 'succeeded' || status === 'failed' || status === 'cancelled') {
-        this._esm._executionStatus = status === 'succeeded' ? 'completed' : status;
-        this._esm._endedAt = Date.now();
+        // Resolve through the ESM (fires onExecutionComplete once, #3) BEFORE
+        // the full-metrics fetch — whose own markTerminal then no-ops.
+        this._esm.markTerminal(status === 'succeeded' ? 'completed' : status);
         this._stopExecPoller();
         // Now fetch full metrics once
         this._pollInFlight = false;
@@ -1203,8 +1253,11 @@ class DagStudio {
       var dagMetrics = metrics.dagExecutionMetrics || {};
       var overallStatus = (dagMetrics.status || '').toLowerCase();
       if (overallStatus === 'completed' || overallStatus === 'succeeded' || overallStatus === 'failed' || overallStatus === 'cancelled') {
-        this._esm._executionStatus = overallStatus === 'succeeded' ? 'completed' : overallStatus;
-        this._esm._endedAt = dagMetrics.endedAt ? new Date(dagMetrics.endedAt).getTime() : Date.now();
+        var execTerminal = overallStatus === 'succeeded' ? 'completed' : overallStatus;
+        // Resolve through the ESM so status+endedAt+callbacks fire atomically
+        // and exactly once — no direct field pokes (#3). Idempotent if telemetry
+        // or the autodetector already resolved this run.
+        this._esm.markTerminal(execTerminal);
         this._stopExecPoller();
         // FLT populates nodeExecutionMetrices AFTER the execution fully
         // completes.  The poller often catches the terminal status before
@@ -1212,7 +1265,6 @@ class DagStudio {
         // the Gantt chart, bottom-bar, and strip all show correct numbers.
         var self = this;
         var finalIterationId = iterationId;
-        var statusBeforeFinal = this._esm._executionStatus;
         setTimeout(async function() {
           try {
             var finalMetrics = await self._api.getDagExecMetrics(finalIterationId);
@@ -1255,11 +1307,6 @@ class DagStudio {
             console.log('[DAG-DIAG] Final poll failed:', e.message);
           }
           self._updateSummary();
-          // Only fire execution state changed if status actually changed during final poll
-          if (self._esm._executionStatus !== statusBeforeFinal) {
-            if (self._esm.onExecutionStateChanged) self._esm.onExecutionStateChanged(self._esm._executionStatus);
-          }
-          if (self._esm.onExecutionComplete) self._esm.onExecutionComplete(finalIterationId, self._esm._executionStatus);
         }, 2000);
       } else {
         // notStarted / running / queued — keep polling, keep UI alive.
@@ -1374,6 +1421,7 @@ class DagStudio {
     this._scheduleSummaryUpdate();
     if (status !== 'running') {
       this._stopElapsedTimer();
+      this._setStale(false);
       if (this._statusTimer) this._statusTimer.style.display = 'none';
     }
   }
@@ -1381,6 +1429,8 @@ class DagStudio {
   _onNodeStateChanged(nodeId, state) {
     if (DAG_DEBUG) console.log('[DAG-DIAG] Node state changed:', nodeId.substring(0, 8), state.status, state.source);
     if (!this._active) return;
+    this._lastActivityAt = Date.now();
+    if (this._isStale) this._setStale(false);
     if (this._renderer) this._renderer.updateNodeState(nodeId, state.status);
     if (this._gantt) this._gantt.updateBar(nodeId, state);
     this._scheduleSummaryUpdate();
@@ -1389,6 +1439,7 @@ class DagStudio {
   _onExecutionComplete(iterationId, finalStatus) {
     this._stopElapsedTimer();
     this._stopExecPoller();
+    this._setStale(false);
     if (!this._active) {
       this._pendingCompletionRefresh = true;
       return;
@@ -1894,13 +1945,25 @@ class DagStudio {
     if (this._sumPend) this._toggleSumChip(this._sumPend, pend);
     if (this._ganttCount) this._ganttCount.textContent = total ? String(total) : '';
 
-    var durationText = '--';
-    if (this._esm.startedAt && this._esm.endedAt) {
-      durationText = ((this._esm.endedAt - this._esm.startedAt) / 1000).toFixed(1) + 's';
-    } else if (this._esm.status === 'running' && this._esm.startedAt) {
-      durationText = ((Date.now() - this._esm.startedAt) / 1000).toFixed(1) + 's';
-    }
-    if (this._sumDur) this._sumDur.textContent = durationText;
+    this._renderDuration();
+  }
+
+  /** Single source for the strip duration — shared by the rAF summary refresh
+   *  and the 100ms elapsed tick so it never disagrees with the toolbar timer
+   *  (#1) and stays monotonic / non-negative (#5). */
+  _renderDuration() {
+    if (!this._sumDur) return;
+    this._sumDur.textContent = dagFormatDuration(
+      this._esm.startedAt, this._esm.endedAt, this._esm.status, Date.now()
+    );
+  }
+
+  /** Toggle the strip's "stale" affordance (no DOM churn unless it changed). */
+  _setStale(isStale) {
+    if (this._isStale === isStale) return;
+    this._isStale = isStale;
+    if (this._stale) this._stale.style.display = isStale ? '' : 'none';
+    if (this._execSummary) this._execSummary.classList.toggle('is-stale', isStale);
   }
 
   /** Show a summary chip with its count, or hide the whole stat when zero. */

@@ -754,6 +754,33 @@
 .dag-studio > .exec-summary .stat-val.warn { color: var(--status-warning); }
 .dag-studio > .exec-summary .stat-val.pend { color: var(--status-pending); }
 
+/* Stale-run affordance: shown when a 'running' execution goes quiet (dropped
+   socket / stuck node) before the 15s metrics self-heal. */
+.dag-studio > .exec-summary .exec-stale {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--status-warning);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: var(--text-xs, 0.72rem);
+}
+.dag-studio > .exec-summary .exec-stale-dot {
+  animation: dagStalePulse 1.6s ease-in-out infinite;
+}
+@keyframes dagStalePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dag-studio > .exec-summary .exec-stale-dot { animation: none; }
+}
+/* Faint warning underline reinforces the stale state across the whole strip. */
+.dag-studio > .exec-summary.is-stale {
+  box-shadow: inset 0 -2px 0 -1px var(--status-warning);
+}
+
 .dag-empty-hint {
   color: var(--text-muted);
   font-size: var(--text-sm);
