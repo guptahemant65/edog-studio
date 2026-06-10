@@ -57,7 +57,7 @@ You don't configure it. You don't read a setup guide. You `git clone`, type `edo
 ▸ Interactive DAG graph + Gantt execution chart<br>
 ▸ Spark & GTS HTTP request/response inspector<br>
 ▸ Lock monitor, interceptor status, hot re-deploy<br>
-▸ PR-driven QA pipeline, end to end
+▸ Every Spark span, poll, and retry — fully drillable
 
 </td>
 </tr>
@@ -67,7 +67,7 @@ You don't configure it. You don't read a setup guide. You `git clone`, type `edo
 
 ## The Feature Tour
 
-Six views, one keystroke apart (<kbd>1</kbd>–<kbd>6</kbd>). Here's what each one does for you.
+Six views, one keystroke apart (<kbd>1</kbd>–<kbd>6</kbd>). Five are shipped today; QA is still baking. Here's what each one does for you.
 
 ### ◆ Workspace Explorer · *both phases*
 Your Fabric tenant as a three-panel tree — tenants ▸ workspaces ▸ lakehouses ▸ tables. Create, rename, delete, and **deploy to a local lakehouse with a single click**. Open a notebook and it turns into a real **embedded IDE**: edit cells, run them one at a time or all at once, save straight back to Fabric. Need a fresh environment? The **Infra Wizard** scaffolds one end to end — Setup ▸ Theme ▸ Build (visual DAG canvas) ▸ Review ▸ Deploy — and it's a true singleton, so it never loses your half-finished work.
@@ -84,8 +84,8 @@ Postman, but it already knows your APIs. The endpoint catalog is **auto-discover
 ### ◆ Environment · *both phases*
 Everything about your local setup on cards you can trust: Config snapshot, Token state, Build & Patch status, Interceptor wrap status — plus the full **Feature Flags matrix** with rollout visibility, a lock monitor, and orphaned-resource cleanup.
 
-### ◆ QA · *connected*
-A PR-driven testing pipeline in five stages: **PR Input ▸ Analysis ▸ Curation ▸ Execution ▸ Results**. Point it at a change and walk it from raw diff to a clean test verdict.
+### ◆ QA · *connected* · 🚧 *in development*
+A PR-driven testing pipeline in five stages: **PR Input ▸ Analysis ▸ Curation ▸ Execution ▸ Results** — point it at a change and walk it from raw diff to a clean test verdict. Landing soon; the view is in the app today as a preview.
 
 > **And the little things that add up:** Command Palette (<kbd>Ctrl</kbd>+<kbd>K</kbd>), a live top bar that tracks your git branch and flags a crashed service the instant it happens, file-watcher hot re-deploy, a token inspector with countdown, and a first-run flow that finds your FLT repo for you.
 
