@@ -2320,9 +2320,13 @@ class WorkspaceExplorer {
   // Context menu actions
 
   _ctxNewInfra() {
-    // Always create a fresh wizard — destroy any lingering instance
+    // A wizard is a singleton. If one is already in progress, take the user
+    // back to it (restoring it if minimized) instead of discarding their
+    // in-progress work and spawning a fresh blank wizard. Mirrors
+    // _cloneEnvironment and the InfraWizardDialog.open() singleton guard.
     if (InfraWizardDialog.isActive()) {
-      InfraWizardDialog.getActive().destroy();
+      InfraWizardDialog.getActive().restore();
+      return;
     }
     const wizard = new InfraWizardDialog(this._api, {
       existingWorkspaces: this._workspaces
