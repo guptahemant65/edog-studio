@@ -1,10 +1,55 @@
 /**
+ * topbarEffectiveState — pure mapper from (studioPhase, socketStatus) to the
+ * #service-status chip's visual state. This is the heart of the "live top bar":
+ * the chip must reflect the *real* SignalR socket, not just the 30s studioPhase
+ * poll. If the service is "running" but the socket has dropped, we degrade to
+ * "Reconnecting..." rather than lying "Connected" for up to 30s.
+ *
+ * Returns { cls, label, live }:
+ *   - cls   : CSS state class on .service-status (running|reconnecting|building|crashed|stopped)
+ *   - label : base text (the caller appends uptime only when `live`)
+ *   - live  : true only for a genuinely-connected running service
+ *
+ * Kept module-level (not a method) so it is unit-testable in isolation and can
+ * never silently diverge from the rendering path. See tests/js/test-topbar-state.mjs.
+ */
+function topbarEffectiveState(studioPhase, socketStatus) {
+  if (studioPhase === 'deploying') {
+    return { cls: 'building', label: 'Deploying\u2026', live: false };
+  }
+  if (studioPhase === 'crashed') {
+    // First-class error state. Must NOT collapse to grey 'stopped' — a crash
+    // should never look identical to idle "Browsing".
+    return { cls: 'crashed', label: 'Service Crashed', live: false };
+  }
+  if (studioPhase === 'running') {
+    // null/undefined = no status event yet (cold start). Trust the running
+    // phase rather than flashing "Reconnecting" on a healthy boot. Once the
+    // socket reports a concrete non-connected state, we surface it instantly.
+    if (socketStatus == null || socketStatus === 'connected') {
+      return { cls: 'running', label: 'Connected', live: true };
+    }
+    return { cls: 'reconnecting', label: 'Reconnecting\u2026', live: false };
+  }
+  return { cls: 'stopped', label: 'Browsing', live: false };
+}
+
+/**
  * TopBar — 44px persistent status bar.
  * Shows tenant chip, phase indicator, token health, git info, Ctrl+K hint.
  * Owns the Token Inspector drawer (slide-in from right on click).
+ *
+ * @param {SignalRManager} [ws] — the live socket. TopBar subscribes to its
+ *   status so the connection chip reflects reality, not just the config poll.
  */
 class TopBar {
-  constructor() {
+  constructor(ws) {
+    this._ws = ws || null;
+    this._socketStatus = ws ? ws.status : null;
+    this._wsUnsub = null;
+    this._studioPhase = null;      // raw studio phase last seen from the poll
+    this._lastStateKey = null;     // effective cls last rendered (for label fade)
+    this._lastFetchAt = 0;         // throttle focus/visibility-driven refresh
     this._statusEl = document.getElementById('service-status');
     this._statusTextEl = document.getElementById('service-status-text');
     this._tokenCountdownEl = document.getElementById('token-countdown');
@@ -34,8 +79,42 @@ class TopBar {
     this._createBranchSwitcher();
     this._bindTokenClick();
     this._bindGitDiffClick();
+    this._subscribeSocket();
+    this._bindFreshnessRefresh();
     this._startConfigPolling();
     this._fetchUserIdentity();
+  }
+
+  /**
+   * Subscribe to the live SignalR status so the connection chip reflects the
+   * real socket, not just the 30s studioPhase poll. A drop while phase=running
+   * flips the chip to "Reconnecting..." within a frame instead of lying
+   * "Connected" until the next poll.
+   */
+  _subscribeSocket() {
+    if (!this._ws || typeof this._ws.addStatusListener !== 'function') return;
+    this._socketStatus = this._ws.status || null;
+    this._wsUnsub = this._ws.addStatusListener((status) => {
+      this._socketStatus = status;
+      this._renderServiceStatus();
+    });
+  }
+
+  /**
+   * Catch up instantly when the user returns to the window. The most common way
+   * an external change (a terminal `git checkout`, a crash, a token expiry)
+   * happens is while EDOG is in a background tab; refreshing on focus makes the
+   * branch chip + connection state feel live without hammering git on a tight
+   * poll. Throttled so focus+visibilitychange don't double-fetch.
+   */
+  _bindFreshnessRefresh() {
+    const refresh = () => {
+      if (document.hidden) return;
+      if (Date.now() - this._lastFetchAt < 2000) return;
+      this.fetchConfig();
+    };
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
   }
 
   /**
@@ -97,6 +176,7 @@ class TopBar {
    * Uses bearer token seconds from health endpoint for accurate countdown.
    */
   async fetchConfig() {
+    this._lastFetchAt = Date.now();
     try {
       const [configResp, healthResp] = await Promise.all([
         fetch('/api/flt/config'),
@@ -134,19 +214,20 @@ class TopBar {
 
       // T6: Phase indicator — prefer studioPhase, but don't override active deploy error states
       if (!this._deployActive) {
+        let phase;
         if (config.studioPhase === 'running' || config.studioPhase === 'deploying') {
-          this._updateServiceStatus(config.studioPhase === 'deploying' ? 'building' : 'running');
+          phase = config.studioPhase;
           if (config.studioPhase === 'running' && !this._uptimeStart) this._uptimeStart = Date.now();
         } else if (config.fabricBaseUrl) {
-          this._updateServiceStatus('running');
+          phase = 'running';
           if (!this._uptimeStart) this._uptimeStart = Date.now();
         } else if (config.studioPhase === 'crashed') {
-          this._updateServiceStatus('stopped');
-          if (this._statusTextEl) this._statusTextEl.textContent = 'Service Crashed';
+          phase = 'crashed';
         } else {
-          this._updateServiceStatus('stopped');
+          phase = 'stopped';
           this._uptimeStart = null;
         }
+        this._updateServiceStatus(phase);
       }
 
       // T8: Show git/patch meta only when real data exists
@@ -235,31 +316,55 @@ class TopBar {
     this._tenantEnvEl.textContent = env;
   }
 
-  /** T6: Update phase/connection indicator. */
-  _updateServiceStatus(status) {
+  /**
+   * T6: Record the raw studio phase and re-render. The chip's *visual* state is
+   * derived from (phase x live socket) by topbarEffectiveState — never set the
+   * className/label directly elsewhere, or the socket overlay silently breaks.
+   */
+  _updateServiceStatus(phase) {
+    this._studioPhase = phase;
+    this._renderServiceStatus();
+  }
+
+  /**
+   * Render the connection chip from the effective state. Called on every input
+   * that can change it: config poll (phase), socket status event, and the 1s
+   * tick (uptime). The label cross-fade fires only when the base state class
+   * changes — never on a per-second uptime update — so the timer never flickers.
+   */
+  _renderServiceStatus() {
     if (!this._statusEl) return;
-    this._statusEl.className = 'service-status ' + status;
-    const labels = { running: 'Connected', stopped: 'Browsing', building: 'Deploying\u2026' };
+    // The deploy flow owns the chip while a deploy is in-flight or has errored:
+    // setDeployStatus() writes #service-status directly and sets _deployActive.
+    // The socket listener and the 1s tick must NOT clobber that — mirror the
+    // same guard fetchConfig() uses on its phase-write path (see :216).
+    if (this._deployActive) return;
+    const eff = topbarEffectiveState(this._studioPhase, this._socketStatus);
+    this._statusEl.className = 'service-status ' + eff.cls;
     if (this._statusTextEl) {
-      let label = labels[status] || status;
-      if (status === 'running' && this._uptimeStart) {
+      let label = eff.label;
+      if (eff.live && this._uptimeStart) {
         label += ' ' + this._formatUptime(Math.floor((Date.now() - this._uptimeStart) / 1000));
       }
       this._statusTextEl.textContent = label;
     }
+    if (eff.cls !== this._lastStateKey) {
+      // Restart the fade keyframe by forcing a reflow between remove/add.
+      this._statusEl.classList.remove('state-flip');
+      void this._statusEl.offsetWidth;
+      this._statusEl.classList.add('state-flip');
+      this._lastStateKey = eff.cls;
+    }
   }
 
-  /** T7: Tick the bearer token countdown every second. */
+  /** T7: Tick the bearer token countdown + live uptime every second. */
   _tickCountdown() {
     if (this._bearerExpiresAt) {
       this._updateTokenCountdown();
     }
-    if (this._uptimeStart && this._statusEl?.classList.contains('running')) {
-      const secs = Math.floor((Date.now() - this._uptimeStart) / 1000);
-      if (this._statusTextEl) {
-        this._statusTextEl.textContent = 'Connected ' + this._formatUptime(secs);
-      }
-    }
+    // Re-render keeps the uptime ticking AND re-evaluates the socket overlay as
+    // a 1s safety net behind the instant addStatusListener push.
+    this._renderServiceStatus();
   }
 
   _formatUptime(totalSeconds) {
@@ -898,7 +1003,7 @@ class TopBar {
         this._statusTextEl.textContent = 'Deploy Failed';
         break;
       case 'crashed':
-        this._statusEl.className = 'service-status stopped';
+        this._statusEl.className = 'service-status crashed';
         this._statusTextEl.textContent = 'Service Crashed';
         break;
       case 'stopped':
@@ -2248,5 +2353,6 @@ class TopBar {
   destroy() {
     if (this._tokenTimer) clearInterval(this._tokenTimer);
     if (this._uptimeTimer) clearInterval(this._uptimeTimer);
+    if (this._wsUnsub) { this._wsUnsub(); this._wsUnsub = null; }
   }
 }

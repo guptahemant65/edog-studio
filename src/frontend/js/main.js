@@ -127,7 +127,7 @@ class EdogLogViewer {
 
     // Cockpit modules
     this.apiClient = new FabricApiClient();
-    this.topbar = new TopBar();
+    this.topbar = new TopBar(this.ws);
     this.sidebar = new Sidebar();
     this.runtimeView = new RuntimeView(this.ws);
 
