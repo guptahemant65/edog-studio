@@ -18,15 +18,9 @@ tests/test_tab_telemetry_v2_wiring.py.
 
 from __future__ import annotations
 
-import contextlib
-import json
 import os
 import re
 import shutil
-import subprocess
-import tempfile
-
-import pytest
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FRONTEND_JS = os.path.join(REPO, "src", "frontend", "js")

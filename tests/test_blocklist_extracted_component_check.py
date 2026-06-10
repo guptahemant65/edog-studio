@@ -74,11 +74,6 @@ class TestInterceptorChecksExtractedComponent:
         # The fix should produce one of these idiomatic forms. We accept either
         # an explicit second IsBlocked(component) call or a combined expression
         # so future refactors don't break the guard for cosmetic reasons.
-        accepted_patterns = (
-            "IsBlocked(component)",
-            "IsBlocked(rawCodeMarker) || BlocklistFilter.Instance.IsBlocked(component)",
-            "IsBlocked(rawCodeMarker)\n",  # weak fallback — must combine with the OR below
-        )
         # Strong assertion: the literal component-form call must be present.
         assert "IsBlocked(component)" in stripped, (
             "EdogLogInterceptor.TraceEvent must consult the blocklist against the "

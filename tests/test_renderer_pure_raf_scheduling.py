@@ -248,7 +248,8 @@ class TestNoTimeBasedThrottleInSource:
     """Reject any future re-introduction of the time-based throttle."""
 
     def test_renderer_has_no_throttle_fields(self):
-        src = open(RENDERER_JS, encoding="utf-8").read()
+        with open(RENDERER_JS, encoding="utf-8") as f:
+            src = f.read()
         # Strip comments — references inside the explanatory comments above
         # scheduleRender are allowed (and useful documentation).
         stripped = re.sub(r"//[^\n]*", "", src)
@@ -261,7 +262,8 @@ class TestNoTimeBasedThrottleInSource:
             )
 
     def test_renderer_schedule_uses_raf_not_settimeout(self):
-        src = open(RENDERER_JS, encoding="utf-8").read()
+        with open(RENDERER_JS, encoding="utf-8") as f:
+            src = f.read()
         # Locate the scheduleRender method body and verify it calls rAF
         # (not setTimeout) for scheduling.
         m = re.search(

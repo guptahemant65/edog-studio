@@ -29,8 +29,6 @@ from __future__ import annotations
 import os
 import re
 
-import pytest
-
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEVMODE = os.path.join(REPO, "src", "backend", "DevMode")
 FRONTEND_JS = os.path.join(REPO, "src", "frontend", "js")

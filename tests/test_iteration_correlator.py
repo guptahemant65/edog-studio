@@ -19,7 +19,7 @@ This test suite covers:
   8. Incremental — onNewLogs catches newly-added logs without full rebuild
   9. setActiveIteration(null) clears state
   10. setActiveIteration to a different id rebuilds from scratch
-  11. Live-corpus recall — real iteration's RAIDs all resolve (≥10× lift)
+  11. Live-corpus recall — real iteration's RAIDs all resolve (≥10x lift)
 
 Source-level guards (separate class):
   12. Renderer.passesFilter uses the correlator (not naive substring)
@@ -458,7 +458,8 @@ class TestPassesFilterUsesCorrelator:
     """renderer.passesFilter must consult the correlator, not substring."""
 
     def test_renderer_uses_iteration_correlator(self) -> None:
-        src = open(RENDERER_JS, encoding="utf-8").read()
+        with open(RENDERER_JS, encoding="utf-8") as f:
+            src = f.read()
         # Strip comments
         stripped = re.sub(r"//[^\n]*", "", src)
         stripped = re.sub(r"/\*.*?\*/", "", stripped, flags=re.DOTALL)
@@ -481,7 +482,8 @@ class TestPassesFilterUsesCorrelator:
         per TelemetryUtils.cs, so that branch is correct. Scope our check
         to passesFilter only.)
         """
-        src = open(RENDERER_JS, encoding="utf-8").read()
+        with open(RENDERER_JS, encoding="utf-8") as f:
+            src = f.read()
         stripped = re.sub(r"//[^\n]*", "", src)
         stripped = re.sub(r"/\*.*?\*/", "", stripped, flags=re.DOTALL)
 
@@ -507,7 +509,8 @@ class TestSummaryUsesCorrelator:
     """ExecutionSummary.compute must consult the correlator."""
 
     def test_summary_uses_iteration_correlator(self) -> None:
-        src = open(SUMMARY_JS, encoding="utf-8").read()
+        with open(SUMMARY_JS, encoding="utf-8") as f:
+            src = f.read()
         stripped = re.sub(r"//[^\n]*", "", src)
         stripped = re.sub(r"/\*.*?\*/", "", stripped, flags=re.DOTALL)
         assert "iterationCorrelator" in stripped or "IterationCorrelator" in stripped, (

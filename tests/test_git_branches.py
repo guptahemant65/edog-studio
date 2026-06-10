@@ -52,14 +52,14 @@ def git_repo(tmp_path: Path) -> Path:
 
 def test_run_git_returns_tuple(git_repo: Path):
     gb = _load_git_branches()
-    code, out, err = gb._run_git(str(git_repo), ["rev-parse", "--abbrev-ref", "HEAD"])
+    code, out, _err = gb._run_git(str(git_repo), ["rev-parse", "--abbrev-ref", "HEAD"])
     assert code == 0
     assert out.strip() == "main"
 
 
 def test_run_git_failure_is_soft(git_repo: Path):
     gb = _load_git_branches()
-    code, out, err = gb._run_git(str(git_repo), ["not-a-command"])
+    code, _out, _err = gb._run_git(str(git_repo), ["not-a-command"])
     assert code != 0  # never raises
 
 

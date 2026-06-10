@@ -70,7 +70,8 @@ class TestRendererHasOrphanSweep:
     """_renderVirtualScroll guards against out-of-bounds renderedRows keys."""
 
     def test_renderer_contains_orphan_sweep(self) -> None:
-        src = open(RENDERER_JS, encoding="utf-8").read()
+        with open(RENDERER_JS, encoding="utf-8") as f:
+            src = f.read()
         # Structural check: a predicate that detects filtIdx >= totalFiltered
         assert re.search(r"filtIdx\s*>=\s*totalFiltered", src), (
             "_renderVirtualScroll must contain a `filtIdx >= totalFiltered` "

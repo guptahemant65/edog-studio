@@ -1,4 +1,4 @@
-"""
+r"""
 ExecutionSummary extract* methods — data-wiring rewrite (2026-06-07).
 
 Background:

@@ -2440,7 +2440,7 @@ def apply_file_sourced_force_full_patch(content):
     for i, line in enumerate(lines):
         if closing_marker in line:
             insert_idx = i
-            # The `bool isFullRefreshMode = string.Equals(` opener sits 1–3
+            # The `bool isFullRefreshMode = string.Equals(` opener sits 1-3
             # lines above (a short comment block may separate them in the
             # real FLT source). Walk backwards until we find it so the
             # new sibling declarations match the STATEMENT'S indent, not
