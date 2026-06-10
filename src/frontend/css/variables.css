@@ -83,6 +83,7 @@
   --status-succeeded: #18a058;
   --status-failed: #e5453b;
   --status-cancelled: #e5940c;
+  --status-warning: #d4a72c;
   --status-pending: #8e95a5;
   /* Component category colors — light */
   --comp-controller: #2d7ff9;
@@ -147,6 +148,7 @@
   --status-succeeded: #34d399;
   --status-failed: #ff6b6b;
   --status-cancelled: #f0b429;
+  --status-warning: #e8c84d;
   --status-pending: #555d70;
   --comp-controller: #5b9bff;
   --comp-controller-bg: rgba(91, 155, 255, 0.12);

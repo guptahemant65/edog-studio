@@ -347,10 +347,10 @@ class ExecutionStateManager {
     if (!current) return;
     var validTransitions = {
       // FLT may emit terminal-only events (e.g., Succeeded without prior Started)
-      pending: ['running', 'completed', 'failed', 'cancelled', 'skipped', 'cancelling'],
-      running: ['completed', 'failed', 'cancelled', 'cancelling', 'skipped'],
+      pending: ['running', 'completed', 'failed', 'cancelled', 'skipped', 'cancelling', 'warning'],
+      running: ['completed', 'failed', 'cancelled', 'cancelling', 'skipped', 'warning'],
       // A node can race to a terminal result after cancel was requested.
-      cancelling: ['cancelled', 'completed', 'failed'],
+      cancelling: ['cancelled', 'completed', 'failed', 'warning'],
     };
     var allowed = validTransitions[current.status];
     if (!allowed || allowed.indexOf(state.status) === -1) {
@@ -419,7 +419,7 @@ class ExecutionStateManager {
   }
 
   _isTerminal(s) {
-    return s === 'completed' || s === 'failed' || s === 'cancelled' || s === 'skipped';
+    return s === 'completed' || s === 'failed' || s === 'cancelled' || s === 'skipped' || s === 'warning';
   }
 
   _emitExecutionState() {
@@ -435,6 +435,7 @@ class ExecutionStateManager {
     if (lower === 'succeeded' || lower === 'completed') return 'completed';
     if (lower === 'failed' || lower === 'faulted') return 'failed';
     if (lower === 'cancelled' || lower === 'canceled') return 'cancelled';
+    if (lower === 'warning' || lower === 'warn' || lower === 'completedwithwarnings' || lower === 'succeededwithwarnings') return 'warning';
     if (lower === 'running' || lower === 'inprogress' || lower === 'started') return 'running';
     return 'pending';
   }
@@ -447,6 +448,11 @@ class ExecutionStateManager {
     if (lower === 'failed' || lower === 'faulted' || lower === 'error') return 'failed';
     if (lower === 'cancelled' || lower === 'canceled') return 'cancelled';
     if (lower === 'skipped' || lower === 'notstarted_faulted') return 'skipped';
+    // 'warning' is a terminal node status in the runDAG lifecycle (a node that
+    // finished but raised warnings). It MUST map to its own terminal state —
+    // falling through to 'pending' left such nodes non-terminal forever, which
+    // stalled _checkCompletion() so the whole execution never resolved.
+    if (lower === 'warning' || lower === 'warn' || lower === 'completedwithwarnings' || lower === 'succeededwithwarnings') return 'warning';
     if (lower === 'running' || lower === 'inprogress' || lower === 'started' || lower === 'executing') return 'running';
     if (lower === 'cancelling') return 'cancelling';
     return 'pending';
@@ -508,6 +514,7 @@ class DagStudio {
     this._sumRun = document.getElementById('dagSumRun');
     this._sumDur = document.getElementById('dagSumDur');
     this._sumSkip = document.getElementById('dagSumSkip');
+    this._sumWarn = document.getElementById('dagSumWarn');
     this._sumCancel = document.getElementById('dagSumCancel');
     this._sumPend = document.getElementById('dagSumPend');
 
@@ -1301,7 +1308,9 @@ class DagStudio {
       for (var i = 0; i < entries.length; i++) {
         var nm = isArray ? entries[i] : entries[i][1];
         var s = ((nm && (nm.status || nm.nodeExecutionStatus)) || '').toLowerCase();
-        if (s === 'succeeded' || s === 'completed') done++;
+        // 'warning' is terminal-complete (see _mapNodeStatus) — count it as done
+        // so the autodetector backup progress mirrors the primary channel.
+        if (s === 'succeeded' || s === 'completed' || s === 'warning' || s === 'warn' || s === 'completedwithwarnings' || s === 'succeededwithwarnings') done++;
         else if (s === 'failed') failed++;
       }
       exec.completedNodes = done;
@@ -1427,7 +1436,7 @@ class DagStudio {
       if (zoomOut) zoomOut.click();
     } else if (e.key === '0') {
       // Fit to screen
-      if (this._renderer) this._renderer.fitToScreen();
+      if (this._renderer) this._renderer.fitToScreen(true);
     }
   }
 
@@ -1830,6 +1839,7 @@ class DagStudio {
     if (status === 'failed') return 'var(--status-failed)';
     if (status === 'running') return 'var(--accent)';
     if (status === 'cancelled' || status === 'cancelling') return 'var(--status-cancelled)';
+    if (status === 'warning') return 'var(--status-warning)';
     if (status === 'skipped') return 'var(--text-muted)';
     return 'var(--status-pending)';
   }
@@ -1860,6 +1870,7 @@ class DagStudio {
     var run = 0;
     var skip = 0;
     var cancel = 0;
+    var warn = 0;
     var pend = 0;
     for (var entry of this._esm.nodeStates) {
       var state = entry[1];
@@ -1867,6 +1878,7 @@ class DagStudio {
       else if (state.status === 'failed') fail += 1;
       else if (state.status === 'running') run += 1;
       else if (state.status === 'skipped') skip += 1;
+      else if (state.status === 'warning') warn += 1;
       else if (state.status === 'cancelled' || state.status === 'cancelling') cancel += 1;
       else pend += 1; // pending / none / anything not terminal
     }
@@ -1875,8 +1887,9 @@ class DagStudio {
     if (this._sumFail) this._sumFail.textContent = String(fail);
     if (this._sumRun) this._sumRun.textContent = String(run);
     // Skipped/cancelled/pending only shown when relevant so the strip stays
-    // calm on a clean run but always reconciles (ok+fail+run+skip+cancel+pend = total).
+    // calm on a clean run but always reconciles (ok+fail+run+skip+cancel+warn+pend = total).
     if (this._sumSkip) this._toggleSumChip(this._sumSkip, skip);
+    if (this._sumWarn) this._toggleSumChip(this._sumWarn, warn);
     if (this._sumCancel) this._toggleSumChip(this._sumCancel, cancel);
     if (this._sumPend) this._toggleSumChip(this._sumPend, pend);
     if (this._ganttCount) this._ganttCount.textContent = total ? String(total) : '';

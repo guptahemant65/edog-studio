@@ -6,6 +6,25 @@
  * Camera system: pan, zoom (wheel + buttons), fit-to-screen.
  * 3-level LOD: zoom < 0.35 = dot mode, 0.35-0.7 = mini, >= 0.7 = full detail.
  */
+
+/* ── Camera-tween pure helpers (unit-tested in tests/js/test-dag-camera.mjs) ──
+ * Kept at module scope so they are reachable from a node:vm test context and
+ * stay free of `this`. Prefixed `dag` to avoid colliding with other inlined
+ * modules in the single-file build. */
+function dagEaseOutCubic(t) {
+  if (t < 0) { t = 0; } else if (t > 1) { t = 1; }
+  var inv = 1 - t;
+  return 1 - inv * inv * inv;
+}
+
+function dagLerpCamera(from, to, e) {
+  return {
+    x: from.x + (to.x - from.x) * e,
+    y: from.y + (to.y - from.y) * e,
+    scale: from.scale + (to.scale - from.scale) * e,
+  };
+}
+
 class DagCanvasRenderer {
   /**
    * @param {HTMLElement} container - The .dag-graph-panel element
@@ -36,6 +55,7 @@ class DagCanvasRenderer {
     this._lastLOD = -1;       // last level-of-detail applied to node DOM
     this._nodeEls = null;     // cached .dag-node element list (refreshed on rebuild)
     this._renderBound = this._render.bind(this);  // bind once, not per frame
+    this._cameraTween = null;  // {from,to,start,dur} while an eased move is in flight
 
     // Callbacks
     this.onNodeSelected = null;
@@ -72,7 +92,7 @@ class DagCanvasRenderer {
     return {
       pending: '#8e95a5', running: '#6d5cff', completed: '#18a058',
       failed: '#e5453b', cancelled: '#e5940c', cancelling: '#e5940c',
-      skipped: '#b08d57', none: '#5b6170'
+      warning: '#d4a72c', skipped: '#b08d57', none: '#5b6170'
     }[status] || '#8e95a5';
   }
 
@@ -81,6 +101,7 @@ class DagCanvasRenderer {
       pending: 'rgba(142,149,165,0.06)', running: 'rgba(109,92,255,0.08)',
       completed: 'rgba(24,160,88,0.06)', failed: 'rgba(229,69,59,0.06)',
       cancelled: 'rgba(229,148,12,0.06)', cancelling: 'rgba(229,148,12,0.08)',
+      warning: 'rgba(212,167,44,0.07)',
       skipped: 'rgba(176,141,87,0.05)', none: 'rgba(91,97,112,0.04)'
     }[status] || 'rgba(142,149,165,0.06)';
   }
@@ -106,7 +127,7 @@ class DagCanvasRenderer {
     this._startRenderLoop();
   }
 
-  fitToScreen() {
+  fitToScreen(animate) {
     if (this._nodes.length === 0) return;
     var cw = this._canvas.width / this._dpr;
     var ch = this._canvas.height / this._dpr;
@@ -120,11 +141,50 @@ class DagCanvasRenderer {
     var pad = 80;
     var rangeX = maxX - minX + pad * 2;
     var rangeY = maxY - minY + pad * 2;
-    this._camera.scale = Math.min(cw / rangeX, ch / rangeY, 1.5);
-    this._camera.x = (cw - rangeX * this._camera.scale) / 2 - (minX - pad) * this._camera.scale;
-    this._camera.y = (ch - rangeY * this._camera.scale) / 2 - (minY - pad) * this._camera.scale;
-    if (this.onViewportChanged) this.onViewportChanged({ x: this._camera.x, y: this._camera.y, scale: this._camera.scale });
+    var scale = Math.min(cw / rangeX, ch / rangeY, 1.5);
+    var target = {
+      scale: scale,
+      x: (cw - rangeX * scale) / 2 - (minX - pad) * scale,
+      y: (ch - rangeY * scale) / 2 - (minY - pad) * scale,
+    };
+    // animate is opt-in: the F button / keyboard '0' glide; initial layout and
+    // resume-from-hidden snap so the first paint is never an unsolicited slide.
+    this._animateCamera(target, animate ? 220 : 0);
+  }
+
+  /**
+   * Glide the camera to a target {x,y,scale} over durationMs using easeOutCubic.
+   * Every discrete camera move (zoom buttons, fit, keyboard, wheel) routes
+   * through here so the canvas edges/grid, the HTML node layer and the minimap
+   * move in lockstep — a CSS transition on the node layer alone would glide the
+   * nodes while the canvas-drawn edges jumped, desyncing them. The tween is
+   * stepped inside _render(); the `_cameraTween` term in that loop's predicate
+   * (plus _requestRender here) keeps the otherwise demand-driven render loop
+   * awake for the tween's duration instead of freezing after one frame.
+   * duration <= 0 snaps immediately. A pointer pan clears the tween so an eased
+   * move never fights the user's drag.
+   */
+  _animateCamera(target, durationMs) {
+    if (durationMs <= 0) {
+      this._cameraTween = null;
+      this._camera.x = target.x;
+      this._camera.y = target.y;
+      this._camera.scale = target.scale;
+      if (this.onViewportChanged) this.onViewportChanged({ x: this._camera.x, y: this._camera.y, scale: this._camera.scale });
+      this._requestRender();
+      return;
+    }
+    this._cameraTween = {
+      from: { x: this._camera.x, y: this._camera.y, scale: this._camera.scale },
+      to: { x: target.x, y: target.y, scale: target.scale },
+      start: this._now(),
+      dur: durationMs,
+    };
     this._requestRender();
+  }
+
+  _now() {
+    return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
   }
 
   updateNodeState(nodeId, status) {
@@ -167,6 +227,7 @@ class DagCanvasRenderer {
 
   pauseRendering() {
     this._paused = true;
+    this._cameraTween = null;  // don't resurrect a half-finished glide on resume
     if (this._rafId) {
       cancelAnimationFrame(this._rafId);
       this._rafId = null;
@@ -584,7 +645,24 @@ class DagCanvasRenderer {
     this._rafId = null;
     if (this._paused) return;
 
-    var animating = this._anyRunning();
+    // Step an in-flight eased camera move before anything else this frame, so
+    // the canvas, node layer and minimap all read the same camera. _dirty is
+    // forced so the just-stepped position always paints, even on the final
+    // frame where the tween clears itself.
+    if (this._cameraTween) {
+      var tw = this._cameraTween;
+      var t = tw.dur > 0 ? (this._now() - tw.start) / tw.dur : 1;
+      if (t >= 1) t = 1;
+      var c = dagLerpCamera(tw.from, tw.to, dagEaseOutCubic(t));
+      this._camera.x = c.x;
+      this._camera.y = c.y;
+      this._camera.scale = c.scale;
+      if (this.onViewportChanged) this.onViewportChanged({ x: c.x, y: c.y, scale: c.scale });
+      if (t >= 1) this._cameraTween = null;
+      this._dirty = true;
+    }
+
+    var animating = this._anyRunning() || (this._cameraTween != null);
     if (!this._dirty && !animating) return;  // idle — sleep until _requestRender()
     this._dirty = false;
 
@@ -648,11 +726,12 @@ class DagCanvasRenderer {
     var fitBtn = this._container.querySelector('#dagFitBtn');
     if (zoomIn) zoomIn.addEventListener('click', this._zoomAt.bind(this, 1.25));
     if (zoomOut) zoomOut.addEventListener('click', this._zoomAt.bind(this, 0.8));
-    if (fitBtn) fitBtn.addEventListener('click', this.fitToScreen.bind(this));
+    if (fitBtn) fitBtn.addEventListener('click', this.fitToScreen.bind(this, true));
   }
 
   _onMouseDown(e) {
     this._isPanning = true;
+    this._cameraTween = null;  // a grab cancels any eased move — never fight the user
     this._panStart = { x: e.clientX, y: e.clientY };
     this._camStart = { x: this._camera.x, y: this._camera.y };
     this._canvas.style.cursor = 'grabbing';
@@ -695,11 +774,14 @@ class DagCanvasRenderer {
     var delta = e.deltaY > 0 ? 0.9 : 1.1;
     var newScale = this._clamp(this._camera.scale * delta, 0.15, 3.0);
     var ratio = newScale / this._camera.scale;
-    this._camera.x = mx - (mx - this._camera.x) * ratio;
-    this._camera.y = my - (my - this._camera.y) * ratio;
-    this._camera.scale = newScale;
-    if (this.onViewportChanged) this.onViewportChanged({ x: this._camera.x, y: this._camera.y, scale: this._camera.scale });
-    this._requestRender();
+    // Micro-ease so consecutive wheel ticks accumulate smoothly. Anchoring off
+    // the live (possibly mid-tween) camera keeps the zoom centred on the cursor
+    // as successive ticks retarget the tween.
+    this._animateCamera({
+      x: mx - (mx - this._camera.x) * ratio,
+      y: my - (my - this._camera.y) * ratio,
+      scale: newScale,
+    }, 90);
   }
 
   _onResize() {
@@ -712,11 +794,12 @@ class DagCanvasRenderer {
     var ch = this._canvas.height / this._dpr / 2;
     var newScale = this._clamp(this._camera.scale * factor, 0.15, 3.0);
     var ratio = newScale / this._camera.scale;
-    this._camera.x = cw - (cw - this._camera.x) * ratio;
-    this._camera.y = ch - (ch - this._camera.y) * ratio;
-    this._camera.scale = newScale;
-    if (this.onViewportChanged) this.onViewportChanged({ x: this._camera.x, y: this._camera.y, scale: this._camera.scale });
-    this._requestRender();
+    // Glide button/keyboard zoom about the viewport centre.
+    this._animateCamera({
+      x: cw - (cw - this._camera.x) * ratio,
+      y: ch - (ch - this._camera.y) * ratio,
+      scale: newScale,
+    }, 200);
   }
 
   /* ── Helpers ── */

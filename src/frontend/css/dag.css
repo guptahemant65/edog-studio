@@ -406,6 +406,10 @@
   border: 1.5px dashed var(--text-muted);
   box-shadow: none;
 }
+/* Warning — solid amber-gold ring; node finished but raised warnings. */
+.dag-node.status-warning .dag-node-status-dot {
+  box-shadow: 0 0 0 3px rgba(212, 167, 44, 0.18);
+}
 /* Never-run (none) — fainter than pending. */
 .dag-node.status-none .dag-node-status-dot {
   opacity: 0.5;
@@ -578,6 +582,7 @@
 .gantt-bar.completed,
 .gantt-bar.succeeded { background: var(--status-succeeded); }
 .gantt-bar.failed { background: var(--status-failed); }
+.gantt-bar.warning { background: var(--status-warning); }
 .gantt-bar.running {
   background: var(--accent);
   animation: dagGanttShimmer 1.5s infinite;
@@ -746,6 +751,7 @@
 .dag-studio > .exec-summary .stat-val.run { color: var(--accent); }
 .dag-studio > .exec-summary .stat-val.skip { color: var(--text-muted); }
 .dag-studio > .exec-summary .stat-val.cancel { color: var(--status-cancelled); }
+.dag-studio > .exec-summary .stat-val.warn { color: var(--status-warning); }
 .dag-studio > .exec-summary .stat-val.pend { color: var(--status-pending); }
 
 .dag-empty-hint {
@@ -832,6 +838,7 @@
 .gl-swatch.gl-completed { background: var(--status-succeeded); }
 .gl-swatch.gl-running { background: var(--accent); }
 .gl-swatch.gl-failed { background: var(--status-failed); }
+.gl-swatch.gl-warning { background: var(--status-warning); }
 .gl-swatch.gl-cancelled { background: var(--status-cancelled); opacity: 0.55; }
 .gl-swatch.gl-skipped { background: transparent; border: 1.5px dashed var(--text-muted); }
 .gl-swatch.gl-pending { background: var(--status-pending); opacity: 0.4; }
