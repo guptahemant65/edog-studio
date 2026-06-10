@@ -44,7 +44,7 @@ You don't configure it. You don't read a setup guide. You `git clone`, type `edo
 ▸ Create, rename, and delete Fabric resources<br>
 ▸ Edit notebooks inline — cells, run-all, the lot<br>
 ▸ Scaffold a whole environment with the Infra Wizard<br>
-▸ Flip feature flags · test any Fabric API live
+▸ Flip feature flags with rollout visibility
 
 </td>
 <td width="50%" valign="top">
@@ -56,6 +56,7 @@ You don't configure it. You don't read a setup guide. You `git clone`, type `edo
 ▸ Real-time log streaming with breakpoints<br>
 ▸ Interactive DAG graph + Gantt execution chart<br>
 ▸ Spark & GTS HTTP request/response inspector<br>
+▸ Fire any Fabric/FLT API from the Playground<br>
 ▸ Lock monitor, interceptor status, hot re-deploy<br>
 ▸ Every Spark span, poll, and retry — fully drillable
 
@@ -78,7 +79,7 @@ The cockpit's beating heart. The moment FLT is running, the Runtime view streams
 ### ◆ DAG Studio · *connected*
 Watch your DAG execute, node by node, in real time. A single source-of-truth state machine fuses SignalR telemetry (~50 ms) with log parsing (~200 ms), so the graph never lies — `pending ▸ running ▸ completed · failed · cancelled · skipped`, all colour-coded. Smooth, eased camera controls, a synced **Gantt chart**, run/cancel buttons, and a live execution strip across the top.
 
-### ◆ API Playground · *both phases*
+### ◆ API Playground · *connected*
 Postman, but it already knows your APIs. The endpoint catalog is **auto-discovered from the FLT C# source at runtime** — no manual setup. Build a request, fire it with live auth, and explore the response in a collapsible JSON tree. History is saved so you can replay anything.
 
 ### ◆ Environment · *both phases*
