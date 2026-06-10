@@ -205,3 +205,29 @@
   border-color: var(--rg-accent);
   color: var(--rg-accent);
 }
+
+.rg-browse {
+  display: block;
+  width: 100%;
+  padding: 9px;
+  font-family: var(--rg-font);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--rg-accent);
+  background: transparent;
+  border: 1px solid var(--rg-accent);
+  border-radius: 8px;
+  cursor: pointer;
+  margin-bottom: 10px;
+  transition: background var(--rg-speed), color var(--rg-speed);
+}
+
+.rg-browse:hover:not(:disabled) {
+  background: var(--rg-accent);
+  color: #ffffff;
+}
+
+.rg-browse:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

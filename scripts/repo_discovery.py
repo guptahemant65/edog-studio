@@ -224,6 +224,7 @@ def find_flt_repos(
     """
     home = Path.home()
     found: list[str] = []
+    seen: set[str] = set()
     timed_out = False
     deadline = time.monotonic() + timeout_sec
 
@@ -246,16 +247,29 @@ def find_flt_repos(
                 if entry.name.startswith(".") or entry.name in SKIP_DIRS:
                     continue
                 if is_flt_repo(entry):
-                    found.append(str(entry.resolve()))
+                    # Dedup by resolved path: priority roots overlap (e.g. cwd
+                    # can sit inside ~/source/repos, and the Q:\ root is rescanned
+                    # in the fallback), so the same repo may be reached twice.
+                    resolved = str(entry.resolve())
+                    if resolved not in seen:
+                        seen.add(resolved)
+                        found.append(resolved)
                     continue
                 _search(entry, depth + 1)
         except (PermissionError, OSError):
             pass
 
-    # Prioritize common dev directories before broad home scan. C:-home roots
-    # come first so the common (laptop) case returns instantly; the devbox Q:\
+    # Prioritize common dev directories before the broad home scan. C:-home
+    # roots come first so they dominate ordering on a laptop; the devbox Q:\
     # root is appended so a devbox — whose repos live on Q:, not C: — still
-    # auto-detects without falling through to the slower broad scans.
+    # auto-detects.
+    #
+    # DO NOT break out of this loop on the first dir that yields a hit. Scanning
+    # ALL priority dirs and aggregating (deduped above) is load-bearing: the old
+    # break-on-first picked whichever dir matched earliest, so a decoy clone in
+    # ~/source/repos silently hid the user's real repo in ~/work and the caller,
+    # seeing a single result, auto-selected the wrong path. See
+    # tests/test_repo_discovery_scan_all.py.
     priority_dirs = [
         home / "source" / "repos",
         home / "repos",
@@ -270,11 +284,12 @@ def find_flt_repos(
     for d in priority_dirs:
         if d.exists() and d.is_dir():
             _search(d)
-        if found or timed_out:
+        if timed_out or len(found) >= limit:
             break
 
-    # If nothing found in priority dirs, scan home (broader), then — for a
-    # devbox whose layout didn't match the priority roots — the Q:\ drive.
+    # Only if the targeted priority dirs found nothing do we pay for the broad
+    # home scan (keeps the common case fast), then — for a devbox whose layout
+    # didn't match the priority roots — the Q:\ drive.
     if not found and not timed_out:
         _search(home)
     if not found and not timed_out and DEVBOX_DRIVE_ROOT.exists():

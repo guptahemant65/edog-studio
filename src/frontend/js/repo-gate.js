@@ -1,7 +1,8 @@
 /* ============================================================================
    REPO GATE — Startup gate for FLT repo discovery/selection.
-   Resolves flt_repo_path before dashboard loads. Auto-resolves when possible,
-   shows picker only when multiple repos found or manual entry when zero.
+   Resolves flt_repo_path before dashboard loads. On first run it always lets
+   the user confirm/choose (even for a single scan hit) rather than silently
+   auto-selecting; offers a native folder picker (Browse) and manual entry.
 
    Scoped under .repo-gate-overlay for CSS isolation.
    ============================================================================ */
@@ -22,25 +23,22 @@ class RepoGateOverlay {
     const repo = health.fltRepo;
     if (repo && repo.valid) return true;
 
-    // Repo not configured or invalid — try auto-scan
+    // Repo not configured or invalid — scan for candidates. We deliberately do
+    // NOT auto-select even when the scan returns a single hit: that silent
+    // auto-set was how a wrong repo (a decoy clone, or a leaked config path)
+    // got locked in without the user ever seeing it. Always surface the picker
+    // so the first-run choice is explicit and overridable. See _doRescan/show.
     try {
       const resp = await fetch('/api/edog/repo-scan', { method: 'POST' });
-      if (!resp.ok) return false;
-      const scan = await resp.json();
-
-      if (scan.found.length === 1) {
-        // Single repo found — auto-set without UI
-        return await this._setRepo(scan.found[0]);
-      }
-      if (scan.found.length > 1) {
-        // Multiple found — need picker (handled by show())
-        this._scanResults = scan.found;
+      if (!resp.ok) {
+        this._scanResults = [];
         return false;
       }
-      // Zero found
-      this._scanResults = [];
+      const scan = await resp.json();
+      this._scanResults = scan.found || [];
       return false;
     } catch {
+      this._scanResults = [];
       return false;
     }
   }
@@ -55,7 +53,7 @@ class RepoGateOverlay {
     document.body.appendChild(this._overlay);
 
     const results = this._scanResults || [];
-    if (results.length > 1) {
+    if (results.length >= 1) {
       this._renderPicker(results);
     } else {
       this._renderManualEntry();
@@ -103,10 +101,13 @@ class RepoGateOverlay {
 
   _renderPicker(paths) {
     this._content.innerHTML = '';
+    this._selectedPath = null;
 
     const label = document.createElement('p');
     label.className = 'rg-label';
-    label.textContent = 'Multiple repositories found. Select one:';
+    label.textContent = paths.length === 1
+      ? 'Found this repository. Confirm it, or browse to pick a different one:'
+      : 'Multiple repositories found. Select one (or browse for another):';
     this._content.appendChild(label);
 
     const list = document.createElement('div');
@@ -139,15 +140,22 @@ class RepoGateOverlay {
     });
 
     this._content.appendChild(list);
+
+    this._errorEl = document.createElement('p');
+    this._errorEl.className = 'rg-error';
+    this._content.appendChild(this._errorEl);
+
     this._addConfirmButton();
+    this._addBrowseButton();
   }
 
   _renderManualEntry() {
     this._content.innerHTML = '';
+    this._selectedPath = null;
 
     const label = document.createElement('p');
     label.className = 'rg-label';
-    label.textContent = 'No FLT repository found automatically. Enter the path:';
+    label.textContent = 'No FLT repository found automatically. Browse for it or enter the path:';
     this._content.appendChild(label);
 
     const inputRow = document.createElement('div');
@@ -167,6 +175,7 @@ class RepoGateOverlay {
     this._content.appendChild(this._errorEl);
 
     this._addConfirmButton();
+    this._addBrowseButton();
 
     // Also add a rescan button
     const rescan = document.createElement('button');
@@ -187,6 +196,55 @@ class RepoGateOverlay {
     btn.addEventListener('click', () => this._handleConfirm());
     this._content.appendChild(btn);
     this._confirmBtn = btn;
+  }
+
+  _addBrowseButton() {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'rg-browse';
+    btn.textContent = 'Browse\u2026';
+    btn.addEventListener('click', () => this._browse());
+    this._content.appendChild(btn);
+    this._browseBtn = btn;
+  }
+
+  /**
+   * Open a native OS folder picker (served by the local dev-server) and feed
+   * the chosen path through the same validation as a typed/selected path.
+   * Browser sandboxing makes a real client-side folder dialog impossible —
+   * <input webkitdirectory> yields relative file lists, not an absolute dir —
+   * so the picker is backend-driven (POST /api/edog/repo-browse).
+   */
+  async _browse() {
+    this._showError('');
+    if (this._browseBtn) {
+      this._browseBtn.disabled = true;
+      this._browseBtn.textContent = 'Opening\u2026';
+    }
+    try {
+      const resp = await fetch('/api/edog/repo-browse', { method: 'POST' });
+      const data = await resp.json().catch(() => ({}));
+      if (data && data.path) {
+        await this._setRepo(data.path);
+      } else if (data && data.error) {
+        // No native picker on this host (non-Windows, or PowerShell failed to
+        // spawn). The picker view has no text field, so drop to manual entry —
+        // which has an input AND a Rescan button — otherwise the instruction to
+        // "enter the path manually" points at a field that doesn't exist.
+        const prev = this._selectedPath || (this._input && this._input.value.trim());
+        this._renderManualEntry();
+        if (this._input && prev) this._input.value = prev;
+        this._showError('Folder picker is unavailable here — enter the path manually.');
+      }
+      // cancelled (no path, no error) — leave the overlay as-is.
+    } catch {
+      this._showError('Could not open the folder picker.');
+    } finally {
+      if (this._browseBtn) {
+        this._browseBtn.disabled = false;
+        this._browseBtn.textContent = 'Browse\u2026';
+      }
+    }
   }
 
   // --- Private: Actions ---
@@ -242,13 +300,11 @@ class RepoGateOverlay {
       const resp = await fetch('/api/edog/repo-scan', { method: 'POST' });
       if (!resp.ok) return;
       const scan = await resp.json();
-      if (scan.found.length > 0) {
-        this._scanResults = scan.found;
-        if (scan.found.length === 1) {
-          const ok = await this._setRepo(scan.found[0]);
-          if (ok) return;
-        }
-        this._renderPicker(scan.found);
+      const found = scan.found || [];
+      if (found.length > 0) {
+        // Always present the choices — never silently lock in a single hit.
+        this._scanResults = found;
+        this._renderPicker(found);
       } else {
         this._showError('No FLT repositories found');
       }

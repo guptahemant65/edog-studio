@@ -3151,6 +3151,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_coverage_run()
         elif self.path == "/api/edog/repo-set":
             self._serve_repo_set()
+        elif self.path == "/api/edog/repo-browse":
+            self._serve_repo_browse()
         elif self.path == "/api/edog/git-checkout":
             self._serve_git_checkout()
         elif self.path == "/api/edog/git-stash-apply":
@@ -6400,6 +6402,58 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         _atomic_write(CONFIG_PATH, json.dumps(cfg, indent=2))
 
         self._json_response(200, info)
+
+    def _serve_repo_browse(self):
+        """POST /api/edog/repo-browse — open a native folder picker and return
+        the chosen absolute path.
+
+        The studio is a localhost dev-server running in the user's own
+        interactive session, so a server-side native dialog is the ONLY reliable
+        way to hand back a real filesystem path: a browser can't open an OS
+        folder dialog, and <input webkitdirectory> yields sandboxed, relative
+        file lists — never the absolute directory path repo-set needs.
+
+        Windows uses the Shell.Application COM folder browser. Deliberately no
+        ``Add-Type``/assembly load and no ``-EncodedCommand`` — a plain,
+        readable ``-Command`` with a stock COM object keeps this off MDE's
+        suspicious-load/obfuscation radar. The chosen path is NOT trusted here;
+        the frontend feeds it back through /api/edog/repo-set, which validates
+        the FLT marker before persisting.
+
+        Returns {path} on selection, {cancelled: true} on cancel/timeout, or
+        {error} when no native picker is available (non-Windows).
+        """
+        if os.name != "nt":
+            self._json_response(200, {"error": "unsupported_platform"})
+            return
+
+        ps_script = (
+            "$ErrorActionPreference='Stop';"
+            "$shell = New-Object -ComObject Shell.Application;"
+            "$folder = $shell.BrowseForFolder(0,"
+            "'Select your workload-fabriclivetable repository',1);"
+            "if ($folder -ne $null) { Write-Output $folder.Self.Path }"
+        )
+        try:
+            proc = subprocess.run(
+                ["powershell", "-NoProfile", "-STA", "-Command", ps_script],
+                capture_output=True,
+                text=True,
+                timeout=300,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        except subprocess.TimeoutExpired:
+            self._json_response(200, {"cancelled": True})
+            return
+        except OSError as exc:
+            self._json_response(200, {"error": "spawn_failed", "detail": str(exc)})
+            return
+
+        path = (proc.stdout or "").strip()
+        if not path:
+            self._json_response(200, {"cancelled": True})
+            return
+        self._json_response(200, {"path": path})
 
     def _serve_import_dag(self):
         """GET /api/import-dag — fetch getLatestDag for an arbitrary lakehouse.
