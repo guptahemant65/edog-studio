@@ -1875,8 +1875,11 @@ class DagStudio {
 
     self._api.getNotebookContent(wsId, ref.notebookId).then(function(resp) {
       var content = (resp && resp.content) ? resp.content : '';
-      var cells = content.split(/\n--\s*CELL\s+SEPARATOR\s*\n|\n#{2,}\s/);
-      var cellCode = (ref.cellIndex < cells.length) ? cells[ref.cellIndex].trim() : content.trim();
+      // Content is canonical ipynb now — parse it instead of guessing at cell
+      // boundaries with a regex (the old split never matched the real format).
+      var cells = NotebookParser.parse(content).cells || [];
+      var cell = cells[ref.cellIndex];
+      var cellCode = cell ? (cell.content || '').trim() : content.trim();
       self._codeCache.set(cacheKey, cellCode);
       self._renderNodeDetail(nodeId);
     }).catch(function(err) {

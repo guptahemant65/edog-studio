@@ -1,24 +1,40 @@
 /**
- * NotebookParser — Parse and serialize Fabric notebook-content.sql format.
+ * NotebookParser — Parse and serialize Fabric notebook definitions.
  *
- * Fabric notebooks stored via updateDefinition use a custom SQL-comment-based
- * format with METADATA, MARKDOWN, and CELL boundaries. This class provides
- * lossless round-trip parsing and serialization for that format.
+ * The canonical wire format is Jupyter **ipynb** JSON: the backend reader
+ * requests getDefinition with `?format=ipynb`, so Fabric normalizes any stored
+ * notebook (wizard ipynb, portal SparkSQL, portal Python) to a single canonical
+ * ipynb part regardless of how it was authored. parse() turns that ipynb into
+ * the normalized cell shape the IDE renders, and serialize() emits ipynb back
+ * for save.
+ *
+ * A legacy SQL-comment source format (METADATA/MARKDOWN/CELL boundaries) is
+ * still parsed as a backward-compatible safety net — e.g. content that was
+ * cached or fetched without the format hint. parse() auto-detects which it is.
  *
  * Usage:
- *   const nb = NotebookParser.parse(raw);
- *   const raw2 = NotebookParser.serialize(nb);
+ *   const nb = NotebookParser.parse(raw);   // raw = ipynb JSON or legacy source
+ *   const raw2 = NotebookParser.serialize(nb);  // ipynb JSON
  */
 class NotebookParser {
   /**
-   * Parse a raw notebook-content.sql string into a structured notebook object.
+   * Parse a raw notebook definition into a structured notebook object.
    *
-   * @param {string} raw — Raw notebook-content.sql text.
+   * Accepts canonical ipynb JSON (preferred) or legacy SQL-source text and
+   * produces the same normalized shape either way.
+   *
+   * @param {string} raw — ipynb JSON string or legacy notebook-content source.
    * @returns {{ notebookMeta: object, cells: Array<{type: string, language: string, content: string, meta: object}> }}
    */
   static parse(raw) {
     if (!raw || typeof raw !== 'string') {
       return { notebookMeta: {}, cells: [] };
+    }
+
+    // Prefer the canonical ipynb format; fall back to legacy SQL-source.
+    const ipynb = NotebookParser._tryParseIpynb(raw);
+    if (ipynb) {
+      return NotebookParser._fromIpynb(ipynb);
     }
 
     const lines = raw.split('\n');
@@ -146,12 +162,36 @@ class NotebookParser {
   }
 
   /**
-   * Serialize a structured notebook object back to notebook-content.sql format.
+   * Serialize a structured notebook object back to canonical ipynb JSON.
    *
    * @param {{ notebookMeta: object, cells: Array<{type: string, language: string, content: string, meta: object}> }} notebook
-   * @returns {string} Raw notebook-content.sql text.
+   * @returns {string} ipynb JSON text suitable for updateDefinition?format=ipynb.
    */
   static serialize(notebook) {
+    if (!notebook) return '';
+
+    const meta = notebook.notebookMeta || {};
+    const cells = (notebook.cells || []).map(
+      (cell) => NotebookParser._toIpynbCell(cell));
+
+    const nb = {
+      cells,
+      metadata: meta,
+      nbformat: 4,
+      nbformat_minor: 5,
+    };
+
+    return JSON.stringify(nb, null, 2);
+  }
+
+  /**
+   * Legacy serializer: emit the SQL-comment source format. Retained for
+   * backward compatibility / tooling; the IDE save path uses serialize() (ipynb).
+   *
+   * @param {{ notebookMeta: object, cells: Array }} notebook
+   * @returns {string} Raw notebook-content.sql text.
+   */
+  static serializeSqlSource(notebook) {
     if (!notebook) return '';
 
     const parts = [];
@@ -207,6 +247,116 @@ class NotebookParser {
     }
 
     return parts.join('\n');
+  }
+
+  // ── ipynb helpers ──────────────────────────────────────────────
+
+  /**
+   * Attempt to parse raw text as an ipynb notebook. Returns the parsed object
+   * only when it is a JSON object carrying a `cells` array; otherwise null so
+   * the caller can fall back to the legacy source parser. Never throws.
+   * @param {string} raw
+   * @returns {object|null}
+   */
+  static _tryParseIpynb(raw) {
+    const trimmed = raw.trimStart();
+    if (trimmed.charAt(0) !== '{') return null;
+    try {
+      const obj = JSON.parse(trimmed);
+      if (obj && typeof obj === 'object' && Array.isArray(obj.cells)) {
+        return obj;
+      }
+    } catch {
+      // Not valid JSON — treat as legacy source.
+    }
+    return null;
+  }
+
+  /**
+   * Convert a parsed ipynb object into the normalized notebook shape.
+   * @param {object} nb — Parsed ipynb (has `cells`, optional `metadata`).
+   * @returns {{ notebookMeta: object, cells: Array }}
+   */
+  static _fromIpynb(nb) {
+    const notebookMeta = (nb.metadata && typeof nb.metadata === 'object')
+      ? nb.metadata : {};
+    const cells = (nb.cells || []).map((c) => {
+      const content = NotebookParser._ipynbSourceToString(c.source);
+      const meta = (c.metadata && typeof c.metadata === 'object') ? c.metadata : {};
+      if (c.cell_type === 'markdown') {
+        return { type: 'markdown', language: 'markdown', content, meta };
+      }
+      const language = NotebookParser._ipynbCellLanguage(meta, notebookMeta);
+      return { type: 'code', language, content, meta };
+    });
+    return { notebookMeta, cells };
+  }
+
+  /**
+   * Map a normalized cell to an ipynb cell. For code cells, the current
+   * `language` is written back into metadata['microsoft.fabric'].language so a
+   * language edit in the IDE survives the round-trip and Fabric runs it right.
+   * @param {{type:string, language:string, content:string, meta:object}} cell
+   * @returns {object}
+   */
+  static _toIpynbCell(cell) {
+    const source = NotebookParser._stringToIpynbSource(cell.content || '');
+    const meta = Object.assign({}, cell.meta || {});
+
+    if (cell.type === 'markdown') {
+      return { cell_type: 'markdown', source, metadata: meta };
+    }
+
+    const fabric = Object.assign({}, meta['microsoft.fabric'] || {});
+    if (cell.language) fabric.language = cell.language;
+    meta['microsoft.fabric'] = fabric;
+    return {
+      cell_type: 'code',
+      source,
+      metadata: meta,
+      outputs: [],
+      execution_count: null,
+    };
+  }
+
+  /**
+   * Reconstruct cell text from an ipynb `source` (array of line fragments that
+   * carry their own newlines, or a single string).
+   * @param {string[]|string} source
+   * @returns {string}
+   */
+  static _ipynbSourceToString(source) {
+    if (Array.isArray(source)) return source.join('');
+    return typeof source === 'string' ? source : '';
+  }
+
+  /**
+   * Split cell text into the canonical ipynb `source` array — one entry per
+   * line, each line except the last terminated with '\n'. join('') is lossless.
+   * @param {string} content
+   * @returns {string[]}
+   */
+  static _stringToIpynbSource(content) {
+    if (content === '') return [];
+    const lines = content.split('\n');
+    return lines.map((l, i) => (i < lines.length - 1 ? l + '\n' : l));
+  }
+
+  /**
+   * Resolve a code cell's language from ipynb metadata. Fabric stores it under
+   * the `microsoft.fabric` namespace (wizard) or a flat `language` (ipynb
+   * export); fall back to the notebook's language_info, then 'python'.
+   * @param {object} cellMeta
+   * @param {object} nbMeta
+   * @returns {string}
+   */
+  static _ipynbCellLanguage(cellMeta, nbMeta) {
+    const fabric = cellMeta && cellMeta['microsoft.fabric'];
+    if (fabric && fabric.language) return fabric.language;
+    if (cellMeta && cellMeta.language) return cellMeta.language;
+    const li = nbMeta && nbMeta.language_info;
+    if (li && li.name) return li.name;
+    return 'python';
   }
 
   // ── Private helpers ────────────────────────────────────────────

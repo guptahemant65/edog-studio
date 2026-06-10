@@ -5,7 +5,7 @@
  * Replaces the content+inspector panels when a notebook is opened.
  *
  * Dependencies:
- *   - NotebookParser  (notebook-parser.js) — parse / serialize notebook-content.sql
+ *   - NotebookParser  (notebook-parser.js) — parse / serialize canonical ipynb
  *   - FabricApiClient  (api-client.js) — Fabric REST + notebook endpoints
  *
  * @author Zara Okonkwo — EDOG Studio hivemind

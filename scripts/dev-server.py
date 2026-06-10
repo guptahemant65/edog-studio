@@ -7369,8 +7369,14 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             "Content-Type": "application/json",
         }
 
-        # Step 1: POST getDefinition → expect 202 with Location header
-        url = f"{REDIRECT_HOST}/v1/workspaces/{ws_id}/notebooks/{nb_id}/getDefinition"
+        # Step 1: POST getDefinition?format=ipynb → expect 202 with Location header.
+        # Requesting ipynb makes Fabric normalize ANY stored notebook (wizard
+        # ipynb part, portal SparkSQL .sql, portal Python .py) to a single
+        # canonical notebook-content.ipynb part, so the IDE reads every notebook
+        # type uniformly. Without it, Fabric returns the source-format part the
+        # notebook was authored in and wizard notebooks come back as .py/.ipynb
+        # the SQL-only reader used to ignore (the "no cells" bug).
+        url = f"{REDIRECT_HOST}/v1/workspaces/{ws_id}/notebooks/{nb_id}/getDefinition?format=ipynb"
         print(f"  [NOTEBOOK] POST getDefinition ws={ws_id[:8]}... nb={nb_id[:8]}...")
 
         try:
@@ -7440,7 +7446,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             # Step 4: Decode base64 parts from the definition
             parts = resp_data.get("definition", {}).get("parts", [])
             all_parts = []
-            content_text = ""
+            content_by_path = {}
             platform_text = ""
             for part in parts:
                 path = part.get("path", "")
@@ -7450,10 +7456,21 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 except Exception:
                     decoded = payload
                 all_parts.append({"path": path, "decoded": decoded})
-                if path == "notebook-content.sql":
-                    content_text = decoded
-                elif path == ".platform":
+                content_by_path[path] = decoded
+                if path == ".platform":
                     platform_text = decoded
+
+            # Prefer canonical ipynb; fall back to legacy source parts so the
+            # reader stays resilient if Fabric ever returns the authored format.
+            content_text = ""
+            for candidate in (
+                "notebook-content.ipynb",
+                "notebook-content.py",
+                "notebook-content.sql",
+            ):
+                if candidate in content_by_path:
+                    content_text = content_by_path[candidate]
+                    break
 
             self._json_response(
                 200,
@@ -7491,10 +7508,14 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._json_response(401, {"error": "no_bearer_token", "message": "Bearer token not cached"})
             return
 
-        # Build definition parts with base64-encoded payloads
+        # Build definition parts with base64-encoded payloads. The IDE serializes
+        # cells as canonical ipynb (NotebookParser.serialize), so we write the
+        # notebook-content.ipynb part and tag updateDefinition with format=ipynb
+        # to match the read path. updateDefinition replaces the whole parts list,
+        # so this also collapses any stale source-format part from authoring.
         parts = [
             {
-                "path": "notebook-content.sql",
+                "path": "notebook-content.ipynb",
                 "payload": base64.b64encode(content.encode("utf-8")).decode(),
                 "payloadType": "InlineBase64",
             },
@@ -7509,7 +7530,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 }
             )
 
-        url = f"{REDIRECT_HOST}/v1/workspaces/{ws_id}/notebooks/{nb_id}/updateDefinition"
+        url = f"{REDIRECT_HOST}/v1/workspaces/{ws_id}/notebooks/{nb_id}/updateDefinition?format=ipynb"
         req_body = json.dumps({"definition": {"parts": parts}}).encode()
         print(f"  [NOTEBOOK] POST updateDefinition ws={ws_id[:8]}... nb={nb_id[:8]}...")
 

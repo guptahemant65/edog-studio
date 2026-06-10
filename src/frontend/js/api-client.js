@@ -419,7 +419,7 @@ class FabricApiClient {
 
   /**
    * Fetch notebook cell content via server-side LRO handler.
-   * Returns decoded notebook-content.sql text and .platform metadata.
+   * Returns decoded canonical ipynb JSON and .platform metadata.
    * @param {string} workspaceId
    * @param {string} notebookId
    * @returns {Promise<{content: string, platform: string}>}
@@ -439,7 +439,7 @@ class FabricApiClient {
    * Save notebook cell content via server-side handler.
    * @param {string} workspaceId
    * @param {string} notebookId
-   * @param {string} content - Raw notebook-content.sql text.
+   * @param {string} content - Canonical ipynb JSON (NotebookParser.serialize).
    * @param {string} [platform] - Optional .platform JSON string.
    */
   async saveNotebookContent(workspaceId, notebookId, content, platform = '') {
