@@ -210,6 +210,29 @@
   text-align: center;
 }
 
+/* P4: "N hidden by filters" affordance in the logs status bar. Drawn in a
+   warning hue so a non-zero hidden count is noticeable but not alarming;
+   clickable to clear all active filters. */
+.hidden-indicator {
+  color: var(--level-warning, #d8a657);
+}
+.hidden-count-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: var(--level-warning, #d8a657);
+  cursor: pointer;
+  text-decoration: underline dotted;
+}
+.hidden-count-btn:hover,
+.hidden-count-btn:focus-visible {
+  color: var(--text, #fff);
+  text-decoration-style: solid;
+  outline: none;
+}
+
 /* Scroll FAB */
 .scroll-fab {
   position: absolute;

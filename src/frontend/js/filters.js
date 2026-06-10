@@ -143,59 +143,16 @@ class FilterManager {
     schedule(() => this.renderer.rerenderTelemetry());
   }
   
-  // Component presets — FLT is the implicit, always-applied baseline.
-  // The ALL / DAG / Spark presets and the .preset-bar UI were removed in
-  // #3 (2026-06-07). FLT include patterns remain here so Renderer.passesFilter
-  // can apply the baseline regardless of any state field. To narrow within
-  // FLT, users still have the component dropdown and click-pill-to-exclude.
-  // Derived from workload-fabriclivetable CodeMarkers.cs, MonitoredCodeMarkers.cs,
-  // and bracket-tagged Tracer.Log* calls across the entire FLT codebase.
-  static COMPONENT_PRESETS = {
-    flt: { include: [
-      // CodeMarkers.cs — controllers, handlers, scheduler, reliable ops (54+ markers)
-      /^LiveTable/i,
-      // MonitoredCodeMarkers.cs — TIPS, FabricApi, eviction, OneLakeRestClient (27+ markers)
-      /^Workload\.LiveTable/i,
-      // FeatureFlightProvider CodeMarkers
-      /^LTWorkload/i,
-      // DQ metrics hook + writer bracket tags
-      /^DqMetrics/i,
-      // Insights metrics bracket tags (InsightsMetricsWrite, InsightsTableManager)
-      /^Insights/i,
-      // OneLake bracket tags (OneLakeRestClient, OneLakeRetryPolicyProvider)
-      /^OneLake/i,
-      // DAG execution flow bracket tags (DagExecutionBeginFlow, DagExecutionEndFlow, etc.)
-      /^DagExecution/i,
-      /^DagCancellation/i,
-      /^DagHook/i,
-      // Node execution flow bracket tags
-      /^NodeExecution/i,
-      // Retry bracket tags (RetryExecutor, RetryPolicy, StandardRetryStrategy)
-      /^Retry/i,
-      /^StandardRetry/i,
-      // Lineage bracket tags
-      /^Lineage/i,
-      /^ExtendedLineage/i,
-      /^FullLineage/i,
-      /^RecursiveTraversal/i,
-      // Error & cancellation flows
-      /^ErrorMessage/i,
-      /^Cancellation$/i,
-      // Catalog & DQ
-      /^GetConnected/i,
-      /^GetDataQuality/i,
-      /^Cache$/i,
-      // Metrics table names (sys_run_metrics)
-      /^sys_/i,
-      // Misc FLT bracket tags
-      /^DevMode$/i,
-      /^WES$/i,
-      /^Multischedule/i,
-      /^IncludedLakehouses/i,
-      /^SelectedOnly/i,
-      /^OC\./i,
-    ] },
-  };
+  // Component noise filtering is owned by the BACKEND (edog-blocklist.json +
+  // EdogLogInterceptor): platform chatter is dropped server-side before it is
+  // ever forwarded, and Errors/Warnings are always surfaced. The frontend used
+  // to ALSO apply a hardcoded FLT include-allowlist here (COMPONENT_PRESETS),
+  // but that silently re-dropped genuine FLT logs and real platform errors —
+  // see renderer.js::passesFilter (P0, 2026-06-10) and
+  // tests/test_logs_flt_backend_owns_filtering.py. The allowlist is gone; the
+  // ALL/DAG/Spark preset bar and applyPreset were already removed in #3.
+  // Manual narrowing still works via the component dropdown and
+  // pill-click-to-exclude (state.excludedComponents).
   
   excludeComponent = (component) => {
     this.state.excludedComponents.add(component);
@@ -215,7 +172,7 @@ class FilterManager {
       btn.classList.add('active');
     });
     
-    // Reset component exclusions. FLT baseline is always applied in passesFilter.
+    // Reset component exclusions. Backend owns noise filtering; no frontend baseline.
     this.state.excludedComponents.clear();
     
     // Reset time filter
@@ -227,7 +184,7 @@ class FilterManager {
     // Clear correlation
     this.clearCorrelationFilter();
     
-    // Re-render with cleared filters; FLT baseline still applies.
+    // Re-render with all filters cleared (backend-forwarded logs all show).
     this.applyFilters();
   }
 }

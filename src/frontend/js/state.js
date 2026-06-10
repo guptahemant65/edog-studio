@@ -202,7 +202,7 @@ class FilterSetView {
 
 class LogViewerState {
   constructor() {
-    this.logBuffer = new RingBuffer(10000);
+    this.logBuffer = new RingBuffer(50000);
     this.filterIndex = new FilterIndex();
     this.telemetryBuffer = new RingBuffer(5000);
     // PR-B: filter fields below are now getter/setter proxies onto

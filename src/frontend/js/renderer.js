@@ -1038,13 +1038,33 @@ class Renderer {
       return false;
     }
 
-    // Component filter — check explicit exclusions AND the FLT baseline.
-    // #3 (2026-06-07): the preset bar was removed; FLT is always applied
-    // here, not behind a state.activePreset gate.
+    // Component filter — explicit user exclusions only.
+    //
+    // P0 (2026-06-10): removed the always-on FLT include ALLOWLIST that used
+    // to live here (COMPONENT_PRESETS.flt.include). It dropped any component
+    // not matching ~27 hardcoded regexes and silently re-introduced the exact
+    // bug the BACKEND deleted when it migrated allowlist->blocklist
+    // (EdogLogInterceptor.cs:30-38). Two harms it caused:
+    //   (a) genuine FLT logs with an un-listed or absent bracket tag (e.g.
+    //       [DeltaLogReader], MetastoreClient, or plain untagged logs that
+    //       arrive as component "Unknown") were hidden even though the backend
+    //       forwarded them; and
+    //   (b) real platform Errors/Warnings — which the backend ALWAYS forwards
+    //       so "failures are never hidden" — were dropped by the viewer.
+    //
+    // The backend is the single source of truth for noise filtering: every log
+    // that reaches us has already passed the component blocklist (non-errors)
+    // and the message blocklist (all levels), or is an Error/Warning the
+    // backend chose to surface. Every WCL-noise component the old #3 baseline
+    // targeted (IncomingRequest, WorkloadInitialization, PbiClientRequest,
+    // FabricAccessContext, MwcAccessInfoProvider, OrchestratorControllerProxy,
+    // ...) is in edog-blocklist.json, so it is already dropped server-side for
+    // non-errors — removing the frontend allowlist does NOT resurrect that
+    // chatter. We therefore honor only the user's explicit pill exclusions
+    // here; the level buttons, search, time, correlation and iteration filters
+    // below still narrow the view. Do NOT re-add a component allowlist. See
+    // tests/test_logs_flt_backend_owns_filtering.py.
     if (this.state.excludedComponents.has(component)) return false;
-
-    const fltInclude = FilterManager.COMPONENT_PRESETS.flt.include;
-    if (!fltInclude.some(p => p.test(component))) return false;
 
     // Time range filter
     if (this.state.timeRangeSeconds > 0) {
@@ -1156,8 +1176,62 @@ class Renderer {
   updateLogsStatus = () => {
     const visibleCountEl = document.getElementById('visible-count');
     const totalCountEl = document.getElementById('total-count');
-    if (visibleCountEl) visibleCountEl.textContent = this.state.filterIndex.length;
-    if (totalCountEl) totalCountEl.textContent = this.state.logBuffer.count;
+    const visible = this.state.filterIndex.length;
+    const total = this.state.logBuffer.count;
+    if (visibleCountEl) visibleCountEl.textContent = visible;
+    if (totalCountEl) totalCountEl.textContent = total;
+
+    // P4 (2026-06-10): surface how many retained logs are hidden by the active
+    // filters. Before this, the only signal was the stats panel's cumulative
+    // total vs the list — a silent mismatch that made the viewer look like it
+    // was "dropping" logs (it wasn't; a filter was hiding them). "of total" is
+    // buffer-scoped (what is currently in the 50k ring), not the cumulative
+    // backend count, so the math here is always exact: hidden = total - visible.
+    const hidden = Math.max(0, total - visible);
+    const indicatorEl = document.getElementById('hidden-indicator');
+    const hiddenCountEl = document.getElementById('hidden-count');
+    if (indicatorEl && hiddenCountEl) {
+      if (hidden > 0) {
+        hiddenCountEl.textContent = hidden.toLocaleString();
+        const btn = document.getElementById('hidden-count-btn');
+        if (btn) {
+          btn.title = this._describeActiveFilters();
+          // Wire click-to-clear exactly once (idempotent across re-renders).
+          if (!btn._wired) {
+            btn._wired = true;
+            btn.addEventListener('click', () => {
+              const fm = (typeof window !== 'undefined' && window.edogViewer)
+                ? window.edogViewer.filter : null;
+              if (fm && typeof fm.clearAll === 'function') fm.clearAll();
+            });
+          }
+        }
+        indicatorEl.style.display = '';
+      } else {
+        indicatorEl.style.display = 'none';
+      }
+    }
+  }
+
+  // P4: human-readable summary of which filters are currently hiding logs.
+  // Used as the hover tooltip on the "N hidden by filters" affordance so the
+  // user can see WHY logs are hidden without guessing.
+  _describeActiveFilters() {
+    const parts = [];
+    const allLevels = ['Verbose', 'Message', 'Warning', 'Error'];
+    const off = allLevels.filter(l => !this.state.activeLevels.has(l));
+    if (off.length) parts.push('Levels off: ' + off.join(', '));
+    const excSize = this.state.excludedComponents
+      ? (this.state.excludedComponents.size || 0) : 0;
+    if (excSize) parts.push(excSize + ' component' + (excSize === 1 ? '' : 's') + ' excluded');
+    if (this.state.searchText) parts.push('Search: "' + this.state.searchText + '"');
+    if (this.state.correlationFilter) parts.push('Correlation filter active');
+    if (this.state.raidFilter) parts.push('Iteration filter active');
+    if (this.state.timeRangeSeconds > 0) parts.push('Time range: last ' + this.state.timeRangeSeconds + 's');
+    if (this.state.endpointFilter) parts.push('Endpoint: ' + this.state.endpointFilter);
+    if (this.state.componentFilter) parts.push('Component: ' + this.state.componentFilter);
+    if (!parts.length) return 'Logs hidden by active filters. Click to clear all filters.';
+    return parts.join('  •  ') + '  —  click to clear all filters.';
   }
 
   updateSearchCount = () => {

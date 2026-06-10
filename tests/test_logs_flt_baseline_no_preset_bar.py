@@ -20,15 +20,26 @@ This test asserts the contract at three levels:
 
   1. **DOM**: index.html has no .preset-bar div and no data-preset
      attributes.
-  2. **JS surface**: filters.js exposes no applyPreset method and
-     COMPONENT_PRESETS contains only the ``flt`` entry.
-  3. **Behavioral**: passesFilter always applies the FLT include filter
-     regardless of any state field. A non-FLT component is rejected;
-     an FLT-relevant component passes.
+  2. **JS surface**: filters.js exposes no applyPreset method and no
+     ALL/DAG/Spark preset entries.
+  3. **Behavioral**: passesFilter does NOT apply a frontend component
+     allowlist. Noise filtering is owned by the backend
+     (edog-blocklist.json + EdogLogInterceptor); the frontend shows every
+     log the backend forwarded, minus the user's explicit pill exclusions.
+
+SUPERSEDED NOTE (P0, 2026-06-10): the original item 3 asserted that
+passesFilter ALWAYS applied an FLT include-ALLOWLIST and rejected non-FLT
+components. That allowlist was itself a bug — it re-dropped genuine FLT logs
+and real platform Errors/Warnings that the backend deliberately forwarded
+(the backend had already migrated allowlist->blocklist for this exact
+reason). The behavioral assertions below are therefore inverted, and the
+COMPONENT_PRESETS constant was removed. The preset-bar / applyPreset removal
+from #3 still stands. See tests/test_logs_flt_backend_owns_filtering.py for
+the full P0 contract + mutation guard.
 
 The source-level guards mutation-test themselves — re-introducing any
-``data-preset="all|dag|spark"`` attribute or restoring ALL/DAG/Spark
-entries to COMPONENT_PRESETS will fail this test.
+``data-preset="all|dag|spark"`` attribute or an applyPreset method will fail
+this test.
 
 @author Pixel — EDOG Studio hivemind
 """
@@ -94,19 +105,20 @@ class TestFiltersJsSurface:
             "applyPreset has no callers and must be removed."
         )
 
-    def test_component_presets_has_only_flt(self):
-        """COMPONENT_PRESETS.flt is kept (renderer reads it); the others are gone."""
+    def test_no_legacy_presets(self):
+        """No ALL/DAG/Spark preset definitions remain.
+
+        #3 removed the preset BAR. P0 (2026-06-10) additionally removed the
+        FLT include-allowlist constant (COMPONENT_PRESETS) entirely — the
+        backend owns noise filtering now. So filters.js must define none of the
+        legacy preset keys, and need not define ``flt`` either.
+        """
         with open(FILTERS_JS, encoding="utf-8") as f:
             src = f.read()
-        # FLT is the baseline include set, retained as a constant.
-        assert "flt:" in src, "FLT include patterns must remain available for renderer"
-        # ALL/DAG/Spark keys at the start of an indented line are the canonical
-        # preset definitions. Bare key matches at non-comment column positions
-        # would catch a future re-introduction.
         for forbidden_key in ("    all:", "    dag:", "    spark:"):
             assert forbidden_key not in src, (
                 f"filters.js still defines a {forbidden_key.strip()} preset entry. "
-                f"Only flt is allowed. See #3."
+                f"Legacy presets must not return. See #3 / P0."
             )
 
 
@@ -194,13 +206,20 @@ def _run(script: str, harness_src: str) -> dict:
 
 
 class TestFltBaselineAlwaysOn:
-    """Regardless of any state field, only FLT-relevant components pass."""
+    """P0 (2026-06-10) inverted contract: the frontend applies NO component
+    allowlist. Every log the backend forwards is shown unless the user has
+    explicitly excluded its component via a pill. Backend (edog-blocklist.json)
+    is the single source of truth for noise suppression — see
+    test_logs_flt_backend_owns_filtering.py for the canonical P0 contract.
+    """
 
     @pytest.mark.parametrize(
         "component",
         [
-            # Top FLT noise emitters per lifecycle doc §7.6 — these are
-            # NOT in the FLT include set and MUST be filtered out.
+            # These six are still suppressed — but server-side, via
+            # edog-blocklist.json, NOT by a frontend allowlist. At the
+            # passesFilter layer (post-forward) they now PASS: the frontend
+            # must not second-guess the backend's forwarding decision.
             "IncomingRequest",
             "WorkloadInitialization",
             "PbiClientRequest",
@@ -209,7 +228,7 @@ class TestFltBaselineAlwaysOn:
             "OrchestratorControllerProxy-GenerateMwcToken",
         ],
     )
-    def test_non_flt_component_is_filtered_out(self, harness_source, component):
+    def test_forwarded_component_passes_frontend(self, harness_source, component):
         script = (
             f"const entry = {{ level: 'Message', "
             f"  component: '{component}',"
@@ -219,16 +238,16 @@ class TestFltBaselineAlwaysOn:
             f"return {{ passes: renderer.passesFilter(entry) }};"
         )
         data = _run(script, harness_source)
-        assert data["passes"] is False, (
-            f"Component {component!r} is not in the FLT include set and must be "
-            f"filtered out unconditionally. If this fails, the FLT baseline is "
-            f"not being applied."
+        assert data["passes"] is True, (
+            f"Component {component!r} reached the frontend, so the backend chose "
+            f"to forward it. passesFilter must NOT re-drop it — the frontend "
+            f"allowlist was removed in P0. Noise is suppressed server-side."
         )
 
     @pytest.mark.parametrize(
         "component",
         [
-            # FLT include-set hits — these MUST pass.
+            # Genuine FLT components — must pass (always did).
             "LiveTableController-Get",
             "LiveTableSchedulerRunController-MVRefresh",
             "DagExecution",
@@ -236,6 +255,10 @@ class TestFltBaselineAlwaysOn:
             "OneLakeRestClient",
             "DqMetrics",
             "Insights",
+            # P0a: genuine FLT components the OLD allowlist missed — now pass.
+            "MetastoreClient",
+            "DeltaLogReader",
+            # P0b: a real platform Error that the old allowlist hid — now passes.
         ],
     )
     def test_flt_component_passes(self, harness_source, component):
@@ -249,5 +272,19 @@ class TestFltBaselineAlwaysOn:
         )
         data = _run(script, harness_source)
         assert data["passes"] is True, (
-            f"Component {component!r} is in the FLT include set and must pass."
+            f"Component {component!r} must pass — the frontend applies no allowlist."
+        )
+
+    def test_user_excluded_component_still_drops(self, harness_source):
+        """The one frontend drop that remains: explicit user pill exclusion."""
+        script = (
+            "state.excludedComponents.add('NodeExecution');"
+            "const entry = { level: 'Message', component: 'NodeExecution',"
+            "  message: 'signal', rootActivityId: 'r1',"
+            "  timestamp: new Date().toISOString() };"
+            "return { passes: renderer.passesFilter(entry) };"
+        )
+        data = _run(script, harness_source)
+        assert data["passes"] is False, (
+            "An explicitly excluded component must still be dropped by passesFilter."
         )

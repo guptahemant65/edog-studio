@@ -367,8 +367,34 @@
     var defaults = defaultFilters();
     var lsLogs = readFiltersFromLS('logs');
     var lsTele = readFiltersFromLS('telemetry');
+    var logs = Object.assign({}, defaults.logs, lsLogs, parsed.filters.logs);
+
+    /* Verbose is always-on by default at boot.
+     *
+     * Root cause this guards: the live FLT service emits ~70% of its log
+     * volume at Verbose. A single in-session "V off" click gets snapshotted
+     * to localStorage (edog-filters-logs) by the persistence subscriber, and
+     * because localStorage outranks defaults in the merge above, EVERY later
+     * boot then starts with Verbose hidden — with a clean URL, so there is no
+     * visible cue and the viewer looks like it is "dropping" logs.
+     *
+     * We re-admit Verbose at boot UNLESS the URL hash explicitly carried a
+     * `levels` key. An explicit deep-link (e.g. a shared
+     * #tab=logs&levels=Warning,Error) is an intentional, verbatim filter and
+     * is still honored — this is why we key off parsed.filters.logs, not the
+     * merged result. The in-session V toggle (filters.js / renderer.passesFilter)
+     * is unaffected; this governs only the default boot state. Do not "simplify"
+     * this to force Verbose unconditionally — that would break URL-hydration of
+     * levels (see tests/test_studio_state_boot.py::test_logs_filter_url_hydrates). */
+    var urlSpecifiedLevels = Object.prototype.hasOwnProperty.call(
+      parsed.filters.logs, 'levels');
+    if (!urlSpecifiedLevels && Array.isArray(logs.levels) &&
+        logs.levels.indexOf('Verbose') === -1) {
+      logs.levels = logs.levels.concat(['Verbose']);
+    }
+
     var filters = {
-      logs: Object.assign({}, defaults.logs, lsLogs, parsed.filters.logs),
+      logs: logs,
       telemetry: Object.assign({}, defaults.telemetry, lsTele, parsed.filters.telemetry),
     };
     return { activeTab: tab, filters: filters };

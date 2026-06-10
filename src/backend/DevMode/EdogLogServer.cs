@@ -31,7 +31,7 @@ namespace Microsoft.LiveTable.Service.DevMode
     /// </summary>
     internal sealed class EdogLogServer : IDisposable
 {
-    private const int MaxLogEntries = 10000;
+    private const int MaxLogEntries = 50000;
     private const int MaxTelemetryEvents = 5000;
 
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };

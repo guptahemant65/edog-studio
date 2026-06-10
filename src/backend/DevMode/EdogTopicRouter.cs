@@ -25,7 +25,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// </summary>
         public static void Initialize()
         {
-            RegisterTopic("log", 10000);
+            RegisterTopic("log", 50000);
             RegisterTopic("telemetry", 5000);
             RegisterTopic("fileop", 2000);
             RegisterTopic("spark", 2000);
