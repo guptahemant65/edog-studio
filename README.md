@@ -24,7 +24,9 @@
 
 <br>
 
-EDOG Studio gives [FabricLiveTable](https://learn.microsoft.com/en-us/fabric/) developers a single UI to browse Fabric resources, deploy to a local lakehouse with one click, and debug with real-time logs, DAG visualization, and Spark traffic inspection. It evolved from [flt-edog-devmode](https://github.com/guptahemant65/flt-edog-devmode) into a full engineering cockpit.
+Stop juggling the Fabric portal, a terminal, log files, and three browser tabs. **EDOG Studio is one window for the entire FabricLiveTable inner loop** — browse your Fabric tenant, deploy to a local lakehouse with one click, and watch the service light up in real time: live logs, an interactive DAG, every Spark request, feature flags, the works.
+
+You don't configure it. You don't read a setup guide. You `git clone`, type `edog`, and it walks you through the rest. It evolved from [flt-edog-devmode](https://github.com/guptahemant65/flt-edog-devmode) into a full engineering cockpit — and now it's yours.
 
 ---
 
@@ -36,25 +38,26 @@ EDOG Studio gives [FabricLiveTable](https://learn.microsoft.com/en-us/fabric/) d
 
 ### ○ Phase 1 — Disconnected
 
-> No FLT service required. Just your Fabric credentials.
+> No FLT service. No deploy. Just your Fabric credentials.
 
 ▸ Browse tenants, workspaces, lakehouses, tables<br>
 ▸ Create, rename, and delete Fabric resources<br>
-▸ Manage feature flags with rollout visibility<br>
-▸ Test any Fabric API in the built-in playground
+▸ Edit notebooks inline — cells, run-all, the lot<br>
+▸ Scaffold a whole environment with the Infra Wizard<br>
+▸ Flip feature flags · test any Fabric API live
 
 </td>
 <td width="50%" valign="top">
 
 ### ● Phase 2 — Connected
 
-> Pick a lakehouse ▸ deploy ▸ full DevTools.
+> Pick a lakehouse ▸ deploy ▸ full DevTools light up.
 
 ▸ Real-time log streaming with breakpoints<br>
-▸ Interactive DAG graph with Gantt chart<br>
-▸ Spark HTTP request/response inspector<br>
-▸ Lock monitor with auto-unlock<br>
-▸ File change detection with hot re-deploy
+▸ Interactive DAG graph + Gantt execution chart<br>
+▸ Spark & GTS HTTP request/response inspector<br>
+▸ Lock monitor, interceptor status, hot re-deploy<br>
+▸ PR-driven QA pipeline, end to end
 
 </td>
 </tr>
@@ -62,35 +65,62 @@ EDOG Studio gives [FabricLiveTable](https://learn.microsoft.com/en-us/fabric/) d
 
 ---
 
-## Views
+## The Feature Tour
 
-| View | Phase | Description |
-|:-----|:-----:|:------------|
-| **Workspace Explorer** | Both | Browse and manage tenants, workspaces, lakehouses, tables. One-click deploy. |
-| **Logs** | Connected | Streaming log viewer with breakpoints, bookmarks, and error clustering. |
-| **DAG Studio** | Connected | Interactive DAG graph, Gantt execution chart, diff, run/cancel controls. |
-| **Spark Inspector** | Connected | Capture every Spark and GTS HTTP request and response. |
-| **API Playground** | Both | Test Fabric APIs with pre-configured endpoints and live auth. |
-| **Environment** | Both | Feature flags, lock monitor, orphaned resource cleanup. |
+Six views, one keystroke apart (<kbd>1</kbd>–<kbd>6</kbd>). Here's what each one does for you.
 
-Plus: Command Palette (<kbd>Ctrl</kbd>+<kbd>K</kbd>), Token Inspector, File Change Detection, Session History.
+### ◆ Workspace Explorer · *both phases*
+Your Fabric tenant as a three-panel tree — tenants ▸ workspaces ▸ lakehouses ▸ tables. Create, rename, delete, and **deploy to a local lakehouse with a single click**. Open a notebook and it turns into a real **embedded IDE**: edit cells, run them one at a time or all at once, save straight back to Fabric. Need a fresh environment? The **Infra Wizard** scaffolds one end to end — Setup ▸ Theme ▸ Build (visual DAG canvas) ▸ Review ▸ Deploy — and it's a true singleton, so it never loses your half-finished work.
+
+### ◆ Runtime · *connected*
+The cockpit's beating heart. The moment FLT is running, the Runtime view streams **live logs** with breakpoints, bookmarks, and error clustering — then hands you **11 inspector sub-tabs** (<kbd>Alt</kbd>+<kbd>1–5</kbd> to fly between them): Spark, HTTP, DI, Caches, Flags, Nexus, Perf, Retries, SysFiles, Telemetry, Tokens. Every Spark session is drillable down to its spans, state, polls, and raw payloads.
+
+### ◆ DAG Studio · *connected*
+Watch your DAG execute, node by node, in real time. A single source-of-truth state machine fuses SignalR telemetry (~50 ms) with log parsing (~200 ms), so the graph never lies — `pending ▸ running ▸ completed · failed · cancelled · skipped`, all colour-coded. Smooth, eased camera controls, a synced **Gantt chart**, run/cancel buttons, and a live execution strip across the top.
+
+### ◆ API Playground · *both phases*
+Postman, but it already knows your APIs. The endpoint catalog is **auto-discovered from the FLT C# source at runtime** — no manual setup. Build a request, fire it with live auth, and explore the response in a collapsible JSON tree. History is saved so you can replay anything.
+
+### ◆ Environment · *both phases*
+Everything about your local setup on cards you can trust: Config snapshot, Token state, Build & Patch status, Interceptor wrap status — plus the full **Feature Flags matrix** with rollout visibility, a lock monitor, and orphaned-resource cleanup.
+
+### ◆ QA · *connected*
+A PR-driven testing pipeline in five stages: **PR Input ▸ Analysis ▸ Curation ▸ Execution ▸ Results**. Point it at a change and walk it from raw diff to a clean test verdict.
+
+> **And the little things that add up:** Command Palette (<kbd>Ctrl</kbd>+<kbd>K</kbd>), a live top bar that tracks your git branch and flags a crashed service the instant it happens, file-watcher hot re-deploy, a token inspector with countdown, and a first-run flow that finds your FLT repo for you.
 
 ---
 
 ## Quick Start
 
+Three lines. No setup guide.
+
 ```powershell
-# Install
-irm https://raw.githubusercontent.com/guptahemant65/edog-studio/master/scripts/install.ps1 | iex
-
-# Configure
-edog --config -u your@email.com
-
-# Launch
+git clone https://github.com/guptahemant65/edog-studio.git
+cd edog-studio
 edog
 ```
 
-Open **http://localhost:5555** — you're in.
+That's it. On first run, EDOG **finds your FabricLiveTable repo for you** and asks for your email — then opens **http://localhost:5555**. The web UI handles auth, workspace selection, and deploy. No CLI token dance.
+
+<details>
+<summary><b>Want <code>edog</code> on your PATH so it runs from anywhere?</b></summary>
+<br>
+
+```powershell
+# One-line installer — adds edog to PATH
+irm https://raw.githubusercontent.com/guptahemant65/edog-studio/master/scripts/install.ps1 | iex
+```
+
+Or point EDOG at your FLT repo manually so it can run from any directory:
+
+```powershell
+edog --config -r C:\path\to\FabricLiveTable
+```
+
+Handy flags: `edog --status` (are changes applied?) · `edog --revert` (undo everything) · `edog --config` (show config) · `edog --logs` (just open the viewer).
+
+</details>
 
 ---
 
@@ -140,7 +170,7 @@ The frontend builds into a **single self-contained HTML file** — all CSS and J
 | **Frontend** | Vanilla JS + CSS — no framework, single-file build |
 | **Backend Injection** | C# — DevMode registrar, interceptors |
 | **Auth** | Silent CBA via C# token-helper (certificate-based, zero browser) |
-| **IPC** | SignalR with MessagePack binary protocol |
+| **IPC** | SignalR (JSON hub protocol) over WebSocket — real-time telemetry |
 
 </details>
 
@@ -154,13 +184,13 @@ cd edog-studio
 python -m venv .venv && .venv\Scripts\activate
 pip install -e ".[dev]"
 
-# Build
+# Build the single-file UI
 python scripts/build-html.py
 
-# Quality gates
-make lint      # Ruff
-make test      # Pytest
-make build     # Full pipeline
+# Quality gates (make, or call the tools directly)
+make lint      # ruff check + format   → python -m ruff check .
+make test      # pytest + coverage     → python -m pytest
+make build     # full pipeline         → python scripts/build-html.py
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
