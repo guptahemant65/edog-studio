@@ -26,7 +26,7 @@
 
 Stop juggling the Fabric portal, a terminal, log files, and three browser tabs. **EDOG Studio is one window for the entire FabricLiveTable inner loop** — browse your Fabric tenant, deploy to a local lakehouse with one click, and watch the service light up in real time: live logs, an interactive DAG, every Spark request, feature flags, the works.
 
-You don't configure it. You don't read a setup guide. You `git clone`, type `edog`, and it walks you through the rest. It evolved from [flt-edog-devmode](https://github.com/guptahemant65/flt-edog-devmode) into a full engineering cockpit — and now it's yours.
+You don't configure it. You don't read a setup guide. You `git clone`, type `edog`, and it walks you through the rest. It evolved from [flt-edog-devmode](https://github.com/guptahemant_microsoft/flt-edog-devmode) into a full engineering cockpit — and now it's yours.
 
 ---
 
@@ -97,7 +97,7 @@ A PR-driven testing pipeline in five stages: **PR Input ▸ Analysis ▸ Curatio
 Three lines. No setup guide.
 
 ```powershell
-git clone https://github.com/guptahemant65/edog-studio.git
+git clone https://github.com/guptahemant_microsoft/edog-studio.git
 cd edog-studio
 edog
 ```
@@ -105,15 +105,17 @@ edog
 That's it. On first run, EDOG **finds your FabricLiveTable repo for you** and asks for your email — then opens **http://localhost:5555**. The web UI handles auth, workspace selection, and deploy. No CLI token dance.
 
 <details>
-<summary><b>Want <code>edog</code> on your PATH so it runs from anywhere?</b></summary>
+<summary><b>Want <code>edog</code> to run from any directory?</b></summary>
 <br>
 
+The repo ships an `edog.cmd` launcher in its root. Add the cloned folder to your `PATH` and `edog` works from anywhere:
+
 ```powershell
-# One-line installer — adds edog to PATH
-irm https://raw.githubusercontent.com/guptahemant65/edog-studio/master/scripts/install.ps1 | iex
+# Add the repo to PATH for this session (or add it permanently via System settings)
+$env:PATH += ";$PWD"
 ```
 
-Or point EDOG at your FLT repo manually so it can run from any directory:
+And point EDOG at your FabricLiveTable checkout so it knows what to launch:
 
 ```powershell
 edog --config -r C:\path\to\FabricLiveTable
@@ -180,7 +182,7 @@ The frontend builds into a **single self-contained HTML file** — all CSS and J
 <br>
 
 ```powershell
-git clone https://github.com/guptahemant65/edog-studio.git
+git clone https://github.com/guptahemant_microsoft/edog-studio.git
 cd edog-studio
 python -m venv .venv && .venv\Scripts\activate
 pip install -e ".[dev]"
