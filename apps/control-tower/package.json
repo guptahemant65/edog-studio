@@ -6,7 +6,8 @@
   "description": "Aperture — Rollout Tracker (F30 Control Tower). Read-only feature-flag rollout intelligence portal.",
   "scripts": {
     "test": "node --experimental-strip-types --test \"tests/*.test.ts\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "mine:live": "node --experimental-strip-types scripts/live-mine.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

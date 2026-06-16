@@ -12,8 +12,8 @@ feature flag rolls out across the 15 canonical environments by mining the
 
 | Layer | State |
 |-------|-------|
-| **Data engine — attribution core** (`src/engine`) | ✅ implemented + tested (28 tests) |
-| ADO REST client + git-history fetch | ⬜ next |
+| **Data engine — attribution core** (`src/engine`) | ✅ implemented + tested |
+| ADO REST client + git-history loader | ✅ implemented (injectable) + tested via fake; live smoke gated on `ADO_TOKEN` |
 | Warm store + incremental refresh | ⬜ next |
 | Derivation (ladder/velocity/sovereign/inert) | 🟡 dwell done; rest pending |
 | Auth (MSAL + Auth.js, two-identity) | ⬜ |
@@ -32,6 +32,13 @@ feature flag rolls out across the 15 canonical environments by mining the
   emits `FileCreationEvent` + `AttributionEvent[]`.
 - `src/engine/derivation.ts` — `firstEnabledDate` + `ladderDwell` (dwell rule
   §7: first-non-off; prod is not special-cased).
+- `src/engine/ado-client.ts` — `AdoClient` interface + `HttpAdoClient` (fetch,
+  concurrency cap, 429 backoff). Network decoupled so orchestration is testable.
+- `src/engine/concurrency.ts` — `mapLimit` (bounded, order-preserving) +
+  `fetchWithRetry` (§3.1).
+- `src/engine/flag-discovery.ts` — `discoverFlagPaths` / `flagIdFromPath` (§3.2).
+- `src/engine/repository.ts` — `loadFlagHistory` (newest→oldest, content per
+  commit) + `mineRepository` (discover → load → mine), the ADO↔engine seam.
 
 ## Commands
 
@@ -50,7 +57,7 @@ its own bundler-based tooling.
 
 ## Next slice
 
-ADO REST client (`src/engine/ado-client.ts`) behind the same `FlagCommit`
-interface the miner already consumes, with recorded fixtures for offline tests
-and a live mode gated on an ADO token — then the warm store and the first
-`/api/ct/grid` endpoint end-to-end.
+Warm store: an immutable `Map<commitId, ParsedFlagContent>` (§3.4.4) so
+incremental `refresh` only fetches new commits, plus atomic last-good rollback
+(§6). Then the remaining derivations (ladder/velocity/sovereign/inert) and the
+first `/api/ct/grid` endpoint end-to-end.
