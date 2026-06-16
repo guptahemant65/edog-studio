@@ -1,0 +1,15 @@
+{
+  "name": "@edog/control-tower",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Aperture — Rollout Tracker (F30 Control Tower). Read-only feature-flag rollout intelligence portal.",
+  "scripts": {
+    "test": "node --experimental-strip-types --test \"tests/*.test.ts\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.6.3"
+  }
+}
