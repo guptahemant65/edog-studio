@@ -1,0 +1,1938 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aperture — Rollout Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f5f6f8; --surface:#ffffff; --surface-2:#fafbfc; --surface-3:#f3f5f7;
+  --border:#e4e7ec; --border-2:#eef0f3; --border-3:#f1f3f5;
+  --text:#0f172a; --text-2:#475569; --text-3:#8a94a6; --text-4:#aab2c0;
+  --accent:#6d5cff; --accent-2:#5848e0; --accent-soft:rgba(109,92,255,.08); --accent-line:rgba(109,92,255,.22);
+  --on:#16a34a; --on-bg:rgba(22,163,74,.10); --on-sw:#22c55e;
+  --off:#64748b; --off-bg:rgba(148,163,184,.10); --off-sw:#cbd5e1;
+  --neutral-cell:#dce1e8; --neutral-ink:#475569; --neutral-sw:#aab2c0;
+  --prod-cell:#7cc59c;
+  --cond:#1d4ed8; --cond-bg:rgba(37,99,235,.10); --cond-sw:#3b82f6;
+  --target:#7c3aed; --target-bg:rgba(124,58,237,.10); --target-sw:#a855f7;
+  --warn:#b45309; --warn-bg:rgba(217,119,6,.10); --warn-sw:#f59e0b;
+  --danger:#be123c; --danger-bg:rgba(225,29,72,.10);
+  --shadow-sm:0 1px 2px rgba(16,24,40,.04),0 1px 3px rgba(16,24,40,.05);
+  --shadow-md:0 2px 6px rgba(16,24,40,.05),0 6px 18px rgba(16,24,40,.08);
+  --shadow-lg:0 8px 24px rgba(16,24,40,.10),0 24px 56px rgba(16,24,40,.14);
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+  --r:9px; --r-sm:6px; --r-xs:4px;
+  --fast:.12s; --med:.22s; --slow:.4s; --e:cubic-bezier(.22,.61,.36,1); --spring:cubic-bezier(.18,1.25,.4,1);
+}
+[data-theme="dark"]{
+  --bg:#0a0d13; --surface:#111722; --surface-2:#0e131c; --surface-3:#161d2a;
+  --border:#222b3a; --border-2:#1a2230; --border-3:#151c28;
+  --text:#e7ebf3; --text-2:#a3adbf; --text-3:#6b7689; --text-4:#4a5263;
+  --accent-soft:rgba(109,92,255,.12); --accent-line:rgba(109,92,255,.30);
+  --on-bg:rgba(34,197,94,.14); --off-bg:rgba(148,163,184,.10);
+  --neutral-cell:#2a3442; --neutral-ink:#a3adbf; --neutral-sw:#5b6678;
+  --prod-cell:#3f8f68;
+  --cond-bg:rgba(59,130,246,.16); --target-bg:rgba(168,85,247,.16); --warn-bg:rgba(245,158,11,.14);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.3); --shadow-md:0 4px 16px rgba(0,0,0,.4); --shadow-lg:0 16px 48px rgba(0,0,0,.55);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased;overflow:hidden;transition:background var(--med) var(--e)}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:8px;border:3px solid var(--surface)}
+::-webkit-scrollbar-thumb:hover{background:var(--text-4)}
+button{font-family:inherit;cursor:pointer}
+
+/* ---------- shell ---------- */
+.topbar{height:54px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 20px;position:relative;z-index:40}
+.brand{display:flex;align-items:center;gap:11px}
+.brand-mark{width:27px;height:27px;border-radius:7px;background:linear-gradient(135deg,#6d5cff,#8b7cff);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:16px;line-height:1;box-shadow:var(--shadow-sm)}
+.crumb{display:flex;align-items:center;gap:9px;font-size:13.5px}
+.crumb b{font-weight:600;letter-spacing:-.01em}
+.crumb .sep{color:var(--text-4)}
+.crumb .cur{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--text-3);background:var(--surface-3);padding:3px 9px;border-radius:20px}
+.topbar-right{display:flex;align-items:center;gap:16px}
+.tstat{font-size:12px;color:var(--text-3)} .tstat b{color:var(--text-2);font-weight:600}
+.tstat .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--on-sw);margin-right:5px;box-shadow:0 0 0 3px var(--on-bg)}
+.searchbtn{display:flex;align-items:center;gap:9px;background:var(--surface-2);border:1px solid var(--border);border-radius:7px;padding:6px 10px;color:var(--text-3);font-size:12px;min-width:200px;transition:border-color var(--fast)}
+.searchbtn:hover{border-color:var(--accent-line)}
+.searchbtn kbd{margin-left:auto;font-family:var(--mono);font-size:10px;background:var(--surface-3);border:1px solid var(--border);border-radius:4px;padding:1px 5px;color:var(--text-3)}
+.theme-btn{width:31px;height:31px;border-radius:7px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);font-size:14px;display:flex;align-items:center;justify-content:center;transition:all var(--fast)}
+.theme-btn:hover{border-color:var(--accent);color:var(--accent)}
+.asof-ctl{position:relative}
+.asof-btn{display:flex;align-items:center;gap:6px;background:var(--surface-2);border:1px solid var(--border);border-radius:7px;padding:6px 10px;color:var(--text-3);font-size:12px;transition:border-color var(--fast)}
+.asof-btn:hover{border-color:var(--accent-line)}
+.asof-btn b{color:var(--text-2);font-weight:600}
+.asof-btn.past{border-color:var(--accent);color:var(--accent)} .asof-btn.past b{color:var(--accent)}
+.asof-pop{position:absolute;top:calc(100% + 6px);right:0;min-width:188px;background:var(--surface);border:1px solid var(--border);border-radius:9px;box-shadow:var(--shadow-lg);padding:5px;z-index:60;opacity:0;transform:translateY(-4px);pointer-events:none;transition:all var(--fast)}
+.asof-pop.open{opacity:1;transform:none;pointer-events:auto}
+.asof-pop .ahd{font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text-4);padding:6px 9px 4px}
+.asof-opt{display:flex;align-items:center;justify-content:space-between;padding:7px 9px;border-radius:6px;font-size:12px;color:var(--text-2);cursor:pointer;transition:background var(--fast)}
+.asof-opt:hover{background:var(--surface-2)}
+.asof-opt.sel{color:var(--accent);font-weight:600}
+.asof-opt small{font-family:var(--mono);font-size:10px;color:var(--text-4)}
+
+.shell{display:flex;height:calc(100% - 54px - 27px)}
+
+/* ---------- nav rail ---------- */
+.nav{width:56px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:4px;overflow:visible}
+.nav-group{margin-bottom:16px}
+.nav-label{font-family:var(--mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.14em;color:var(--text-4);padding:0 8px 7px;display:flex;align-items:center;gap:6px}
+.nav-label .live{width:6px;height:6px;border-radius:50%;background:var(--on-sw);box-shadow:0 0 0 3px var(--on-bg)}
+.nav-item{display:flex;align-items:center;gap:10px;padding:7px 9px;border-radius:var(--r-sm);color:var(--text-2);font-size:12.5px;font-weight:500;position:relative;cursor:pointer;transition:background var(--fast),color var(--fast);margin-bottom:1px}
+.nav-item:hover{background:var(--surface-3);color:var(--text)}
+.nav-item.active{background:var(--accent-soft);color:var(--accent)}
+.nav-item.active::before{content:'';position:absolute;left:-12px;top:50%;transform:translateY(-50%);width:3px;height:18px;background:var(--accent);border-radius:0 3px 3px 0}
+.nav-ico{width:17px;text-align:center;font-size:13px;opacity:.85}
+.nav-item .tag{margin-left:auto;font-family:var(--mono);font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--on);background:var(--on-bg);padding:1px 5px;border-radius:10px}
+.nav-foot{margin-top:auto;border-top:1px solid var(--border-2);padding-top:12px}
+.vocab-title{font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:.14em;color:var(--text-4);padding:0 8px 8px}
+.vocab-row{display:flex;align-items:center;gap:8px;padding:3px 8px;font-size:11px;color:var(--text-2)}
+.vocab-row i{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+.vocab-row .q{margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--text-4)}
+.nav-ico-btn{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:16px;cursor:pointer;position:relative;transition:background var(--fast),color var(--fast)}
+.nav-ico-btn:hover{background:var(--surface-3);color:var(--text)}
+.nav-ico-btn.active{background:var(--accent-soft);color:var(--accent)}
+.nav-ico-btn.active::before{content:'';position:absolute;left:-9px;top:50%;transform:translateY(-50%);width:3px;height:20px;background:var(--accent);border-radius:0 3px 3px 0}
+.nav-ico-btn[data-tip]:hover::after{content:attr(data-tip);position:absolute;left:46px;top:50%;transform:translateY(-50%);background:var(--text);color:var(--surface);font-family:var(--mono);font-size:10px;padding:4px 8px;border-radius:5px;white-space:nowrap;box-shadow:var(--shadow-md);z-index:60;pointer-events:none}
+.nav-sep{width:24px;height:1px;background:var(--border-2);margin:5px 0}
+.nav-sys{width:9px;height:9px;border-radius:50%;background:var(--on-sw);box-shadow:0 0 0 3px var(--on-bg)}
+.legend-wrap{position:relative;margin-top:auto}
+.legend-pop{position:absolute;left:48px;bottom:0;background:var(--surface);border:1px solid var(--border);border-radius:11px;box-shadow:var(--shadow-lg);padding:13px 13px 9px;width:178px;opacity:0;pointer-events:none;transform:translateX(-6px) scale(.98);transform-origin:left bottom;transition:all var(--fast) var(--e);z-index:60}
+.legend-wrap:hover .legend-pop{opacity:1;pointer-events:auto;transform:none}
+
+/* ---------- content ---------- */
+.content{flex:1;overflow-y:auto;padding:20px 22px 40px}
+.sec-label{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.14em;color:var(--text-3);display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.sec-label::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--text-4)}
+.sec-label .right{margin-left:auto;color:var(--text-4);letter-spacing:.06em;text-transform:none;font-size:10.5px}
+
+/* briefing */
+.briefing{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin-bottom:22px}
+.lead{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:13px 14px;cursor:pointer;position:relative;overflow:hidden;transition:box-shadow var(--fast),border-color var(--fast)}
+.lead:hover{box-shadow:var(--shadow-sm);border-color:var(--accent-line)}
+.lead.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),var(--shadow-md)}
+.lead-top{display:flex;align-items:center;justify-content:space-between;color:var(--text-3);font-size:11.5px;font-weight:500;margin-bottom:7px}
+.lead-ico{font-size:13px;opacity:.7}
+.lead-val{font-size:21px;font-weight:600;letter-spacing:-.02em;line-height:1;display:flex;align-items:baseline;gap:7px}
+.lead-val small{font-size:11px;font-weight:500;color:var(--text-3);letter-spacing:0}
+.lead-sub{font-size:11px;color:var(--text-3);margin-top:8px;display:flex;align-items:center;gap:6px}
+.lead-sub .pill{font-family:var(--mono);font-size:9px;padding:1px 6px;border-radius:10px;text-transform:uppercase;letter-spacing:.04em;font-weight:600}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* rollout-stage pipeline */
+.ribbon-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px 24px 14px;margin-bottom:22px;box-shadow:var(--shadow-sm)}
+.pipe{position:relative;height:104px}
+.pipe-flow{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
+.pp-st{position:absolute;top:0;bottom:0;width:64px;transform:translateX(-50%);cursor:pointer;transition:opacity var(--med) var(--e)}
+.pp-c{position:absolute;top:0;left:0;right:0;text-align:center;font-size:19px;font-weight:700;letter-spacing:-.02em;color:var(--text);line-height:1;transition:color var(--fast)}
+.pp-c.off{color:var(--text-4);font-weight:500}
+.pp-node{position:absolute;top:50%;left:50%;width:14px;height:14px;border-radius:50%;background:var(--neutral-sw);transform:translate(-50%,-50%);box-shadow:0 0 0 5px var(--surface),0 0 0 6px var(--border-2);transition:transform var(--fast) var(--e),box-shadow var(--fast);z-index:2}
+.pp-node.prod{background:var(--prod-cell)}
+.pp-node.empty{background:var(--surface);box-shadow:0 0 0 5px var(--surface),inset 0 0 0 2px var(--border)}
+.pp-st:hover .pp-node{transform:translate(-50%,-50%) scale(1.32)}
+.pp-st:hover .pp-c{color:var(--accent)}
+.pp-st.active .pp-node{box-shadow:0 0 0 5px var(--surface),0 0 0 7px var(--accent);background:var(--accent)}
+.pp-st.active .pp-c{color:var(--accent)}
+.pp-pips{position:absolute;top:calc(50% + 16px);left:50%;transform:translateX(-50%);display:flex;gap:3px}
+.pp-pip{width:5px;height:5px;border-radius:50%}
+.pp-pip.cond{background:var(--cond-sw)}.pp-pip.target{background:var(--target-sw)}
+.pp-l{position:absolute;bottom:0;left:0;right:0;text-align:center;font-family:var(--mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--text-3)}
+.pp-st.dim{opacity:.3}
+.pp-st.empty{cursor:default}
+
+/* layout split */
+.split{display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start}
+
+/* object table */
+.tbl-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow-sm);overflow:hidden}
+.tbl-toolbar{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--border-2);flex-wrap:wrap}
+.tbl-search{flex:1;min-width:140px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12.5px;color:var(--text);font-family:inherit}
+.tbl-search:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.tbl-search::placeholder{color:var(--text-4)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font-size:11.5px;padding:5px 11px;border-radius:20px;border:1px solid var(--border);background:var(--surface);color:var(--text-2);transition:all var(--fast);font-weight:500}
+.chip:hover{border-color:var(--accent-line);color:var(--text)}
+.chip.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.chip .n{font-family:var(--mono);font-size:10px;opacity:.7;margin-left:4px}
+.active-filter{display:flex;align-items:center}
+.afpill{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;color:var(--text-2);background:var(--accent-soft);border:1px solid var(--accent-line);border-radius:20px;padding:4px 6px 4px 12px;font-weight:500}
+.afpill .afn{font-family:var(--mono);font-size:10px;color:var(--accent);font-weight:700}
+.afpill button{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--text-3);background:var(--surface);transition:all var(--fast)}
+.afpill button:hover{color:var(--text);background:var(--surface-2)}
+.viewseg{display:flex;margin-left:auto;background:var(--surface-2);border:1px solid var(--border);border-radius:7px;padding:2px;gap:2px}
+.viewseg button{font-size:10.5px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;padding:4px 11px;border-radius:5px;color:var(--text-3);font-weight:600;transition:all var(--fast)}
+.viewseg button.on{background:var(--surface);color:var(--text);box-shadow:var(--shadow-sm)}
+.grp-row td{background:var(--surface-2);padding:7px 12px;font-family:var(--mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--text-2);font-weight:700;border-bottom:1px solid var(--border)}
+.grp-row .gcount{color:var(--text-4);margin-left:8px;font-weight:500}
+.grp-row .gbar{display:inline-block;width:7px;height:7px;border-radius:2px;margin-right:8px;vertical-align:middle}
+.tbl-scroll{max-height:calc(100vh - 430px);min-height:300px;overflow-y:auto}
+.otable{width:100%;border-collapse:collapse;font-size:12px}
+.otable thead th{position:sticky;top:0;background:var(--surface);z-index:3;text-align:left;font-family:var(--mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--text-3);font-weight:600;padding:10px 12px;border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none}
+.otable thead th:hover{color:var(--text)}
+.otable thead th .arr{opacity:.45;font-size:9px;margin-left:3px}
+.otable thead th.sorted{color:var(--accent)} .otable thead th.sorted .arr{opacity:1}
+.otable td{padding:9px 12px;border-bottom:1px solid var(--border-2);vertical-align:middle}
+.otable tbody tr{cursor:pointer;transition:background var(--fast)}
+.otable tbody tr:hover{background:var(--accent-soft)}
+.otable tbody tr.sel{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
+.oid{font-family:var(--mono);font-size:11.5px;color:var(--text);font-weight:500;display:flex;align-items:center;gap:7px}
+.oid .depmark{color:var(--warn);font-size:11px} 
+.lad{display:inline-flex;gap:2px}
+.lc{width:21px;height:15px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:7.5px;color:var(--text-4)}
+.lc.s-on{background:var(--neutral-cell);color:var(--neutral-ink)}.lc.s-cond{background:var(--cond-bg);color:var(--cond)}.lc.s-target{background:var(--target-bg);color:var(--target)}.lc.s-off{background:var(--off-bg)}
+.pill{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.04em;padding:2px 8px;border-radius:4px;font-weight:600;white-space:nowrap;display:inline-block}
+.pill.s-on{color:var(--neutral-ink);background:var(--neutral-cell)}.pill.s-cond{color:var(--cond);background:var(--cond-bg)}.pill.s-target{color:var(--target);background:var(--target-bg)}.pill.s-off{color:var(--off);background:var(--off-bg)}
+.muted{font-family:var(--mono);font-size:11px;color:var(--text-3)}
+.dwell{font-family:var(--mono);font-size:11px;font-weight:600}
+.dwell.hot{color:var(--warn)} .dwell.cold{color:var(--text-3)}
+.lastby{font-size:11.5px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:172px}
+.lastby small{color:var(--text-4);font-family:var(--mono);font-size:10px}
+.tbl-empty td{padding:34px 14px;text-align:center;color:var(--text-4);font-size:12.5px}
+.empty-clear{margin-left:8px;color:var(--accent);font-family:var(--mono);font-size:11px;text-decoration:underline;cursor:pointer;background:none}
+.prlink{color:inherit;text-decoration:none;border-bottom:1px dashed var(--border);cursor:pointer}
+.prlink:hover{color:var(--accent);border-bottom-color:var(--accent)}
+.prlink .ext{opacity:.55;margin-left:1px;font-size:.85em}
+.tbl-foot{padding:9px 14px;border-top:1px solid var(--border-2);font-family:var(--mono);font-size:10.5px;color:var(--text-4);display:flex;justify-content:space-between}
+
+/* sidebar */
+.side{display:flex;flex-direction:column;gap:16px;position:sticky;top:0}
+.scard{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow-sm);overflow:hidden}
+.scard-head{padding:12px 14px 10px;border-bottom:1px solid var(--border-2);font-size:12.5px;font-weight:600;display:flex;align-items:center;justify-content:space-between}
+.scard-head .cnt{font-family:var(--mono);font-size:10px;color:var(--text-3);background:var(--surface-3);padding:2px 8px;border-radius:10px}
+.scard-body{padding:6px}
+.afeed-row{display:flex;align-items:center;gap:10px;padding:8px 9px;border-radius:var(--r-sm);cursor:pointer;transition:background var(--fast)}
+.afeed-row:hover{background:var(--surface-3)}
+.afeed-ico{width:22px;height:22px;border-radius:6px;background:var(--warn-bg);color:var(--warn);display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0}
+.afeed-ico.dep{background:var(--accent-soft);color:var(--accent)}
+.afeed-main{flex:1;min-width:0}
+.afeed-name{font-family:var(--mono);font-size:11px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.afeed-meta{font-size:10px;color:var(--text-3);margin-top:1px}
+.spark{display:flex;align-items:flex-end;gap:1.5px;height:18px}
+.spark i{width:3px;background:var(--warn-sw);border-radius:1px;opacity:.55}
+.afeed-d{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--warn);flex-shrink:0}
+.cohort{display:flex;align-items:center;gap:9px;padding:5px 10px;font-size:11px}
+.cohort .nm{width:48px;font-family:var(--mono);font-size:10px;color:var(--text-2);text-transform:uppercase;letter-spacing:.04em}
+.cohort .bar{flex:1;height:7px;border-radius:4px;background:var(--surface-3);overflow:hidden}
+.cohort .bar i{display:block;height:100%;border-radius:4px;transition:width var(--slow) var(--e)}
+.cohort .v{width:22px;text-align:right;font-family:var(--mono);font-size:11px;font-weight:600;color:var(--text-2)}
+.gauge-wrap{display:flex;align-items:center;gap:14px;padding:12px 14px}
+.gauge{width:74px;height:74px;flex-shrink:0;position:relative}
+.gauge .lbl{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.gauge .lbl b{font-size:17px;font-weight:700;letter-spacing:-.02em}
+.gauge .lbl span{font-family:var(--mono);font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-4)}
+.gauge-txt{font-size:11.5px;color:var(--text-2)} .gauge-txt b{color:var(--text);font-weight:600}
+
+/* provenance status bar */
+.provbar{height:27px;background:var(--surface);border-top:1px solid var(--border);display:flex;align-items:center;gap:0;padding:0 16px;font-family:var(--mono);font-size:10.5px;color:var(--text-4);white-space:nowrap;overflow:hidden;z-index:40}
+.provbar .pb-l{display:flex;align-items:center;gap:0;flex:1;min-width:0;overflow:hidden}
+.provbar .pb-r{display:flex;align-items:center;gap:9px;color:var(--text-3)}
+.provbar i.d{width:5px;height:5px;border-radius:50%;background:var(--on-sw);box-shadow:0 0 0 3px var(--on-bg);margin-right:8px;flex-shrink:0}
+.provbar b{color:var(--text-2);font-weight:600}
+.provbar .pb-seg{display:inline-flex;align-items:center}
+.provbar .sep{margin:0 9px;color:var(--border)}
+.provbar .pb-commit{color:var(--accent);font-weight:600;text-decoration:none}
+.provbar .pb-commit:hover{text-decoration:underline}
+.provbar .pb-commit .ext{font-size:.85em;opacity:.7;margin-left:1px}
+.provbar .sw{display:inline-block;width:7px;height:7px;border-radius:2px;margin:0 4px 0 0;vertical-align:-1px}
+
+/* facets (object explorer refine) */
+.facet-clear{font-family:var(--mono);font-size:9.5px;color:var(--accent);background:var(--accent-soft);border:none;border-radius:10px;padding:3px 9px;font-weight:600;letter-spacing:.02em}
+.facet-clear:hover{background:var(--accent);color:#fff}
+.facet-grp{padding:9px 10px 4px}
+.facet-grp-l{font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:.12em;color:var(--text-4);margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.facet-grp-l::after{content:'';flex:1;height:1px;background:var(--border-3)}
+.facet{display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:var(--r-sm);cursor:pointer;transition:background var(--fast)}
+.facet:hover{background:var(--surface-3)}
+.facet.on{background:var(--accent-soft)}
+.facet.on .fnm{color:var(--accent)}
+.fnm{flex:0 0 78px;font-family:var(--mono);font-size:10.5px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fnm.pad{padding-left:13px}
+.fdot{width:7px;height:7px;border-radius:2px;flex-shrink:0;margin-right:6px}
+.fbar{flex:1;height:6px;border-radius:3px;background:var(--surface-3);overflow:hidden}
+.fbar i{display:block;height:100%;border-radius:3px;background:var(--accent);opacity:.55}
+.facet.on .fbar i{opacity:1}
+.fv{flex:0 0 18px;text-align:right;font-family:var(--mono);font-size:10.5px;font-weight:600;color:var(--text-3)}
+
+/* heterogeneity spread micro-bar */
+.mixwrap{display:inline-flex;align-items:center;gap:6px}
+.mixbar{display:flex;width:74px;height:9px;border-radius:3px;overflow:hidden;background:var(--off-bg);border:1px solid var(--border-2)}
+.mixbar i{height:100%}
+.mixbar .m-on{background:var(--neutral-sw)} .mixbar .m-cond{background:var(--cond-sw)} .mixbar .m-target{background:var(--target-sw)}
+.mixhet{color:var(--target);font-size:9px}
+
+/* promotion timeline (dossier) */
+.ptl-wrap{margin-bottom:20px}
+.ptl-cap{font-family:var(--mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--text-4);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.ptl-cap::after{content:'';flex:1;height:1px;background:var(--border-2)}
+.ptl{position:relative;display:flex;padding:4px 6px 0}
+.ptl-base{position:absolute;left:8.33%;right:8.33%;top:9px;height:2px;background:var(--border)}
+.ptl-fill{position:absolute;left:8.33%;top:9px;height:2px;background:var(--text-3);transition:width var(--slow) var(--e)}
+.ptl-step{flex:1;display:flex;flex-direction:column;align-items:center;position:relative;z-index:1}
+.ptl-node{width:13px;height:13px;border-radius:50%;border:2px solid var(--border);background:var(--surface);transition:all var(--fast)}
+.ptl-step.on .ptl-node{border-color:var(--neutral-sw);background:var(--neutral-sw)}
+.ptl-step.cond .ptl-node{border-color:var(--cond);background:var(--cond)}
+.ptl-step.target .ptl-node{border-color:var(--target);background:var(--target)}
+.ptl-step.atstage .ptl-node{box-shadow:0 0 0 4px var(--surface-3)}
+.ptl-rl{font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-2);margin-top:8px;font-weight:600}
+.ptl-step.off .ptl-rl{color:var(--text-4)}
+.ptl-rd{font-size:9px;color:var(--text-4);margin-top:2px;font-family:var(--mono)}
+
+/* dossier drawer */
+.overlay{position:fixed;inset:0;background:rgba(15,23,42,.32);backdrop-filter:blur(2px);opacity:0;pointer-events:none;transition:opacity var(--med);z-index:60}
+.overlay.show{opacity:1;pointer-events:auto}
+[data-theme="dark"] .overlay{background:rgba(0,0,0,.55)}
+.drawer{position:fixed;top:0;right:0;height:100%;width:560px;max-width:92vw;background:var(--surface);border-left:1px solid var(--border);box-shadow:var(--shadow-lg);transform:translateX(100%);transition:transform var(--med) var(--e);z-index:61;display:flex;flex-direction:column}
+.drawer.show{transform:none}
+.drawer-head{padding:18px 22px;border-bottom:1px solid var(--border-2)}
+.drawer-close{position:absolute;top:16px;right:18px;width:30px;height:30px;border-radius:7px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);font-size:13px;display:flex;align-items:center;justify-content:center}
+.drawer-close:hover{border-color:var(--accent);color:var(--accent)}
+.drawer-kicker{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--text-3);margin-bottom:6px}
+.drawer-title{font-family:var(--mono);font-size:16px;font-weight:600;letter-spacing:-.01em;padding-right:40px}
+.drawer-desc{font-size:12px;color:var(--text-2);margin-top:8px;line-height:1.55}
+.drawer-body{flex:1;overflow-y:auto;padding:18px 22px}
+.dstat-row{display:flex;gap:10px;margin-bottom:20px}
+.dstat{flex:1;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--r-sm);padding:10px 12px}
+.dstat .k{font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-4)}
+.dstat .v{font-size:15px;font-weight:700;letter-spacing:-.02em;margin-top:4px}
+.denv-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+.denv{display:flex;align-items:center;gap:10px;padding:9px 11px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--r-sm)}
+.denv-sw{width:9px;height:9px;border-radius:3px;flex-shrink:0}
+.denv-sw.s-on{background:var(--neutral-sw)}.denv-sw.s-cond{background:var(--cond-sw)}.denv-sw.s-target{background:var(--target-sw)}.denv-sw.s-off{background:var(--off-sw)}
+.denv-main{flex:1;min-width:0}
+.denv-name{font-family:var(--mono);font-size:11px;color:var(--text);font-weight:500}
+.denv-attr{font-size:10px;color:var(--text-3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.denv-st{font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-4)}
+.dgroup-label{font-family:var(--mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.12em;color:var(--text-4);margin:18px 0 9px;display:flex;align-items:center;gap:8px}
+.dgroup-label::after{content:'';flex:1;height:1px;background:var(--border-2)}
+.dep-note{background:var(--warn-bg);border:1px solid rgba(217,119,6,.2);border-radius:var(--r-sm);padding:11px 13px;font-size:11.5px;color:var(--warn);margin-bottom:18px;display:flex;gap:9px}
+.dep-note b{color:var(--warn)}
+
+/* dossier — narrative + ledger */
+.dposture{display:flex;gap:11px;font-size:12.5px;line-height:1.65;color:var(--text-2);background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--r-sm);padding:13px 15px;margin-bottom:22px}
+.dposture .ppsw{width:9px;height:9px;border-radius:3px;flex-shrink:0;margin-top:4px}
+.dposture b{color:var(--text);font-weight:600}
+.ptl-dw{font-size:8.5px;color:var(--text-4);margin-top:3px;font-family:var(--mono);min-height:11px}
+.ptl-step.atstage .ptl-dw{color:var(--text-2);font-weight:600}
+.dl-row{display:flex;gap:11px;padding:11px 13px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--r-sm);margin-bottom:7px}
+.dl-sw{width:9px;height:9px;border-radius:3px;flex-shrink:0;margin-top:4px}
+.dl-sw.s-on{background:var(--neutral-sw)}.dl-sw.s-cond{background:var(--cond-sw)}.dl-sw.s-target{background:var(--target-sw)}
+.dl-main{flex:1;min-width:0}
+.dl-top{display:flex;align-items:center;gap:9px}
+.dl-env{font-family:var(--mono);font-size:11.5px;color:var(--text);font-weight:600}
+.dl-st{font-size:9px;padding:2px 7px}
+.dl-attr{font-size:11px;color:var(--text-3);margin-top:3px}
+.dl-raw-btn{margin-top:8px;font-family:var(--mono);font-size:10px;color:var(--accent);background:none;letter-spacing:.03em;cursor:pointer}
+.dl-raw-btn:hover{text-decoration:underline}
+.dl-raw{display:none;margin-top:9px;background:var(--surface-3);border:1px solid var(--border-2);border-radius:6px;padding:10px 12px;font-family:var(--mono);font-size:10.5px;line-height:1.55;white-space:pre;overflow-x:auto;color:var(--text-2)}
+.dl-raw.open{display:block}
+.dl-raw-l{display:block;font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text-4);margin-bottom:7px}
+.jk{color:var(--accent)} .js{color:var(--target)} .jn{color:var(--warn)}
+.dl-off-sum{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:9px 12px;font-size:11px;color:var(--text-4);cursor:pointer;border:1px dashed var(--border);border-radius:var(--r-sm);margin-top:4px}
+.dl-off-sum:hover{color:var(--text-3);border-color:var(--accent-line)}
+.dl-off-sum .chev{font-size:9px;transition:transform var(--fast)}
+.dl-off-sum.open .chev{transform:rotate(90deg)}
+.dl-off-names{display:none;flex-basis:100%;font-family:var(--mono);font-size:10px;color:var(--text-4);line-height:1.7;margin-top:3px}
+.dl-off-sum.open .dl-off-names{display:block}
+.dl-empty{font-size:11.5px;color:var(--text-4);padding:9px 0}
+.dsov{display:flex;align-items:center;gap:13px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--r-sm);padding:12px 14px}
+.dsov-dots{display:flex;gap:6px}
+.sov-dot{width:13px;height:13px;border-radius:50%;border:2px solid var(--border);background:var(--surface)}
+.sov-dot.on{border-color:var(--neutral-sw);background:var(--neutral-sw)}
+.dsov-txt{font-size:12px;color:var(--text-2)} .dsov-txt b{color:var(--text);font-weight:700}
+
+/* command palette */
+.palette-wrap{position:fixed;inset:0;display:flex;align-items:flex-start;justify-content:center;padding-top:13vh;opacity:0;pointer-events:none;transition:opacity var(--fast);z-index:80}
+.palette-wrap.show{opacity:1;pointer-events:auto}
+.palette{width:560px;max-width:92vw;background:var(--surface);border:1px solid var(--border);border-radius:13px;box-shadow:var(--shadow-lg);overflow:hidden;transform:scale(.97) translateY(-6px);transition:transform var(--med) var(--spring)}
+.palette-wrap.show .palette{transform:none}
+.palette-in{display:flex;align-items:center;gap:11px;padding:15px 18px;border-bottom:1px solid var(--border-2)}
+.palette-in span{color:var(--text-4);font-size:15px}
+.palette-in input{flex:1;border:none;background:none;font-size:15px;color:var(--text);font-family:inherit}
+.palette-in input:focus{outline:none}
+.palette-in kbd{font-family:var(--mono);font-size:10px;background:var(--surface-3);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text-3)}
+.palette-list{max-height:380px;overflow-y:auto;padding:7px}
+.pgroup{font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:.12em;color:var(--text-4);padding:8px 11px 5px}
+.pitem{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:7px;cursor:pointer}
+.pitem.cur{background:var(--accent-soft)}
+.pitem-ico{width:22px;text-align:center;color:var(--text-3);font-size:13px}
+.pitem.cur .pitem-ico{color:var(--accent)}
+.pitem-main{flex:1;min-width:0}
+.pitem-t{font-size:13px;color:var(--text);font-family:var(--mono);font-size:12px}
+.pitem-s{font-size:10.5px;color:var(--text-3)}
+.pitem-st{font-family:var(--mono);font-size:9px}
+
+/* spatial lens overlay removed */
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--text);color:var(--surface);padding:11px 18px;border-radius:9px;font-size:12.5px;box-shadow:var(--shadow-lg);opacity:0;pointer-events:none;transition:all var(--med) var(--spring);z-index:90;display:flex;align-items:center;gap:10px}
+.toast.show{opacity:1;transform:translateX(-50%)}
+.toast kbd{font-family:var(--mono);font-size:10px;background:rgba(255,255,255,.15);padding:2px 6px;border-radius:4px}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-mark">◉</div>
+    <div class="crumb"><b>Aperture</b><span class="sep">›</span><span class="cur">Rollout Tracker</span></div>
+  </div>
+  <div class="topbar-right">
+    <span class="tstat"><span class="dot"></span><b id="clock">--:--</b> UTC</span>
+    <span class="tstat"><b>42</b> flags · <b>15</b> envs</span>
+    <div class="asof-ctl">
+      <button class="asof-btn" id="asofBtn" onclick="toggleAsof(event)">as of <b id="asofVal">now</b> ▾</button>
+      <div class="asof-pop" id="asofPop">
+        <div class="ahd">Time travel · snapshot</div>
+        <div class="asof-opt sel" data-days="0" onclick="setAsof(0,'now')">Now<small>live</small></div>
+        <div class="asof-opt" data-days="7" onclick="setAsof(7,'7d ago')">7 days ago<small>−7d</small></div>
+        <div class="asof-opt" data-days="30" onclick="setAsof(30,'30d ago')">30 days ago<small>−30d</small></div>
+        <div class="asof-opt" data-days="90" onclick="setAsof(90,'90d ago')">90 days ago<small>−90d</small></div>
+      </div>
+    </div>
+    <button class="searchbtn" onclick="openPalette()"><span>⌕</span>Search flags<kbd>⌘K</kbd></button>
+    <button class="theme-btn" onclick="toggleTheme()" id="themeBtn">◐</button>
+  </div>
+</div>
+
+<div class="shell">
+  <nav class="nav">
+    <div class="nav-ico-btn active" data-tip="Rollout Tracker"><span>◎</span></div>
+    <div class="nav-sep"></div>
+    <div class="legend-wrap">
+      <div class="nav-ico-btn" data-tip="State vocabulary"><span>◧</span></div>
+      <div class="legend-pop">
+        <div class="vocab-title">State Vocabulary</div>
+        <div class="vocab-row"><i style="background:var(--off-sw)"></i>Off<span class="q">{}</span></div>
+        <div class="vocab-row"><i style="background:var(--neutral-sw)"></i>On<span class="q">true</span></div>
+        <div class="vocab-row"><i style="background:var(--cond-sw)"></i>Conditional<span class="q">Requires</span></div>
+        <div class="vocab-row"><i style="background:var(--target-sw)"></i>Targeted<span class="q">Targets</span></div>
+      </div>
+    </div>
+    <div class="nav-ico-btn" data-tip="System · live"><span class="nav-sys"></span></div>
+  </nav>
+
+  <main class="content">
+    <div class="sec-label">Situational Briefing<span class="right" id="asof">posture as of now</span></div>
+    <div class="briefing" id="briefing"></div>
+
+    <div class="sec-label">Rollout Stage<span class="right" id="fleetCap"></span></div>
+    <div class="ribbon-card">
+      <div class="pipe" id="pipe"></div>
+    </div>
+
+    <div class="split">
+      <div class="tbl-card">
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="search" type="text" placeholder="Filter flags by name…" oninput="setSearch(this.value)">
+          <div class="active-filter" id="activeFilter"></div>
+          <div class="viewseg">
+            <button id="vGrid" class="on" onclick="setView('grid')">Grid</button>
+            <button id="vLadder" onclick="setView('ladder')">Ladder</button>
+          </div>
+        </div>
+        <div class="tbl-scroll">
+          <table class="otable">
+            <thead><tr id="thead"></tr></thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+        <div class="tbl-foot"><span id="rowcount"></span><span>read-only · reconstructed from FeatureManagement @ master</span></div>
+      </div>
+
+      <aside class="side">
+        <div class="scard">
+          <div class="scard-head">Refine<button class="facet-clear" id="facetclear" onclick="clearFacets()" style="display:none">clear ✕</button></div>
+          <div class="scard-body" id="facets"></div>
+        </div>
+        <div class="scard">
+          <div class="scard-head">Recent movement<span class="cnt" id="velo">—</span></div>
+          <div class="scard-body" id="recent" style="padding:6px 4px"></div>
+        </div>
+        <div class="scard">
+          <div class="scard-head">Sovereign coverage</div>
+          <div class="gauge-wrap">
+            <div class="gauge" id="gauge"></div>
+            <div class="gauge-txt" id="gaugetxt"></div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </main>
+</div>
+
+<footer class="provbar" id="provbar"></footer>
+
+<div class="overlay" id="overlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-head">
+    <button class="drawer-close" onclick="closeDrawer()">✕</button>
+    <div class="drawer-kicker">Flag Dossier</div>
+    <div class="drawer-title" id="dtitle"></div>
+    <div class="drawer-desc" id="ddesc"></div>
+  </div>
+  <div class="drawer-body" id="dbody"></div>
+</div>
+
+<div class="palette-wrap" id="paletteWrap">
+  <div class="palette">
+    <div class="palette-in"><span>⌕</span><input id="paletteInput" placeholder="Jump to a flag or surface…" oninput="renderPalette(this.value)" onkeydown="paletteKey(event)"><kbd>esc</kbd></div>
+    <div class="palette-list" id="paletteList"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SEED = {
+  "envOrder": [
+    "onebox",
+    "test",
+    "cst",
+    "daily",
+    "dxt",
+    "msit",
+    "prod",
+    "mc",
+    "gcc",
+    "gcchigh",
+    "dod",
+    "usnat",
+    "ussec",
+    "bleu",
+    "usgovcanary"
+  ],
+  "envLabels": {
+    "onebox": "Onebox",
+    "test": "Test",
+    "cst": "CST",
+    "daily": "Daily",
+    "dxt": "DXT",
+    "msit": "MSIT",
+    "prod": "Prod",
+    "mc": "Mooncake",
+    "gcc": "GCC",
+    "gcchigh": "GCC-High",
+    "dod": "DoD",
+    "usnat": "USNat",
+    "ussec": "USSec",
+    "bleu": "Bleu",
+    "usgovcanary": "USGovCanary"
+  },
+  "ladderOrder": [
+    "test",
+    "cst",
+    "daily",
+    "dxt",
+    "msit",
+    "prod"
+  ],
+  "sovereignEnvs": [
+    "mc",
+    "gcc",
+    "gcchigh",
+    "dod",
+    "usnat",
+    "ussec",
+    "usgovcanary"
+  ],
+  "authorPool": [
+    "Agency",
+    "Ayush Singhal",
+    "Ganesh Patil",
+    "Harshit Goyal",
+    "Hemant Gupta",
+    "Jayaprakash Kupparaju (LTIMindtree Limited)",
+    "Nagireddy Nagireddy (LTIMindtree Limited)",
+    "Robin Roy",
+    "Saurav Agnihotri",
+    "Sheetal Goyal (SPGOYAL)",
+    "Sushma Sree Ravuri",
+    "Suvam Banerjee",
+    "Vishaal Selvaraj"
+  ],
+  "flagCount": 42,
+  "flags": [
+    {
+      "id": "FLTArtifactBasedThrottling",
+      "description": "Set true if want to enable artifact-based throttling for FLT Service. EnableFMVServiceAPIThrottling must be enabled for this feature to take effect.",
+      "environments": {
+        "onebox": "on",
+        "test": "on",
+        "cst": "on",
+        "daily": "on",
+        "dxt": "on",
+        "msit": "on",
+        "prod": "on",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "on",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTCapacityThrottlingAsUserError",
+      "description": "When set to true, mark capacity throttling as user error instead of system error",
+      "environments": {
+        "onebox": "on",
+        "test": "on",
+        "cst": "on",
+        "daily": "on",
+        "dxt": "on",
+        "msit": "on",
+        "prod": "cond",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "off",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTDagExecutionHandlerV2",
+      "description": "When set to true, enables V2 version for the Dag execution orchestration which is more oiptimized",
+      "environments": {
+        "onebox": "off",
+        "test": "on",
+        "cst": "on",
+        "daily": "on",
+        "dxt": "on",
+        "msit": "on",
+        "prod": "on",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "on",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTDagSettings",
+      "description": "Feature flag to control DagSettings containing Environment and Optimal Refresh.",
+      "environments": {
+        "onebox": "on",
+        "test": "on",
+        "cst": "on",
+        "daily": "on",
+        "dxt": "on",
+        "msit": "on",
+        "prod": "on",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "on",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTDqMetricsBatchWrite",
+      "description": "Enables batch write for DQ metrics.",
+      "environments": {
+        "onebox": "off",
+        "test": "on",
+        "cst": "on",
+        "daily": "on",
+        "dxt": "on",
+        "msit": "on",
+        "prod": "target",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "off",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTDqMetricsBatchWriteInsert",
+      "description": "",
+      "environments": {
+        "onebox": "off",
+        "test": "on",
+        "cst": "on",
+        "daily": "on",
+        "dxt": "on",
+        "msit": "off",
+        "prod": "off",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "off",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTDqMetricsSetTableLogRetentionDays",
+      "description": "When enabled, configures the log retention daysof FLT DQ Metrics Set Table",
+      "environments": {
+        "onebox": "on",
+        "test": "on",
+        "cst": "on",
+        "daily": "on",
+        "dxt": "on",
+        "msit": "on",
+        "prod": "on",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "on",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTDqMetricsWriteDisabled",
+      "description": "When flight is enabled, the DQ Metrics Write are Disabled",
+      "environments": {
+        "onebox": "on",
+        "test": "off",
+        "cst": "off",
+        "daily": "off",
+        "dxt": "off",
+        "msit": "off",
+        "prod": "off",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "off",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTEnableDqChecks",
+      "description": "Enable Data Quality (DQ) checks during DAG execution. When enabled, DQ checks run after MLV refresh to validate data quality using pydeequ-based scripts defined in notebooks.",
+      "environments": {
+        "onebox": "off",
+        "test": "on",
+        "cst": "on",
+        "daily": "on",
+        "dxt": "off",
+        "msit": "off",
+        "prod": "off",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "off",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTEnableFileSourcedFMLV",
+      "description": "",
+      "environments": {
+        "onebox": "off",
+        "test": "on",
+        "cst": "on",
+        "daily": "on",
+        "dxt": "on",
+        "msit": "off",
+        "prod": "off",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "off",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTEnableOneLakeS2STokenForPLS",
+      "description": "When enabled, adds x-ms-s2s-actor-authorization header to OneLake DataLake clients for Private Link (PLS) enabled workspaces to fix write operation failures",
+      "environments": {
+        "onebox": "on",
+        "test": "on",
+        "cst": "on",
+        "daily": "on",
+        "dxt": "on",
+        "msit": "on",
+        "prod": "on",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "off",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTEnableRefreshTriggers",
+      "description": "Feature flag to enable RefreshTrigger controller APIs in FLT service",
+      "environments": {
+        "onebox": "on",
+        "test": "on",
+        "cst": "on",
+        "daily": "on",
+        "dxt": "off",
+        "msit": "off",
+        "prod": "off",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "off",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTEnforceWorkspacePrivateLinkAccessProtector",
+      "description": "Controls if FLT's workspace private link (WSPL) access protector is enforced. When enabled, the FLT insights API routes through the WSPL TDS code path: the SQL hostname is rewritten with the workspace DNS zone (z{xy}) and an MWC V2 access-context token is used for SQL auth. Mirrors Lakehouse_EnforceWorkspacePrivateLinkAccessProtector.",
+      "environments": {
+        "onebox": "off",
+        "test": "off",
+        "cst": "off",
+        "daily": "cond",
+        "dxt": "off",
+        "msit": "off",
+        "prod": "off",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "off",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTGTSUserErrorClassification",
+      "description": "When enabled, FLT classifies parseable HTTP 400/409/422 responses from GTS submit as MLV_KNOWN_USER_ERROR (User) and surfaces the GTS-supplied message verbatim. When disabled (default), all such failures stay classified as MLV_SPARK_SESSION_REQUEST_SUBMISSION_FAILED (System). Long-term plan: SparkCore returns explicit errorType on the GTS response; this flight + heuristic are retired.",
+      "environments": {
+        "onebox": "on",
+        "test": "on",
+        "cst": "on",
+        "daily": "off",
+        "dxt": "off",
+        "msit": "off",
+        "prod": "off",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "off",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTInsightsEngine",
+      "description": "Enables Insights card engine gating independently from metrics collection. When enabled, registers InsightDiscoveryHook for card rendering without requiring FLTInsightsMetrics. Allows independent rollout: FLTInsightsMetrics ON + FLTInsightsEngine OFF = Delta writes only (no cards), FLTInsightsMetrics OFF + FLTInsightsEngine ON = Cards only (no Delta writes), Both ON = full feature.",
+      "environments": {
+        "onebox": "off",
+        "test": "on",
+        "cst": "on",
+        "daily": "on",
+        "dxt": "off",
+        "msit": "off",
+        "prod": "off",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "off",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTInsightsMetrics",
+      "description": "Enables Insights metrics collection and table management. When enabled, first DAG completion creates _mlv_system schema with sys_run_metrics, sys_node_metrics, and sys_error_metrics Delta tables.",
+      "environments": {
+        "onebox": "off",
+        "test": "on",
+        "cst": "on",
+        "daily": "on",
+        "dxt": "off",
+        "msit": "off",
+        "prod": "off",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "off",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTInsightsReplCleanup",
+      "description": "Enables REPL cleanup for Insights metrics writes. When ON, writers call SubmitAndAwaitSparkJobAsync which polls the submitted transform to completion and then cancels it to free the REPL within the Spark session; when OFF, writers fire-and-forget via SubmitSparkJobAsync and the REPL leaks until Spark session TTL. The await blocks the Insights hook but has no user-visible latency impact since hooks run after DAG completion.",
+      "environments": {
+        "onebox": "off",
+        "test": "on",
+        "cst": "on",
+        "daily": "on",
+        "dxt": "off",
+        "msit": "off",
+        "prod": "off",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "off",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTIRCdfRatioOverloadPreventionEnabled",
+      "description": "Enable CDF ratio overload prevention for incremental refresh. ON sets cdfRatioOverloadPrevention.enabled=true as a Spark session property.",
+      "environments": {
+        "onebox": "on",
+        "test": "on",
+        "cst": "on",
+        "daily": "on",
+        "dxt": "off",
+        "msit": "off",
+        "prod": "off",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "off",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTIRDeletesDisabled",
+      "description": "Disable FLT IR deletes functionality",
+      "environments": {
+        "onebox": "on",
+        "test": "on",
+        "cst": "on",
+        "daily": "off",
+        "dxt": "off",
+        "msit": "off",
+        "prod": "off",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "off",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTIRDeletesEnabled",
+      "description": "Enable IR deletes via Spark session properties. ON sets ir.deletes.enabled=true as a session property. OFF leaves VHD default (deletes enabled). Replaces old FLTIRDeletesDisabled (inverted logic).",
+      "environments": {
+        "onebox": "on",
+        "test": "on",
+        "cst": "on",
+        "daily": "on",
+        "dxt": "off",
+        "msit": "off",
+        "prod": "off",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "off",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTIRDeltaPhysicalCDFEnabled",
+      "description": "Enables Delta Physical CDF for Incremental Refresh.",
+      "environments": {
+        "onebox": "on",
+        "test": "on",
+        "cst": "on",
+        "daily": "on",
+        "dxt": "off",
+        "msit": "off",
+        "prod": "off",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "off",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTIRQuickMergeEnabled",
+      "description": "Enables Quick Merge optimization for Incremental Refresh.",
+      "environments": {
+        "onebox": "on",
+        "test": "on",
+        "cst": "on",
+        "daily": "off",
+        "dxt": "off",
+        "msit": "off",
+        "prod": "off",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "off",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTLimitConcurrentOneLakeCatalogCalls",
+      "description": "When set to true, it limit the max concurrent calls to onelake catalog service",
+      "environments": {
+        "onebox": "on",
+        "test": "on",
+        "cst": "on",
+        "daily": "on",
+        "dxt": "on",
+        "msit": "on",
+        "prod": "on",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "on",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTListDagAPIPagination",
+      "description": "Enable pagination support for the List DAG API",
+      "environments": {
+        "onebox": "off",
+        "test": "on",
+        "cst": "on",
+        "daily": "on",
+        "dxt": "on",
+        "msit": "on",
+        "prod": "on",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "off",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTListPathOptimization",
+      "description": "When enabled, optimizes the OneLake path listing strategy for catalog operations in LiveTable to reduce redundant directory traversals",
+      "environments": {
+        "onebox": "on",
+        "test": "off",
+        "cst": "off",
+        "daily": "off",
+        "dxt": "off",
+        "msit": "off",
+        "prod": "off",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "off",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTMLVAutoDVDuringRefreshEnabled",
+      "description": "Enables Automatic Deletion Vector enablement on MLV refresh.",
+      "environments": {
+        "onebox": "on",
+        "test": "on",
+        "cst": "on",
+        "daily": "on",
+        "dxt": "off",
+        "msit": "off",
+        "prod": "off",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "off",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTMlvExecutionDefinitionsPublicApiSupport",
+      "description": "Gates the entire multi-schedule Definitions - Public API feature",
+      "environments": {
+        "onebox": "on",
+        "test": "on",
+        "cst": "on",
+        "daily": "on",
+        "dxt": "on",
+        "msit": "on",
+        "prod": "target",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "off",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTMLVWarnings",
+      "description": "Feature flag to control MLVs warnings",
+      "environments": {
+        "onebox": "on",
+        "test": "on",
+        "cst": "on",
+        "daily": "on",
+        "dxt": "on",
+        "msit": "on",
+        "prod": "on",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "off",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTParallelNodeLimit10",
+      "description": "Optimal Concurrency Experiment for ParallelNodeLimit. When enabled, sets the ParallelNodeLimit to 10 for DAG execution.",
+      "environments": {
+        "onebox": "on",
+        "test": "cond",
+        "cst": "on",
+        "daily": "cond",
+        "dxt": "cond",
+        "msit": "cond",
+        "prod": "cond",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "off",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTParallelNodeLimit15",
+      "description": "Optimal Concurrency Experiment for ParallelNodeLimit. When enabled, sets the ParallelNodeLimit to 15 for DAG execution.",
+      "environments": {
+        "onebox": "off",
+        "test": "cond",
+        "cst": "off",
+        "daily": "cond",
+        "dxt": "cond",
+        "msit": "cond",
+        "prod": "cond",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "off",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTParallelNodeLimit20",
+      "description": "Optimal Concurrency Experiment for ParallelNodeLimit. When enabled, sets the ParallelNodeLimit to 20 for DAG execution.",
+      "environments": {
+        "onebox": "off",
+        "test": "cond",
+        "cst": "off",
+        "daily": "cond",
+        "dxt": "cond",
+        "msit": "cond",
+        "prod": "cond",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "off",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTPublicApiSupport",
+      "description": "Enables FLT Public API Support",
+      "environments": {
+        "onebox": "on",
+        "test": "on",
+        "cst": "on",
+        "daily": "on",
+        "dxt": "on",
+        "msit": "on",
+        "prod": "off",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "off",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTPublicApiSupportOptOut",
+      "description": "Controls whether Public API Support for FLT DAG Settings is opted out",
+      "environments": {
+        "onebox": "off",
+        "test": "off",
+        "cst": "off",
+        "daily": "off",
+        "dxt": "off",
+        "msit": "off",
+        "prod": "off",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "off",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTRefreshPolicy",
+      "description": "Feature flag to control to show refresh policy in UI",
+      "environments": {
+        "onebox": "on",
+        "test": "on",
+        "cst": "on",
+        "daily": "on",
+        "dxt": "off",
+        "msit": "off",
+        "prod": "off",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "off",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTResilientCatalogListing",
+      "description": "When set to true, skip shortcut schema and shortcut table in initial catalog listing",
+      "environments": {
+        "onebox": "on",
+        "test": "on",
+        "cst": "on",
+        "daily": "on",
+        "dxt": "on",
+        "msit": "on",
+        "prod": "off",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "off",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTSkipShortcutExecution",
+      "description": "When set to true, skips shortcut execution in a DAG ",
+      "environments": {
+        "onebox": "on",
+        "test": "on",
+        "cst": "on",
+        "daily": "on",
+        "dxt": "on",
+        "msit": "on",
+        "prod": "on",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "on",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTSystemSpacePersistence",
+      "description": "When set to true, DAG execution's data is persisted in System Folder instead of User Folder",
+      "environments": {
+        "onebox": "cond",
+        "test": "cond",
+        "cst": "on",
+        "daily": "on",
+        "dxt": "on",
+        "msit": "on",
+        "prod": "on",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "on",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTTableMaintenanceHook",
+      "description": "Enables the table maintenance hook.",
+      "environments": {
+        "onebox": "off",
+        "test": "on",
+        "cst": "on",
+        "daily": "off",
+        "dxt": "off",
+        "msit": "off",
+        "prod": "off",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "off",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTUnresolvedEntitySupport",
+      "description": "Feature for LiveTable Lineage view to support unresolved entities",
+      "environments": {
+        "onebox": "on",
+        "test": "on",
+        "cst": "on",
+        "daily": "on",
+        "dxt": "on",
+        "msit": "on",
+        "prod": "on",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "on",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTUseLakeHouseMetastoreClientV2",
+      "description": "Refactor LakeMetastoreClient",
+      "environments": {
+        "onebox": "on",
+        "test": "on",
+        "cst": "on",
+        "daily": "on",
+        "dxt": "on",
+        "msit": "on",
+        "prod": "on",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "on",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTUseOneLakeRegionalEndpoint",
+      "description": "Switch to OneLake regional endpoint from Global Endpoint for Materialized Lake Views Service",
+      "environments": {
+        "onebox": "on",
+        "test": "on",
+        "cst": "on",
+        "daily": "on",
+        "dxt": "on",
+        "msit": "on",
+        "prod": "on",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "on",
+        "usgovcanary": "off"
+      }
+    },
+    {
+      "id": "FLTUserBasedThrottling",
+      "description": "Set true if want to enable user-based throttling for FLT Service. EnableFMVServiceAPIThrottling must be enabled for this feature to take effect.",
+      "environments": {
+        "onebox": "on",
+        "test": "on",
+        "cst": "cond",
+        "daily": "on",
+        "dxt": "off",
+        "msit": "off",
+        "prod": "off",
+        "mc": "off",
+        "gcc": "off",
+        "gcchigh": "off",
+        "dod": "off",
+        "usnat": "off",
+        "ussec": "off",
+        "bleu": "off",
+        "usgovcanary": "off"
+      }
+    }
+  ]
+}
+;
+const NOW = new Date('2026-06-13T16:00:00Z');
+const DAY = 86400000;
+const RUNGS = SEED.ladderOrder;            // [test,cst,daily,dxt,msit,prod]
+const RUNGL = ['Test','CST','Daily','DXT','MSIT','Prod'];
+const SOV = SEED.sovereignEnvs;
+const ENVL = SEED.envLabels;
+const cleanAuthor = n => n.replace(/\s*\([^)]*\)\s*$/,'').trim();
+const AUTHORS = SEED.authorPool.map(cleanAuthor);
+const SMETA = {on:{l:'on'},off:{l:'off'},cond:{l:'cond'},target:{l:'targ'}};
+const sc = s => 's-' + (s==='cond'?'cond':s==='target'?'target':s==='target'?'target':s);
+const scl = s => 's-' + ({on:'on',off:'off',cond:'cond',target:'target'}[s]||'off');
+const short = id => id.replace(/^FLT/,'');
+
+function hash(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
+function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function fmtDate(d){return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});}
+const PR_BASE='https://powerbi.visualstudio.com/Power%20BI/_git/FeatureManagement/pullrequest/';
+const COMMIT_BASE='https://powerbi.visualstudio.com/Power%20BI/_git/FeatureManagement/commit/';
+function prLink(pr){return `<a class="prlink" href="${PR_BASE}${pr}" target="_blank" rel="noopener" onclick="event.stopPropagation()">PR ${pr}<span class="ext">↗</span></a>`;}
+
+// ---- derive ----
+const INERT = [
+  {flag:'FLTArtifactBasedThrottling', needs:'EnableFMVServiceAPIThrottling', note:'prerequisite never enabled in this env'},
+  {flag:'FLTDqMetricsBatchWriteInsert', needs:'FLTDqMetricsBatchWrite', note:'parent batch-write off where insert is on'},
+  {flag:'FLTIRDeletesEnabled', needs:'FLTIRDeletesDisabled', note:'conflicting pair — disable wins downstream'}
+];
+const inertSet = new Set(INERT.map(d=>d.flag));
+
+const FLAGS = SEED.flags.map(f=>{
+  const e=f.environments;
+  const lad=RUNGS.map(r=>e[r]||'off');
+  let hi=-1; RUNGS.forEach((r,i)=>{if((e[r]||'off')!=='off')hi=i;});
+  const stage = hi<0?'staging':RUNGS[hi];
+  const stageState = hi<0?'off':lad[hi];
+  const sovOn = SOV.filter(s=>(e[s]||'off')!=='off').length;
+  const rng=mulberry(hash(f.id));
+  // age (since first enabled) vs dwell (time at CURRENT stage) — kept independent
+  const firstDays = 30+Math.floor(rng()*420);
+  const firstDate = new Date(NOW-firstDays*DAY);
+  // dwell = days the flag has sat at its current rung (NOT its age) — drives stalled + recency
+  const dwell = hi<0 ? 0 : 2+Math.floor(rng()*200);
+  const lastChangeDays = hi<0 ? null : dwell;
+  const lastDate = new Date(NOW-(lastChangeDays==null?firstDays:lastChangeDays)*DAY);
+  const stalled = hi>=0 && hi<5 && dwell>=30;
+  const dormant = hi<0;
+  const author = AUTHORS[Math.floor(rng()*AUTHORS.length)];
+  const pr = 14000+Math.floor(rng()*4000);
+  // per-env attribution
+  const attr={};
+  SEED.envOrder.forEach((env,i)=>{
+    if((e[env]||'off')!=='off'){
+      const r2=mulberry(hash(f.id+env));
+      attr[env]={author:AUTHORS[Math.floor(r2()*AUTHORS.length)],date:new Date(NOW-(5+Math.floor(r2()*430))*DAY),pr:14000+Math.floor(r2()*4000)};
+    }
+  });
+  // state composition across all 15 envs + reach + heterogeneity
+  const mix={on:0,cond:0,target:0,off:0};
+  SEED.envOrder.forEach(env=>{const v=e[env]||'off';mix[v]=(mix[v]||0)+1;});
+  const nonOff=mix.on+mix.cond+mix.target;
+  const distinct=['on','cond','target'].filter(s=>mix[s]>0).length;
+  const ageBucket = hi<0?'dormant':(dwell<30?'fresh':dwell<90?'recent':dwell<180?'aging':'stale');
+  const ps=e.prod||'off';
+  const prodPosture = ps==='on'?'ga':ps==='cond'?'cond':ps==='target'?'targeted':'notprod';
+  // ladder rung crossing dates (for promotion timeline) — attribution date of each reached rung
+  const rungDates=RUNGS.map((r,i)=>(e[r]||'off')!=='off'&&attr[r]?attr[r].date:null);
+  return {...f,lad,hi,stage,stageState,sovOn,dwell,stalled,dormant,author,pr,firstDate,lastDate,lastChangeDays,attr,mix,nonOff,distinct,ageBucket,prodPosture,rungDates,dep:INERT.find(d=>d.flag===f.id)};
+});
+
+const DIST={staging:FLAGS.filter(f=>f.hi<0).length};
+RUNGS.forEach((r,i)=>DIST[r]=FLAGS.filter(f=>f.hi===i).length);
+
+const inProd=FLAGS.filter(f=>f.hi===5).length;
+const preProd=FLAGS.filter(f=>f.hi>=0&&f.hi<5).length;
+const stalledN=FLAGS.filter(f=>f.stalled).length;
+const depN=FLAGS.filter(f=>f.dep).length;
+// sovereign dark cells = for prod-live flags, sovereign envs still off
+let sovGaps=0; FLAGS.forEach(f=>{if(f.stageState!=='off'&&f.hi===5){sovGaps+=SOV.filter(s=>(f.environments[s]||'off')==='off').length;}});
+const sovCovered=FLAGS.filter(f=>f.sovOn>0).length;
+const sovGapFlags=FLAGS.filter(f=>f.hi===5&&f.sovOn<7).length;
+// cell-state totals (for provenance bar)
+const CELLMIX={on:0,cond:0,target:0,off:0};
+FLAGS.forEach(f=>{['on','cond','target','off'].forEach(s=>CELLMIX[s]+=f.mix[s]);});
+const CELLTOTAL=CELLMIX.on+CELLMIX.cond+CELLMIX.target+CELLMIX.off;
+// facet aggregates
+const AGE_ORDER=[['fresh','< 30d'],['recent','30–90d'],['aging','90–180d'],['stale','180d+'],['dormant','staging']];
+const POSTURE_ORDER=[['ga','fully on','--neutral-sw'],['cond','conditional','--cond-sw'],['targeted','targeted','--target-sw'],['notprod','pre-prod','--off-sw']];
+const POSTURE_COUNTS=POSTURE_ORDER.map(([k,l,c])=>[k,l,c,FLAGS.filter(f=>f.prodPosture===k).length]);
+const AGE_COUNTS=AGE_ORDER.map(([k,l])=>[k,l,FLAGS.filter(f=>f.ageBucket===k).length]);
+
+// ---- state ----
+let filter={mode:'all',rung:null,posture:null,age:null};
+let search='';
+let sort={key:'hi',dir:-1};
+let view='grid';
+let selId=null;
+
+// ---- briefing ----
+const LEADS=[
+  {id:'prod',ico:'●',label:'Live in prod',val:inProd,sub:'furthest stage',pill:'prod',pc:'var(--neutral-ink)',pbg:'var(--neutral-cell)',f:{mode:'prod'}},
+  {id:'pre',ico:'▸',label:'On the ladder',val:preProd,sub:'pre-prod',pill:'climbing',pc:'var(--neutral-ink)',pbg:'var(--neutral-cell)',f:{mode:'preprod'}},
+  {id:'stalled',ico:'◆',label:'Stalled mid-ladder',val:stalledN,sub:'30d+ no advance',pill:'attention',pc:'var(--warn)',pbg:'var(--warn-bg)',f:{mode:'stalled'}},
+  {id:'sov',ico:'◈',label:'Sovereign gaps',val:sovGapFlags,sub:sovGaps+' dark cells',pill:sovCovered+' covered',pc:'var(--text-3)',pbg:'var(--surface-3)',f:{mode:'sov'}}
+];
+function renderBriefing(){
+  document.getElementById('briefing').innerHTML=LEADS.map(L=>`
+    <div class="lead ${filter.mode===L.f.mode?'active':''}" onclick="applyLead('${L.f.mode}')">
+      <div class="lead-top"><span>${L.label}</span><span class="lead-ico">${L.ico}</span></div>
+      <div class="lead-val">${L.val}<small>flags</small></div>
+      <div class="lead-sub"><span class="pill" style="color:${L.pc};background:${L.pbg}">${L.pill}</span>${L.sub}</div>
+    </div>`).join('');
+}
+function applyLead(mode){filter.mode=filter.mode===mode?'all':mode;filter.rung=null;refresh();}
+
+// ---- rollout pipeline ----
+function renderPipeline(){
+  const order=['staging','test','cst','daily','dxt','msit','prod'];
+  const parked={}; order.forEach(k=>parked[k]=0);
+  const post={}; order.forEach(k=>post[k]={cond:0,target:0});
+  FLAGS.forEach(f=>{parked[f.stage]++; if(f.stageState==='cond')post[f.stage].cond++; else if(f.stageState==='target')post[f.stage].target++;});
+  const total=FLAGS.length, N=order.length;
+  const reach=k=>{const i=order.indexOf(k);let n=0;for(let j=i;j<N;j++)n+=parked[order[j]];return n;};
+  const xs=order.map((k,i)=>+(5+i*(90/(N-1))).toFixed(2));
+  const hh=order.map(k=>Math.max(3, reach(k)/total*23));
+  let top='',bot='';
+  xs.forEach((x,i)=>{top+=`${i?'L':'M'}${x},${(50-hh[i]).toFixed(2)} `;});
+  for(let i=xs.length-1;i>=0;i--)bot+=`L${xs[i]},${(50+hh[i]).toFixed(2)} `;
+  const svg=`<svg class="pipe-flow" viewBox="0 0 100 100" preserveAspectRatio="none">
+    <defs><linearGradient id="ppg" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="var(--neutral-cell)" stop-opacity=".58"/>
+      <stop offset=".68" stop-color="var(--neutral-cell)" stop-opacity=".5"/>
+      <stop offset="1" stop-color="var(--prod-cell)" stop-opacity=".5"/>
+    </linearGradient></defs>
+    <path d="${top}${bot}Z" fill="url(#ppg)" stroke="var(--border)" stroke-width=".35"/></svg>`;
+  const active=filter.rung;
+  const stations=order.map((k,i)=>{
+    const v=parked[k]; const dim=active&&active!==k?'dim':''; const act=active===k?'active':'';
+    const node=v?(k==='prod'?'prod':''):'empty';
+    const pips=[...Array(Math.min(post[k].cond,3)).fill('cond'),...Array(Math.min(post[k].target,3)).fill('target')]
+      .map(c=>`<span class="pp-pip ${c}"></span>`).join('');
+    const tip=`${v} parked at ${k} · ${reach(k)} reached ${k}+`+(post[k].cond?` · ${post[k].cond} conditional`:'')+(post[k].target?` · ${post[k].target} targeted`:'');
+    return `<div class="pp-st ${dim} ${act} ${v?'':'empty'}" style="left:${xs[i]}%" title="${tip}" ${v?`onclick="applyRung('${k}')"`:''}>
+      <div class="pp-c ${v?'':'off'}">${v}</div>
+      <div class="pp-node ${node}"></div>
+      ${pips?`<div class="pp-pips">${pips}</div>`:''}
+      <div class="pp-l">${k}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('pipe').innerHTML=svg+stations;
+  const pct=Math.round(inProd/total*100);
+  document.getElementById('fleetCap').textContent=`${total} flags · ${inProd} reached prod (${pct}%)`;
+}
+function applyRung(k){filter.rung=filter.rung===k?null:k;filter.mode='all';refresh();}
+
+// ---- active filter indicator (replaces redundant chip row; filters come from briefing tiles + ribbon) ----
+const MODE_LABEL={prod:'In prod',preprod:'Pre-prod',stalled:'Stalled',sov:'Sovereign gaps'};
+function renderChips(){
+  const el=document.getElementById('activeFilter');if(!el)return;
+  const parts=[];
+  if(filter.rung){const i=RUNGS.indexOf(filter.rung);parts.push(filter.rung==='staging'?'Staging':RUNGL[i]);}
+  if(filter.mode&&filter.mode!=='all')parts.push(MODE_LABEL[filter.mode]||filter.mode);
+  if(filter.posture)parts.push((POSTURE_ORDER.find(p=>p[0]===filter.posture)||[])[1]||filter.posture);
+  if(filter.age)parts.push((AGE_ORDER.find(a=>a[0]===filter.age)||[])[1]||filter.age);
+  if(!parts.length){el.innerHTML='';return;}
+  const n=filtered(filter.mode,filter.rung).length;
+  el.innerHTML=`<span class="afpill">${parts.join(' · ')}<span class="afn">${n}</span><button onclick="clearAllFilters()" title="clear filter">✕</button></span>`;
+}
+function clearAllFilters(){filter.mode='all';filter.rung=null;filter.posture=null;filter.age=null;refresh();}
+
+function filtered(mode,rung){
+  let r=FLAGS.slice();
+  if(rung)r=r.filter(f=>f.stage===rung);
+  if(mode==='stalled')r=r.filter(f=>f.stalled);
+  else if(mode==='sov')r=r.filter(f=>f.hi===5&&f.sovOn<7);
+  else if(mode==='preprod')r=r.filter(f=>f.hi>=0&&f.hi<5);
+  else if(mode==='prod')r=r.filter(f=>f.hi===5);
+  if(filter.posture)r=r.filter(f=>f.prodPosture===filter.posture);
+  if(filter.age)r=r.filter(f=>f.ageBucket===filter.age);
+  if(search){const q=search.toLowerCase();r=r.filter(f=>f.id.toLowerCase().includes(q));}
+  return r;
+}
+
+// ---- table ----
+const COLS=[
+  {k:'id',l:'Flag',w:''},
+  {k:'lad',l:'Ladder',w:'',nosort:true},
+  {k:'hi',l:'Stage',w:''},
+  {k:'prod',l:'Prod',w:''},
+  {k:'nonOff',l:'Spread',w:''},
+  {k:'dwell',l:'Dwell',w:''},
+  {k:'lastDate',l:'Last change',w:''}
+];
+function renderHead(){
+  document.getElementById('thead').innerHTML=COLS.map(c=>{
+    const sorted=sort.key===c.k; const arr=sorted?(sort.dir<0?'▼':'▲'):'';
+    return `<th class="${sorted?'sorted':''}" ${c.nosort?'':`onclick="setSort('${c.k}')"`}>${c.l}<span class="arr">${arr}</span></th>`;
+  }).join('');
+}
+function setSort(k){if(sort.key===k)sort.dir*=-1;else{sort.key=k;sort.dir=-1;}refresh();}
+function setView(v){view=v;document.getElementById('vGrid').classList.toggle('on',v==='grid');document.getElementById('vLadder').classList.toggle('on',v==='ladder');renderTable();}
+let asofDays=0;
+function toggleAsof(e){if(e)e.stopPropagation();document.getElementById('asofPop').classList.toggle('open');}
+function closeAsof(){document.getElementById('asofPop').classList.remove('open');}
+function setAsof(days,label){
+  asofDays=days;
+  document.getElementById('asofVal').textContent=label;
+  document.getElementById('asofBtn').classList.toggle('past',days>0);
+  document.querySelectorAll('.asof-opt').forEach(o=>o.classList.toggle('sel',+o.dataset.days===days));
+  const asof=document.getElementById('asof');
+  if(asof){
+    if(days>0){const d=new Date(Date.now()-days*864e5);asof.textContent=`posture reconstructed @ ${fmtDate(d)}`;}
+    else asof.textContent='posture as of now';
+  }
+  closeAsof();
+  if(days>0)showToast(`Snapshot view · ${label} · reconstructed from history`);
+}
+
+function mixBar(f){
+  const tot=15;
+  const seg=(n,cls)=>n?`<i class="${cls}" style="width:${(n/tot*100).toFixed(2)}%"></i>`:'';
+  const tip=`${f.mix.on} on · ${f.mix.cond} conditional · ${f.mix.target} targeted · ${f.mix.off} off`;
+  const het=f.distinct>=2?'<span class="mixhet" title="runs mixed states across envs">◆</span>':'';
+  return `<span class="mixwrap" title="${tip}"><span class="mixbar">${seg(f.mix.on,'m-on')}${seg(f.mix.cond,'m-cond')}${seg(f.mix.target,'m-target')}</span>${het}</span>`;
+}
+
+function rowHTML(f){
+  const lad=f.lad.map((s,i)=>`<span class="lc ${scl(s)}" title="${RUNGL[i]}: ${s}">${RUNGL[i][0]}</span>`).join('');
+  const frung=f.hi<0?'staging':RUNGL[f.hi];
+  const dwellCls=f.stalled?'hot':'cold';
+  const dwellTxt=f.dwell>0?f.dwell+'d':'—';
+  return `<tr class="${selId===f.id?'sel':''}" onclick="openDrawer('${f.id}')">
+      <td><span class="oid">${f.dep?'<span class="depmark" title="dependency exposure">⊘</span>':''}${f.id}</span></td>
+      <td><span class="lad">${lad}</span></td>
+      <td><span class="pill ${scl(f.stageState)}">${frung}</span></td>
+      <td><span class="pill ${scl(f.environments.prod||'off')}">${(f.environments.prod||'off')==='off'?'off':SMETA[f.environments.prod].l}</span></td>
+      <td>${mixBar(f)}</td>
+      <td><span class="dwell ${dwellCls}">${dwellTxt}</span></td>
+      <td><span class="lastby">${f.author}<br><small>${fmtDate(f.lastDate)} · ${prLink(f.pr)}</small></span></td>
+    </tr>`;
+}
+function renderTable(){
+  let rows=filtered(filter.mode,filter.rung);
+  const k=sort.key,d=sort.dir;
+  rows.sort((a,b)=>{
+    let va=a[k],vb=b[k];
+    if(k==='id'||k==='prod'){va=(''+va).toString();vb=(''+vb).toString();return va<vb?d:va>vb?-d:0;}
+    if(k==='lastDate'){va=a.lastDate.getTime();vb=b.lastDate.getTime();}
+    return (va-vb)*d || a.id.localeCompare(b.id);
+  });
+  let html;
+  if(view==='ladder'){
+    const byStage=rows.slice().sort((a,b)=>(b.hi-a.hi));
+    let cur=undefined,out='';
+    byStage.forEach(f=>{
+      if(f.hi!==cur){
+        cur=f.hi;
+        const label=f.hi<0?'Staging — not yet promoted':RUNGL[f.hi];
+        const n=byStage.filter(x=>x.hi===cur).length;
+        const sw=f.hi<0?'var(--text-4)':(f.hi===5?'#86c8a0':'var(--accent-line)');
+        out+=`<tr class="grp-row"><td colspan="${COLS.length}"><span class="gbar" style="background:${sw}"></span>${label}<span class="gcount">${n} flag${n===1?'':'s'}</span></td></tr>`;
+      }
+      out+=rowHTML(f);
+    });
+    html=out;
+  }else{
+    html=rows.map(rowHTML).join('');
+  }
+  if(!rows.length)html=`<tr class="tbl-empty"><td colspan="${COLS.length}">No flags match this filter.${search?` <button class="empty-clear" onclick="clearSearch()">clear search</button>`:''}</td></tr>`;
+  document.getElementById('tbody').innerHTML=html;
+  document.getElementById('rowcount').textContent=`${rows.length} of ${FLAGS.length} flags`;
+}
+
+// ---- sidebar ----
+function renderRecent(){
+  const moved30=FLAGS.filter(f=>f.lastChangeDays!=null&&f.lastChangeDays<=30).length;
+  const velo=document.getElementById('velo');
+  if(velo)velo.textContent=`${moved30} moved · 30d`;
+  const rows=[...FLAGS].filter(f=>f.lastChangeDays!=null).sort((a,b)=>a.lastChangeDays-b.lastChangeDays).slice(0,6);
+  document.getElementById('recent').innerHTML=rows.map(f=>{
+    const to=f.hi<0?'staging':RUNGL[f.hi];
+    const from=f.hi<=0?'staging':RUNGL[f.hi-1];
+    const ago=f.lastChangeDays===0?'today':f.lastChangeDays+'d ago';
+    return `<div class="afeed-row" onclick="openDrawer('${f.id}')">
+      <div class="afeed-ico" style="color:var(--text-3)">▲</div>
+      <div class="afeed-main"><div class="afeed-name">${f.id}</div><div class="afeed-meta">${from} → ${to}</div></div>
+      <div class="afeed-d">${ago}</div>
+    </div>`;
+  }).join('');
+}
+function renderGauge(){
+  const pct=Math.round(sovCovered/FLAGS.length*100);
+  const g=document.getElementById('gauge');
+  const c=2*Math.PI*30;
+  g.innerHTML=`<svg width="74" height="74" viewBox="0 0 74 74">
+    <circle cx="37" cy="37" r="30" fill="none" stroke="var(--surface-3)" stroke-width="7"/>
+    <circle cx="37" cy="37" r="30" fill="none" stroke="${pct>0?'var(--on)':'var(--off-sw)'}" stroke-width="7" stroke-linecap="round"
+      stroke-dasharray="${c}" stroke-dashoffset="${c*(1-pct/100)}" transform="rotate(-90 37 37)" style="transition:stroke-dashoffset .8s var(--e)"/>
+  </svg><div class="lbl"><b>${pct}%</b><span>covered</span></div>`;
+  document.getElementById('gaugetxt').innerHTML=`<b>${sovGaps}</b> dark cells — prod-live flags absent from sovereign clouds. <b>${FLAGS.length-sovCovered}</b> of ${FLAGS.length} flags touch zero sovereign envs.`;
+}
+
+// ---- facets (refine) ----
+function renderFacets(){
+  const maxP=Math.max(...POSTURE_COUNTS.map(a=>a[3]));
+  const maxG=Math.max(...AGE_COUNTS.map(a=>a[2]));
+  const postRows=POSTURE_COUNTS.map(([k,l,c,n])=>{
+    const on=filter.posture===k;
+    return `<div class="facet ${on?'on':''}" onclick="toggleFacet('posture','${k}')"><span class="fdot" style="background:var(${c})"></span><span class="fnm">${l}</span><span class="fbar"><i style="width:${maxP?Math.round(n/maxP*100):0}%"></i></span><span class="fv">${n}</span></div>`;
+  }).join('');
+  const ageRows=AGE_COUNTS.map(([k,l,n])=>{
+    const on=filter.age===k;
+    return `<div class="facet ${on?'on':''}" onclick="toggleFacet('age','${k}')"><span class="fnm pad">${l}</span><span class="fbar"><i style="width:${maxG?Math.round(n/maxG*100):0}%"></i></span><span class="fv">${n}</span></div>`;
+  }).join('');
+  document.getElementById('facets').innerHTML=
+    `<div class="facet-grp"><div class="facet-grp-l">By prod posture · GA readiness</div>${postRows}</div>`+
+    `<div class="facet-grp"><div class="facet-grp-l">By age · time at current stage</div>${ageRows}</div>`;
+  document.getElementById('facetclear').style.display=(filter.posture||filter.age)?'inline-block':'none';
+}
+function toggleFacet(dim,val){filter[dim]=filter[dim]===val?null:val;refresh();}
+function clearFacets(){filter.posture=null;filter.age=null;refresh();}
+
+// ---- provenance bar ----
+const PROV_COMMIT='7f3a91c';
+const PROV_SYNC=new Date(NOW-4*60000);
+function agoTxt(ms){const m=Math.floor(ms/60000);if(m<1)return 'just now';if(m<60)return m+'m ago';const h=Math.floor(m/60);return h+'h ago';}
+function renderProv(){
+  const ago=agoTxt(NOW.getTime()-PROV_SYNC.getTime());
+  const sw=c=>`<span class="sw" style="background:var(${c})"></span>`;
+  document.getElementById('provbar').innerHTML=
+    `<div class="pb-l"><i class="d"></i><span class="pb-seg">Reconstructed&nbsp;from&nbsp;<b>FeatureManagement</b>&nbsp;@&nbsp;<a class="pb-commit" href="${COMMIT_BASE}${PROV_COMMIT}" target="_blank" rel="noopener">${PROV_COMMIT}<span class="ext">↗</span></a></span>`+
+    `<span class="sep">│</span><span class="pb-seg"><b>${FLAGS.length}</b>&nbsp;flags · <b>15</b>&nbsp;envs · <b>${CELLTOTAL}</b>&nbsp;cells</span>`+
+    `<span class="sep">│</span><span class="pb-seg">${sw('--on-sw')}<b>${CELLMIX.on}</b>&nbsp;on&nbsp;&nbsp;${sw('--cond-sw')}<b>${CELLMIX.cond}</b>&nbsp;cond&nbsp;&nbsp;${sw('--target-sw')}<b>${CELLMIX.target}</b>&nbsp;targeted&nbsp;&nbsp;${sw('--off-sw')}<b>${CELLMIX.off}</b>&nbsp;off</span></div>`+
+    `<div class="pb-r"><span>last&nbsp;sync&nbsp;${ago}</span><span class="sep">│</span><span>read-only</span></div>`;
+}
+
+// ---- dossier ----
+function synthRule(f,env,state){
+  const rng=mulberry(hash(f.id+env+'rule'));
+  const pick=a=>a[Math.floor(rng()*a.length)];
+  if(state==='cond'){
+    const kind=Math.floor(rng()*3);
+    if(kind===0){
+      return {label:'Percentage rollout',json:{EnabledFor:[{Name:'Microsoft.Percentage',Parameters:{Value:pick([5,10,25,50,75])}}]}};
+    }else if(kind===1){
+      return {label:'Capacity SKU gate',json:{EnabledFor:[{Name:'CapacitySkuFilter',Parameters:{AllowedSkus:pick([['F64','F128','F256'],['F256','F512'],['F2','F4','F8']])}}]}};
+    }
+    const d=new Date(NOW-(20+Math.floor(rng()*120))*DAY);
+    return {label:'Time window',json:{EnabledFor:[{Name:'Microsoft.TimeWindow',Parameters:{Start:d.toISOString().slice(0,10)}}]}};
+  }
+  return {label:'Targeted audience',json:{EnabledFor:[{Name:'Microsoft.Targeting',Parameters:{Audience:{
+    Groups:[{Name:pick(['ring-0-canary','fabric-internal','early-adopter-tenants','dogfood-capacities']),RolloutPercentage:pick([25,50,100])}],
+    DefaultRolloutPercentage:pick([0,5,10])}}}]}};
+}
+function syntaxJSON(s){
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"([^"]+)":/g,'<span class="jk">"$1"</span>:')
+    .replace(/: "([^"]*)"/g,': <span class="js">"$1"</span>')
+    .replace(/: (\d+)/g,': <span class="jn">$1</span>');
+}
+function toggleRaw(id){document.getElementById(id).classList.toggle('open');}
+function toggleOff(el){el.classList.toggle('open');}
+function postureLine(f){
+  const stClass=f.hi<0?'off':f.stageState;
+  const sw={on:'--neutral-sw',cond:'--cond-sw',target:'--target-sw',off:'--off-sw'}[stClass];
+  const word={on:'fully on',cond:'conditional',target:'targeted',off:'off'}[stClass];
+  let sentence;
+  if(f.hi<0){
+    sentence=`Not yet promoted — still in <b>staging</b>. Touches <b>${f.nonOff}</b> of 15 environments.`;
+  }else{
+    const dwellTxt=f.dwell>0?`<b>${f.dwell}d</b> at this stage`:'just promoted';
+    sentence=`Furthest stage <b>${RUNGL[f.hi]}</b>, currently <b>${word}</b> · ${dwellTxt} · <b>${f.sovOn}/7</b> sovereign clouds live.`;
+  }
+  sentence+=` Last change by <b>${f.author}</b> · ${fmtDate(f.lastDate)} · ${prLink(f.pr)}.`;
+  return `<div class="dposture"><span class="ppsw" style="background:var(${sw})"></span><div>${sentence}</div></div>`;
+}
+function timelineHTML(f){
+  const fillW=Math.max(0,f.hi);
+  let steps='';
+  RUNGS.forEach((r,i)=>{
+    const st=f.environments[r]||'off';
+    const cls=st==='off'?'off':st;
+    const d=f.rungDates[i];
+    const date=d?d.toLocaleDateString('en-US',{month:'short',year:'2-digit'}):'—';
+    let dw='';
+    if(i===f.hi&&f.hi<5&&f.dwell>0)dw=`held ${f.dwell}d`;
+    steps+=`<div class="ptl-step ${cls} ${i===f.hi?'atstage':''}"><div class="ptl-node"></div><div class="ptl-rl">${RUNGL[i]}</div><div class="ptl-rd">${date}</div><div class="ptl-dw">${dw}</div></div>`;
+  });
+  return `<div class="ptl-wrap"><div class="ptl-cap">Promotion timeline · test → prod</div><div class="ptl"><div class="ptl-base"></div><div class="ptl-fill" style="width:calc(83.33% * ${fillW} / 5)"></div>${steps}</div></div>`;
+}
+function ledgerHTML(f){
+  const order=SEED.envOrder;
+  const reached=order.filter(env=>(f.environments[env]||'off')!=='off');
+  const off=order.filter(env=>(f.environments[env]||'off')==='off');
+  let h=`<div class="dgroup-label">Attribution ledger</div>`;
+  if(!reached.length)h+=`<div class="dl-empty">No environment has enabled this flag.</div>`;
+  reached.forEach(env=>{
+    const st=f.environments[env];const a=f.attr[env];
+    const stWord={on:'on',cond:'conditional',target:'targeted'}[st];
+    const attrTxt=a?`enabled by ${a.author} · ${fmtDate(a.date)} · ${prLink(a.pr)}`:'enabled · attribution unavailable';
+    let raw='';
+    if(st==='cond'||st==='target'){
+      const rid=('raw_'+f.id+'_'+env).replace(/[^a-z0-9_]/gi,'');
+      const r=synthRule(f,env,st);
+      raw=`<button class="dl-raw-btn" onclick="toggleRaw('${rid}')">Show raw ▾</button>`+
+        `<pre class="dl-raw" id="${rid}"><span class="dl-raw-l">${st==='cond'?'Requires':'Targets'} · ${r.label}</span>${syntaxJSON(JSON.stringify(r.json,null,2))}</pre>`;
+    }
+    h+=`<div class="dl-row"><span class="dl-sw ${scl(st)}"></span><div class="dl-main">`+
+      `<div class="dl-top"><span class="dl-env">${ENVL[env]}</span><span class="dl-st pill ${scl(st)}">${stWord}</span></div>`+
+      `<div class="dl-attr">${attrTxt}</div>${raw}</div></div>`;
+  });
+  if(off.length){
+    h+=`<div class="dl-off-sum" onclick="toggleOff(this)"><span class="chev">▸</span>${off.length} environment${off.length===1?'':'s'} off`+
+      `<span class="dl-off-names">${off.map(e=>ENVL[e]).join(' · ')}</span></div>`;
+  }
+  return h;
+}
+function sovStripHTML(f){
+  const dots=SOV.map(s=>{const on=(f.environments[s]||'off')!=='off';return `<span class="sov-dot ${on?'on':''}" title="${ENVL[s]}: ${on?f.environments[s]:'off'}"></span>`;}).join('');
+  return `<div class="dgroup-label">Sovereign coverage</div>`+
+    `<div class="dsov"><div class="dsov-dots">${dots}</div><div class="dsov-txt"><b>${f.sovOn}/7</b> sovereign clouds enabled</div></div>`;
+}
+function openDrawer(id){
+  selId=id;const f=FLAGS.find(x=>x.id===id);
+  document.getElementById('dtitle').textContent=f.id;
+  document.getElementById('ddesc').textContent=f.description||'';
+  let body='';
+  if(f.dep){body+=`<div class="dep-note"><span>⊘</span><div><b>Inert dependency.</b> ${f.dep.note}. Requires <b>${f.dep.needs}</b>.</div></div>`;}
+  body+=postureLine(f);
+  body+=timelineHTML(f);
+  body+=ledgerHTML(f);
+  body+=sovStripHTML(f);
+  document.getElementById('dbody').innerHTML=body;
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('drawer').classList.add('show');
+  renderTable();
+}
+function closeDrawer(){selId=null;document.getElementById('overlay').classList.remove('show');document.getElementById('drawer').classList.remove('show');renderTable();}
+
+// ---- palette ----
+let paletteItems=[],paletteCur=0;
+const SURFACES=[['Rollout Tracker','◎','workspace']];
+function openPalette(){document.getElementById('paletteWrap').classList.add('show');const inp=document.getElementById('paletteInput');inp.value='';renderPalette('');setTimeout(()=>inp.focus(),40);}
+function closePalette(){document.getElementById('paletteWrap').classList.remove('show');}
+function renderPalette(q){
+  q=(q||'').toLowerCase();paletteCur=0;
+  const surf=SURFACES.filter(s=>s[0].toLowerCase().includes(q)).map(s=>({type:'surface',t:s[0],ico:s[1],s:s[2]}));
+  const flags=FLAGS.filter(f=>f.id.toLowerCase().includes(q)).slice(0,8).map(f=>({type:'flag',t:f.id,ico:'◆',s:(f.hi<0?'staging':RUNGL[f.hi])+' · '+f.dwell+'d',id:f.id,st:f.stageState}));
+  paletteItems=[...surf,...flags];
+  let html='';
+  if(surf.length){html+=`<div class="pgroup">Surfaces</div>`+surf.map((it,i)=>pitem(it,i)).join('');}
+  if(flags.length){const off=surf.length;html+=`<div class="pgroup">Flags</div>`+flags.map((it,i)=>pitem(it,off+i)).join('');}
+  if(!paletteItems.length)html=`<div class="pgroup">No matches</div>`;
+  document.getElementById('paletteList').innerHTML=html;
+}
+function pitem(it,i){
+  return `<div class="pitem ${i===paletteCur?'cur':''}" onclick="runPalette(${i})">
+    <span class="pitem-ico">${it.ico}</span>
+    <div class="pitem-main"><div class="pitem-t">${it.t}</div><div class="pitem-s">${it.s||''}</div></div>
+    ${it.st?`<span class="pitem-st pill ${scl(it.st)}" style="padding:2px 7px">${it.st}</span>`:''}
+  </div>`;
+}
+function paletteKey(e){
+  if(e.key==='Escape'){closePalette();return;}
+  if(e.key==='ArrowDown'){e.preventDefault();paletteCur=Math.min(paletteCur+1,paletteItems.length-1);}
+  else if(e.key==='ArrowUp'){e.preventDefault();paletteCur=Math.max(paletteCur-1,0);}
+  else if(e.key==='Enter'){runPalette(paletteCur);return;}
+  else return;
+  [...document.querySelectorAll('.pitem')].forEach((el,i)=>el.classList.toggle('cur',i===paletteCur));
+}
+function runPalette(i){
+  const it=paletteItems[i];if(!it)return;closePalette();
+  if(it.type==='flag')openDrawer(it.id);
+  else if(it.t!=='Rollout Tracker')surfaceSoon(it.t);
+}
+
+// ---- misc ----
+function surfaceSoon(name){showToast(`<b style="font-weight:600">${name}</b> — shares this design language · live in the full product`);}
+let toastT;
+function showToast(html){const t=document.getElementById('toast');t.innerHTML=html;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2600);}
+function setSearch(v){search=v;renderTable();renderChips();}
+function clearSearch(){search='';const el=document.getElementById('search');if(el)el.value='';renderTable();renderChips();}
+function toggleTheme(){const h=document.documentElement;h.setAttribute('data-theme',h.getAttribute('data-theme')==='dark'?'light':'dark');}
+
+function refresh(){renderBriefing();renderPipeline();renderChips();renderHead();renderTable();renderFacets();}
+function init(){
+  renderBriefing();renderPipeline();renderChips();renderHead();renderTable();renderRecent();renderGauge();renderFacets();renderProv();
+  const tick=()=>{const d=new Date();document.getElementById('clock').textContent=String(d.getUTCHours()).padStart(2,'0')+':'+String(d.getUTCMinutes()).padStart(2,'0');renderProv();};tick();setInterval(tick,1000);
+}
+document.addEventListener('keydown',e=>{
+  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openPalette();}
+  else if(e.key==='Escape'){closePalette();closeDrawer();closeAsof();}
+});
+document.addEventListener('click',e=>{if(!e.target.closest('.asof-ctl'))closeAsof();});
+init();
+</script>
+</body>
+</html>
