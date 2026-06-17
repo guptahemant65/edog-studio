@@ -5,7 +5,9 @@
     "moduleResolution": "Bundler",
     "allowImportingTsExtensions": true,
     "lib": [
-      "ES2022"
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
     ],
     "strict": true,
     "noUncheckedIndexedAccess": true,

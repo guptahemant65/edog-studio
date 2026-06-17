@@ -21,7 +21,7 @@ feature flag rolls out across the 15 canonical environments by mining the
 | Auth (MSAL two-identity, delegated per-user ADO token) | ✅ Entra auth-code+PKCE, server-side token cache, encrypted session cookie + tested; dev fallback via `CT_DEV_AUTH=1`+`ADO_TOKEN` |
 | Derived endpoints — `freshness`, `ladder/distribution`, `velocity`, `sovereign-lens` | ✅ pure builders + thin routes + tested |
 | Remaining `/api/ct/*` routes (dossier, per-flag ladder, timeline/activity diff, activity stream + timeline, time-travel bounds/reconstruct, inert, updates, refresh, health) | ✅ all 17 endpoints live — pure builders + thin routes + tested; `next build` green |
-| Frontend build-out (from `mocks/rollout-tracker.html`) | ⬜ |
+| Frontend build-out (from `mocks/rollout-tracker.html`) | ✅ live SPA wired to the 17 endpoints — locked mock CSS ported verbatim (`app/globals.css`), client-safe view-model (`app/view-model.ts`), interactive `RolloutTracker` (`app/rollout-tracker.tsx`) with briefing/pipeline/object table/facets/gauge/dossier drawer/command palette/as-of time-travel; `next build` green |
 
 ## Engine core (done)
 
@@ -94,8 +94,13 @@ All 17 `/api/ct/*` read-only endpoints are now live (grid, freshness, ladder
 distribution + per-flag ladder, velocity, sovereign-lens, dossier, timeline diff,
 activity stream/diff/timeline, time-travel bounds + reconstruct, inert
 intelligence, updates poll, refresh, health) — each a thin adapter over a pure
-builder in `src/api/`. Next up: the frontend build-out from
-`mocks/rollout-tracker.html`.
+builder in `src/api/`. The P3 frontend is now live: `app/page.tsx` is the
+auth-gated server shell that assembles `InitialData` from `buildGridResponse` +
+`buildInertResponse`, and `app/rollout-tracker.tsx` (a `'use client'` SPA) renders
+the locked mock against real warm-store data — every number derived from the
+endpoints, no fabricated rule JSON (per-env attribution links straight to the real
+PR/commit). Next up: P4 gauntlet (read-only enforcement test, cold-load perf,
+Azure deploy).
 
 ### Auth notes (§2)
 
