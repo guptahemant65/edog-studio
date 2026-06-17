@@ -22,6 +22,7 @@ feature flag rolls out across the 15 canonical environments by mining the
 | Derived endpoints — `freshness`, `ladder/distribution`, `velocity`, `sovereign-lens` | ✅ pure builders + thin routes + tested |
 | Remaining `/api/ct/*` routes (dossier, per-flag ladder, timeline/activity diff, activity stream + timeline, time-travel bounds/reconstruct, inert, updates, refresh, health) | ✅ all 17 endpoints live — pure builders + thin routes + tested; `next build` green |
 | Frontend build-out (from `mocks/rollout-tracker.html`) | ✅ live SPA wired to the 17 endpoints — locked mock CSS ported verbatim (`app/globals.css`), client-safe view-model (`app/view-model.ts`), interactive `RolloutTracker` (`app/rollout-tracker.tsx`) with briefing/pipeline/object table/facets/gauge/dossier drawer/command palette/as-of time-travel; `next build` green |
+| P4 read-only enforcement gauntlet (`tests/read-only.test.ts`) | ✅ no mutating HTTP handlers (POST confined to reconstruct + refresh), `HttpAdoClient` GET-only egress, cold-load cost model (one fetch per commit, refresh reuses the immutable cache) — 6 tests |
 
 ## Engine core (done)
 
