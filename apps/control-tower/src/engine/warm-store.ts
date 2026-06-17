@@ -49,6 +49,8 @@ export class CommitContentCache {
 export interface FlagVintage {
   flagId: string;
   flagPath: string;
+  /** human-readable description from the newest commit's content. */
+  description: string;
   /** oldest-first commit ids for this flag. */
   commitIds: string[];
   newestCommit: { commitId: string; date: string } | null;
@@ -123,9 +125,11 @@ export class WarmStore {
     });
     const flagId = flagIdFromPath(flagPath);
     const newest = commits[0];
+    const newestContent = flagCommits[flagCommits.length - 1];
     return {
       flagId,
       flagPath,
+      description: newestContent ? parseFlagContent(newestContent.rawJson).description : '',
       commitIds: oldestFirst.map((c) => c.commitId),
       newestCommit: newest ? { commitId: newest.commitId, date: newest.author?.date ?? '' } : null,
       events: mineFlag(flagId, flagCommits),
