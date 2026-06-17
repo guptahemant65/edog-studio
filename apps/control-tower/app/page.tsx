@@ -1,7 +1,11 @@
 import { ensureBuilt } from '../src/server/store.ts';
-import { devAdoClientProvider, MissingTokenError } from '../src/server/ado-provider.ts';
+import { adoProviderForRequest } from '../src/server/request-auth.ts';
+import { UnauthorizedError } from '../src/server/session-ado-provider.ts';
+import { MissingTokenError } from '../src/server/ado-provider.ts';
+import { AuthConfigError } from '../src/auth/auth-config.ts';
 import { buildGridResponse, type GridRow } from '../src/api/grid.ts';
 import { LADDER_ENVS } from '../src/types/model.ts';
+import { headers } from 'next/headers';
 
 // Always render at request time — the warm store is process state, not build-time data.
 export const dynamic = 'force-dynamic';
@@ -65,13 +69,20 @@ function GridTable({ rows }: { rows: GridRow[] }) {
 
 export default async function Page() {
   let rows: GridRow[] = [];
-  let banner: string | null = null;
+  let banner: { text: string; signIn?: boolean } | null = null;
   try {
-    const store = await ensureBuilt(devAdoClientProvider);
+    const cookieHeader = (await headers()).get('cookie');
+    const provider = adoProviderForRequest(cookieHeader);
+    const client = await provider();
+    const store = await ensureBuilt(() => Promise.resolve(client));
     rows = buildGridResponse(store).rows;
   } catch (err) {
-    if (err instanceof MissingTokenError) {
-      banner = 'Set ADO_TOKEN to a PAT with code-read scope, then reload to mine live flag data.';
+    if (err instanceof UnauthorizedError) {
+      banner = { text: 'Sign in with your Microsoft account to view rollout data.', signIn: true };
+    } else if (err instanceof AuthConfigError) {
+      banner = { text: 'Auth is not configured. Set the Entra env vars, or use CT_DEV_AUTH=1 + ADO_TOKEN for local dev.' };
+    } else if (err instanceof MissingTokenError) {
+      banner = { text: 'Set ADO_TOKEN to a PAT with code-read scope, then reload to mine live flag data.' };
     } else {
       throw err;
     }
@@ -84,9 +95,26 @@ export default async function Page() {
         Read-only rollout intelligence for FabricLiveTable feature flags.
       </p>
       {banner ? (
-        <p style={{ background: '#1c2330', border: '1px solid #30363d', borderRadius: 6, padding: 12, marginTop: 24 }}>
-          {banner}
-        </p>
+        <div style={{ background: '#1c2330', border: '1px solid #30363d', borderRadius: 6, padding: 16, marginTop: 24 }}>
+          <p style={{ margin: 0 }}>{banner.text}</p>
+          {banner.signIn ? (
+            <a
+              href="/api/auth/signin"
+              style={{
+                display: 'inline-block',
+                marginTop: 12,
+                padding: '8px 16px',
+                background: '#2f81f7',
+                color: '#fff',
+                borderRadius: 6,
+                textDecoration: 'none',
+                fontWeight: 600,
+              }}
+            >
+              Sign in with Microsoft
+            </a>
+          ) : null}
+        </div>
       ) : (
         <div style={{ marginTop: 24 }}>
           <GridTable rows={rows} />
