@@ -19,7 +19,8 @@ feature flag rolls out across the 15 canonical environments by mining the
 | Grid response builder + server layer | ✅ `buildGridResponse` + Web-standard handlers + store singleton, tested |
 | Next.js shell + `GET /api/ct/grid` | ✅ App Router shell + wired grid route (dev: `ADO_TOKEN`) |
 | Auth (MSAL two-identity, delegated per-user ADO token) | ✅ Entra auth-code+PKCE, server-side token cache, encrypted session cookie + tested; dev fallback via `CT_DEV_AUTH=1`+`ADO_TOKEN` |
-| Remaining 16 `/api/ct/*` routes | ⬜ |
+| Derived endpoints — `freshness`, `ladder/distribution`, `velocity`, `sovereign-lens` | ✅ pure builders + thin routes + tested |
+| Remaining 12 `/api/ct/*` routes (dossier, activity, time-travel, inert, updates, refresh, …) | ⬜ |
 | Frontend build-out (from `mocks/rollout-tracker.html`) | ⬜ |
 
 ## Engine core (done)
@@ -89,9 +90,10 @@ its own bundler-based tooling.
 
 ## Next slice
 
-The remaining 16 `/api/ct/*` routes (dossier, ladder, activity, velocity,
-sovereign-lens, …) as thin adapters over new pure builders alongside
-`src/api/grid.ts`, then the frontend build-out from `mocks/rollout-tracker.html`.
+The remaining 12 `/api/ct/*` routes (dossier, timeline diff, activity stream,
+time-travel, inert intelligence, updates poll, refresh, health, …) as thin
+adapters over new pure builders alongside `src/api/`, then the frontend
+build-out from `mocks/rollout-tracker.html`.
 
 ### Auth notes (§2)
 
