@@ -118,3 +118,35 @@ the browser; the session cookie is AES-256-GCM encrypted, httpOnly, profile-only
 > security posture) for testability without a live Entra registration. Real MSAL
 > token acquisition (`MsalTokenService`) is retained behind a `TokenService`
 > seam, so this is swappable for Auth.js later.
+
+### Deployment (Azure Container Apps)
+
+The app ships as a self-contained Next.js standalone image (`output: 'standalone'`
+in `next.config.mjs`) built by the multi-stage `Dockerfile` (node:22-alpine, runs
+`node server.js` as non-root on port 3000). Deploy from this directory with:
+
+```
+az containerapp up -n edog-control-tower -g <rg> --source . --ingress external --target-port 3000
+```
+
+> **CLI gotcha:** `az containerapp up --source` streams the ACR build log through
+> colorama on a cp1252 Windows console, and Next prints non-ASCII glyphs (`▲`, `✓`)
+> that crash the streamer (`UnicodeEncodeError`) *after* the remote build starts.
+> `PYTHONUTF8`/`PYTHONIOENCODING`/file-redirection do **not** fix it. The Dockerfile
+> works around it by stripping non-ASCII from the build output
+> (`npm run build 2>&1 | tr -cd '\t\n\r -~'` under `ash -o pipefail`), so the
+> streamer never receives the offending bytes while real build failures stay fatal.
+
+**Lighting up live data.** A fresh deploy renders the sign-in banner (no token).
+To show real flags, set either:
+
+- **Dev-auth (quickest):** `CT_DEV_AUTH=1` env var + an `ADO_TOKEN` secret (a PAT
+  with `Code (read)` on the `FeatureManagement` repo):
+  ```
+  az containerapp secret set    -n edog-control-tower -g <rg> --secrets ado-token=<PAT>
+  az containerapp update         -n edog-control-tower -g <rg> \
+    --set-env-vars CT_DEV_AUTH=1 ADO_TOKEN=secretref:ado-token
+  ```
+- **Full Entra:** an app registration whose redirect URI equals
+  `<FQDN>/api/auth/callback`, plus the five `ENTRA_*`/`CT_*` env vars above (store
+  `ENTRA_CLIENT_SECRET` + `CT_SESSION_SECRET` as Container App secrets).
