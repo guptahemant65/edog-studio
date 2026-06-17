@@ -6,6 +6,10 @@
  * Next.js App Router route files are thin adapters that call these.
  */
 import { buildGridResponse, type BuildGridOptions } from '../api/grid.ts';
+import { buildFreshnessResponse } from '../api/freshness.ts';
+import { buildLadderDistributionResponse } from '../api/ladder.ts';
+import { buildVelocityResponse } from '../api/velocity.ts';
+import { buildSovereignLensResponse } from '../api/sovereign.ts';
 import type { WarmStore } from '../engine/warm-store.ts';
 
 const JSON_HEADERS: Record<string, string> = {
@@ -15,10 +19,33 @@ const JSON_HEADERS: Record<string, string> = {
   'cache-control': 'no-store',
 };
 
+function ok(body: unknown): Response {
+  return new Response(JSON.stringify(body), { status: 200, headers: JSON_HEADERS });
+}
+
 /** GET /api/ct/grid — current-state grid projected from the warm store. */
 export function handleGrid(store: WarmStore, opts: BuildGridOptions = {}): Response {
-  const body = buildGridResponse(store, opts);
-  return new Response(JSON.stringify(body), { status: 200, headers: JSON_HEADERS });
+  return ok(buildGridResponse(store, opts));
+}
+
+/** GET /api/ct/freshness — metadata-only warm-store freshness (never calls ADO). */
+export function handleFreshness(store: WarmStore, now?: number): Response {
+  return ok(buildFreshnessResponse(store, now));
+}
+
+/** GET /api/ct/ladder/distribution — per-rung ladder distribution. */
+export function handleLadderDistribution(store: WarmStore, now?: number): Response {
+  return ok(buildLadderDistributionResponse(store, now));
+}
+
+/** GET /api/ct/velocity — promotion-speed analytics. */
+export function handleVelocity(store: WarmStore, now?: number): Response {
+  return ok(buildVelocityResponse(store, now));
+}
+
+/** GET /api/ct/sovereign-lens — sovereign vs prod gap classification. */
+export function handleSovereignLens(store: WarmStore, now?: number): Response {
+  return ok(buildSovereignLensResponse(store, now));
 }
 
 /** A uniform error envelope for unbuilt/failed stores. */
