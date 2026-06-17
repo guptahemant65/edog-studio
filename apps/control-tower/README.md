@@ -15,10 +15,12 @@ feature flag rolls out across the 15 canonical environments by mining the
 | **Data engine — attribution core** (`src/engine`) | ✅ implemented + tested |
 | ADO REST client + git-history loader | ✅ implemented (injectable) + tested via fake; live smoke gated on `ADO_TOKEN` |
 | Warm store + incremental refresh | ✅ immutable commit cache, atomic refresh, freshness metadata + tested |
-| Derivation (ladder/velocity/sovereign/inert) | 🟡 dwell done; rest pending |
+| Derivation layer (state/stale/velocity/sovereign/ladder) | ✅ implemented + tested |
+| Grid response builder + server layer | ✅ `buildGridResponse` + Web-standard handlers + store singleton, tested |
+| Next.js shell + `GET /api/ct/grid` | ✅ App Router shell + wired grid route (dev: `ADO_TOKEN`) |
 | Auth (MSAL + Auth.js, two-identity) | ⬜ |
-| API surface (17 `/api/ct/*` routes) | ⬜ |
-| Next.js frontend (from `mocks/rollout-tracker.html`) | ⬜ |
+| Remaining 16 `/api/ct/*` routes | ⬜ |
+| Frontend build-out (from `mocks/rollout-tracker.html`) | ⬜ |
 
 ## Engine core (done)
 
@@ -42,6 +44,33 @@ feature flag rolls out across the 15 canonical environments by mining the
 - `src/engine/warm-store.ts` — `WarmStore`: immutable `CommitContentCache`,
   `build` (cold-load), atomic `refresh` (stage-then-swap, last-good rollback on
   failure), and `freshness` metadata (no ADO). Refresh refetches only NEW commits.
+- `src/engine/current-state.ts` — fold transitions to current per-env `CellState`
+  (latest wins) + `lastChange` + `daysSinceLastChange`; always all 15 envs.
+- `src/engine/stale-reason.ts` + `config.ts` — C06 §4.3 health classifier with
+  tunable thresholds.
+- `src/engine/velocity.ts` — per-flag TTP, cohort stats, per-rung median dwell,
+  quarterly prod-on trend (§5.3).
+- `src/engine/sovereign.ts` — `GAP_MAP` gap classification for the 7 clouds (§5.4).
+- `src/engine/ladder-distribution.ts` — per-rung state counts + furthest-rung
+  histogram (C03 §2.4).
+- `src/api/grid.ts` — pure `buildGridResponse(store)` → `ControlTowerGridResponse`
+  (§7.1 #1). `src/server/` — Web-standard route handlers, the warm-store
+  singleton (`ensureBuilt`), and the auth-swappable dev ADO provider.
+
+## App shell
+
+The Next.js App Router shell lives in `app/`: `layout.tsx`, `page.tsx` (renders
+the grid, with a graceful "set `ADO_TOKEN`" banner), and `app/api/ct/grid/route.ts`
+(thin adapter over `src/server`). `next.config.mjs` teaches webpack to resolve the
+engine's explicit `.ts` import extensions.
+
+```bash
+npm run build      # next build (typechecks app/, compiles routes)
+ADO_TOKEN=<pat> npm run dev   # next dev on :5556 — live flag data
+```
+
+> `npm run typecheck` (tsc) gates the pure engine (`src`/`tests`/`scripts`);
+> `app/` is gated by `next build` (it needs the DOM lib + Next's jsx transform).
 
 ## Commands
 
@@ -60,6 +89,8 @@ its own bundler-based tooling.
 
 ## Next slice
 
-The remaining derivations (ladder distribution, velocity, sovereign lens, inert
-/ C06 stale-reason) reading from the warm store, then the first `/api/ct/grid`
-endpoint end-to-end (current-state rows from the latest vintage).
+Auth (§2): MSAL + Auth.js two-identity, server-side delegated ADO tokens — this
+replaces the dev `ADO_TOKEN` provider. Then the remaining 16 `/api/ct/*` routes
+(dossier, ladder, activity, velocity, sovereign-lens, …) as thin adapters over
+new pure builders alongside `src/api/grid.ts`, and the frontend build-out from
+`mocks/rollout-tracker.html`.

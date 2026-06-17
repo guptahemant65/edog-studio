@@ -7,10 +7,20 @@
   "scripts": {
     "test": "node --experimental-strip-types --test \"tests/*.test.ts\"",
     "typecheck": "tsc --noEmit",
-    "mine:live": "node --experimental-strip-types scripts/live-mine.ts"
+    "mine:live": "node --experimental-strip-types scripts/live-mine.ts",
+    "dev": "next dev -p 5556",
+    "build": "next build",
+    "start": "next start -p 5556"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
     "typescript": "^5.6.3"
+  },
+  "dependencies": {
+    "next": "^15.5.19",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   }
 }

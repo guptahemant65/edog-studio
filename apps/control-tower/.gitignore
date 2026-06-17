@@ -2,3 +2,5 @@ node_modules/
 *.tsbuildinfo
 .next/
 dist/
+next-env.d.ts
+tsconfig.engine.bak
