@@ -8,6 +8,7 @@
  */
 import { CANONICAL_15_ENVS, type Attribution, type CellState, type EnvBlock, type EnvKey } from '../types/model.ts';
 import { classifyState, extractPR, normaliseBlock } from './state.ts';
+import { parseJsonc } from './jsonc.ts';
 
 /** A single commit of a flag file, as delivered by the ADO layer (decoupled from HTTP). */
 export interface FlagCommit {
@@ -45,9 +46,9 @@ export interface AttributionEvent {
 
 export type MineEvent = FileCreationEvent | AttributionEvent;
 
-/** Parse a flag file's raw JSON into id/description/environments. Tolerant of missing keys. */
+/** Parse a flag file's raw JSON into id/description/environments. Tolerant of missing keys + JSONC. */
 export function parseFlagContent(rawJson: string): ParsedFlagContent {
-  const obj = JSON.parse(rawJson) as Record<string, unknown>;
+  const obj = parseJsonc<Record<string, unknown>>(rawJson);
   const environments = (obj.Environments ?? {}) as Record<string, EnvBlock>;
   return {
     id: typeof obj.Id === 'string' ? obj.Id : '',

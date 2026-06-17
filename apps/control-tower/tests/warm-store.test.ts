@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AdoClient, AdoCommit, AdoItem, VersionDescriptor } from '../src/engine/ado-client.ts';
+import { AdoNotFoundError } from '../src/engine/ado-client.ts';
 import { WarmStore } from '../src/engine/warm-store.ts';
 import type { AttributionEvent } from '../src/engine/miner.ts';
 
@@ -16,6 +17,7 @@ class MutableFakeAdoClient implements AdoClient {
   getContentCalls = 0;
   private readonly flags = new Map<string, FlagFixture>();
   private readonly failContent = new Set<string>();
+  private readonly notFoundContent = new Set<string>();
 
   addFlag(path: string): void {
     if (!this.flags.has(path)) this.flags.set(path, { commits: [], contents: new Map() });
@@ -33,6 +35,11 @@ class MutableFakeAdoClient implements AdoClient {
     this.failContent.add(commitId);
   }
 
+  /** Make content fetch for a commit 404 (file absent at this path/commit). */
+  notFoundFor(commitId: string): void {
+    this.notFoundContent.add(commitId);
+  }
+
   async listItems(): Promise<AdoItem[]> {
     return [...this.flags.keys()].map((path) => ({ path, isFolder: false }));
   }
@@ -43,6 +50,9 @@ class MutableFakeAdoClient implements AdoClient {
 
   async getContent(path: string, version: VersionDescriptor): Promise<string> {
     this.getContentCalls++;
+    if (this.notFoundContent.has(version.version)) {
+      throw new AdoNotFoundError(`${path}@${version.version}`);
+    }
     if (this.failContent.has(version.version)) {
       throw new Error(`forced failure for ${version.version}`);
     }
@@ -84,6 +94,23 @@ describe('WarmStore.build (cold-load)', () => {
     assert.equal(store.current()?.headCommitId, 'a2'.padEnd(40, '0')); // newest by date
   });
 });
+
+describe('WarmStore.build (404 boundary — pre-rename/pre-creation commit)', () => {
+  it('skips a commit whose content 404s and still builds the snapshot', async () => {
+    const client = seededClient();
+    client.notFoundFor('a1'.padEnd(40, '0')); // oldest Alpha commit absent at this path
+    const store = new WarmStore();
+    await store.build(client);
+    assert.ok(store.isBuilt);
+    // a1 fetched (404, not cached), a2 + b1 cached.
+    assert.equal(store.cacheSize, 2);
+    assert.equal(store.current()?.flags.size, 2);
+    // Alpha still present, derived from the surviving a2 commit; head unchanged.
+    assert.equal(store.getEvents('FLTAlpha').length > 0, true);
+    assert.equal(store.current()?.headCommitId, 'a2'.padEnd(40, '0'));
+  });
+});
+
 
 describe('WarmStore.refresh (immutable cache — §3.4.5)', () => {
   it('fetches ZERO new content when nothing changed', async () => {

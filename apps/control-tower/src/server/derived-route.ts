@@ -10,6 +10,7 @@ import { ensureBuilt } from './store.ts';
 import { adoProviderForRequest } from './request-auth.ts';
 import { UnauthorizedError } from './session-ado-provider.ts';
 import { MissingTokenError } from './ado-provider.ts';
+import { AzureCredError } from './azure-cred-ado-provider.ts';
 import { AuthConfigError } from '../auth/auth-config.ts';
 import { errorResponse } from './routes.ts';
 import type { AdoClient } from '../engine/ado-client.ts';
@@ -24,7 +25,9 @@ export async function serveDerived(req: Request, project: DerivedProjector): Pro
     return await project(store, client);
   } catch (err) {
     if (err instanceof UnauthorizedError) return errorResponse(401, err.message);
-    if (err instanceof AuthConfigError || err instanceof MissingTokenError) return errorResponse(503, err.message);
+    if (err instanceof AuthConfigError || err instanceof MissingTokenError || err instanceof AzureCredError) {
+      return errorResponse(503, err.message);
+    }
     return errorResponse(500, err instanceof Error ? err.message : 'internal error');
   }
 }

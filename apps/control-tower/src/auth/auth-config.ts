@@ -56,3 +56,12 @@ export function readAuthEnv(env: NodeJS.ProcessEnv = process.env): AuthEnv {
 export function isDevAuth(env: NodeJS.ProcessEnv = process.env): boolean {
   return env.CT_DEV_AUTH === '1' && !!env.ADO_TOKEN;
 }
+
+/**
+ * Whether the Azure-credential data source is active (`CT_AZURE_CRED=1`). The ADO
+ * token is then minted via `@azure/identity` — the developer's `az login` locally,
+ * or a managed identity when deployed — so no PAT or interactive sign-in is needed.
+ */
+export function isAzureCred(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.CT_AZURE_CRED === '1';
+}

@@ -11,7 +11,7 @@
  * Freshness is metadata-only and never calls ADO (§6.2/§6.3). The cheap
  * `$top=1` updates poll belongs to the API layer, not here.
  */
-import type { AdoClient } from './ado-client.ts';
+import { type AdoClient, AdoNotFoundError } from './ado-client.ts';
 import { mapLimit } from './concurrency.ts';
 import { discoverFlagPaths, flagIdFromPath } from './flag-discovery.ts';
 import { mineFlag, parseFlagContent, type FlagCommit, type MineEvent, type ParsedFlagContent } from './miner.ts';
@@ -113,8 +113,16 @@ export class WarmStore {
   private async loadVintage(client: AdoClient, flagPath: string): Promise<FlagVintage> {
     const commits = await client.getPathCommits(flagPath, 'master'); // newest-first
     const oldestFirst = [...commits].reverse();
-    const flagCommits = await mapLimit(oldestFirst, CONCURRENCY, async (c): Promise<FlagCommit> => {
-      const content = await this.cache.getOrFetch(client, flagPath, c.commitId);
+    const fetched = await mapLimit(oldestFirst, CONCURRENCY, async (c): Promise<FlagCommit | null> => {
+      let content: ParsedFlagContent;
+      try {
+        content = await this.cache.getOrFetch(client, flagPath, c.commitId);
+      } catch (err) {
+        // The file didn't exist at this path/commit (pre-creation or pre-rename);
+        // skip it rather than failing the whole cold-load.
+        if (err instanceof AdoNotFoundError) return null;
+        throw err;
+      }
       return {
         commitId: c.commitId,
         author: c.author?.name ?? null,
@@ -123,15 +131,15 @@ export class WarmStore {
         rawJson: content.rawJson,
       };
     });
+    const flagCommits = fetched.filter((c): c is FlagCommit => c !== null);
     const flagId = flagIdFromPath(flagPath);
-    const newest = commits[0];
     const newestContent = flagCommits[flagCommits.length - 1];
     return {
       flagId,
       flagPath,
       description: newestContent ? parseFlagContent(newestContent.rawJson).description : '',
-      commitIds: oldestFirst.map((c) => c.commitId),
-      newestCommit: newest ? { commitId: newest.commitId, date: newest.author?.date ?? '' } : null,
+      commitIds: flagCommits.map((c) => c.commitId),
+      newestCommit: newestContent ? { commitId: newestContent.commitId, date: newestContent.date } : null,
       events: mineFlag(flagId, flagCommits),
     };
   }

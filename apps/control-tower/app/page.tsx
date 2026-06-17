@@ -2,6 +2,7 @@ import { ensureBuilt } from '../src/server/store.ts';
 import { adoProviderForRequest } from '../src/server/request-auth.ts';
 import { UnauthorizedError } from '../src/server/session-ado-provider.ts';
 import { MissingTokenError } from '../src/server/ado-provider.ts';
+import { AzureCredError } from '../src/server/azure-cred-ado-provider.ts';
 import { AuthConfigError } from '../src/auth/auth-config.ts';
 import { buildGridResponse } from '../src/api/grid.ts';
 import { buildInertResponse } from '../src/api/inert.ts';
@@ -93,6 +94,8 @@ export default async function Page() {
       banner = { text: 'Auth is not configured. Set the Entra env vars, or use CT_DEV_AUTH=1 + ADO_TOKEN for local dev.' };
     } else if (err instanceof MissingTokenError) {
       banner = { text: 'Set ADO_TOKEN to a PAT with code-read scope, then reload to mine live flag data.' };
+    } else if (err instanceof AzureCredError) {
+      banner = { text: err.message };
     } else {
       throw err;
     }

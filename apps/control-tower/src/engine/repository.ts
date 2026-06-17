@@ -5,7 +5,7 @@
  * This is the seam between the ADO client and the pure engine. Content is
  * fetched per immutable commitId so a future warm store can cache it forever.
  */
-import type { AdoClient } from './ado-client.ts';
+import { type AdoClient, AdoNotFoundError } from './ado-client.ts';
 import { mapLimit } from './concurrency.ts';
 import { discoverFlagPaths, flagIdFromPath } from './flag-discovery.ts';
 import { mineFlag, type FlagCommit, type MineEvent } from './miner.ts';
@@ -24,11 +24,18 @@ export async function loadFlagHistory(
 ): Promise<FlagCommit[]> {
   const commits = await client.getPathCommits(flagPath, branch);
   const oldestFirst = [...commits].reverse();
-  return mapLimit(oldestFirst, CONTENT_CONCURRENCY, async (commit) => {
-    const rawJson = await client.getContent(flagPath, {
-      versionType: 'commit',
-      version: commit.commitId,
-    });
+  const fetched = await mapLimit(oldestFirst, CONTENT_CONCURRENCY, async (commit): Promise<FlagCommit | null> => {
+    let rawJson: string;
+    try {
+      rawJson = await client.getContent(flagPath, {
+        versionType: 'commit',
+        version: commit.commitId,
+      });
+    } catch (err) {
+      // File absent at this path/commit (pre-creation or pre-rename) — skip it.
+      if (err instanceof AdoNotFoundError) return null;
+      throw err;
+    }
     return {
       commitId: commit.commitId,
       author: commit.author?.name ?? null,
@@ -37,6 +44,7 @@ export async function loadFlagHistory(
       rawJson,
     } satisfies FlagCommit;
   });
+  return fetched.filter((c): c is FlagCommit => c !== null);
 }
 
 export interface FlagMineResult {

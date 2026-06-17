@@ -7,6 +7,18 @@
  */
 import { fetchWithRetry, type RetryOptions } from './concurrency.ts';
 
+/** Thrown when an item is absent at a specific path+version (HTTP 404) — e.g. a
+ * commit predating the file's creation/rename at that path. Callers treat this as
+ * an "absent at this commit" boundary rather than a hard failure. */
+export class AdoNotFoundError extends Error {
+  readonly url: string;
+  constructor(url: string) {
+    super(`ADO 404 Not Found for ${url}`);
+    this.name = 'AdoNotFoundError';
+    this.url = url;
+  }
+}
+
 export interface VersionDescriptor {
   versionType: 'branch' | 'commit';
   /** 'master' for a branch, or a full 40-char SHA for a commit. */
@@ -100,6 +112,9 @@ export class HttpAdoClient implements AdoClient {
       `&versionDescriptor.versionType=${version.versionType}` +
       `&includeContent=true&$format=text&api-version=${API_VERSION}`;
     const res = await fetchWithRetry(url, { headers: this.headers('text/plain') }, this.retry);
+    if (res.status === 404) {
+      throw new AdoNotFoundError(url);
+    }
     if (!res.ok) {
       throw new Error(`ADO ${res.status} ${res.statusText} for ${url}`);
     }

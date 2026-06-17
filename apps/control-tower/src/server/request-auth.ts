@@ -3,6 +3,8 @@
  *
  * Chooses the data-identity source for a request:
  *  - local dev (`CT_DEV_AUTH=1` + `ADO_TOKEN`) → a PAT-backed client;
+ *  - Azure credential (`CT_AZURE_CRED=1`) → an Entra token via `@azure/identity`
+ *    (the developer's `az login` locally, or a managed identity when deployed);
  *  - otherwise → the signed-in user's delegated token via the session.
  *
  * The returned provider validates authentication on EVERY call, so callers must
@@ -11,9 +13,10 @@
  */
 import { getTokenCache } from '../auth/token-cache.ts';
 import { readAuthEnv } from '../auth/auth-config.ts';
-import { isDevAuth } from '../auth/auth-config.ts';
+import { isDevAuth, isAzureCred } from '../auth/auth-config.ts';
 import { MsalTokenService } from '../auth/token-service.ts';
 import { devAdoClientProvider } from './ado-provider.ts';
+import { azureCredAdoClientProvider } from './azure-cred-ado-provider.ts';
 import { sessionAdoClientProvider } from './session-ado-provider.ts';
 import type { AdoClientProvider } from './store.ts';
 
@@ -25,6 +28,7 @@ export function isSecureRequest(): boolean {
 /** Build the appropriate ADO client provider for the incoming request. */
 export function adoProviderForRequest(cookieHeader: string | null): AdoClientProvider {
   if (isDevAuth()) return devAdoClientProvider;
+  if (isAzureCred()) return azureCredAdoClientProvider;
   const env = readAuthEnv(); // throws AuthConfigError when Entra isn't configured
   const svc = new MsalTokenService({
     clientId: env.clientId,
