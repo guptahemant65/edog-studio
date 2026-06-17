@@ -20,7 +20,7 @@ feature flag rolls out across the 15 canonical environments by mining the
 | Next.js shell + `GET /api/ct/grid` | ✅ App Router shell + wired grid route (dev: `ADO_TOKEN`) |
 | Auth (MSAL two-identity, delegated per-user ADO token) | ✅ Entra auth-code+PKCE, server-side token cache, encrypted session cookie + tested; dev fallback via `CT_DEV_AUTH=1`+`ADO_TOKEN` |
 | Derived endpoints — `freshness`, `ladder/distribution`, `velocity`, `sovereign-lens` | ✅ pure builders + thin routes + tested |
-| Remaining 12 `/api/ct/*` routes (dossier, activity, time-travel, inert, updates, refresh, …) | ⬜ |
+| Remaining `/api/ct/*` routes (dossier, per-flag ladder, timeline/activity diff, activity stream + timeline, time-travel bounds/reconstruct, inert, updates, refresh, health) | ✅ all 17 endpoints live — pure builders + thin routes + tested; `next build` green |
 | Frontend build-out (from `mocks/rollout-tracker.html`) | ⬜ |
 
 ## Engine core (done)
@@ -90,10 +90,12 @@ its own bundler-based tooling.
 
 ## Next slice
 
-The remaining 12 `/api/ct/*` routes (dossier, timeline diff, activity stream,
-time-travel, inert intelligence, updates poll, refresh, health, …) as thin
-adapters over new pure builders alongside `src/api/`, then the frontend
-build-out from `mocks/rollout-tracker.html`.
+All 17 `/api/ct/*` read-only endpoints are now live (grid, freshness, ladder
+distribution + per-flag ladder, velocity, sovereign-lens, dossier, timeline diff,
+activity stream/diff/timeline, time-travel bounds + reconstruct, inert
+intelligence, updates poll, refresh, health) — each a thin adapter over a pure
+builder in `src/api/`. Next up: the frontend build-out from
+`mocks/rollout-tracker.html`.
 
 ### Auth notes (§2)
 

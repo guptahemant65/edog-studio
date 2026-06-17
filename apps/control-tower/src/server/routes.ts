@@ -10,6 +10,8 @@ import { buildFreshnessResponse } from '../api/freshness.ts';
 import { buildLadderDistributionResponse } from '../api/ladder.ts';
 import { buildVelocityResponse } from '../api/velocity.ts';
 import { buildSovereignLensResponse } from '../api/sovereign.ts';
+import { buildInertResponse } from '../api/inert.ts';
+import { buildTimeTravelBounds } from '../api/time-travel.ts';
 import type { WarmStore } from '../engine/warm-store.ts';
 
 const JSON_HEADERS: Record<string, string> = {
@@ -19,33 +21,44 @@ const JSON_HEADERS: Record<string, string> = {
   'cache-control': 'no-store',
 };
 
-function ok(body: unknown): Response {
+/** 200 JSON response with no-store caching. */
+export function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), { status: 200, headers: JSON_HEADERS });
 }
 
 /** GET /api/ct/grid — current-state grid projected from the warm store. */
 export function handleGrid(store: WarmStore, opts: BuildGridOptions = {}): Response {
-  return ok(buildGridResponse(store, opts));
+  return jsonResponse(buildGridResponse(store, opts));
 }
 
 /** GET /api/ct/freshness — metadata-only warm-store freshness (never calls ADO). */
 export function handleFreshness(store: WarmStore, now?: number): Response {
-  return ok(buildFreshnessResponse(store, now));
+  return jsonResponse(buildFreshnessResponse(store, now));
 }
 
 /** GET /api/ct/ladder/distribution — per-rung ladder distribution. */
 export function handleLadderDistribution(store: WarmStore, now?: number): Response {
-  return ok(buildLadderDistributionResponse(store, now));
+  return jsonResponse(buildLadderDistributionResponse(store, now));
 }
 
 /** GET /api/ct/velocity — promotion-speed analytics. */
 export function handleVelocity(store: WarmStore, now?: number): Response {
-  return ok(buildVelocityResponse(store, now));
+  return jsonResponse(buildVelocityResponse(store, now));
 }
 
 /** GET /api/ct/sovereign-lens — sovereign vs prod gap classification. */
 export function handleSovereignLens(store: WarmStore, now?: number): Response {
-  return ok(buildSovereignLensResponse(store, now));
+  return jsonResponse(buildSovereignLensResponse(store, now));
+}
+
+/** GET /api/ct/inert — dependency / inert intelligence. */
+export function handleInert(store: WarmStore, now?: number): Response {
+  return jsonResponse(buildInertResponse(store, now));
+}
+
+/** GET /api/ct/time-travel/bounds — queryable history window. */
+export function handleTimeTravelBounds(store: WarmStore): Response {
+  return jsonResponse(buildTimeTravelBounds(store));
 }
 
 /** A uniform error envelope for unbuilt/failed stores. */

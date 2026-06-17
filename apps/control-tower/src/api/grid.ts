@@ -40,7 +40,7 @@ export interface ControlTowerGridResponse {
   meta: GridMeta;
 }
 
-function layerOf(states: EnvStates): FlagLayer {
+export function layerOf(states: EnvStates): FlagLayer {
   if (SOVEREIGN_ENVS.some((e) => states[e] !== 'off')) return 'sovereign';
   if (LADDER_ENVS.some((e) => states[e] !== 'off')) return 'ladder';
   return 'other';

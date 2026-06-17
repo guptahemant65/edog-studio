@@ -13,6 +13,9 @@ export type AdoClientProvider = () => Promise<AdoClient>;
 let store: WarmStore | null = null;
 let building: Promise<void> | null = null;
 
+/** Process start time (module load) — drives the /health uptime metric. */
+export const STARTED_AT = Date.now();
+
 /** The process-wide warm store (created on first access). */
 export function getStore(): WarmStore {
   if (!store) store = new WarmStore();

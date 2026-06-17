@@ -39,6 +39,12 @@ export interface AdoClient {
   getContent(path: string, version: VersionDescriptor): Promise<string>;
   /** Commit history for a file path on a branch (newest-first, as ADO returns it). */
   getPathCommits(path: string, branch: string): Promise<AdoCommit[]>;
+  /**
+   * Newest commit touching a scope/path on a branch — a cheap `$top=1` HEAD check
+   * for the freshness poll (architecture §6.2). Optional: only the HTTP client
+   * implements it; test fakes may omit it.
+   */
+  getLatestCommit?(scopePath: string, branch: string): Promise<AdoCommit | null>;
 }
 
 const DEFAULT_BASE =
@@ -107,5 +113,14 @@ export class HttpAdoClient implements AdoClient {
       `&searchCriteria.itemVersion.versionType=branch&api-version=${API_VERSION}`;
     const body = await this.getJson<{ value: AdoCommit[] }>(url);
     return body.value;
+  }
+
+  async getLatestCommit(scopePath: string, branch: string): Promise<AdoCommit | null> {
+    const url =
+      `${this.baseUrl}/commits?searchCriteria.itemPath=${encodeURIComponent(scopePath)}` +
+      `&searchCriteria.itemVersion.version=${encodeURIComponent(branch)}` +
+      `&searchCriteria.itemVersion.versionType=branch&searchCriteria.$top=1&api-version=${API_VERSION}`;
+    const body = await this.getJson<{ value: AdoCommit[] }>(url);
+    return body.value[0] ?? null;
   }
 }

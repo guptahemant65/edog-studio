@@ -12,16 +12,16 @@ import { UnauthorizedError } from './session-ado-provider.ts';
 import { MissingTokenError } from './ado-provider.ts';
 import { AuthConfigError } from '../auth/auth-config.ts';
 import { errorResponse } from './routes.ts';
+import type { AdoClient } from '../engine/ado-client.ts';
 import type { WarmStore } from '../engine/warm-store.ts';
 
-export async function serveDerived(
-  req: Request,
-  project: (store: WarmStore) => Response,
-): Promise<Response> {
+export type DerivedProjector = (store: WarmStore, client: AdoClient) => Response | Promise<Response>;
+
+export async function serveDerived(req: Request, project: DerivedProjector): Promise<Response> {
   try {
     const client = await adoProviderForRequest(req.headers.get('cookie'))();
     const store = await ensureBuilt(() => Promise.resolve(client));
-    return project(store);
+    return await project(store, client);
   } catch (err) {
     if (err instanceof UnauthorizedError) return errorResponse(401, err.message);
     if (err instanceof AuthConfigError || err instanceof MissingTokenError) return errorResponse(503, err.message);
