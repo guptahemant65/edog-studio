@@ -18,7 +18,7 @@ feature flag rolls out across the 15 canonical environments by mining the
 | Derivation layer (state/stale/velocity/sovereign/ladder) | ✅ implemented + tested |
 | Grid response builder + server layer | ✅ `buildGridResponse` + Web-standard handlers + store singleton, tested |
 | Next.js shell + `GET /api/ct/grid` | ✅ App Router shell + wired grid route (dev: `ADO_TOKEN`) |
-| Auth (MSAL + Auth.js, two-identity) | ⬜ |
+| Auth (MSAL two-identity, delegated per-user ADO token) | ✅ Entra auth-code+PKCE, server-side token cache, encrypted session cookie + tested; dev fallback via `CT_DEV_AUTH=1`+`ADO_TOKEN` |
 | Remaining 16 `/api/ct/*` routes | ⬜ |
 | Frontend build-out (from `mocks/rollout-tracker.html`) | ⬜ |
 
@@ -89,8 +89,22 @@ its own bundler-based tooling.
 
 ## Next slice
 
-Auth (§2): MSAL + Auth.js two-identity, server-side delegated ADO tokens — this
-replaces the dev `ADO_TOKEN` provider. Then the remaining 16 `/api/ct/*` routes
-(dossier, ladder, activity, velocity, sovereign-lens, …) as thin adapters over
-new pure builders alongside `src/api/grid.ts`, and the frontend build-out from
-`mocks/rollout-tracker.html`.
+The remaining 16 `/api/ct/*` routes (dossier, ladder, activity, velocity,
+sovereign-lens, …) as thin adapters over new pure builders alongside
+`src/api/grid.ts`, then the frontend build-out from `mocks/rollout-tracker.html`.
+
+### Auth notes (§2)
+
+Two identities: the App identity (infra) and the Data identity (delegated
+per-user Entra token with the ADO scope). The user's ADO access token lives
+**only** in a server-side cache keyed by `oid` and never touches the cookie or
+the browser; the session cookie is AES-256-GCM encrypted, httpOnly, profile-only,
+8h. Env: `ENTRA_CLIENT_ID`, `ENTRA_TENANT_ID`, `ENTRA_CLIENT_SECRET`,
+`CT_REDIRECT_URI`, `CT_SESSION_SECRET`. Local dev shortcut: `CT_DEV_AUTH=1` +
+`ADO_TOKEN` (PAT) bypasses Entra.
+
+> **Deviation from §2.4:** the spec names Auth.js (next-auth) v5. The session
+> layer here is implemented directly with `node:crypto` AES-256-GCM (identical
+> security posture) for testability without a live Entra registration. Real MSAL
+> token acquisition (`MsalTokenService`) is retained behind a `TokenService`
+> seam, so this is swappable for Auth.js later.
