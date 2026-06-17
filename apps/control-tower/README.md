@@ -14,7 +14,7 @@ feature flag rolls out across the 15 canonical environments by mining the
 |-------|-------|
 | **Data engine — attribution core** (`src/engine`) | ✅ implemented + tested |
 | ADO REST client + git-history loader | ✅ implemented (injectable) + tested via fake; live smoke gated on `ADO_TOKEN` |
-| Warm store + incremental refresh | ⬜ next |
+| Warm store + incremental refresh | ✅ immutable commit cache, atomic refresh, freshness metadata + tested |
 | Derivation (ladder/velocity/sovereign/inert) | 🟡 dwell done; rest pending |
 | Auth (MSAL + Auth.js, two-identity) | ⬜ |
 | API surface (17 `/api/ct/*` routes) | ⬜ |
@@ -39,6 +39,9 @@ feature flag rolls out across the 15 canonical environments by mining the
 - `src/engine/flag-discovery.ts` — `discoverFlagPaths` / `flagIdFromPath` (§3.2).
 - `src/engine/repository.ts` — `loadFlagHistory` (newest→oldest, content per
   commit) + `mineRepository` (discover → load → mine), the ADO↔engine seam.
+- `src/engine/warm-store.ts` — `WarmStore`: immutable `CommitContentCache`,
+  `build` (cold-load), atomic `refresh` (stage-then-swap, last-good rollback on
+  failure), and `freshness` metadata (no ADO). Refresh refetches only NEW commits.
 
 ## Commands
 
@@ -57,7 +60,6 @@ its own bundler-based tooling.
 
 ## Next slice
 
-Warm store: an immutable `Map<commitId, ParsedFlagContent>` (§3.4.4) so
-incremental `refresh` only fetches new commits, plus atomic last-good rollback
-(§6). Then the remaining derivations (ladder/velocity/sovereign/inert) and the
-first `/api/ct/grid` endpoint end-to-end.
+The remaining derivations (ladder distribution, velocity, sovereign lens, inert
+/ C06 stale-reason) reading from the warm store, then the first `/api/ct/grid`
+endpoint end-to-end (current-state rows from the latest vintage).
