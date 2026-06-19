@@ -29,6 +29,7 @@ class FabricApiClient {
    * @returns {Promise<object|null>} Config object, or null if unavailable.
    */
   async fetchConfig() {
+    if (window.__edogSessionDead) return null;
     try {
       const resp = await fetch('/api/flt/config');
       if (!resp.ok) return null;
@@ -748,6 +749,7 @@ class FabricApiClient {
    * @throws {Error} With .status, .body, .path on API errors; plain Error on network failures.
    */
   async _fabricFetch(path, options = {}) {
+    if (window.__edogSessionDead) throw new Error('Session ended');
     try {
       const config = this._config || await this.fetchConfig();
       if (!config) {
@@ -780,6 +782,7 @@ class FabricApiClient {
   }
 
   async _fltFetch(path, options = {}) {
+    if (window.__edogSessionDead) return null;
     try {
       var url = '/api/flt-proxy' + path;
       var headers = { 'Content-Type': 'application/json' };

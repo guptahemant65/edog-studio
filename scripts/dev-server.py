@@ -256,6 +256,10 @@ _CAPACITY_CACHE_TTL = 300  # seconds
 _capacity_cache: dict = {"data": None, "ts": 0.0}
 _capacity_cache_lock = threading.Lock()
 
+# Unique session ID generated at server boot. The frontend uses this to detect
+# when a new server instance has started (stale tab → show disconnect overlay).
+_SERVER_SESSION_ID = secrets.token_hex(8)
+
 # F09 Playground catalog cache — keyed by flt_repo_path.
 # Value: {"mtime": float, "payload": dict}.
 # Invalidated when any controller file mtime is newer than the cached mtime.
@@ -6060,6 +6064,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         self._json_response(
             200,
             {
+                "sessionId": _SERVER_SESSION_ID,
                 "tokenHelperBuilt": helper.exists(),
                 "hasBearerToken": bearer is not None,
                 "bearerExpiresIn": int(bearer_exp - time.time()) if bearer_exp else 0,

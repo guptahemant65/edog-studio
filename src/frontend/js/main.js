@@ -256,26 +256,52 @@ class EdogLogViewer {
     // The Phase 3 topic stream (SubscribeToTopic) delivers:
     //   Phase 1: Snapshot (ring buffer history)
     //   Phase 2: Live events as they arrive
-    // On reconnect the snapshot replays events already seen. Track the
-    // highest sequenceId per topic so we skip duplicates.
-    this._topicHighWater = {};  // topic → highest sequenceId seen
-    this._onStreamLog = (envelope) => {
+    // Phase 2 replays everything Phase 1 already sent (the backend writes every
+    // event to BOTH the ring AND the live channel), so the client must dedup.
+    // We dedup by the SET of sequenceIds admitted — NOT by a high-water mark.
+    //
+    // WHY A SET, NOT A HIGH-WATER MARK (2026-06-11, do NOT revert):
+    // The backend stamps SequenceId then enqueues to the ring in two
+    // non-atomic steps under concurrent publishers (EdogTopicRouter.Publish →
+    // TopicBuffer.Write, SingleWriter=false). So GetSnapshot() can hand back
+    // events slightly OUT OF seq order — e.g. 102 before 101. A high-water mark
+    // ("drop seq <= max seen") then advances to 102 and PERMANENTLY drops 101
+    // as a phantom "replay duplicate." Real symptom (node/run metrics polling):
+    // a component filter showed 4 of 8 logs with a hole in the middle — job
+    // submit + Poll #3/#4 + success present, Poll #1/#2 gone — while the ring
+    // and /api/logs still held all 8. Snapshot replay on reconnect and
+    // multi-subscriber interleave reorder events the same way. A Set admits
+    // each unique seq exactly once regardless of arrival order, so no reorder
+    // can lose data. The set is pruned (oldest seqs dropped) past a generous
+    // window so memory stays flat across long sessions; the window dwarfs the
+    // 50k ring, so a real duplicate's twin is always still present when it
+    // arrives. Reset on reconnect (see setStatus 'connected') is mandatory:
+    // FLT restart resets seq IDs to 1, so a stale set would drop the fresh
+    // snapshot. See tests/test_logs_seq_dedup_no_drop.py.
+    this._topicSeen = {};            // topic → Set<sequenceId> admitted
+    this._topicSeenWindow = 200000;  // prune threshold (~4x the 50k ring)
+    this._admitTopicEvent = (topic, envelope) => {
       var seq = envelope && envelope.sequenceId;
-      if (seq != null) {
-        var hw = this._topicHighWater['log'] || 0;
-        if (seq <= hw) return;  // already seen — snapshot replay
-        this._topicHighWater['log'] = seq;
+      if (seq == null) return true;  // no seq to dedup on — always admit
+      var seen = this._topicSeen[topic] || (this._topicSeen[topic] = new Set());
+      if (seen.has(seq)) return false;  // genuine duplicate (snapshot<->live replay)
+      seen.add(seq);
+      if (seen.size > this._topicSeenWindow) {
+        // Drop the oldest (lowest) half. Only seqs whose duplicate twin has
+        // already passed get pruned — the newest window is always retained.
+        var ordered = Array.from(seen).sort(function (a, b) { return a - b; });
+        var cut = ordered.length >> 1;
+        for (var i = 0; i < cut; i++) seen.delete(ordered[i]);
       }
+      return true;
+    };
+    this._onStreamLog = (envelope) => {
+      if (!this._admitTopicEvent('log', envelope)) return;
       const data = envelope && envelope.data ? envelope.data : envelope;
       if (data) this.handleWebSocketMessage('log', data);
     };
     this._onStreamTelemetry = (envelope) => {
-      var seq = envelope && envelope.sequenceId;
-      if (seq != null) {
-        var hw = this._topicHighWater['telemetry'] || 0;
-        if (seq <= hw) return;
-        this._topicHighWater['telemetry'] = seq;
-      }
+      if (!this._admitTopicEvent('telemetry', envelope)) return;
       const data = envelope && envelope.data ? envelope.data : envelope;
       if (data) this.handleWebSocketMessage('telemetry', data);
     };
@@ -884,11 +910,11 @@ class EdogLogViewer {
       this.state.logBuffer.clear();
       this.state.filterIndex.clear();
       this.state.telemetryBuffer.clear();
-      // Reset sequence high-water marks: FLT restart resets topic sequence
-      // IDs to 1, so retaining the old high-water (e.g. 500) would silently
-      // drop the entire fresh snapshot. setStatus dedupes, so this only runs
-      // on genuine reconnects.
-      this._topicHighWater = {};
+      // Reset per-topic dedup state: FLT restart resets topic sequence IDs to
+      // 1, so retaining the old seen-set would make the fresh snapshot (seq
+      // 1,2,3...) look like already-seen duplicates and silently drop the
+      // entire run. setStatus dedupes, so this only runs on genuine reconnects.
+      this._topicSeen = {};
       // Cluster A: drop any resolved-RAID state too — the new buffer is
       // a fresh snapshot, the old RAIDs don't apply.
       if (this.iterationCorrelator && this.iterationCorrelator.activeIteration) {
@@ -1608,6 +1634,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (resp.ok) health = await resp.json();
   } catch { /* health stays null — gates will handle */ }
 
+  // Session guard — detect server death or restart
+  const serverSessionId = health && health.sessionId;
+  if (serverSessionId) {
+    _startSessionGuard(serverSessionId);
+  }
+
   // Gate 1: Auth — resolve bearer token
   await resolveAuthGate(health);
 
@@ -1626,6 +1658,69 @@ document.addEventListener('DOMContentLoaded', async () => {
     }, 500);
   }
 });
+
+/* ═══════════════════════════════════════════════════════════════════
+   Session Guard — detects server death/restart and shows disconnect overlay.
+   Polls /api/edog/health every 5s. If the server is unreachable or returns
+   a different sessionId, all polling stops and a full-page overlay appears.
+   ═══════════════════════════════════════════════════════════════════ */
+
+function _startSessionGuard(expectedSessionId) {
+  var failCount = 0;
+  var disconnected = false;
+
+  setInterval(async function() {
+    if (disconnected) return;
+    try {
+      var resp = await fetch('/api/edog/health', { signal: AbortSignal.timeout(1500) });
+      if (!resp.ok) { failCount++; } else {
+        var data = await resp.json();
+        if (data.sessionId && data.sessionId !== expectedSessionId) {
+          _showDisconnectOverlay('Server restarted. This session is no longer valid.');
+          disconnected = true;
+          return;
+        }
+        failCount = 0;
+      }
+    } catch {
+      failCount++;
+    }
+    if (failCount >= 2) {
+      _showDisconnectOverlay('EDOG Studio server is no longer running.');
+      disconnected = true;
+    }
+  }, 2000);
+}
+
+function _showDisconnectOverlay(message) {
+  // Global kill switch — prevents ALL further API calls from any module
+  window.__edogSessionDead = true;
+
+  var existing = document.getElementById('edog-disconnect-overlay');
+  if (existing) return;
+
+  var overlay = document.createElement('div');
+  overlay.id = 'edog-disconnect-overlay';
+  overlay.style.cssText = [
+    'position:fixed', 'inset:0', 'z-index:999999',
+    'display:flex', 'align-items:center', 'justify-content:center',
+    'background:rgba(10,10,14,0.92)', 'backdrop-filter:blur(8px)',
+    'font-family:var(--font-mono, "SF Mono", "Cascadia Code", monospace)',
+    'color:#c8ccd4', 'flex-direction:column', 'gap:16px',
+  ].join(';');
+
+  overlay.innerHTML =
+    '<div style="width:48px;height:48px;border-radius:50%;background:rgba(229,69,59,0.12);display:flex;align-items:center;justify-content:center">' +
+      '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#e5453b" stroke-width="2" stroke-linecap="round">' +
+        '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>' +
+      '</svg>' +
+    '</div>' +
+    '<div style="font-size:15px;font-weight:500;color:#e8eaed;letter-spacing:-0.01em">Session Ended</div>' +
+    '<div style="font-size:12px;color:#888;max-width:320px;text-align:center;line-height:1.5">' + message + '</div>' +
+    '<div style="margin-top:12px;font-size:11px;color:#555;letter-spacing:0.02em">Run <span style="color:#7db4fa;font-weight:500">edog</span> to start a new session</div>';
+
+  document.body.appendChild(overlay);
+}
 
 async function resolveAuthGate(health) {
   const onboarding = new OnboardingScreen();
