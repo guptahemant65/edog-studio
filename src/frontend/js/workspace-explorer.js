@@ -2856,25 +2856,30 @@ class WorkspaceExplorer {
       const tables = MockData.tablesForLakehouse || [];
       return { tables, schemas: [], errors: [] };
     }
-    // Try public API first (works for non-schema lakehouses).
-    // Public API returns a flat list with no schema metadata — synthesize an empty
-    // schemas array so the renderer falls back to a single implicit "dbo" section.
-    try {
+    // Capacity API can enumerate schema-enabled lakehouses without the public API's
+    // extra failing round-trip. When capacity metadata is unavailable, keep the
+    // existing public API flow.
+    const listTables = async () => {
       const data = await this._api.listTables(wsId, lhId);
       const tables = (data && (data.value || data.data)) || [];
       return { tables, schemas: [], errors: [] };
-    } catch (e) {
-      // 400 = schemas-enabled lakehouse → fall back to capacity host which
-      // enumerates schemas via OneLake DFS and merges across them.
-      if (e.status === 400 && capId) {
+    };
+
+    if (capId) {
+      try {
         const data = await this._api.listTablesViaCapacity(wsId, lhId, capId);
         const tables = (data && (data.value || data.data)) || [];
         const schemas = (data && data.schemas) || [];
         const errors = (data && data.errors) || [];
         return { tables, schemas, errors };
+      } catch (e) {
+        return listTables();
       }
-      throw e;
     }
+
+    // Public API returns a flat list with no schema metadata — synthesize an empty
+    // schemas array so the renderer falls back to a single implicit "dbo" section.
+    return listTables();
   }
 
   // ────────────────────────────────────────────

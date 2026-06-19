@@ -90,6 +90,113 @@ ONELAKE_RESOURCE = "https://storage.azure.com"
 TOKEN_HELPER_CLIENT_ID = "ea0616ba-638b-4df5-95b9-636659ae5121"
 TOKEN_HELPER_AUTHORITY = "https://login.windows-ppe.net/organizations"
 
+# ── Performance: shared SSL context ──────────────────────────────────────
+# ssl.SSLContext is thread-safe for reading after construction (Python docs).
+# Creating one per-request loaded CA certs 29+ times per session. One is enough.
+_SSL_CTX = ssl.create_default_context()
+
+# ── Performance: urllib3 connection pooling ───────────────────────────────
+import urllib3  # noqa: E402
+
+# Keepalive pool for the redirect host (Fabric public APIs, token minting).
+# block=False: excess concurrent requests create transient connections rather
+# than queueing — correct for a dev tool where latency > throughput.
+_POOL_REDIRECT = urllib3.HTTPSConnectionPool(
+    "biazure-int-edog-redirect.analysis-df.windows.net",
+    port=443,
+    maxsize=10,
+    timeout=urllib3.Timeout(connect=10, read=30),
+    retries=False,
+    block=False,
+)
+
+# Dynamic pool manager for capacity hosts (hostname varies by capId) and
+# other one-off hosts (OneLake, ADO, Azure OpenAI).
+_POOL_MANAGER = urllib3.PoolManager(
+    num_pools=20,
+    maxsize=6,
+    timeout=urllib3.Timeout(connect=10, read=30),
+    retries=False,
+)
+
+_REDIRECT_HOSTNAME = "biazure-int-edog-redirect.analysis-df.windows.net"
+
+
+def _pooled_request(
+    method: str,
+    url: str,
+    *,
+    headers: dict | None = None,
+    body: bytes | None = None,
+    timeout: float = 30,
+    preload_content: bool = True,
+) -> urllib3.HTTPResponse:
+    """Universal pooled HTTP request — auto-routes by hostname.
+
+    - Redirect host URLs → _POOL_REDIRECT (dedicated keepalive pool)
+    - Everything else     → _POOL_MANAGER (dynamic per-host pools)
+    - Localhost URLs      → stdlib urlopen (no TLS overhead to save)
+
+    Returns urllib3.HTTPResponse. Caller checks .status (not exceptions).
+    For streaming, set preload_content=False and call resp.release_conn()
+    or resp.close() when done.
+    """
+    tm = urllib3.Timeout(connect=10, read=timeout)
+    if _REDIRECT_HOSTNAME in url:
+        # Strip scheme+host, keep path — ConnectionPool wants relative paths
+        path = url.split(_REDIRECT_HOSTNAME, 1)[1] if _REDIRECT_HOSTNAME in url else url
+        return _POOL_REDIRECT.request(
+            method, path, headers=headers, body=body,
+            timeout=tm, preload_content=preload_content,
+        )
+    if url.startswith("http://localhost") or url.startswith("http://127.0.0.1"):
+        # Localhost — no TLS, no point pooling. Use stdlib.
+        req = urllib.request.Request(url, data=body, headers=headers or {}, method=method)
+        resp = urllib.request.urlopen(req, timeout=timeout)
+        # Wrap in a duck-typed object so callers get a uniform interface
+        class _LocalResp:
+            def __init__(self, r):
+                self.status = r.status
+                self.headers = r.headers
+                self.data = r.read()
+            def release_conn(self): pass  # noqa: E704
+            def close(self): pass  # noqa: E704
+        return _LocalResp(resp)
+    # Everything else — PoolManager (capacity hosts, OneLake, ADO, OpenAI)
+    return _POOL_MANAGER.request(
+        method, url, headers=headers, body=body,
+        timeout=tm, preload_content=preload_content,
+    )
+
+# ── Performance: config file cache with mtime invalidation ───────────────
+_config_cache: dict = {}
+_config_cache_mtime: float = 0.0
+_config_cache_lock = threading.Lock()
+
+
+def _get_config() -> dict:
+    """Return parsed edog-config.json, cached until the file is modified.
+
+    Uses file mtime for invalidation — immediate pickup after writes, zero
+    disk reads on the hot path when config hasn't changed.  Thread-safe.
+    """
+    global _config_cache, _config_cache_mtime
+    try:
+        if not CONFIG_PATH.exists():
+            return {}
+        current_mtime = CONFIG_PATH.stat().st_mtime
+        with _config_cache_lock:
+            if current_mtime == _config_cache_mtime and _config_cache:
+                return _config_cache
+        # File changed (or cold start) — read and parse
+        data = json.loads(CONFIG_PATH.read_text())
+        with _config_cache_lock:
+            _config_cache = data
+            _config_cache_mtime = current_mtime
+        return data
+    except Exception:
+        return {}
+
 # MWC priority-placement misrouting headers.
 #
 # When a Fabric capacity request lands on the wrong core-service pod, the
@@ -141,6 +248,13 @@ _ado_token_lock = threading.Lock()
 
 ADO_RESOURCE_ID = "499b84ac-1321-427f-aa17-267ca6975798"
 _ADO_PR_URL_RE = None  # lazily compiled
+
+# Capacity list cache — the redirect host /v1/capacities is notoriously flaky.
+# Cache for 5 min so the wizard doesn't re-fetch on every panel navigation, and
+# serve stale data when all retries fail (stale-while-error resilience).
+_CAPACITY_CACHE_TTL = 300  # seconds
+_capacity_cache: dict = {"data": None, "ts": 0.0}
+_capacity_cache_lock = threading.Lock()
 
 # F09 Playground catalog cache — keyed by flt_repo_path.
 # Value: {"mtime": float, "payload": dict}.
@@ -715,38 +829,56 @@ def _parse_ado_pr_url(pr_url: str) -> dict:
 
 def _ado_api_get(token: str, url: str) -> dict | str:
     """Call an ADO REST API endpoint. Returns parsed JSON or raw text."""
-    req = urllib.request.Request(
-        url,
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Accept": "application/json",
-        },
-    )
-    ctx = ssl.create_default_context()
-    with urllib.request.urlopen(req, context=ctx, timeout=30) as resp:
-        content_type = resp.headers.get("Content-Type", "")
-        body = resp.read().decode("utf-8")
-        if "application/json" in content_type:
-            return json.loads(body)
-        return body
+    try:
+        resp = _pooled_request(
+            "GET",
+            url,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/json",
+            },
+            timeout=30,
+        )
+    except urllib3.exceptions.TimeoutError as e:
+        raise TimeoutError(f"ADO API request timed out: {url}") from e
+    except urllib3.exceptions.HTTPError as e:
+        raise urllib.error.URLError(str(e)) from e
+    if resp.status >= 400:
+        import io
+
+        raise urllib.error.HTTPError(url, resp.status, "", hdrs=resp.headers, fp=io.BytesIO(resp.data))
+    content_type = resp.headers.get("Content-Type", "")
+    body = resp.data.decode("utf-8")
+    if "application/json" in content_type:
+        return json.loads(body)
+    return body
 
 
 def _ado_api_get_text(token: str, url: str) -> str:
     """Call an ADO REST API endpoint expecting raw text (file content)."""
-    req = urllib.request.Request(
-        url,
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Accept": "text/plain",
-        },
-    )
-    ctx = ssl.create_default_context()
-    with urllib.request.urlopen(req, context=ctx, timeout=30) as resp:
-        raw = resp.read()
-        try:
-            return raw.decode("utf-8")
-        except UnicodeDecodeError:
-            return None  # binary file
+    try:
+        resp = _pooled_request(
+            "GET",
+            url,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "text/plain",
+            },
+            timeout=30,
+        )
+    except urllib3.exceptions.TimeoutError as e:
+        raise TimeoutError(f"ADO API request timed out: {url}") from e
+    except urllib3.exceptions.HTTPError as e:
+        raise urllib.error.URLError(str(e)) from e
+    if resp.status >= 400:
+        import io
+
+        raise urllib.error.HTTPError(url, resp.status, "", hdrs=resp.headers, fp=io.BytesIO(resp.data))
+    raw = resp.data
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return None  # binary file
 
 
 def _fetch_pr_diff(pr_url: str) -> dict:
@@ -1178,9 +1310,90 @@ def _urlopen_with_mwc_retry(req, ctx, *, timeout=30, max_retries=4, label="capac
             )
             sys.stderr.flush()
             req.add_header(MWC_ROUTING_HINT_HEADER, hint)
-            time.sleep(0.1 * (attempt + 1))
+            time.sleep(0.05 * (attempt + 1))  # 50ms base, reduced from 100ms
     # Unreachable: the loop either returns or raises above.
     raise last_err  # pragma: no cover
+
+
+def _pool_request_with_mwc_retry(
+    pool,
+    method: str,
+    url: str,
+    *,
+    headers: dict,
+    body: bytes | None = None,
+    timeout: float = 30,
+    max_retries: int = 4,
+    label: str = "capacity",
+    preload_content: bool = True,
+) -> urllib3.HTTPResponse:
+    """urllib3 pool request with wrong-node retry support.
+
+    Replacement for ``_urlopen_with_mwc_retry`` using urllib3 connection pools.
+    Key differences from the old function:
+      - Uses pool.request() → connection reuse via HTTP keep-alive
+      - Headers are **copied** per attempt to prevent cross-thread mutation
+      - Reduced sleep base: 50ms (vs 100ms) — routing hint is the fix, not sleep
+      - Returns urllib3.HTTPResponse (caller checks .status, not exceptions)
+
+    Args:
+        pool: urllib3 pool (HTTPSConnectionPool or PoolManager).
+        method: HTTP method.
+        url: Full URL (for PoolManager) or path (for ConnectionPool).
+        headers: Request headers — copied per attempt for thread safety.
+        body: Request body bytes, or None.
+        timeout: Per-attempt timeout in seconds.
+        max_retries: Maximum wrong-node retries.
+        label: Diagnostic tag for log output.
+        preload_content: If True, response body is fully buffered. Set False
+            for streaming (caller must call resp.release_conn() when done).
+
+    Returns:
+        urllib3.HTTPResponse from the first successful attempt.
+    """
+    last_resp = None
+    tm = urllib3.Timeout(connect=10, read=timeout)
+    for attempt in range(max_retries + 1):
+        # Copy headers each attempt — thread safety for fan-out callers
+        attempt_headers = dict(headers)
+        try:
+            resp = pool.request(
+                method,
+                url,
+                headers=attempt_headers,
+                body=body,
+                timeout=tm,
+                preload_content=preload_content,
+            )
+        except Exception:
+            if attempt >= max_retries:
+                raise
+            time.sleep(0.05 * (attempt + 1))
+            continue
+
+        # urllib3 returns responses, doesn't raise on 4xx/5xx.
+        # Check for wrong-node 400 and retry with routing hint.
+        if resp.status == 400:
+            hint = resp.headers.get(MWC_PRIORITY_PLACEMENT_WRONG_NODE_HEADER)
+            if hint and attempt < max_retries:
+                if preload_content:
+                    resp.release_conn()
+                else:
+                    resp.close()
+                sys.stderr.write(
+                    f"  [MWC-Retry] {label}: wrong-node 400 "
+                    f"(attempt {attempt + 1}/{max_retries + 1}) — "
+                    f"retrying with {MWC_ROUTING_HINT_HEADER}={hint}\n"
+                )
+                sys.stderr.flush()
+                headers[MWC_ROUTING_HINT_HEADER] = hint
+                time.sleep(0.05 * (attempt + 1))
+                continue
+
+        return resp
+
+    # Unreachable: loop always returns or raises.
+    return last_resp  # pragma: no cover
 
 
 def _get_mwc_token(bearer: str, ws_id: str, artifact_id: str, cap_id: str, workload_type: str = "Lakehouse") -> tuple:
@@ -1217,38 +1430,33 @@ def _get_mwc_token(bearer: str, ws_id: str, artifact_id: str, cap_id: str, workl
         }
     ).encode()
 
-    url = f"{REDIRECT_HOST}/metadata/v201606/generatemwctoken"
-    req = urllib.request.Request(
-        url,
-        data=body,
-        headers={
-            "Authorization": f"Bearer {bearer}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
+    url_path = "/metadata/v201606/generatemwctoken"
 
-    ctx = ssl.create_default_context()
     try:
-        with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
-            resp_data = json.loads(resp.read())
-    except urllib.error.HTTPError as e:
-        err_body = ""
-        with contextlib.suppress(Exception):
-            err_body = e.read().decode("utf-8", errors="replace")[:500]
-        if e.code == 404:
+        resp = _POOL_REDIRECT.request(
+            "POST",
+            url_path,
+            headers={
+                "Authorization": f"Bearer {bearer}",
+                "Content-Type": "application/json",
+            },
+            body=body,
+        )
+        if resp.status == 404:
             raise CapacityRoutingError(
                 f"LiveTable workload not registered on capacity {cap_id}. "
                 f"MWC token endpoint returned 404 EndpointNotFound."
-            ) from e
-        if e.code in (401, 403):
-            raise urllib.error.HTTPError(
-                e.url,
-                e.code,
-                f"Bearer token rejected (HTTP {e.code}) — re-authenticate. {err_body}",
-                e.headers,
-                None,
-            ) from e
+            )
+        if resp.status in (401, 403):
+            err_body = resp.data.decode("utf-8", errors="replace")[:500]
+            raise Exception(
+                f"Bearer token rejected (HTTP {resp.status}) — re-authenticate. {err_body}"
+            )
+        if resp.status >= 400:
+            err_body = resp.data.decode("utf-8", errors="replace")[:500]
+            raise Exception(f"MWC token endpoint returned {resp.status}: {err_body}")
+        resp_data = json.loads(resp.data)
+    except (CapacityRoutingError, Exception):
         raise
 
     if not resp_data.get("Token"):
@@ -1606,13 +1814,20 @@ def _enumerate_delta_active_files_full(
     """
     onelake_bearer = _ensure_onelake_bearer()
     log_path = f"/{ws_id}/{lh_id}/Tables/{schema}/{table_name}/_delta_log"
-    ctx = ssl.create_default_context()
     warnings: list[str] = []
 
     list_url = f"{ONELAKE_HOST}{log_path}?resource=filesystem&recursive=false"
-    req = urllib.request.Request(list_url, headers={"Authorization": f"Bearer {onelake_bearer}"})
-    with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
-        listing = json.loads(resp.read())
+    resp = _pooled_request(
+        "GET",
+        list_url,
+        headers={"Authorization": f"Bearer {onelake_bearer}"},
+        timeout=timeout,
+    )
+    if resp.status >= 400:
+        import io
+
+        raise urllib.error.HTTPError(list_url, resp.status, "", hdrs=resp.headers, fp=io.BytesIO(resp.data))
+    listing = json.loads(resp.data)
 
     json_files = sorted(
         p["name"] for p in listing.get("paths", []) if p["name"].endswith(".json") and not p.get("isDirectory")
@@ -1633,9 +1848,17 @@ def _enumerate_delta_active_files_full(
     has_dv = False
     for jf in json_files:
         file_url = f"{ONELAKE_HOST}/{ws_id}/{jf}"
-        req = urllib.request.Request(file_url, headers={"Authorization": f"Bearer {onelake_bearer}"})
-        with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
-            content = resp.read().decode()
+        resp = _pooled_request(
+            "GET",
+            file_url,
+            headers={"Authorization": f"Bearer {onelake_bearer}"},
+            timeout=timeout,
+        )
+        if resp.status >= 400:
+            import io
+
+            raise urllib.error.HTTPError(file_url, resp.status, "", hdrs=resp.headers, fp=io.BytesIO(resp.data))
+        content = resp.data.decode()
         for line in content.strip().split("\n"):
             if not line.strip():
                 continue
@@ -1782,10 +2005,17 @@ def _list_lakehouse_schemas(ws_id: str, lh_id: str, timeout: int = 30) -> list[d
     url = f"{ONELAKE_HOST}/{ws_id}?{qs}"
     print(f"  [OneLake] GET schemas → {url[:90]}...")
 
-    ctx = ssl.create_default_context()
-    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
-    with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
-        payload = json.loads(resp.read())
+    resp = _pooled_request(
+        "GET",
+        url,
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=timeout,
+    )
+    if resp.status >= 400:
+        import io
+
+        raise urllib.error.HTTPError(url, resp.status, "", hdrs=resp.headers, fp=io.BytesIO(resp.data))
+    payload = json.loads(resp.data)
 
     schemas: list[dict] = []
     for entry in payload.get("paths", []):
@@ -2967,25 +3197,49 @@ def _monitor_flt(deploy_id):
 
 
 def _token_refresh_loop(ws_id, lh_id, cap_id):
-    """Refresh bearer and MWC tokens every 50 minutes."""
+    """Refresh bearer and MWC tokens every 40 minutes.
+
+    Runs in ALL phases (not just 'running') so disconnected-mode
+    Fabric API calls also benefit from fresh tokens.
+    """
     while True:
-        time.sleep(50 * 60)
-        with _studio_lock:
-            if _studio_state["phase"] != "running":
-                return
+        time.sleep(40 * 60)
         try:
             bearer = _ensure_bearer()
             if bearer:
                 _get_mwc_token(bearer, ws_id, lh_id, cap_id)
-                _deploy_log("MWC token refreshed", "success")
+                print("  [MWC] Background token refresh complete")
             else:
-                _deploy_log("Token refresh skipped — bearer unavailable", "warn")
+                print("  [MWC] Token refresh skipped — bearer unavailable")
         except Exception as e:
-            _deploy_log(f"Token refresh failed: {e}", "warn")
+            print(f"  [MWC] Token refresh failed (non-fatal): {e}")
+
+
+def _prewarm_mwc_token():
+    """Pre-warm MWC token on server start so first FLT request is fast."""
+    time.sleep(2)  # let server bind
+    cfg = _get_config()
+    ws_id = cfg.get("workspace_id")
+    art_id = cfg.get("artifact_id")
+    cap_id = cfg.get("capacity_id")
+    if not all([ws_id, art_id, cap_id]):
+        return
+    bearer = _ensure_bearer()
+    if not bearer:
+        return
+    try:
+        _get_mwc_token(bearer, ws_id, art_id, cap_id, workload_type="LiveTable")
+        print("  [MWC] Pre-warm complete — first FLT request will be fast")
+    except Exception as e:
+        print(f"  [MWC] Pre-warm failed (non-fatal): {e}")
 
 
 class EdogDevHandler(SimpleHTTPRequestHandler):
     """HTTP handler for EDOG development server."""
+
+    # Enable HTTP/1.1 so chunked transfer encoding works. HTTP/1.0 (the
+    # stdlib default) does not support Transfer-Encoding: chunked.
+    protocol_version = "HTTP/1.1"
 
     def handle_one_request(self):
         # Client-side disconnects (browser navigation, Ctrl+R during in-flight
@@ -3003,6 +3257,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/api/flt/config":
             self._serve_config()
+        elif self.path == "/api/fabric/capacities":
+            self._serve_list_capacities()
         elif self.path.startswith("/api/fabric/"):
             self._proxy_fabric("GET")
         elif self.path == "/api/edog/certs":
@@ -3248,8 +3504,44 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(content)
 
+    def _stream_response(self, resp, *, extra_headers=None):
+        """Stream a urllib3 response to the browser via chunked transfer encoding.
+
+        Sends data in 64KB chunks as it arrives from upstream, reducing
+        time-to-first-byte for large responses. Connection is always released
+        back to the pool via try/finally, even on client disconnect.
+
+        Args:
+            resp: urllib3.HTTPResponse with preload_content=False.
+            extra_headers: dict of additional headers to forward (e.g.
+                continuation tokens, CORS expose headers).
+        """
+        try:
+            self.send_response(resp.status)
+            self.send_header("Content-Type", resp.headers.get("Content-Type", "application/json"))
+            self.send_header("Transfer-Encoding", "chunked")
+            if extra_headers:
+                for k, v in extra_headers.items():
+                    self.send_header(k, v)
+            self.end_headers()
+            while True:
+                chunk = resp.read(65536)
+                if not chunk:
+                    break
+                self.wfile.write(f"{len(chunk):x}\r\n".encode())
+                self.wfile.write(chunk)
+                self.wfile.write(b"\r\n")
+            self.wfile.write(b"0\r\n\r\n")
+        finally:
+            resp.close()
+
     def _proxy_fabric(self, method):
-        """Proxy /api/fabric/* to redirect host with bearer token."""
+        """Proxy /api/fabric/* to redirect host with bearer token.
+
+        Uses urllib3 connection pool (_POOL_REDIRECT) for TCP/TLS reuse.
+        Workspace listing is buffered for _normalize_workspaces(); all other
+        paths stream through via chunked transfer encoding.
+        """
         bearer = _ensure_bearer()
         if not bearer:
             self._send_json(401, {"error": "no_bearer_token", "message": "Bearer token not cached"})
@@ -3262,8 +3554,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             "/metadata/workspaces"
         )[1].lstrip("/")
 
-        url = REDIRECT_HOST + target_path
-        print(f"  [PROXY] {method} {fabric_path} → {target_path}")
+        print(f"  [POOL] {method} {fabric_path} → {target_path}")
 
         headers = {
             "Authorization": f"Bearer {bearer}",
@@ -3275,20 +3566,31 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         if content_len > 0:
             req_body = self.rfile.read(content_len)
 
+        # Determine if this path needs full body buffering:
+        #  - workspace listing: needs _normalize_workspaces()
+        #  - LRO 202s: need Location/Retry-After headers before body
+        #  - errors: need body for status forwarding
+        # Everything else can stream for lower TTFB.
+        needs_buffering = is_workspace_list
+
         try:
-            ctx = ssl.create_default_context()
-            req = urllib.request.Request(url, data=req_body, headers=headers, method=method)
-            with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
-                resp_body = resp.read()
-                # Only workspace listing needs normalization
-                if is_workspace_list:
-                    resp_body = _normalize_workspaces(resp_body)
+            resp = _POOL_REDIRECT.request(
+                method,
+                target_path,
+                headers=headers,
+                body=req_body,
+                preload_content=needs_buffering,
+            )
+
+            # Errors and LROs must be buffered regardless
+            if resp.status >= 400 or resp.status == 202:
+                resp_body = resp.data if needs_buffering else resp.read()
+                if not needs_buffering:
+                    resp.close()
                 self.send_response(resp.status)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(resp_body)))
-                # Forward LRO-relevant headers so the browser can poll long-running ops.
-                # Without these, 202 responses are unusable client-side (no Location to
-                # extract operation/job ID from).
+                # Forward LRO headers on 202
                 _exposed = []
                 for hdr in ("Location", "Retry-After", "x-ms-operation-id"):
                     val = resp.headers.get(hdr)
@@ -3299,15 +3601,147 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                     self.send_header("Access-Control-Expose-Headers", ", ".join(_exposed))
                 self.end_headers()
                 self.wfile.write(resp_body)
-        except urllib.error.HTTPError as e:
-            resp_body = e.read()
-            self.send_response(e.code)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(resp_body)))
-            self.end_headers()
-            self.wfile.write(resp_body)
+                return
+
+            if needs_buffering:
+                resp_body = resp.data
+                if is_workspace_list:
+                    resp_body = _normalize_workspaces(resp_body)
+                self.send_response(resp.status)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(resp_body)))
+                self.end_headers()
+                self.wfile.write(resp_body)
+            else:
+                # Stream response to browser via chunked transfer encoding
+                self._stream_response(resp)
         except Exception as e:
             self._send_json(502, {"error": "proxy_error", "message": str(e)})
+
+    def _serve_list_capacities(self):
+        """GET /api/fabric/capacities — list capacities with retry + cache.
+
+        The redirect host's /v1/capacities endpoint is unreliable (INT infra).
+        This dedicated handler adds:
+          - 5-minute in-memory cache (capacities rarely change mid-session)
+          - Up to 3 retries with exponential backoff on transient failures
+          - Stale-while-error: serves cached data when all retries fail
+        """
+        bearer = _ensure_bearer()
+        if not bearer:
+            self._send_json(401, {"error": "no_bearer_token", "message": "Bearer token not cached"})
+            return
+
+        now = time.time()
+        with _capacity_cache_lock:
+            cached_data = _capacity_cache["data"]
+            cached_ts = _capacity_cache["ts"]
+
+        # Serve from cache if fresh
+        if cached_data and (now - cached_ts) < _CAPACITY_CACHE_TTL:
+            print("  [CACHE] GET /capacities — serving from cache")
+            self._json_response(200, cached_data)
+            return
+
+        url = REDIRECT_HOST + "/v1.0/myorg/capacities"
+        headers = {
+            "Authorization": f"Bearer {bearer}",
+            "Content-Type": "application/json",
+        }
+        max_retries = 3
+        # Short timeout — if it hasn't responded in 10s it won't in 30
+        req_timeout = 10
+
+        # --- Primary: /v1.0/myorg/capacities (PBI REST API, tested ✅) ---
+        last_err = None
+        for attempt in range(max_retries):
+            try:
+                resp = _pooled_request("GET", url, headers=headers, timeout=req_timeout)
+                if resp.status >= 400:
+                    last_err = RuntimeError(f"HTTP {resp.status}")
+                    if resp.status < 500 and resp.status != 429:
+                        # 4xx — fall through to fallback endpoint
+                        break
+                    sys.stderr.write(
+                        f"  [RETRY] GET /capacities (v1.0) — {resp.status} "
+                        f"(attempt {attempt + 1}/{max_retries})\n"
+                    )
+                    sys.stderr.flush()
+                else:
+                    data = json.loads(resp.data)
+                    with _capacity_cache_lock:
+                        _capacity_cache["data"] = data
+                        _capacity_cache["ts"] = time.time()
+                    print(f"  [PROXY] GET /capacities (v1.0) — OK (attempt {attempt + 1}/{max_retries})")
+                    self._json_response(200, data)
+                    return
+            except Exception as e:
+                last_err = e
+                if isinstance(e, urllib.error.HTTPError) and e.code < 500 and e.code != 429:
+                    # 4xx — fall through to fallback endpoint
+                    break
+                sys.stderr.write(
+                    f"  [RETRY] GET /capacities (v1.0) — {type(e).__name__}: {e} "
+                    f"(attempt {attempt + 1}/{max_retries})\n"
+                )
+                sys.stderr.flush()
+
+            if attempt < max_retries - 1:
+                time.sleep(0.5 * (2 ** attempt))
+
+        # --- Fallback: /capacities/listandgethealthbyrollouts (internal admin, tested ✅) ---
+        # Requires admin headers but returns full capacity metadata.
+        fallback_url = REDIRECT_HOST + "/capacities/listandgethealthbyrollouts"
+        fallback_headers = {
+            "Authorization": f"Bearer {bearer}",
+            "Content-Type": "application/json",
+            "x-powerbi-hostenv": "Power BI Web App",
+            "x-powerbi-user-admin": "true",
+            "origin": "https://powerbi-df.analysis-df.windows.net",
+            "referer": "https://powerbi-df.analysis-df.windows.net/",
+        }
+        try:
+            resp = _pooled_request("GET", fallback_url, headers=fallback_headers, timeout=req_timeout)
+            if resp.status >= 400:
+                raise RuntimeError(f"HTTP {resp.status}")
+            raw = json.loads(resp.data)
+            # Normalize capacitiesMetadata[] to match PBI REST shape:
+            # { value: [{ id, displayName, sku, state, region }] }
+            normalized = []
+            for item in raw.get("capacitiesMetadata", []):
+                state_code = item.get("state", 0)
+                # state=1 → Active, state=0 → template/inactive
+                if state_code == 0:
+                    continue  # Skip SKU templates
+                cfg = item.get("configuration", {})
+                normalized.append({
+                    "id": item.get("capacityObjectId", ""),
+                    "displayName": cfg.get("displayName", ""),
+                    "sku": cfg.get("sku", ""),
+                    "state": "Active" if state_code == 1 else "Suspended",
+                    "region": cfg.get("region", ""),
+                })
+            data = {"value": normalized}
+            with _capacity_cache_lock:
+                _capacity_cache["data"] = data
+                _capacity_cache["ts"] = time.time()
+            print(f"  [PROXY] GET /capacities (fallback admin) — OK ({len(normalized)} capacities)")
+            self._json_response(200, data)
+            return
+        except Exception as fallback_err:
+            sys.stderr.write(f"  [FALLBACK] GET /capacities admin — {fallback_err}\n")
+            sys.stderr.flush()
+
+        # All attempts exhausted — serve stale cache if available
+        if cached_data:
+            print("  [CACHE] GET /capacities — all endpoints failed, serving stale cache")
+            self._json_response(200, cached_data)
+            return
+
+        # No cache, all retries failed
+        err_msg = str(last_err) if last_err else "unknown error"
+        print(f"  [PROXY] GET /capacities — FAILED after all attempts: {err_msg}")
+        self._send_json(502, {"error": "capacity_list_failed", "message": f"Failed after all attempts: {err_msg}"})
 
     def _serve_create_capacity(self):
         """POST /api/fabric/capacities — create a new Fabric capacity.
@@ -3388,18 +3822,13 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         print(f"  [PROXY] POST /capacities/new (sku={sku}, region={region}, admin={upn})")
 
         try:
-            ctx = ssl.create_default_context()
-            req = urllib.request.Request(url, data=body_out, headers=headers, method="POST")
-            with urllib.request.urlopen(req, timeout=60, context=ctx) as resp:
-                resp_body = resp.read()
-                self.send_response(resp.status)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(resp_body)))
-                self.end_headers()
-                self.wfile.write(resp_body)
-        except urllib.error.HTTPError as e:
-            resp_body = e.read()
-            self.send_response(e.code)
+            resp = _pooled_request("POST", url, headers=headers, body=body_out, timeout=60)
+            resp_body = resp.data
+            if resp.status < 400:
+                # Invalidate capacity cache so the new capacity appears on next list
+                with _capacity_cache_lock:
+                    _capacity_cache["ts"] = 0.0
+            self.send_response(resp.status)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(resp_body)))
             self.end_headers()
@@ -3578,37 +4007,48 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             }
         ).encode("utf-8")
 
-        req = urllib.request.Request(
-            threads_url,
-            data=body,
-            method="POST",
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-            },
-        )
         try:
-            ctx = ssl.create_default_context()
-            with urllib.request.urlopen(req, context=ctx, timeout=30) as resp:
-                resp_body = json.loads(resp.read().decode("utf-8"))
-        except urllib.error.HTTPError as e:
-            try:
-                err_body = e.read().decode("utf-8")
-            except Exception:
-                err_body = ""
-            status = 502 if e.code >= 500 else (401 if e.code in (401, 403) else 502)
-            self._json_response(
-                status,
-                {
-                    "error": f"ado_http_{e.code}",
-                    "message": f"ADO returned {e.code}: {e.reason}",
-                    "detail": err_body[:500],
+            resp = _pooled_request(
+                "POST",
+                threads_url,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
                 },
+                body=body,
+                timeout=30,
             )
+            if resp.status >= 400:
+                import http
+
+                err_body = resp.data.decode("utf-8", "replace")
+                status = 502 if resp.status >= 500 else (401 if resp.status in (401, 403) else 502)
+                try:
+                    reason = http.HTTPStatus(resp.status).phrase
+                except ValueError:
+                    reason = ""
+                self._json_response(
+                    status,
+                    {
+                        "error": f"ado_http_{resp.status}",
+                        "message": f"ADO returned {resp.status}: {reason}",
+                        "detail": err_body[:500],
+                    },
+                )
+                return
+            resp_body = json.loads(resp.data.decode("utf-8"))
+        except urllib3.exceptions.TimeoutError:
+            self._json_response(504, {"error": "ado_timeout", "message": "ADO API request timed out"})
+            return
+        except urllib3.exceptions.HTTPError as e:
+            self._json_response(502, {"error": "ado_unreachable", "message": f"Cannot reach ADO: {e}"})
             return
         except urllib.error.URLError as e:
-            self._json_response(502, {"error": "ado_unreachable", "message": f"Cannot reach ADO: {e.reason}"})
+            self._json_response(
+                502,
+                {"error": "ado_unreachable", "message": f"Cannot reach ADO: {e.reason}"},
+            )
             return
         except TimeoutError:
             self._json_response(504, {"error": "ado_timeout", "message": "ADO API request timed out"})
@@ -3704,16 +4144,20 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         out_body = json.dumps(resp_body_req).encode()
 
         print(f"  [OpenAI] Proxying via Responses API → {cfg['endpoint']} / {cfg['deployment']}")
-        req = urllib.request.Request(
-            url,
-            data=out_body,
-            method="POST",
-            headers={"Content-Type": "application/json", "api-key": cfg["api_key"]},
-        )
         try:
-            ctx = ssl.create_default_context()
-            with urllib.request.urlopen(req, timeout=300, context=ctx) as resp:
-                resp_data = json.loads(resp.read())
+            resp = _pooled_request(
+                "POST",
+                url,
+                headers={"Content-Type": "application/json", "api-key": cfg["api_key"]},
+                body=out_body,
+                timeout=300,
+            )
+            if resp.status >= 400:
+                err_body = resp.data.decode("utf-8", errors="replace")[:2000]
+                print(f"  [OpenAI] API error {resp.status}: {err_body[:200]}")
+                self._json_response(resp.status, {"error": f"openai_api_{resp.status}", "message": err_body})
+                return
+            resp_data = json.loads(resp.data)
 
             # Translate Responses API response → Chat Completions response
             content_text = ""
@@ -3752,12 +4196,12 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
             self.wfile.write(chat_resp_bytes)
-        except urllib.error.HTTPError as e:
-            err_body = e.read().decode("utf-8", errors="replace")[:2000]
-            print(f"  [OpenAI] API error {e.code}: {err_body[:200]}")
-            self._json_response(e.code, {"error": f"openai_api_{e.code}", "message": err_body})
+        except urllib3.exceptions.TimeoutError:
+            self._json_response(504, {"error": "openai_timeout", "message": "Azure OpenAI request timed out (300s)"})
         except urllib.error.URLError as e:
             self._json_response(502, {"error": "openai_unreachable", "message": str(e.reason)})
+        except urllib3.exceptions.HTTPError as e:
+            self._json_response(502, {"error": "openai_unreachable", "message": str(e)})
         except TimeoutError:
             self._json_response(504, {"error": "openai_timeout", "message": "Azure OpenAI request timed out (300s)"})
         except Exception as e:
@@ -4230,21 +4674,24 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 cl = int(self.headers.get("Content-Length", 0))
                 body = self.rfile.read(cl) if cl else None
 
-            req = urllib.request.Request(target_url, data=body, method=method)
+            headers = {}
             ct = self.headers.get("Content-Type")
             if ct:
-                req.add_header("Content-Type", ct)
+                headers["Content-Type"] = ct
             auth = self.headers.get("Authorization")
             if auth:
-                req.add_header("Authorization", auth)
+                headers["Authorization"] = auth
 
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                resp_body = resp.read()
-                self.send_response(resp.status)
-                self.send_header("Content-Type", resp.headers.get("Content-Type", "application/json"))
-                self.send_header("Content-Length", str(len(resp_body)))
-                self.end_headers()
-                self.wfile.write(resp_body)
+            resp = _pooled_request(method, target_url, headers=headers or None, body=body, timeout=10)
+            if resp.status >= 400:
+                self._json_response(resp.status, {"error": "log_proxy_error", "message": f"HTTP {resp.status}"})
+                return
+            resp_body = resp.data
+            self.send_response(resp.status)
+            self.send_header("Content-Type", resp.headers.get("Content-Type", "application/json"))
+            self.send_header("Content-Length", str(len(resp_body)))
+            self.end_headers()
+            self.wfile.write(resp_body)
         except urllib.error.HTTPError as e:
             self._json_response(e.code, {"error": "log_proxy_error", "message": str(e)})
         except Exception as e:
@@ -4253,13 +4700,11 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
     def _proxy_to_flt(self, method="GET"):
         """Proxy REST request to FLT service through Fabric capacity endpoint.
 
-        FLT API controllers are only accessible through the Fabric infrastructure,
-        not via localhost. The proxy generates an MWC token on-demand and routes
-        through: https://{host}/webapi/capacities/{capId}/workloads/LiveTable/
-        LiveTableService/automatic/v1/workspaces/{wsId}/lakehouses/{artId}{path}
+        Uses urllib3 connection pool (_POOL_MANAGER) for TCP/TLS reuse to
+        capacity hosts, and _pool_request_with_mwc_retry for wrong-node
+        recovery with thread-safe header handling.
         """
-        # Read config for workspace/artifact/capacity IDs
-        cfg = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
+        cfg = _get_config()
         ws_id = cfg.get("workspace_id", "")
         art_id = cfg.get("artifact_id", "")
         cap_id = cfg.get("capacity_id", "")
@@ -4284,8 +4729,6 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             flt_path = flt_path[len("/api/flt-proxy") :]
 
         try:
-            # FLT V1 authenticator validates workloadType == "LiveTable" strictly.
-            # Using default "Lakehouse" causes 401 on LiveTable controller endpoints.
             mwc_token, host = _get_mwc_token(bearer, ws_id, art_id, cap_id, workload_type="LiveTable")
         except CapacityRoutingError as e:
             self._json_response(
@@ -4314,52 +4757,58 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 cl = int(self.headers.get("Content-Length", 0))
                 body = self.rfile.read(cl) if cl else None
 
-            req = urllib.request.Request(target_url, data=body, method=method)
-            ct = self.headers.get("Content-Type")
-            if ct:
-                req.add_header("Content-Type", ct)
-            req.add_header("Authorization", f"MwcToken {mwc_token}")
-            req.add_header("x-ms-workload-resource-moniker", art_id)
+            req_headers = {
+                "Content-Type": self.headers.get("Content-Type", "application/json"),
+                "Authorization": f"MwcToken {mwc_token}",
+                "x-ms-workload-resource-moniker": art_id,
+            }
 
-            ctx = ssl.create_default_context()
-            with _urlopen_with_mwc_retry(req, ctx, timeout=30, label="flt-proxy") as resp:
+            resp = _pool_request_with_mwc_retry(
+                _POOL_MANAGER,
+                method,
+                target_url,
+                headers=req_headers,
+                body=body,
+                timeout=30,
+                label="flt-proxy",
+                preload_content=False,
+            )
+
+            # Errors need buffering for routing-lag detection and status forwarding
+            if resp.status >= 400:
                 resp_body = resp.read()
+                resp.close()
+                if resp.status in (400, 404):
+                    probe = resp_body.decode("utf-8", errors="replace")[:500].lower()
+                    routing_lag = any(
+                        s in probe
+                        for s in ("endpointnotfound", "route not found", "workload not registered", "not found")
+                    )
+                    if routing_lag:
+                        self._json_response(
+                            503,
+                            {
+                                "error": "capacity_routing_not_ready",
+                                "retryable": True,
+                                "message": f"Capacity routing not propagated yet (upstream {resp.status})",
+                                "detail": resp_body.decode("utf-8", errors="replace")[:500],
+                            },
+                        )
+                        return
                 self.send_response(resp.status)
                 self.send_header("Content-Type", resp.headers.get("Content-Type", "application/json"))
                 self.send_header("Content-Length", str(len(resp_body)))
-                # Forward pagination token for paginated FLT endpoints
-                cont_token = resp.headers.get("x-ms-continuation-token")
-                if cont_token:
-                    self.send_header("x-ms-continuation-token", cont_token)
-                    self.send_header("Access-Control-Expose-Headers", "x-ms-continuation-token")
                 self.end_headers()
                 self.wfile.write(resp_body)
-        except urllib.error.HTTPError as e:
-            err_body = ""
-            with contextlib.suppress(Exception):
-                err_body = e.read().decode("utf-8", errors="replace")[:500]
-            # Normalize capacity routing-lag errors to retryable 503.
-            # During the first 10-60s after deploy, the capacity may return
-            # 400/404 with routing-related messages while propagation completes.
-            routing_lag = False
-            if e.code in (400, 404):
-                probe = (err_body + str(e)).lower()
-                routing_lag = any(
-                    s in probe for s in ("endpointnotfound", "route not found", "workload not registered", "not found")
-                )
+                return
 
-            if routing_lag:
-                self._json_response(
-                    503,
-                    {
-                        "error": "capacity_routing_not_ready",
-                        "retryable": True,
-                        "message": f"Capacity routing not propagated yet (upstream {e.code})",
-                        "detail": err_body,
-                    },
-                )
-            else:
-                self._json_response(e.code, {"error": "flt_proxy_error", "message": str(e), "detail": err_body})
+            # Success — stream to browser with pagination header forwarding
+            extra = {}
+            cont_token = resp.headers.get("x-ms-continuation-token")
+            if cont_token:
+                extra["x-ms-continuation-token"] = cont_token
+                extra["Access-Control-Expose-Headers"] = "x-ms-continuation-token"
+            self._stream_response(resp, extra_headers=extra if extra else None)
         except Exception as e:
             self._json_response(502, {"error": "flt_proxy_error", "message": str(e)})
 
@@ -5303,13 +5752,11 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
 
         # Build upstream request
         try:
-            req = urllib.request.Request(target_url, data=body, method=method)
-            for name, value in sanitized_headers.items():
-                req.add_header(name, value)
+            upstream_headers = dict(sanitized_headers)
             # Ensure Content-Type defaults for body-bearing methods if client didn't set one
             if body is not None and not any(k.lower() == "content-type" for k in sanitized_headers):
-                req.add_header("Content-Type", "application/json")
-            req.add_header("Authorization", auth_header_value)
+                upstream_headers["Content-Type"] = "application/json"
+            upstream_headers["Authorization"] = auth_header_value
             # MWC path: scope the request to the artifact's moniker so FLT's
             # ExecutionContextManager populates CustomerCapacityAsyncLocalContext
             # correctly (Service/Microsoft.LiveTable.Service/Common/Constants.cs:473,
@@ -5318,37 +5765,30 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             # catalog scan returns empty arrays (nodes: [], edges: []).
             # NB: keep one line — test_playground_moniker source regex requires it.
             if token_type == "mwc" and not any(k.lower() == "x-ms-workload-resource-moniker" for k in sanitized_headers):  # fmt: skip
-                req.add_header("x-ms-workload-resource-moniker", art_id)
+                upstream_headers["x-ms-workload-resource-moniker"] = art_id
         except Exception as e:
             self._json_response(400, {"error": "bad_request", "message": f"failed to build request: {e}"})
             return
 
         # Dispatch
-        ctx = ssl.create_default_context()
         t0 = time.time()
         upstream_status = 0
         upstream_reason = ""
         upstream_headers_list = []
         upstream_body = b""
         try:
-            with _urlopen_with_mwc_retry(req, ctx, timeout=timeout, label=f"playground-{token_type}") as resp:
-                upstream_status = resp.status
-                upstream_reason = resp.reason or ""
-                upstream_headers_list = list(resp.headers.items())
-                upstream_body = resp.read(_PLAYGROUND_MAX_RESPONSE_BODY_BYTES + 1)
-        except urllib.error.HTTPError as e:
-            # Upstream returned non-2xx — that's data, not dispatcher failure
-            upstream_status = e.code
-            upstream_reason = e.reason or ""
-            try:
-                upstream_headers_list = list(e.headers.items()) if e.headers else []
-            except Exception:
-                upstream_headers_list = []
-            try:
-                upstream_body = e.read(_PLAYGROUND_MAX_RESPONSE_BODY_BYTES + 1) or b""
-            except Exception:
-                upstream_body = b""
-        except (TimeoutError, urllib.error.URLError) as e:
+            resp = _pooled_request(
+                method,
+                target_url,
+                headers=upstream_headers,
+                body=body,
+                timeout=timeout,
+            )
+            upstream_status = resp.status
+            upstream_reason = getattr(resp, "reason", "") or ""
+            upstream_headers_list = list(resp.headers.items())
+            upstream_body = resp.data[:_PLAYGROUND_MAX_RESPONSE_BODY_BYTES + 1]
+        except (TimeoutError, urllib.error.URLError, urllib3.exceptions.TimeoutError) as e:
             elapsed = int((time.time() - t0) * 1000)
             reason = getattr(e, "reason", e)
             print(f"[PLAYGROUND-ERR] upstream_timeout: {reason} ({elapsed}ms)")
@@ -5356,6 +5796,10 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 504,
                 {"error": "upstream_timeout", "message": f"upstream did not respond within {timeout}s: {reason}"},
             )
+            return
+        except urllib3.exceptions.HTTPError as e:
+            print(f"[PLAYGROUND-ERR] transport: {e}")
+            self._json_response(502, {"error": "upstream_error", "message": str(e)})
             return
         except Exception as e:
             print(f"[PLAYGROUND-ERR] transport: {e}")
@@ -5460,12 +5904,15 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             return
 
         try:
-            req = urllib.request.Request(
+            resp = _pooled_request(
+                "GET",
                 f"http://localhost:{flt_port}/api/edog/interceptors/status",
                 headers={"Accept": "application/json"},
+                timeout=3,
             )
-            with urllib.request.urlopen(req, timeout=3) as r:
-                payload = json.loads(r.read().decode("utf-8") or "{}")
+            if resp.status >= 400:
+                raise RuntimeError(f"HTTP {resp.status}")
+            payload = json.loads(resp.data.decode("utf-8") or "{}")
             payload["available"] = True
             payload["deployPhase"] = phase
             self._json_response(200, payload)
@@ -6504,26 +6951,31 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         )
 
         try:
-            req = urllib.request.Request(target_url, method="GET")
-            req.add_header("Authorization", f"MwcToken {mwc_token}")
-            req.add_header("x-ms-workload-resource-moniker", lh_id)
-            req.add_header("Content-Type", "application/json")
-            ctx = ssl.create_default_context()
-            with _urlopen_with_mwc_retry(req, ctx, timeout=30, label="flt-import") as resp:
-                resp_body = resp.read()
+            resp = _pool_request_with_mwc_retry(
+                _POOL_MANAGER,
+                "GET",
+                target_url,
+                headers={
+                    "Authorization": f"MwcToken {mwc_token}",
+                    "x-ms-workload-resource-moniker": lh_id,
+                    "Content-Type": "application/json",
+                },
+                timeout=30,
+                label="flt-import",
+            )
+            resp_body = resp.data
+            if resp.status >= 400:
+                err_body = resp_body.decode("utf-8", "replace")[:500]
+                self._json_response(
+                    resp.status,
+                    {"error": "flt_import_error", "message": f"HTTP {resp.status}", "detail": err_body},
+                )
+                return
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(resp_body)))
             self.end_headers()
             self.wfile.write(resp_body)
-        except urllib.error.HTTPError as e:
-            err_body = ""
-            with contextlib.suppress(Exception):
-                err_body = e.read().decode("utf-8", "replace")[:500]
-            self._json_response(
-                e.code,
-                {"error": "flt_import_error", "message": str(e), "detail": err_body},
-            )
         except Exception as e:
             self._json_response(502, {"error": "flt_import_error", "message": str(e)})
 
@@ -6597,23 +7049,28 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             "x-ms-workload-resource-moniker": lh_id,
             "Content-Type": "application/json",
         }
-        ctx = ssl.create_default_context()
 
         def fetch_schema(schema: dict) -> tuple[dict, list[dict] | None, str | None]:
             """Fetch tables for a single schema. Returns (schema, tables, error_msg)."""
             sname = schema["name"]
             url = f"{host}{base}/artifacts/DataArtifact/{lh_id}/schemas/{sname}/tables"
             try:
-                req = urllib.request.Request(url, headers=mwc_headers, method="GET")
-                with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
-                    payload = json.loads(resp.read())
+                resp = _pool_request_with_mwc_retry(
+                    _POOL_MANAGER,
+                    "GET",
+                    url,
+                    headers=mwc_headers,
+                    timeout=30,
+                    label=f"mwc-tables-{sname}",
+                )
+                if resp.status >= 400:
+                    msg = resp.data.decode("utf-8", "replace")[:200]
+                    return schema, None, f"HTTP {resp.status}: {msg}"
+                payload = json.loads(resp.data)
                 rows = payload.get("data") or payload.get("value") or []
                 for row in rows:
                     row["schemaName"] = sname
                 return schema, rows, None
-            except urllib.error.HTTPError as exc:
-                msg = exc.read().decode("utf-8", "replace")[:200]
-                return schema, None, f"HTTP {exc.code}: {msg}"
             except Exception as exc:
                 return schema, None, f"{type(exc).__name__}: {exc}"
 
@@ -6737,7 +7194,6 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             "x-ms-workload-resource-moniker": lh_id,
             "Content-Type": "application/json",
         }
-        ctx = ssl.create_default_context()
         print(
             f"  [MWC] POST batchGetTableDetails across {len(by_schema)} schema(s): "
             + ", ".join(f"{s}({len(t)})" for s, t in by_schema.items())
@@ -6748,9 +7204,19 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             url = f"{host}{base}/artifacts/DataArtifact/{lh_id}/schemas/{schema_name}/batchGetTableDetails"
             try:
                 req_body = json.dumps({"tables": names}).encode()
-                req = urllib.request.Request(url, data=req_body, headers=mwc_headers, method="POST")
-                with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
-                    resp_data = json.loads(resp.read())
+                resp = _pool_request_with_mwc_retry(
+                    _POOL_MANAGER,
+                    "POST",
+                    url,
+                    headers=mwc_headers,
+                    body=req_body,
+                    timeout=30,
+                    label=f"mwc-table-details-{schema_name}",
+                )
+                if resp.status >= 400:
+                    msg = resp.data.decode("utf-8", "replace")[:200]
+                    return schema_name, None, f"HTTP {resp.status}: {msg}"
+                resp_data = json.loads(resp.data)
 
                 operation_id = resp_data.get("operationId")
                 if not operation_id:
@@ -6760,9 +7226,18 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 poll_url = f"{url}/operationResults/{operation_id}"
                 for attempt in range(20):
                     time.sleep(1)
-                    poll_req = urllib.request.Request(poll_url, headers=mwc_headers, method="GET")
-                    with urllib.request.urlopen(poll_req, timeout=30, context=ctx) as poll_resp:
-                        poll_data = json.loads(poll_resp.read())
+                    poll_resp = _pool_request_with_mwc_retry(
+                        _POOL_MANAGER,
+                        "GET",
+                        poll_url,
+                        headers=mwc_headers,
+                        timeout=30,
+                        label=f"mwc-table-details-poll-{schema_name}",
+                    )
+                    if poll_resp.status >= 400:
+                        msg = poll_resp.data.decode("utf-8", "replace")[:200]
+                        return schema_name, None, f"HTTP {poll_resp.status}: {msg}"
+                    poll_data = json.loads(poll_resp.data)
 
                     status = (poll_data.get("status") or "").lower()
                     if status in ("succeeded", "completed"):
@@ -6772,9 +7247,6 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                         return schema_name, None, f"operation_{status}"
 
                 return schema_name, None, f"poll_timeout (operation {operation_id})"
-            except urllib.error.HTTPError as exc:
-                msg = exc.read().decode("utf-8", "replace")[:200]
-                return schema_name, None, f"HTTP {exc.code}: {msg}"
             except Exception as exc:
                 return schema_name, None, f"{type(exc).__name__}: {exc}"
 
@@ -6847,17 +7319,33 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             return
 
         log_path = f"/{ws_id}/{lh_id}/Tables/{schema}/{table_name}/_delta_log"
-        ctx = ssl.create_default_context()
 
         try:
             # List delta log files
             list_url = f"{ONELAKE_HOST}{log_path}?resource=filesystem&recursive=false"
-            req = urllib.request.Request(
+            resp = _pooled_request(
+                "GET",
                 list_url,
                 headers={"Authorization": f"Bearer {onelake_bearer}"},
+                timeout=10,
             )
-            with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
-                listing = json.loads(resp.read())
+            if resp.status == 404:
+                self._json_response(
+                    200,
+                    {
+                        "tableName": table_name,
+                        "schemaName": schema,
+                        "rowCount": None,
+                        "sizeBytes": None,
+                        "error": "delta_log_not_found",
+                    },
+                )
+                return
+            if resp.status >= 400:
+                body = resp.data.decode("utf-8", "replace")[:200]
+                self._json_response(resp.status, {"error": "onelake_error", "message": body})
+                return
+            listing = json.loads(resp.data)
 
             # Find JSON commit files, sorted by name (version order)
             json_files = sorted(
@@ -6872,12 +7360,29 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             active_files = {}  # path → {size, numRecords}
             for jf in json_files:
                 file_url = f"{ONELAKE_HOST}/{ws_id}/{jf}"
-                req = urllib.request.Request(
+                resp = _pooled_request(
+                    "GET",
                     file_url,
                     headers={"Authorization": f"Bearer {onelake_bearer}"},
+                    timeout=10,
                 )
-                with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
-                    content = resp.read().decode()
+                if resp.status == 404:
+                    self._json_response(
+                        200,
+                        {
+                            "tableName": table_name,
+                            "schemaName": schema,
+                            "rowCount": None,
+                            "sizeBytes": None,
+                            "error": "delta_log_not_found",
+                        },
+                    )
+                    return
+                if resp.status >= 400:
+                    body = resp.data.decode("utf-8", "replace")[:200]
+                    self._json_response(resp.status, {"error": "onelake_error", "message": body})
+                    return
+                content = resp.data.decode()
 
                 for line in content.strip().split("\n"):
                     if not line.strip():
@@ -6907,21 +7412,6 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                     "fileCount": len(active_files),
                 },
             )
-        except urllib.error.HTTPError as e:
-            if e.code == 404:
-                self._json_response(
-                    200,
-                    {
-                        "tableName": table_name,
-                        "schemaName": schema,
-                        "rowCount": None,
-                        "sizeBytes": None,
-                        "error": "delta_log_not_found",
-                    },
-                )
-            else:
-                body = e.read().decode("utf-8", "replace")[:200]
-                self._json_response(e.code, {"error": "onelake_error", "message": body})
         except Exception as e:
             self._json_response(502, {"error": "stats_error", "message": str(e)})
 
@@ -6974,17 +7464,15 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         # Canonical FLT path. Constants.DefaultTableMetadataFilePath = "_metadata/table.json.gz".
         path = f"/{ws_id}/{lh_id}/Tables/{schema}/{table}/_metadata/table.json.gz"
         url = f"{ONELAKE_HOST}{path}"
-        ctx = ssl.create_default_context()
 
         try:
-            req = urllib.request.Request(
+            resp = _pooled_request(
+                "GET",
                 url,
                 headers={"Authorization": f"Bearer {onelake_bearer}"},
+                timeout=15,
             )
-            with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
-                raw = resp.read()
-        except urllib.error.HTTPError as e:
-            if e.code == 404:
+            if resp.status == 404:
                 self._json_response(
                     404,
                     {
@@ -6998,9 +7486,11 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                     },
                 )
                 return
-            body = e.read().decode("utf-8", "replace")[:200]
-            self._json_response(e.code, {"error": "onelake_error", "message": body})
-            return
+            if resp.status >= 400:
+                body = resp.data.decode("utf-8", "replace")[:200]
+                self._json_response(resp.status, {"error": "onelake_error", "message": body})
+                return
+            raw = resp.data
         except Exception as e:
             self._json_response(502, {"error": "fetch_error", "message": str(e)})
             return
@@ -7145,7 +7635,6 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         import pyarrow as pa
         import pyarrow.parquet as pq
 
-        ctx = ssl.create_default_context()
         all_rows: list[dict] = []
         arrow_schema = None
         merged_partition_values: dict = {}
@@ -7161,9 +7650,15 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
 
             file_url = f"{ONELAKE_HOST}/{ws_id}/{lh_id}/Tables/{schema}/{table}/{fpath}"
             try:
-                req = urllib.request.Request(file_url, headers={"Authorization": f"Bearer {onelake_bearer}"})
-                with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
-                    raw_parquet = resp.read()
+                resp = _pooled_request(
+                    "GET",
+                    file_url,
+                    headers={"Authorization": f"Bearer {onelake_bearer}"},
+                    timeout=30,
+                )
+                if resp.status >= 400:
+                    continue
+                raw_parquet = resp.data
             except Exception:
                 # Skip unreadable files — partial results are better than none
                 continue
@@ -7266,7 +7761,6 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._json_response(401, {"error": "onelake_bearer_unavailable", "message": str(e)})
             return
 
-        ctx = ssl.create_default_context()
         result: dict = {
             "workspaceCreatedAt": None,
             "workspaceLastActivity": None,
@@ -7276,13 +7770,17 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         # Workspace: list root artifacts and extract earliest/latest lastModified.
         try:
             ws_url = f"{ONELAKE_HOST}/{ws_id}?resource=filesystem&recursive=false"
-            req = urllib.request.Request(ws_url, headers={"Authorization": f"Bearer {token}"})
-            with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
-                ws_payload = json.loads(resp.read())
-        except urllib.error.HTTPError as e:
-            body = e.read().decode("utf-8", "replace")[:200]
-            self._json_response(e.code, {"error": "onelake_error", "message": body})
-            return
+            resp = _pooled_request(
+                "GET",
+                ws_url,
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=15,
+            )
+            if resp.status >= 400:
+                body = resp.data.decode("utf-8", "replace")[:200]
+                self._json_response(resp.status, {"error": "onelake_error", "message": body})
+                return
+            ws_payload = json.loads(resp.data)
         except Exception as e:
             self._json_response(502, {"error": "fetch_error", "message": str(e)})
             return
@@ -7320,15 +7818,20 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                     }
                 )
                 lh_url = f"{ONELAKE_HOST}/{ws_id}?{qs}"
-                req2 = urllib.request.Request(lh_url, headers={"Authorization": f"Bearer {token}"})
-                with urllib.request.urlopen(req2, timeout=15, context=ctx) as resp2:
-                    lh_payload = json.loads(resp2.read())
-            except urllib.error.HTTPError as e:
-                if e.code != 404:
-                    body = e.read().decode("utf-8", "replace")[:200]
-                    self._json_response(e.code, {"error": "onelake_error", "message": body})
+                resp = _pooled_request(
+                    "GET",
+                    lh_url,
+                    headers={"Authorization": f"Bearer {token}"},
+                    timeout=15,
+                )
+                if resp.status == 404:
+                    lh_payload = {"paths": []}
+                elif resp.status >= 400:
+                    body = resp.data.decode("utf-8", "replace")[:200]
+                    self._json_response(resp.status, {"error": "onelake_error", "message": body})
                     return
-                lh_payload = {"paths": []}
+                else:
+                    lh_payload = json.loads(resp.data)
             except Exception as e:
                 self._json_response(502, {"error": "fetch_error", "message": str(e)})
                 return
@@ -7417,7 +7920,6 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._json_response(401, {"error": "no_bearer_token", "message": "Bearer token not cached"})
             return
 
-        ctx = ssl.create_default_context()
         headers = {
             "Authorization": f"Bearer {bearer}",
             "Content-Type": "application/json",
@@ -7436,28 +7938,18 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         try:
             location = None
             resp_data = None
-            req = urllib.request.Request(url, data=b"{}", headers=headers, method="POST")
-            try:
-                with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
-                    status_code = resp.getcode()
-                    if status_code == 202:
-                        # 202 Accepted — extract Location for LRO polling
-                        location = resp.headers.get("Location", "")
-                        retry_after = int(resp.headers.get("Retry-After", "2"))
-                        resp.read()  # drain body
-                    else:
-                        # Synchronous 200 — definition returned directly
-                        resp_data = json.loads(resp.read())
-            except urllib.error.HTTPError as e:
-                if e.code == 202:
-                    # Some servers raise HTTPError for 202
-                    location = e.headers.get("Location", "")
-                    retry_after = int(e.headers.get("Retry-After", "2"))
-                    e.read()
-                else:
-                    body = e.read().decode("utf-8", "replace")[:500]
-                    self._json_response(e.code, {"error": "getDefinition_error", "message": body})
-                    return
+            resp = _pooled_request("POST", url, headers=headers, body=b"{}", timeout=30)
+            if resp.status == 202:
+                # 202 Accepted — extract Location for LRO polling
+                location = resp.headers.get("Location", "")
+                retry_after = int(resp.headers.get("Retry-After", "2"))
+            elif resp.status >= 400:
+                body = resp.data.decode("utf-8", "replace")[:500]
+                self._json_response(resp.status, {"error": "getDefinition_error", "message": body})
+                return
+            else:
+                # Synchronous 200 — definition returned directly
+                resp_data = json.loads(resp.data)
 
             # Step 2: If LRO, poll Location URL until Succeeded (max 60s)
             if location and not resp_data:
@@ -7468,9 +7960,15 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 print(f"  [NOTEBOOK] Polling LRO: {location[:80]}...")
                 for attempt in range(30):
                     time.sleep(retry_after if attempt == 0 else 2)
-                    poll_req = urllib.request.Request(location, headers=headers, method="GET")
-                    with urllib.request.urlopen(poll_req, timeout=30, context=ctx) as poll_resp:
-                        poll_data = json.loads(poll_resp.read())
+                    poll_resp = _pooled_request("GET", location, headers=headers, timeout=30)
+                    if poll_resp.status >= 400:
+                        err_body = poll_resp.data.decode("utf-8", "replace")[:500]
+                        self._json_response(
+                            poll_resp.status,
+                            {"error": "notebook_content_error", "message": err_body},
+                        )
+                        return
+                    poll_data = json.loads(poll_resp.data)
 
                     status = poll_data.get("status", "").lower()
                     if status == "succeeded":
@@ -7493,9 +7991,12 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
 
                 # Step 3: GET the result URL
                 result_url = location + "/result"
-                result_req = urllib.request.Request(result_url, headers=headers, method="GET")
-                with urllib.request.urlopen(result_req, timeout=30, context=ctx) as result_resp:
-                    resp_data = json.loads(result_resp.read())
+                result_resp = _pooled_request("GET", result_url, headers=headers, timeout=30)
+                if result_resp.status >= 400:
+                    err_body = result_resp.data.decode("utf-8", "replace")[:500]
+                    self._json_response(result_resp.status, {"error": "notebook_content_error", "message": err_body})
+                    return
+                resp_data = json.loads(result_resp.data)
 
             # Step 4: Decode base64 parts from the definition
             parts = resp_data.get("definition", {}).get("parts", [])
@@ -7534,9 +8035,6 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                     "allParts": all_parts,
                 },
             )
-        except urllib.error.HTTPError as e:
-            body = e.read().decode("utf-8", "replace")[:500]
-            self._json_response(e.code, {"error": "notebook_content_error", "message": body})
         except Exception as e:
             traceback.print_exc()
             self._json_response(502, {"error": "notebook_content_error", "message": str(e)})
@@ -7589,27 +8087,21 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         print(f"  [NOTEBOOK] POST updateDefinition ws={ws_id[:8]}... nb={nb_id[:8]}...")
 
         try:
-            ctx = ssl.create_default_context()
-            req = urllib.request.Request(
+            resp = _pooled_request(
+                "POST",
                 url,
-                data=req_body,
                 headers={
                     "Authorization": f"Bearer {bearer}",
                     "Content-Type": "application/json",
                 },
-                method="POST",
+                body=req_body,
+                timeout=30,
             )
-            with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
-                resp.read()  # drain
+            if resp.status >= 400:
+                err_body = resp.data.decode("utf-8", "replace")[:500]
+                self._json_response(resp.status, {"error": "save_error", "message": err_body})
+                return
             self._json_response(200, {"status": "saved"})
-        except urllib.error.HTTPError as e:
-            # 202 Accepted is also a success for updateDefinition
-            if e.code == 202:
-                e.read()
-                self._json_response(200, {"status": "saved"})
-            else:
-                err_body = e.read().decode("utf-8", "replace")[:500]
-                self._json_response(e.code, {"error": "save_error", "message": err_body})
         except Exception as e:
             traceback.print_exc()
             self._json_response(502, {"error": "save_error", "message": str(e)})
@@ -7638,29 +8130,26 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         print(f"  [NOTEBOOK] POST run ws={ws_id[:8]}... nb={nb_id[:8]}...")
 
         try:
-            ctx = ssl.create_default_context()
-            req = urllib.request.Request(
+            resp = _pooled_request(
+                "POST",
                 url,
-                data=b"{}",
                 headers={
                     "Authorization": f"Bearer {bearer}",
                     "Content-Type": "application/json",
                 },
-                method="POST",
+                body=b"{}",
+                timeout=30,
             )
-            try:
-                with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
-                    # Unexpected 200 — return whatever we got
-                    resp_data = json.loads(resp.read())
-                    self._json_response(200, {"status": "started", "detail": resp_data})
-            except urllib.error.HTTPError as e:
-                if e.code == 202:
-                    location = e.headers.get("Location", "")
-                    e.read()  # drain
-                    self._json_response(200, {"location": location, "status": "started"})
-                else:
-                    err_body = e.read().decode("utf-8", "replace")[:500]
-                    self._json_response(e.code, {"error": "run_error", "message": err_body})
+            if resp.status == 202:
+                location = resp.headers.get("Location", "")
+                self._json_response(200, {"location": location, "status": "started"})
+            elif resp.status >= 400:
+                err_body = resp.data.decode("utf-8", "replace")[:500]
+                self._json_response(resp.status, {"error": "run_error", "message": err_body})
+            else:
+                # Unexpected 200 — return whatever we got
+                resp_data = json.loads(resp.data)
+                self._json_response(200, {"status": "started", "detail": resp_data})
         except Exception as e:
             traceback.print_exc()
             self._json_response(502, {"error": "run_error", "message": str(e)})
@@ -7683,21 +8172,21 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         print(f"  [NOTEBOOK] GET run-status → {location[:80]}...")
 
         try:
-            ctx = ssl.create_default_context()
-            req = urllib.request.Request(
+            resp = _pooled_request(
+                "GET",
                 location,
                 headers={
                     "Authorization": f"Bearer {bearer}",
                     "Content-Type": "application/json",
                 },
-                method="GET",
+                timeout=30,
             )
-            with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
-                resp_data = json.loads(resp.read())
+            if resp.status >= 400:
+                err_body = resp.data.decode("utf-8", "replace")[:500]
+                self._json_response(resp.status, {"error": "run_status_error", "message": err_body})
+                return
+            resp_data = json.loads(resp.data)
             self._json_response(200, resp_data)
-        except urllib.error.HTTPError as e:
-            err_body = e.read().decode("utf-8", "replace")[:500]
-            self._json_response(e.code, {"error": "run_status_error", "message": err_body})
         except Exception as e:
             traceback.print_exc()
             self._json_response(502, {"error": "run_status_error", "message": str(e)})
@@ -7725,27 +8214,21 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         print(f"  [NOTEBOOK] POST cancel → {cancel_url[:80]}...")
 
         try:
-            ctx = ssl.create_default_context()
-            req = urllib.request.Request(
+            resp = _pooled_request(
+                "POST",
                 cancel_url,
-                data=b"{}",
                 headers={
                     "Authorization": f"Bearer {bearer}",
                     "Content-Type": "application/json",
                 },
-                method="POST",
+                body=b"{}",
+                timeout=30,
             )
-            with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
-                resp.read()  # drain
+            if resp.status >= 400:
+                err_body = resp.data.decode("utf-8", "replace")[:500]
+                self._json_response(resp.status, {"error": "cancel_error", "message": err_body})
+                return
             self._json_response(200, {"status": "cancelled"})
-        except urllib.error.HTTPError as e:
-            # 202 is also success for cancel
-            if e.code == 202:
-                e.read()
-                self._json_response(200, {"status": "cancelled"})
-            else:
-                err_body = e.read().decode("utf-8", "replace")[:500]
-                self._json_response(e.code, {"error": "cancel_error", "message": err_body})
         except Exception as e:
             traceback.print_exc()
             self._json_response(502, {"error": "cancel_error", "message": str(e)})
@@ -7807,18 +8290,22 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         print(f"  [JUPYTER] POST create-session ws={ws_id[:8]}... nb={nb_id[:8]}...")
 
         try:
-            ctx = ssl.create_default_context()
-            req = urllib.request.Request(
+            resp = _pooled_request(
+                "POST",
                 url,
-                data=session_body,
                 headers={
                     "Authorization": f"MwcToken {token}",
                     "Content-Type": "application/json",
                 },
-                method="POST",
+                body=session_body,
+                timeout=60,
             )
-            with urllib.request.urlopen(req, timeout=60, context=ctx) as resp:
-                resp_data = json.loads(resp.read())
+            if resp.status >= 400:
+                err_body = resp.data.decode("utf-8", "replace")[:500]
+                print(f"  [JUPYTER] Session creation failed: {resp.status}")
+                self._json_response(resp.status, {"error": "jupyter_session_error", "message": err_body})
+                return
+            resp_data = json.loads(resp.data)
 
             kernel_id = resp_data.get("kernel", {}).get("id", "")
             session_id = resp_data.get("id", "")
@@ -7842,10 +8329,6 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                     "capHost": cap_host,
                 },
             )
-        except urllib.error.HTTPError as e:
-            err_body = e.read().decode("utf-8", "replace")[:500]
-            print(f"  [JUPYTER] Session creation failed: {e.code}")
-            self._json_response(e.code, {"error": "jupyter_session_error", "message": err_body})
         except Exception as e:
             traceback.print_exc()
             self._json_response(502, {"error": "jupyter_session_error", "message": str(e)})
@@ -7887,26 +8370,26 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         print(f"  [JUPYTER] GET kernel-specs ws={ws_id[:8]}... nb={nb_id[:8]}...")
 
         try:
-            ctx = ssl.create_default_context()
-            req = urllib.request.Request(
+            resp = _pooled_request(
+                "GET",
                 url,
                 headers={
                     "Authorization": f"MwcToken {token}",
                     "Content-Type": "application/json",
                 },
-                method="GET",
+                timeout=30,
             )
-            with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
-                resp_body = resp.read()
-                self.send_response(resp.status)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Access-Control-Allow-Origin", "*")
-                self.send_header("Content-Length", str(len(resp_body)))
-                self.end_headers()
-                self.wfile.write(resp_body)
-        except urllib.error.HTTPError as e:
-            err_body = e.read().decode("utf-8", "replace")[:500]
-            self._json_response(e.code, {"error": "kernel_specs_error", "message": err_body})
+            if resp.status >= 400:
+                err_body = resp.data.decode("utf-8", "replace")[:500]
+                self._json_response(resp.status, {"error": "kernel_specs_error", "message": err_body})
+                return
+            resp_body = resp.data
+            self.send_response(resp.status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Content-Length", str(len(resp_body)))
+            self.end_headers()
+            self.wfile.write(resp_body)
         except Exception as e:
             traceback.print_exc()
             self._json_response(502, {"error": "kernel_specs_error", "message": str(e)})
@@ -7981,18 +8464,21 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
 
             print("  [JUPYTER] Auto-creating session for execute-cell...")
             try:
-                ctx = ssl.create_default_context()
-                req = urllib.request.Request(
+                resp = _pooled_request(
+                    "POST",
                     url,
-                    data=session_body,
                     headers={
                         "Authorization": f"MwcToken {token}",
                         "Content-Type": "application/json",
                     },
-                    method="POST",
+                    body=session_body,
+                    timeout=60,
                 )
-                with urllib.request.urlopen(req, timeout=60, context=ctx) as resp:
-                    resp_data = json.loads(resp.read())
+                if resp.status >= 400:
+                    err_body = resp.data.decode("utf-8", "replace")[:500]
+                    self._json_response(resp.status, {"error": "jupyter_session_error", "message": err_body})
+                    return
+                resp_data = json.loads(resp.data)
                 kernel_id = resp_data.get("kernel", {}).get("id", "")
                 session_id = resp_data.get("id", "")
                 with _jupyter_lock:
@@ -8002,10 +8488,6 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                         "capHost": cap_host,
                     }
                 print(f"  [JUPYTER] Session auto-created kernel={kernel_id[:8]}...")
-            except urllib.error.HTTPError as e:
-                err_body = e.read().decode("utf-8", "replace")[:500]
-                self._json_response(e.code, {"error": "jupyter_session_error", "message": err_body})
-                return
             except Exception as e:
                 traceback.print_exc()
                 self._json_response(502, {"error": "jupyter_session_error", "message": str(e)})
@@ -8014,19 +8496,22 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         # Step 1: Poll session until kernel is idle (max 10 min)
         session_url = f"{cap_host}{base}/sessions/{session_id}"
         print("  [JUPYTER] Polling session until kernel idle...")
-        ctx = ssl.create_default_context()
         kernel_ready = False
         for attempt in range(300):  # Max 10 min (300 x 2s)
             try:
-                req = urllib.request.Request(
+                resp = _pooled_request(
+                    "GET",
                     session_url,
                     headers={
                         "Authorization": f"MwcToken {token}",
                     },
-                    method="GET",
+                    timeout=15,
                 )
-                with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
-                    sdata = json.loads(resp.read())
+                if resp.status >= 400:
+                    print(f"  [JUPYTER] Poll error: HTTP {resp.status}")
+                    time.sleep(2)
+                    continue
+                sdata = json.loads(resp.data)
                 kstate = sdata.get("kernel", {}).get("execution_state", "unknown")
                 if kstate == "idle":
                     kernel_ready = True
@@ -8104,23 +8589,18 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         print(f"  [JUPYTER] DELETE session={session_id[:8]}...")
 
         try:
-            ctx = ssl.create_default_context()
-            req = urllib.request.Request(
+            resp = _pooled_request(
+                "DELETE",
                 url,
                 headers={
                     "Authorization": f"MwcToken {token}",
                     "Content-Type": "application/json",
                 },
-                method="DELETE",
+                timeout=30,
             )
-            with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
-                resp.read()  # drain
-        except urllib.error.HTTPError as e:
-            if e.code in (204, 404):
-                e.read()  # 204=success, 404=already deleted
-            else:
-                err_body = e.read().decode("utf-8", "replace")[:500]
-                self._json_response(e.code, {"error": "close_session_error", "message": err_body})
+            if resp.status >= 400 and resp.status not in (404,):
+                err_body = resp.data.decode("utf-8", "replace")[:500]
+                self._json_response(resp.status, {"error": "close_session_error", "message": err_body})
                 return
         except Exception as e:
             traceback.print_exc()
@@ -8202,18 +8682,19 @@ if __name__ == "__main__":
 
     def _drift_detection_loop():
         import urllib.error
-        import urllib.request
 
         while True:
             time.sleep(30)
             try:
                 snap, rev, local_hash = feature_overrides.get_snapshot()
-                req = urllib.request.Request(
+                resp = _pooled_request(
+                    "GET",
                     f"http://localhost:{FLT_INTERNAL_PORT}/api/edog/feature-flags/overrides",
-                    method="GET",
+                    timeout=5,
                 )
-                with urllib.request.urlopen(req, timeout=5) as resp:
-                    body = json.loads(resp.read().decode("utf-8"))
+                if resp.status >= 400:
+                    raise urllib.error.URLError(f"HTTP {resp.status}")
+                body = json.loads(resp.data.decode("utf-8"))
                 flt_hash = body.get("hash")
                 if flt_hash and flt_hash != local_hash:
                     print(f"  ⚠ Drift detected (FLT hash={flt_hash[:8]} vs local={local_hash[:8]}); re-pushing.")
@@ -8235,10 +8716,7 @@ if __name__ == "__main__":
     # cleanly when flt_repo_path isn't configured yet (disconnected phase),
     # in which case the lazy on-tab-open path still covers it.
     def _warm_fm_cache():
-        try:
-            cfg = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
-        except (OSError, json.JSONDecodeError):
-            return
+        cfg = _get_config()
         flt_repo_path = cfg.get("flt_repo_path", "")
         if not flt_repo_path or not Path(flt_repo_path).is_dir():
             return  # disconnected phase — defer to lazy on-tab-open sync
@@ -8250,6 +8728,7 @@ if __name__ == "__main__":
     threading.Thread(target=_coldstart_clear_flt_overrides, daemon=True, name="edog-coldstart").start()
     threading.Thread(target=_drift_detection_loop, daemon=True, name="edog-drift").start()
     threading.Thread(target=_warm_fm_cache, daemon=True, name="edog-fm-warmup").start()
+    threading.Thread(target=_prewarm_mwc_token, daemon=True, name="edog-mwc-prewarm").start()
 
     try:
         server.serve_forever()
@@ -8324,4 +8803,3 @@ if __name__ == "__main__":
 
         server.server_close()
         print("Server stopped.")
-

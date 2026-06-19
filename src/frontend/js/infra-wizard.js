@@ -1119,6 +1119,7 @@ class InfraSetupPage {
     this._notebookManual = false;
     this._capacities = null;
     this._capacityLoading = false;
+    this._capacityLoadFailed = false;
     this._firstActivation = true;
 
     this._render();
@@ -1470,6 +1471,7 @@ class InfraSetupPage {
   _loadCapacities() {
     var self = this;
     this._capacityLoading = true;
+    this._capacityLoadFailed = false;
     this._capSelect.classList.add('loading');
 
     var isMock = new URLSearchParams(window.location.search).has('mock');
@@ -1491,18 +1493,70 @@ class InfraSetupPage {
       self._capacities = (data && data.value) || [];
       self._renderCapacityOptions();
     }).catch(function(err) {
-      self._capacities = [];
-      self._renderCapacityOptions();
-      self._fields.capacity.error = 'Failed to load capacities: ' + err.message;
-      self._updateFieldUI('capacity');
+      // Fallback: seed with locally-known capacity from edog config so wizard
+      // is never blocked by a flaky API. The user can always proceed.
+      var config = self._api.getConfig && self._api.getConfig();
+      var localCapId = config && config.capacityId;
+      if (localCapId) {
+        self._capacities = [{ id: localCapId, displayName: localCapId.substring(0, 8) + '\u2026', state: 'Active', sku: 'Local' }];
+        self._capacityLoadFailed = false;
+        self._renderCapacityOptions();
+        // Auto-select the only option
+        self._capSelect.value = localCapId;
+        self._fields.capacity.value = localCapId;
+        self._fields.capacity.touched = true;
+        self._validateField('capacity');
+        // Show info, not error
+        var errorEl = self._containerEl.querySelector('#iw-cap-error');
+        if (errorEl) {
+          errorEl.textContent = 'Using capacity from local config (API unavailable)';
+          errorEl.classList.add('show');
+          errorEl.style.color = 'var(--text-muted, #888)';
+        }
+      } else {
+        self._capacities = [];
+        self._capacityLoadFailed = true;
+        self._renderCapacityOptions();
+        self._showCapacityRetry(err.message);
+      }
     });
+  }
+
+  _showCapacityRetry(errMsg) {
+    var self = this;
+    var errorEl = this._containerEl.querySelector('#iw-cap-error');
+    if (!errorEl) return;
+    errorEl.innerHTML = '';
+    var span = document.createElement('span');
+    span.textContent = 'Failed to load capacities. ';
+    var retryLink = document.createElement('a');
+    retryLink.textContent = 'Retry';
+    retryLink.href = '#';
+    retryLink.className = 'iw-retry-link';
+    retryLink.addEventListener('click', function(e) {
+      e.preventDefault();
+      errorEl.innerHTML = '';
+      errorEl.classList.remove('show');
+      self._fields.capacity.error = null;
+      self._capSelect.innerHTML = '<option value="" disabled selected>Loading capacities\u2026</option>';
+      self._loadCapacities();
+    });
+    errorEl.appendChild(span);
+    errorEl.appendChild(retryLink);
+    errorEl.classList.add('show');
+    this._fields.capacity.error = 'Failed to load capacities';
+    this._fields.capacity.touched = true;
+    this._capSelect.classList.add('error');
+    this._emitValidation();
   }
 
   _renderCapacityOptions() {
     this._capacityLoading = false;
     this._capSelect.classList.remove('loading');
     var html = '<option value="" disabled selected>Select capacity\u2026</option>';
-    if (this._capacities && this._capacities.length > 0) {
+    if (this._capacityLoadFailed) {
+      html = '<option value="" disabled selected>Failed to load \u2014 see below</option>';
+    } else if (this._capacities && this._capacities.length > 0) {
       for (var i = 0; i < this._capacities.length; i++) {
         var cap = this._capacities[i];
         var stateLabel = cap.state === 'Active' ? 'Running' : cap.state === 'Suspended' ? 'Paused' : cap.state;

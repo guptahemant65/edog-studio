@@ -566,6 +566,13 @@
   display: none;
 }
 .iw-form-error.show { display: block; }
+.iw-retry-link {
+  color: var(--accent, #5b9bf5);
+  cursor: pointer;
+  text-decoration: underline;
+  font-weight: 500;
+}
+.iw-retry-link:hover { color: var(--accent-hover, #7db4fa); }
 .iw-form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
