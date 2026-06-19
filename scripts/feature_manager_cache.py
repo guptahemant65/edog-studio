@@ -226,7 +226,8 @@ class FeatureManagementCache:
         try:
             self._do_sync()
         except Exception as e:
-            logger.exception("FM cache sync failed")
+            # Non-fatal: network may be unavailable. Log one line, not a traceback.
+            logger.warning("FM cache sync failed: %s", e)
             with self._lock:
                 self._last_error = f"{type(e).__name__}: {e}"
         finally:
