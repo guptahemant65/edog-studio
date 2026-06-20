@@ -124,6 +124,11 @@
   .del{color:var(--bad);}
   @media (max-width:620px){.files{grid-template-columns:1fr;row-gap:0;}.files .fc,.files .fd{padding-left:0;}}
 
+  /* tool + checks line under a case */
+  .ct{color:var(--ink);}
+  .tc{color:var(--mut);}
+  .tcl{color:var(--meta);font-weight:600;}
+
   /* section heading between transcript and gallery */
   .shead{margin:40px 0 4px;font-size:13px;font-weight:700;letter-spacing:.04em;
     text-transform:uppercase;color:var(--mut);}
@@ -235,26 +240,35 @@
       <div class="l i1"><span class="dim">I'll run these checks. Edit before I touch anything.</span></div>
       <div class="grp i1">
         <div class="cat">Happy path <span class="cc">(2)</span></div>
-        <div class="l i1 dim">the insights endpoint returns 200 with a valid body</div>
-        <div class="l i1 dim">the chain of steps runs and ends in "Completed"</div>
+        <div class="ct i1">the insights endpoint returns 200 with a valid body</div>
+        <div class="tc i2"><span class="tcl">tool:</span> API call (GET the endpoint) · <span class="tcl">checks:</span> status is 200 · body matches its schema · computed values are correct</div>
+        <div class="ct i1">the chain of steps runs and ends in "Completed"</div>
+        <div class="tc i2"><span class="tcl">tool:</span> run the DAG, then read the data back · <span class="tcl">checks:</span> final state Completed · result matches a fresh recompute · no warnings</div>
       </div>
       <div class="grp i1">
         <div class="cat">Edge cases <span class="cc">(3)</span></div>
-        <div class="l i1 dim">201 items is rejected with a clean 400</div>
-        <div class="l i1 dim">an empty filter lists everything</div>
-        <div class="l i1 dim">a very long filter doesn't crash</div>
+        <div class="ct i1">201 items is rejected with a clean 400</div>
+        <div class="tc i2"><span class="tcl">tool:</span> API call (oversized request) · <span class="tcl">checks:</span> a 400 with the right "too many items" message</div>
+        <div class="tc i2 faint">in practice the URL-length limit can reject it first — reported, not hidden</div>
+        <div class="ct i1">an empty filter lists everything</div>
+        <div class="tc i2"><span class="tcl">tool:</span> API call (no filter) · <span class="tcl">checks:</span> returns the full list · nothing dropped</div>
+        <div class="ct i1">a very long filter doesn't crash</div>
+        <div class="tc i2"><span class="tcl">tool:</span> API call (large but valid) · <span class="tcl">checks:</span> no server error (no 5xx) · responds gracefully</div>
       </div>
       <div class="grp i1">
         <div class="cat">Risk <span class="cc">(1)</span></div>
-        <div class="l i1 dim">does the sign-in token outlive a long write?</div>
+        <div class="ct i1">does the sign-in token outlive a long write?</div>
+        <div class="tc i2"><span class="tcl">tool:</span> run a long DAG, watch token + write timing in the logs · <span class="tcl">checks:</span> token still valid at the final write <span class="faint">(can only observe the gap → stays suspected)</span></div>
       </div>
       <div class="grp i1">
         <div class="cat">API contract <span class="cc">(1)</span> <span class="faint">· added automatically</span></div>
-        <div class="l i1 dim">compare the API before and after — catch breaking changes</div>
+        <div class="ct i1">compare the API before and after — catch breaking changes</div>
+        <div class="tc i2"><span class="tcl">tool:</span> build the API description from both versions and diff them · <span class="tcl">checks:</span> every change is an addition · nothing removed or changed</div>
       </div>
       <div class="grp i1">
         <div class="cat">Feature flag <span class="cc">(1)</span> <span class="faint">· added automatically</span></div>
-        <div class="l i1 dim">run with FLTInsightsMetrics both ON and OFF</div>
+        <div class="ct i1">run with FLTInsightsMetrics both ON and OFF</div>
+        <div class="tc i2"><span class="tcl">tool:</span> flip the flag, then call the endpoint each way · <span class="tcl">checks:</span> ON — filter applied · OFF — filter ignored (as designed)</div>
       </div>
       <div class="sp-sm"></div>
       <div class="l i1 gate"><span class="head">▸</span> Run this plan?&nbsp;&nbsp;<span class="opt">edit · drop &lt;n&gt; · add "&lt;your own&gt;" · y to start</span></div>
@@ -346,13 +360,18 @@
         <div class="grp i1">
           <div class="cat">Happy path <span class="cc">(2)</span></div>
           <div class="vr i1"><span class="vd"><span class="ok">✓</span> <span class="hi">PASS</span></span><span class="vd">GET /insights/summary → 200, body valid</span><span class="cite">request #1455</span></div>
+          <div class="vr i1"><span></span><span class="vsub"><span class="tcl">tool:</span> API call (GET the endpoint) · <span class="tcl">checks:</span> status 200 · body matches schema · computed values correct</span><span class="cite"></span></div>
           <div class="vr i1"><span class="vd"><span class="ok">✓</span> <span class="hi">PASS</span></span><span class="vd">The chain of steps finishes, ending in "Completed"</span><span class="cite">run #1402</span></div>
+          <div class="vr i1"><span></span><span class="vsub"><span class="tcl">tool:</span> run the DAG, then read the data back · <span class="tcl">checks:</span> final state Completed · result matches a fresh recompute · no warnings</span><span class="cite"></span></div>
         </div>
         <div class="grp i1">
           <div class="cat">Edge cases <span class="cc">(3)</span></div>
           <div class="vr i1"><span class="vd"><span class="ok">✓</span> <span class="hi">PASS</span></span><span class="vd">201 items → clean 400, no crash</span><span class="cite">request #1460</span></div>
+          <div class="vr i1"><span></span><span class="vsub"><span class="tcl">tool:</span> API call (oversized request) · <span class="tcl">checks:</span> 400 with the right "too many items" message <span class="faint">(URL-length limit may reject first — reported)</span></span><span class="cite"></span></div>
           <div class="vr i1"><span class="vd"><span class="ok">✓</span> <span class="hi">PASS</span></span><span class="vd">Empty filter lists everything</span><span class="cite">request #1462</span></div>
+          <div class="vr i1"><span></span><span class="vsub"><span class="tcl">tool:</span> API call (no filter) · <span class="tcl">checks:</span> returns the full list · nothing dropped</span><span class="cite"></span></div>
           <div class="vr i1"><span class="vd"><span class="warn">▲</span> <span class="hi">SUSPECTED</span></span><span class="vd">A very long filter may time out</span><span class="cite"></span></div>
+          <div class="vr i1"><span></span><span class="vsub"><span class="tcl">tool:</span> API call (large but valid) · <span class="tcl">checks:</span> no server error (no 5xx) · responds gracefully</span><span class="cite"></span></div>
           <div class="vr i1"><span></span><span class="vsub"><span class="vlbl">In the code:</span>&nbsp;&nbsp;the filter scans every row, unbounded</span><span class="cite">LiveTableController.cs:212</span></div>
           <div class="vr i1"><span></span><span class="vsub"><span class="vlbl">What I saw:</span>&nbsp;&nbsp;a 900-char filter took 9.4s</span><span class="cite">request #1471</span></div>
           <div class="vr i1"><span></span><span class="vsub"><span class="vlbl">My read:</span>&nbsp;&nbsp;a longer filter could cross the timeout.</span><span class="cite"></span></div>
@@ -361,6 +380,7 @@
         <div class="grp i1">
           <div class="cat">Risk <span class="cc">(1)</span></div>
           <div class="vr i1"><span class="vd"><span class="warn">▲</span> <span class="hi">SUSPECTED</span></span><span class="vd">The sign-in token may expire during a long write</span><span class="cite"></span></div>
+          <div class="vr i1"><span></span><span class="vsub"><span class="tcl">tool:</span> run a long DAG, watch token + write timing in the logs · <span class="tcl">checks:</span> token still valid at the final write <span class="faint">(only observes the gap → suspected)</span></span><span class="cite"></span></div>
           <div class="vr i1"><span></span><span class="vsub"><span class="vlbl">In the code:</span>&nbsp;&nbsp;the token is created earlier now</span><span class="cite">TokenManager.cs:88</span></div>
           <div class="vr i1"><span></span><span class="vsub"><span class="vlbl">What I saw:</span>&nbsp;&nbsp;token created at 2.3s, write at 14.1s</span><span class="cite">token #1203 · request #1881</span></div>
           <div class="vr i1"><span></span><span class="vsub"><span class="vlbl">My read:</span>&nbsp;&nbsp;a longer run could outlive the token before the last write.</span><span class="cite"></span></div>
@@ -369,10 +389,12 @@
         <div class="grp i1">
           <div class="cat">API contract <span class="cc">(1)</span></div>
           <div class="vr i1"><span class="vd"><span class="ok">✓</span> <span class="hi">PASS</span></span><span class="vd">Only adds GET /insights/summary (+ optional "filter")</span><span class="cite">nothing removed</span></div>
+          <div class="vr i1"><span></span><span class="vsub"><span class="tcl">tool:</span> build the API description from both versions and diff them · <span class="tcl">checks:</span> every change is an addition · nothing removed or changed</span><span class="cite"></span></div>
         </div>
         <div class="grp i1">
           <div class="cat">Feature flag <span class="cc">(1)</span></div>
           <div class="vr i1"><span class="vd"><span class="meta">◌</span> <span class="hi">NEVER RAN</span></span><span class="vd">FLTInsightsMetrics OFF path — nothing reached it; check by hand</span><span class="cite"></span></div>
+          <div class="vr i1"><span></span><span class="vsub"><span class="tcl">tool:</span> flip the flag, then call the endpoint each way · <span class="tcl">checks:</span> ON — filter applied · OFF — filter ignored (as designed)</span><span class="cite"></span></div>
         </div>
 
         <div class="sp-sm"></div>
@@ -396,13 +418,16 @@
   <div class="gallery">
 
     <div class="alt">
-      <div class="cap"><span class="tag note">GROUPED</span><span class="nm">Several cases in one category</span></div>
+      <div class="cap"><span class="tag note">GROUPED</span><span class="nm">Cases show their tool + checks</span></div>
       <div class="ab">
         <div class="cat">Edge cases <span class="cc">(3)</span></div>
         <div class="vr i1"><span class="vd"><span class="ok">✓</span> <span class="hi">PASS</span></span><span class="vd">201 items is rejected</span><span class="cite"></span></div>
+        <div class="vr i1"><span></span><span class="vsub"><span class="tcl">tool:</span> oversized API call · <span class="tcl">checks:</span> clean 400, right message</span><span class="cite"></span></div>
         <div class="vr i1"><span class="vd"><span class="ok">✓</span> <span class="hi">PASS</span></span><span class="vd">empty filter lists everything</span><span class="cite"></span></div>
+        <div class="vr i1"><span></span><span class="vsub"><span class="tcl">tool:</span> API call (no filter) · <span class="tcl">checks:</span> full list · nothing dropped</span><span class="cite"></span></div>
         <div class="vr i1"><span class="vd"><span class="warn">▲</span> <span class="hi">SUSPECTED</span></span><span class="vd">very long filter may time out</span><span class="cite"></span></div>
-        <div class="l dim" style="margin-top:6px;">one category, mixed results — counts still total across <b>all</b> cases, not per category</div>
+        <div class="vr i1"><span></span><span class="vsub"><span class="tcl">tool:</span> large valid API call · <span class="tcl">checks:</span> no 5xx · responds gracefully</span><span class="cite"></span></div>
+        <div class="l dim" style="margin-top:6px;">each case names <b>how</b> it's checked and <b>against what</b> — more than just API calls (we read data back, recompute, diff contracts, toggle flags). Counts still total across <b>all</b> cases.</div>
       </div>
     </div>
 

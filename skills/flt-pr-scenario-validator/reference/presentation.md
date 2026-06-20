@@ -81,14 +81,23 @@ Emphasis: **bold** only the single number that matters in a line (`**3 of 4** be
 ```
 Direction is always visible, never just a name: `+ New` · `− Removed` · `· Uses` for flags; `+155 / −2` for each file. The `API change` line says plainly whether it is **safe** (only adds) or **breaking** (removes/changes a shape). If sign-in / permission wiring changed, replace `Who's allowed in  no change` with the `▲ NEEDS A HUMAN` line (Beat 2).
 
-**Category group** (several cases under one category — used in the plan and the verdict; the count rides the header, the status rides each case):
+**Category group** (several cases under one category — used in the plan and the verdict; the count rides the header, the status rides each case). **Every case carries two plain sub-fields, rendered on a dim line under it — `tool` (what checks it) and `checks` (the assertion points)** — so the reader sees *how* each case is validated and *against what*:
 ```
 Edge cases (3)
-  ✓ PASS       201 items → clean 400, no crash
-  ✓ PASS       empty filter lists everything
-  ▲ SUSPECTED  a very long filter may time out
+  201 items is rejected with a clean 400
+    tool: API call (oversized request) · checks: a 400 with the right "too many items" message
+    (in practice the URL-length limit can reject it first — reported, not hidden)
+  an empty filter lists everything
+    tool: API call (no filter) · checks: returns the full list · nothing dropped
+  a very long filter doesn't crash
+    tool: API call (large but valid) · checks: no server error (no 5xx) · responds gracefully
 ```
 A category can hold a mix of statuses. Counts always total across **every** case, not per category.
+
+**Each case carries `tool` and `checks` (the scenario model's two presentation fields).**
+- `tool` — which tool validates it, in plain words: *an API call*, *run the DAG and read the data back*, *build the API description from both versions and diff them*, *flip the flag and call the endpoint each way*. Plain — not an endpoint or class name.
+- `checks` — the assertion points it verifies, `·`-separated: *status is 200* · *body matches its schema* · *the stored result matches a fresh recompute* · *no warnings* · *no 5xx* · *every change is an addition*.
+- Both render as one dim `tool: … · checks: …` line under the case, in the plan and echoed under the case's status row in the verdict. They make visible that validation is **more than API calls** — it reads data back, recomputes expected values, diffs contracts, and toggles flags. Where a check is limited (e.g. it can only *observe* a timing gap, not force it), say so honestly in `checks` and let the case stay `SUSPECTED`.
 
 **Menu** (selectable rows — letter/marker · name · plain meta):
 ```
@@ -147,7 +156,7 @@ Checks are grouped by **category**; a category can hold **several cases**, each 
 
 | State | When | Render |
 |---|---|---|
-| Plan proposed | checks derived | category groups (§3), each `<Category> (N)` with one case per line, then the `▸ Run this plan?` gate |
+| Plan proposed | checks derived | category groups (§3), each `<Category> (N)` with one case per line **and a dim `tool: … · checks: …` line under each case**, then the `▸ Run this plan?` gate |
 | Edited | user types `drop N` / `add …` / `edit` | `✓ Updated — dropped "201 items", added "filter with special characters"` then the locked summary line |
 | API check added | a controller/DTO changed | an `API contract (1)` category appears: `Compare the API before and after — catch breaking changes   (added automatically)` |
 | Toggle check added | a feature flag appears in the diff | a `Feature flag (1)` category appears: `run with FLTInsightsMetrics both ON and OFF   (added automatically)` |
@@ -195,7 +204,7 @@ Checks are grouped by **category**; a category can hold **several cases**, each 
 | State | When | Render |
 |---|---|---|
 | Reviewer summary | always, first | the `What this means for the reviewer` block: *watch · looks safe · your call* |
-| Per-case result, grouped | each case under its category | `<Category> (N)` header, then one row per case: `✓ PASS` / `✕ BROKEN` / `▲ SUSPECTED` / `▲ COULDN'T CHECK` / `◌ NEVER RAN`. A category may mix statuses. |
+| Per-case result, grouped | each case under its category | `<Category> (N)` header, then one row per case: `✓ PASS` / `✕ BROKEN` / `▲ SUSPECTED` / `▲ COULDN'T CHECK` / `◌ NEVER RAN`, **with the same dim `tool: … · checks: …` line echoed under each**. A category may mix statuses. |
 | What I tested | always | `What I tested   8 cases · 5 passed · 2 suspected · 1 never ran` — totals across **all** cases, not per category |
 | Out of date | the PR moved on since the run | `▲ OUT OF DATE — I checked commit abc1234, but the PR is now at def5678. Re-run before trusting this.` |
 | Ask before posting | before any PR comment | `▸ Post this summary to PR #982144?   y · edit · no` — never posts silently |
@@ -218,25 +227,33 @@ Checks are grouped by **category**; a category can hold **several cases**, each 
 
   Happy path (2)
     ✓ PASS        GET /insights/summary → 200, body valid              (request #1455)
+                    tool: API call (GET the endpoint) · checks: status 200 · body matches its schema · computed values correct
     ✓ PASS        The chain of steps finishes, ending in "Completed"   (run #1402)
+                    tool: run the DAG, then read the data back · checks: final state Completed · stored result matches a fresh recompute · no warnings
   Edge cases (3)
     ✓ PASS        201 items → clean 400, no crash                      (request #1460)
+                    tool: API call (oversized request) · checks: 400 with the right "too many items" message (URL-length limit may reject first — reported)
     ✓ PASS        Empty filter lists everything                        (request #1462)
+                    tool: API call (no filter) · checks: returns the full list · nothing dropped
     ▲ SUSPECTED   A very long filter may time out
+                    tool: API call (large but valid) · checks: no server error (no 5xx) · responds gracefully
                     In the code:  the filter scans every row unbounded (LiveTableController.cs:212)
                     What I saw:    a 900-char filter took 9.4s         (request #1471)
                     My read:       a longer filter could cross the timeout.
                     Couldn't prove it without a bigger dataset (not set up here).
   Risk (1)
     ▲ SUSPECTED   The sign-in token may expire during a long write
+                    tool: run a long DAG, watch token + write timing in the logs · checks: token still valid at the final write (Phase-1: only observes the gap → SUSPECTED)
                     In the code:  the token is created earlier now     (TokenManager.cs:88)
                     What I saw:    token created at 2.3s, write at 14.1s  (token #1203, request #1881)
                     My read:       a longer run could outlive the token before the last write.
                     Couldn't prove it without fault injection (not available yet).
   API contract (1)
     ✓ PASS        Only adds GET /insights/summary (+ optional "filter")  (nothing removed)
+                    tool: build the API description from both versions and diff them · checks: every change is an addition · nothing removed or changed
   Feature flag (1)
     ◌ NEVER RAN   FLTInsightsMetrics OFF path — nothing I sent reached it; check this by hand
+                    tool: flip the flag, then call the endpoint each way · checks: ON — filter applied · OFF — filter ignored (as designed)
 
   What I tested  8 cases · 5 passed · 2 suspected · 1 never ran
   How sure       data & API checks: high (repeatable) · the 2 risks: suspected only
