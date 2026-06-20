@@ -1,5 +1,6 @@
-"""Fetch + parse a PR's clean unified diff (ADO): changed files, symbols,
-config-value facts, and feature-flag refs. Blast radius MUST use this, never a
+"""Fetch + parse a PR's clean unified diff (ADO): changed files (with +/- line
+counts), changed symbols, config-value facts, and feature-flag references split
+into introduced (added) vs removed. Blast radius MUST use this, never a
 patched-tree git diff.
 """
 
@@ -16,37 +17,59 @@ _FLAG_RE = re.compile(r"\bFeatureNames\.(?P<name>[A-Z]\w+)")
 
 
 def parse_diff(diff_text: str) -> dict:
-    files = [{"path": m.group("b")} for m in _FILE_RE.finditer(diff_text)]
+    files: list[dict] = []
+    by_path: dict[str, dict] = {}
     symbols: list[dict] = []
     facts: list[dict] = []
-    flags: set[str] = set()
+    flags_added: set[str] = set()
+    flags_removed: set[str] = set()
     seen: set[tuple[str, str]] = set()
+    current: dict | None = None
     for line in diff_text.splitlines():
+        fm = _FILE_RE.match(line)
+        if fm:
+            current = {"path": fm.group("b"), "added": 0, "removed": 0}
+            files.append(current)
+            by_path[current["path"]] = current
+            continue
+        is_add = line.startswith("+") and not line.startswith("++")
+        is_del = line.startswith("-") and not line.startswith("--")
         if line.startswith("@@"):
-            # Hunk header: the trailing context (after the 2nd @@) names the
-            # enclosing class/method the change lives in -> attribute it.
-            added = line.split("@@")[-1]
-        elif (line.startswith("+") and not line.startswith("++")) or (
-            line.startswith("-") and not line.startswith("--")
-        ):
-            added = line[1:]
+            # Hunk header: trailing context names the enclosing class/method.
+            text = line.split("@@")[-1]
+        elif is_add or is_del:
+            text = line[1:]
+            if current is not None:
+                current["added" if is_add else "removed"] += 1
         else:
             continue
         for rx, kind in ((_CLASS_RE, "type"), (_METHOD_RE, "method")):
-            for sm in rx.finditer(added):
+            for sm in rx.finditer(text):
                 key = (kind, sm.group("name"))
                 if key not in seen:
                     seen.add(key)
                     symbols.append({"kind": kind, "name": sm.group("name")})
-        for cm in _CONST_RE.finditer(added):
+        for cm in _CONST_RE.finditer(text):
             facts.append({"name": cm.group("name"), "value": cm.group("value")})
-        for fm in _FLAG_RE.finditer(added):
-            flags.add(fm.group("name"))
+        for flag in _FLAG_RE.finditer(text):
+            name = flag.group("name")
+            if is_add:
+                flags_added.add(name)
+            elif is_del:
+                flags_removed.add(name)
+            else:  # hunk-header context counts as a plain reference, not a change
+                flags_added.add(name)
+                flags_removed.add(name)
+    union = sorted(flags_added | flags_removed)
+    # A flag only on + lines is newly introduced/used; only on - lines is removed;
+    # on both (or in context) it was merely touched, not introduced or removed.
     return {
         "files": files,
         "symbols": symbols,
         "config_facts": facts,
-        "feature_flags": sorted(flags),
+        "feature_flags": union,
+        "feature_flags_added": sorted(flags_added - flags_removed),
+        "feature_flags_removed": sorted(flags_removed - flags_added),
     }
 
 
