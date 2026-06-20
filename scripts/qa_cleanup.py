@@ -13,10 +13,15 @@ import urllib.request
 from scripts import qa_run_lock
 from scripts import qa_teardown_ledger as ledger
 
+# EDOG's dev-server binds this fixed address (dev-server.py, ThreadedHTTPServer
+# on 127.0.0.1:5555). Single-sourced here so the control-plane base isn't a
+# literal repeated per reverser.
+EDOG_BASE = "http://127.0.0.1:5555"
+
 
 def _flag_clear(s: dict) -> bool:
     req = urllib.request.Request(
-        f"http://127.0.0.1:5555/api/edog/feature-flags/overrides/{s['flag']}",
+        f"{EDOG_BASE}/api/edog/feature-flags/overrides/{s['flag']}",
         method="DELETE",
     )
     with urllib.request.urlopen(req, timeout=10) as r:
@@ -25,7 +30,7 @@ def _flag_clear(s: dict) -> bool:
 
 def _capacity_delete(s: dict) -> bool:
     req = urllib.request.Request(
-        f"http://127.0.0.1:5555/api/fabric/capacities/{s['capacityId']}",
+        f"{EDOG_BASE}/api/fabric/capacities/{s['capacityId']}",
         method="DELETE",
     )
     with urllib.request.urlopen(req, timeout=30) as r:
