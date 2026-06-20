@@ -84,3 +84,46 @@ def test_flag_touched_on_both_sides_is_neither_introduced_nor_removed():
     res = qa_pr_diff.parse_diff(diff)
     assert "Keep" in res["feature_flags"]
     assert res["feature_flags_added"] == [] and res["feature_flags_removed"] == []
+
+
+# The ADO ado-proxy builds diffs with difflib, which emits "--- a/" / "+++ b/"
+# headers but NO "diff --git" line. The parser must key on "+++ b/" so files and
+# per-file churn are not silently empty for real PRs.
+ADO_PROXY_DIFF = """--- a/Service/Controllers/LiveTableInsightsController.cs
++++ b/Service/Controllers/LiveTableInsightsController.cs
+@@ -115,7 +115,7 @@ public class LiveTableInsightsController
+-        const int MaxItems = 200;
++        const int MaxItems = 500;
++        public void NewEndpoint() { }
+--- a/Service/Trends/InsightsQueryBuilder.cs
++++ b/Service/Trends/InsightsQueryBuilder.cs
+@@ -10,3 +10,3 @@ public class InsightsQueryBuilder
+-        var old = 1;
+"""
+
+
+def test_parse_ado_proxy_diff_without_diff_git_header():
+    res = qa_pr_diff.parse_diff(ADO_PROXY_DIFF)
+    files = {f["path"]: f for f in res["files"]}
+    assert set(files) == {
+        "Service/Controllers/LiveTableInsightsController.cs",
+        "Service/Trends/InsightsQueryBuilder.cs",
+    }
+    # churn is still counted per file even with no "diff --git" line
+    assert files["Service/Controllers/LiveTableInsightsController.cs"]["added"] == 2
+    assert files["Service/Controllers/LiveTableInsightsController.cs"]["removed"] == 1
+    assert files["Service/Trends/InsightsQueryBuilder.cs"]["removed"] == 1
+    # symbols/facts still resolve to a file context
+    assert ("MaxItems", "500") in {(f["name"], f["value"]) for f in res["config_facts"]}
+
+
+def test_parse_handles_added_and_deleted_files_via_dev_null():
+    diff = (
+        "--- /dev/null\n+++ b/Service/NewFile.cs\n@@ -0,0 +1,1 @@\n+        var x = 1;\n"
+        "--- a/Service/GoneFile.cs\n+++ /dev/null\n@@ -1,1 +0,0 @@\n-        var y = 2;\n"
+    )
+    files = {f["path"]: f for f in qa_pr_diff.parse_diff(diff)["files"]}
+    assert "Service/NewFile.cs" in files  # new file uses the +++ path
+    assert "Service/GoneFile.cs" in files  # deleted file falls back to the --- path
+    assert files["Service/NewFile.cs"]["added"] == 1
+    assert files["Service/GoneFile.cs"]["removed"] == 1

@@ -9,7 +9,8 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 
-_FILE_RE = re.compile(r"^diff --git a/.+? b/(?P<b>.+)$", re.MULTILINE)
+_FROM_FILE_RE = re.compile(r"^--- (?P<a>a/.+|/dev/null)\s*$")
+_TO_FILE_RE = re.compile(r"^\+\+\+ (?P<b>b/.+|/dev/null)\s*$")
 _CLASS_RE = re.compile(r"\b(?:class|interface|record|struct)\s+(?P<name>[A-Z]\w+)")
 _METHOD_RE = re.compile(r"\b(?:public|private|internal|protected)\s+[\w<>\[\],\s]+?\s+(?P<name>[A-Z]\w+)\s*\(")
 _CONST_RE = re.compile(r"\b(?:const\s+\w+|int|long|double|var)\s+(?P<name>\w+)\s*=\s*(?P<value>\d+)")
@@ -25,12 +26,28 @@ def parse_diff(diff_text: str) -> dict:
     flags_removed: set[str] = set()
     seen: set[tuple[str, str]] = set()
     current: dict | None = None
+    pending_from: str | None = None
     for line in diff_text.splitlines():
-        fm = _FILE_RE.match(line)
-        if fm:
-            current = {"path": fm.group("b"), "added": 0, "removed": 0}
+        tm = _TO_FILE_RE.match(line)
+        if tm:
+            # The "+++" line names the new file; both git ("diff --git" present)
+            # and plain difflib unified diffs (ADO ado-proxy, no "diff --git")
+            # carry it, so keying on it covers both. A "/dev/null" target means a
+            # deletion — fall back to the "---" path we just saw.
+            path = tm.group("b")
+            if path == "/dev/null" and pending_from:
+                path = pending_from
+            elif path.startswith("b/"):
+                path = path[2:]
+            current = {"path": path, "added": 0, "removed": 0}
             files.append(current)
-            by_path[current["path"]] = current
+            by_path[path] = current
+            pending_from = None
+            continue
+        fm = _FROM_FILE_RE.match(line)
+        if fm:
+            a = fm.group("a")
+            pending_from = a[2:] if a.startswith("a/") else a
             continue
         is_add = line.startswith("+") and not line.startswith("++")
         is_del = line.startswith("-") and not line.startswith("--")
