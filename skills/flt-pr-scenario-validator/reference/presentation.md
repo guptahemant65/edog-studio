@@ -98,6 +98,13 @@ A category can hold a mix of statuses. Counts always total across **every** case
 - `tool` — which tool validates it, in plain words: *an API call*, *run the DAG and read the data back*, *build the API description from both versions and diff them*, *flip the flag and call the endpoint each way*. Plain — not an endpoint or class name.
 - `checks` — the assertion points it verifies, `·`-separated: *status is 200* · *body matches its schema* · *the stored result matches a fresh recompute* · *no warnings* · *no 5xx* · *every change is an addition*.
 - Both render as one dim `tool: … · checks: …` line under the case, in the plan and echoed under the case's status row in the verdict. They make visible that validation is **more than API calls** — it reads data back, recomputes expected values, diffs contracts, and toggles flags. Where a check is limited (e.g. it can only *observe* a timing gap, not force it), say so honestly in `checks` and let the case stay `SUSPECTED`.
+- `evidence` — the **full raw output** of the tool that ran this case (the API reply, the chain-of-steps node states + data read-back, the log lines, the diff, the flag state). It is **not** printed inline by default; it is saved as the run goes and printed on demand. See §8 for how it is rendered and the per-tool shape.
+
+**Raw evidence on demand** (the closing offer in the verdict — never per line):
+```
+▸ Want the full output of any case? say  show #1455  ·  or open .edog-qa/runs/4471/evidence/
+```
+One standing line, after the per-case results. The citation on each case (`request #1455`, `run #1402`) is the key; `show #<ref>` replays that case's saved raw block (§8). A terminal can't fold text, so "expandable" means *saved aside and printed on request* — never a wall of output by default.
 
 **Menu** (selectable rows — letter/marker · name · plain meta):
 ```
@@ -183,6 +190,7 @@ Checks are grouped by **category**; a category can hold **several cases**, each 
 | Setting applied | a required toggle was switched and re-checked | dim: `✓ Feature toggle "FLTMLVWarnings" is ON and confirmed active in this workspace` |
 | Couldn't switch a toggle | a toggle is locked / missing here | `▲ Couldn't switch the "X" toggle — it's locked in this environment. A test-setup limit; I'm surfacing it, not guessing.` |
 | Check passed | the rule held and was asserted | `✓ <check>` + the cited evidence |
+| Evidence saved | any case ran | as each case runs, its **full raw output** is written to `.edog-qa/runs/{runId}/evidence/{ref}.{json\|log\|txt}` (the citation is the key) — nothing printed inline; available via `show #<ref>` in Beat 7 (§8) |
 | Check broken | the change makes it fail | `✕ <check> — your change breaks this` + the failing fact, cited |
 | Service was busy | a busy / capacity / rate-limit error | retry once; if it recurs `▲ Still busy after a retry (capacity limit) — that's the environment, not your change`; otherwise pass |
 | Nothing to refresh | a step had nothing changed to refresh | `✓ <check> — nothing had changed, so nothing needed refreshing (correct)` (a success) |
@@ -206,6 +214,7 @@ Checks are grouped by **category**; a category can hold **several cases**, each 
 | Reviewer summary | always, first | the `What this means for the reviewer` block: *watch · looks safe · your call* |
 | Per-case result, grouped | each case under its category | `<Category> (N)` header, then one row per case: `✓ PASS` / `✕ BROKEN` / `▲ SUSPECTED` / `▲ COULDN'T CHECK` / `◌ NEVER RAN`, **with the same dim `tool: … · checks: …` line echoed under each**. A category may mix statuses. |
 | What I tested | always | `What I tested   8 cases · 5 passed · 2 suspected · 1 never ran` — totals across **all** cases, not per category |
+| Raw output on demand | always, after the per-case results | one standing offer: `▸ Want the full output of any case? say  show #1455  ·  or open .edog-qa/runs/4471/evidence/`. On `show #<ref>` the skill prints that case's saved raw block, tool-shaped (§8) — the captured bytes replayed, never re-fabricated. A case that never ran has no block (`nothing ran here, so there's no output to show`). |
 | Out of date | the PR moved on since the run | `▲ OUT OF DATE — I checked commit abc1234, but the PR is now at def5678. Re-run before trusting this.` |
 | Ask before posting | before any PR comment | `▸ Post this summary to PR #982144?   y · edit · no` — never posts silently |
 | Posted | the author approves | `✓ Posted the summary to PR #982144` |
@@ -285,3 +294,88 @@ Everything else must be plain English. These two have no short plain synonym, so
 - **MLV** — a managed table FLT keeps up to date automatically (a "materialized lake view"). First use: `Missing MLVs (managed tables FLT auto-refreshes): sales_summary`.
 
 If a third domain term ever feels unavoidable, that's a signal to rewrite the line in plain language instead.
+
+---
+
+## 8. Raw evidence — quiet by default, one keystroke to expand
+
+Every claim already trails a citation (`request #1455`, `run #1402`, `token #1203`). That citation is also the **key to the full, raw output** of the tool that produced it. The default stays quiet — status + result + the `tool: … · checks: …` line. The complete output is **saved, not dumped**: a terminal can't truly fold text, so "expandable" means *kept aside and printed on request*.
+
+**How it works**
+- Every case that runs writes its full tool output to `.edog-qa/runs/{runId}/evidence/{ref}.{json|log|txt}` as it happens. The citation *is* the filename key (`request #1455` → `evidence/1455.json`).
+- The results block ends with **one** standing offer, not a line per case:
+  `▸ Want the full output of any case? say  show #1455  ·  or open .edog-qa/runs/4471/evidence/`
+- On `show #<ref>`, the skill prints that case's raw block inline — tool-shaped (below). It is the captured bytes replayed; nothing is re-derived or invented.
+- In the rich HTML board (linked from the PR comment) the same block is a collapsed "show raw output" disclosure under each case. The mock (`flt-pr-scenario-validator-tui-v3.html`) demonstrates this with a native `<details>` element — no JavaScript.
+- A case that never ran has no raw block: `show #<ref>` says `nothing ran here, so there's no output to show`.
+
+The point: a reader trusts a `PASS` because the proof is one keystroke away, **in the tool's own words** — and seeing the blocks makes plain that the checks are *more than API calls* (they read data back, recompute, diff contracts, toggle flags). Honesty rules (§6) hold inside the raw block too: `-1` shows as "not reported", the 201→400 caveat is shown, the token risk stays `SUSPECTED`.
+
+**What each tool's raw block looks like** (what `show #<ref>` prints):
+
+*API call* — the request, the real **inner** status (FLT's own, read from inside the dispatch reply — not the wrapper), headers, body, then each check:
+```
+▸ show raw output · request #1455 · API call
+  GET  …/liveTable/insights/summary?filter=
+  ← 200 OK            (FLT's own status, read from inside the dispatch reply)
+     content-type: application/json · x-ms-request-id: 7af3c1 · 240 ms
+  body:
+    { "items": [ {"name":"sales_daily","rows":1240,"policy":"INCREMENTALREFRESH"},
+                 {"name":"sales_summary","rows":-1,"policy":"NOREFRESH"} ], "count": 2 }
+  checks:
+    ✓ inner status is 200
+    ✓ body matches its schema
+    ✓ count (2) equals items.length        (computed from the response)
+  note: rows -1 means "not reported", shown as-is — never as 0.
+```
+
+*Run the chain of steps, then read the data back* — node states and the **stored-vs-recompute** proof (the data-correctness evidence — the most valuable block):
+```
+▸ show raw output · run #1402 · ran the chain of steps, then read the data back
+  iteration 9c2f… · 2 steps
+    sales_daily     Completed   incremental   1240 rows   2.1s
+    sales_summary   Completed   full           312 rows   3.4s   no warnings
+  final state: Completed
+  data check — stored result vs a fresh recompute of the query:
+    stored      312 rows
+    recompute   312 rows
+    ✓ exact match, row for row
+  checks:
+    ✓ final state Completed   ✓ stored equals recompute   ✓ no warnings
+```
+
+*Watch the logs* — the actual lines that were matched, with their ids and times:
+```
+▸ show raw output · request #1881 · watched the token + write timing in the logs
+  00:02.3  sign-in token minted, valid 60m          [token #1203]
+  00:14.1  final write begins                        [write #4012]
+  00:14.9  final write ok                            [write #4012]
+  checks:
+    ✓ token still valid at the final write (large margin)
+    ▲ Phase 1 can only watch the gap — it can't force a write long enough to
+      actually expire the token. Stays SUSPECTED, not proven.
+```
+
+*Compare the API before and after* — the raw diff entries:
+```
+▸ show raw output · the API before vs after (built from both branches, then diffed)
+  ch-001  added   GET /insights/summary
+  ch-002  added   optional query param "filter" on /insights/summary
+  — nothing removed · nothing changed —
+  checks:
+    ✓ every change is an addition   ✓ nothing removed or modified
+```
+
+*Flip the feature flag* — the flag state before/after and each path's result:
+```
+▸ show raw output · feature flag FLTInsightsMetrics, both ways
+  before:  effective in this workspace = no
+  set ON → applied (confirmed)
+  after:   effective in this workspace = yes
+  ON   GET …/insights/summary?filter=sales → filter applied, 1 item   [request #1466]
+  OFF  no request in this run reached the OFF branch
+       ◌ OFF path never ran — check by hand
+  checks:
+    ✓ ON applies the filter   ◌ OFF path not exercised
+```
+

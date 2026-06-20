@@ -84,6 +84,7 @@ Seven beats. Each names its **gate** (what must be true to proceed), the **primi
 - Enforce preconditions (flags + table props) before each scenario's stimulus — see Beat 5 preconditions above.
 - For controller/DTO PRs, generate the swagger from the PR assembly and the base-commit (main) assembly with `dotnet swagger tofile` (main is **build-only**, no deploy) and `qa_contract_diff.diff(main, pr)`; assert each `ch-NNN` is intended; flag removed/modified as breaking.
 - Re-check `bearerExpiresIn` before any multi-minute operation.
+- **Persist each ran case's full raw output** to `.edog-qa/runs/{runId}/evidence/{ref}.{json|log|txt}` as it happens (the citation — `request #1455`, `run #1402` — is the filename key): the dispatch reply with the **inner** status, the DAG node states + the stored-vs-recompute data check, the matched log lines, the contract diff, the flag catalog before/after. This is the "expandable" evidence the verdict offers via `show #<ref>` (see `reference/presentation.md` §8). Save the captured bytes — never re-fabricate them later.
 
 ### Beat 6 — Correlate & attribute
 - For each suspicious signal, write the causal narrative across streams (logs + telemetry + interceptors + DAG state + the data/convergence result), citing event ids.
@@ -95,6 +96,7 @@ Seven beats. Each names its **gate** (what must be true to proceed), the **primi
 ### Beat 7 — Verdict, post, clean up
 - Build the verdict: assemble `qa_verdict.Claim`s, run `qa_verdict.verify(claims, bundle)` — **any claim whose evidence is not in the bundle is dropped.** Set `attribution` from `qa_error_classify`, not by hand. Render the per-scenario verdicts + a PR-level risk synthesis (the reviewer's 30-second read: blast radius, change type, security flag, flag-gating, coverage).
 - State the validated `sourceCommit`. Re-query the PR's current source commit; if HEAD advanced, mark the verdict **STALE**.
+- **Offer the raw output, quiet by default.** After the per-case results, print one standing line — `▸ Want the full output of any case? say  show #1455  ·  or open .edog-qa/runs/4471/evidence/` — never a per-case dump. On `show #<ref>`, replay that case's saved evidence block, tool-shaped (presentation §8); a case that never ran has none.
 - **Author-approval gate:** post to the PR (`POST /api/ado-proxy/pr-comment` — creates a real thread) **only after the author confirms.** Never post silently.
 - Clean up: on pass, auto-run `qa_cleanup.run(runId)` (reverses the ledger LIFO, releases the lock). On fail, offer to keep infra for debugging. **Always tear down what the skill itself started**, in reverse order: clear flag overrides → revert the deploy injections (`edog --revert`) → remove the worktree → **stop the headless dev-server the skill spawned in Beat 1** (the `server_stop` ledger op — kill the recorded PID; never stop a server you did not start). Confirm zero orphans: `git worktree list` clean, no leftover flag overrides, FLT repo `git status` clean, and `:5555` down (unless the env was pre-existing). The run is not complete until the environment is exactly as the skill found it.
 
@@ -143,4 +145,4 @@ The terminal conversation **is** the product, so render it to **`reference/prese
 
 ## Cross-turn state
 
-You orchestrate across many turns and are not one persistent process. After every beat, persist run state to `.edog-qa/runs/{runId}/state.json` (current beat, locked target, scenario plan, pinned `sourceCommit`, pending evidence). On each new turn: re-read state, `qa_run_lock.heartbeat(runId)`, and continue. Prefer fire-and-poll for long operations (deploy, DAG, Spark cold-start ≤10 min) — kick off, persist the handle, poll on subsequent turns rather than blocking.
+You orchestrate across many turns and are not one persistent process. After every beat, persist run state to `.edog-qa/runs/{runId}/state.json` (current beat, locked target, scenario plan, pinned `sourceCommit`, pending evidence), and write each ran case's full raw output to `.edog-qa/runs/{runId}/evidence/{ref}.{json|log|txt}` (Beat 5). On each new turn: re-read state, `qa_run_lock.heartbeat(runId)`, and continue. Prefer fire-and-poll for long operations (deploy, DAG, Spark cold-start ≤10 min) — kick off, persist the handle, poll on subsequent turns rather than blocking.

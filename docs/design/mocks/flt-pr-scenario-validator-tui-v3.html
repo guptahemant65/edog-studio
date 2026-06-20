@@ -129,6 +129,23 @@
   .tc{color:var(--mut);}
   .tcl{color:var(--meta);font-weight:600;}
 
+  /* raw-output disclosure — quiet by default, printed on demand */
+  details.raw{margin:2px 0 4px;padding-left:2ch;}
+  details.raw>summary{list-style:none;cursor:pointer;color:var(--faint);
+    font-family:var(--mono);font-size:11.8px;line-height:1.85;outline:none;user-select:none;}
+  details.raw>summary::-webkit-details-marker{display:none;}
+  details.raw>summary::marker{content:"";}
+  details.raw>summary .mk{color:var(--head);font-weight:700;}
+  details.raw>summary:hover{color:var(--mut);}
+  details.raw[open]>summary .show{display:none;}
+  details.raw>summary .hide{display:none;}
+  details.raw[open]>summary .hide{display:inline;}
+  .rawbody{margin:6px 0 2px;padding:10px 13px;background:var(--panel-2);
+    border:1px solid var(--line);border-left:2px solid var(--line-2);border-radius:7px;
+    white-space:pre-wrap;word-break:break-word;color:var(--ink);
+    font-family:var(--mono);font-size:11.6px;line-height:1.7;}
+  .rawbody .rk{color:var(--mut);}
+
   /* section heading between transcript and gallery */
   .shead{margin:40px 0 4px;font-size:13px;font-weight:700;letter-spacing:.04em;
     text-transform:uppercase;color:var(--mut);}
@@ -306,7 +323,30 @@
       <div class="grp i1">
         <div class="cat">Happy path <span class="cc">(2)</span></div>
         <div class="vr i1"><span class="vd"><span class="ok">✓</span> <span class="hi">PASS</span></span><span class="vd">GET /insights/summary → 200, body valid</span><span class="cite">request #1455</span></div>
+        <details class="raw"><summary><span class="show"><span class="mk">▸</span> show raw output</span><span class="hide"><span class="mk">▾</span> hide raw output</span>  ·  request #1455  ·  API call</summary>
+<div class="rawbody">GET  &hellip;/liveTable/insights/summary?filter=
+&larr; <span class="ok">200 OK</span>            <span class="rk">(FLT's own status, read from inside the dispatch reply)</span>
+   <span class="rk">content-type: application/json · x-ms-request-id: 7af3c1 · 240 ms</span>
+body:
+  { "items": [ {"name":"sales_daily","rows":1240,"policy":"INCREMENTALREFRESH"},
+               {"name":"sales_summary","rows":-1,"policy":"NOREFRESH"} ], "count": 2 }
+checks:
+  <span class="ok">✓</span> inner status is 200
+  <span class="ok">✓</span> body matches its schema
+  <span class="ok">✓</span> count (2) equals items.length   <span class="rk">(computed from the response)</span>
+<span class="rk">note: rows -1 means "not reported", shown as-is — never as 0.</span></div></details>
         <div class="vr i1"><span class="vd"><span class="ok">✓</span> <span class="hi">PASS</span></span><span class="vd">The chain of steps finishes, ending in "Completed"</span><span class="cite">run #1402</span></div>
+        <details class="raw"><summary><span class="show"><span class="mk">▸</span> show raw output</span><span class="hide"><span class="mk">▾</span> hide raw output</span>  ·  run #1402  ·  ran the chain of steps, then read the data back</summary>
+<div class="rawbody">iteration 9c2f&hellip; · 2 steps
+  sales_daily     <span class="ok">Completed</span>   incremental   1240 rows   2.1s
+  sales_summary   <span class="ok">Completed</span>   full          312 rows   3.4s   no warnings
+final state: <span class="ok">Completed</span>
+data check — stored result vs a fresh recompute of the query:
+  stored      312 rows
+  recompute   312 rows
+  <span class="ok">✓</span> exact match, row for row
+checks:
+  <span class="ok">✓</span> final state Completed   <span class="ok">✓</span> stored equals recompute   <span class="ok">✓</span> no warnings</div></details>
       </div>
       <div class="grp i1">
         <div class="cat">Edge cases <span class="cc">(3)</span></div>
@@ -361,13 +401,45 @@
           <div class="cat">Happy path <span class="cc">(2)</span></div>
           <div class="vr i1"><span class="vd"><span class="ok">✓</span> <span class="hi">PASS</span></span><span class="vd">GET /insights/summary → 200, body valid</span><span class="cite">request #1455</span></div>
           <div class="vr i1"><span></span><span class="vsub"><span class="tcl">tool:</span> API call (GET the endpoint) · <span class="tcl">checks:</span> status 200 · body matches schema · computed values correct</span><span class="cite"></span></div>
+          <details class="raw"><summary><span class="show"><span class="mk">▸</span> show raw output</span><span class="hide"><span class="mk">▾</span> hide raw output</span>  ·  request #1455  ·  API call</summary>
+<div class="rawbody">GET  &hellip;/liveTable/insights/summary?filter=
+&larr; <span class="ok">200 OK</span>            <span class="rk">(FLT's own status, read from inside the dispatch reply)</span>
+   <span class="rk">content-type: application/json · x-ms-request-id: 7af3c1 · 240 ms</span>
+body:
+  { "items": [ {"name":"sales_daily","rows":1240,"policy":"INCREMENTALREFRESH"},
+               {"name":"sales_summary","rows":-1,"policy":"NOREFRESH"} ], "count": 2 }
+checks:
+  <span class="ok">✓</span> inner status is 200
+  <span class="ok">✓</span> body matches its schema
+  <span class="ok">✓</span> count (2) equals items.length   <span class="rk">(computed from the response)</span>
+<span class="rk">note: rows -1 means "not reported", shown as-is — never as 0.</span></div></details>
           <div class="vr i1"><span class="vd"><span class="ok">✓</span> <span class="hi">PASS</span></span><span class="vd">The chain of steps finishes, ending in "Completed"</span><span class="cite">run #1402</span></div>
           <div class="vr i1"><span></span><span class="vsub"><span class="tcl">tool:</span> run the DAG, then read the data back · <span class="tcl">checks:</span> final state Completed · result matches a fresh recompute · no warnings</span><span class="cite"></span></div>
+          <details class="raw"><summary><span class="show"><span class="mk">▸</span> show raw output</span><span class="hide"><span class="mk">▾</span> hide raw output</span>  ·  run #1402  ·  ran the chain of steps, then read the data back</summary>
+<div class="rawbody">iteration 9c2f&hellip; · 2 steps
+  sales_daily     <span class="ok">Completed</span>   incremental   1240 rows   2.1s
+  sales_summary   <span class="ok">Completed</span>   full          312 rows   3.4s   no warnings
+final state: <span class="ok">Completed</span>
+data check — stored result vs a fresh recompute of the query:
+  stored      312 rows
+  recompute   312 rows
+  <span class="ok">✓</span> exact match, row for row
+checks:
+  <span class="ok">✓</span> final state Completed   <span class="ok">✓</span> stored equals recompute   <span class="ok">✓</span> no warnings</div></details>
         </div>
         <div class="grp i1">
           <div class="cat">Edge cases <span class="cc">(3)</span></div>
           <div class="vr i1"><span class="vd"><span class="ok">✓</span> <span class="hi">PASS</span></span><span class="vd">201 items → clean 400, no crash</span><span class="cite">request #1460</span></div>
           <div class="vr i1"><span></span><span class="vsub"><span class="tcl">tool:</span> API call (oversized request) · <span class="tcl">checks:</span> 400 with the right "too many items" message <span class="faint">(URL-length limit may reject first — reported)</span></span><span class="cite"></span></div>
+          <details class="raw"><summary><span class="show"><span class="mk">▸</span> show raw output</span><span class="hide"><span class="mk">▾</span> hide raw output</span>  ·  request #1460  ·  API call (oversized request)</summary>
+<div class="rawbody">GET  &hellip;/insights/summary?ids=&lt;201 ids — a 4,600-char URL&gt;
+&larr; <span class="warn">400 Bad Request</span>
+   body:  "Request Too Long"   <span class="rk">&larr; from the web server, before the controller</span>
+expected: a 400 "too many items (max 200)" from the controller itself
+checks:
+  <span class="warn">▲</span> a 400 did come back, but the URL-length limit rejected it first —
+    the controller's own "max 200" guard was never reached. Reported, not hidden.
+    To exercise the guard, the ids must be sent in the body, not the URL.</div></details>
           <div class="vr i1"><span class="vd"><span class="ok">✓</span> <span class="hi">PASS</span></span><span class="vd">Empty filter lists everything</span><span class="cite">request #1462</span></div>
           <div class="vr i1"><span></span><span class="vsub"><span class="tcl">tool:</span> API call (no filter) · <span class="tcl">checks:</span> returns the full list · nothing dropped</span><span class="cite"></span></div>
           <div class="vr i1"><span class="vd"><span class="warn">▲</span> <span class="hi">SUSPECTED</span></span><span class="vd">A very long filter may time out</span><span class="cite"></span></div>
@@ -385,16 +457,39 @@
           <div class="vr i1"><span></span><span class="vsub"><span class="vlbl">What I saw:</span>&nbsp;&nbsp;token created at 2.3s, write at 14.1s</span><span class="cite">token #1203 · request #1881</span></div>
           <div class="vr i1"><span></span><span class="vsub"><span class="vlbl">My read:</span>&nbsp;&nbsp;a longer run could outlive the token before the last write.</span><span class="cite"></span></div>
           <div class="vr i1"><span></span><span class="vsub faint">Couldn't prove it without fault injection (not available yet).</span><span class="cite"></span></div>
+          <details class="raw"><summary><span class="show"><span class="mk">▸</span> show raw output</span><span class="hide"><span class="mk">▾</span> hide raw output</span>  ·  request #1881  ·  watched the token + write timing in the logs</summary>
+<div class="rawbody">00:02.3  sign-in token minted, valid 60m          <span class="rk">[token #1203]</span>
+00:14.1  final write begins                        <span class="rk">[write #4012]</span>
+00:14.9  final write ok                            <span class="rk">[write #4012]</span>
+checks:
+  <span class="ok">✓</span> token still valid at the final write (large margin)
+  <span class="warn">▲</span> Phase 1 can only watch the gap — it can't force a write long enough to
+    actually expire the token. Stays SUSPECTED, not proven.</div></details>
         </div>
         <div class="grp i1">
           <div class="cat">API contract <span class="cc">(1)</span></div>
           <div class="vr i1"><span class="vd"><span class="ok">✓</span> <span class="hi">PASS</span></span><span class="vd">Only adds GET /insights/summary (+ optional "filter")</span><span class="cite">nothing removed</span></div>
           <div class="vr i1"><span></span><span class="vsub"><span class="tcl">tool:</span> build the API description from both versions and diff them · <span class="tcl">checks:</span> every change is an addition · nothing removed or changed</span><span class="cite"></span></div>
+          <details class="raw"><summary><span class="show"><span class="mk">▸</span> show raw output</span><span class="hide"><span class="mk">▾</span> hide raw output</span>  ·  the API before vs after (built from both branches, then diffed)</summary>
+<div class="rawbody">ch-001  <span class="ok">added</span>   GET /insights/summary
+ch-002  <span class="ok">added</span>   optional query param "filter" on /insights/summary
+— nothing removed · nothing changed —
+checks:
+  <span class="ok">✓</span> every change is an addition   <span class="ok">✓</span> nothing removed or modified</div></details>
         </div>
         <div class="grp i1">
           <div class="cat">Feature flag <span class="cc">(1)</span></div>
           <div class="vr i1"><span class="vd"><span class="meta">◌</span> <span class="hi">NEVER RAN</span></span><span class="vd">FLTInsightsMetrics OFF path — nothing reached it; check by hand</span><span class="cite"></span></div>
           <div class="vr i1"><span></span><span class="vsub"><span class="tcl">tool:</span> flip the flag, then call the endpoint each way · <span class="tcl">checks:</span> ON — filter applied · OFF — filter ignored (as designed)</span><span class="cite"></span></div>
+          <details class="raw"><summary><span class="show"><span class="mk">▸</span> show raw output</span><span class="hide"><span class="mk">▾</span> hide raw output</span>  ·  feature flag FLTInsightsMetrics, both ways</summary>
+<div class="rawbody">before:  effective in this workspace = no
+set ON &rarr; applied (confirmed)
+after:   effective in this workspace = yes
+ON   GET &hellip;/insights/summary?filter=sales &rarr; filter applied, 1 item   <span class="rk">[request #1466]</span>
+OFF  no request in this run reached the OFF branch
+     <span class="meta">◌</span> OFF path never ran — check by hand
+checks:
+  <span class="ok">✓</span> ON applies the filter   <span class="meta">◌</span> OFF path not exercised</div></details>
         </div>
 
         <div class="sp-sm"></div>
@@ -403,6 +498,7 @@
           <span class="k">How sure</span><span class="v">data &amp; API checks: high (repeatable) · the 2 risks: suspected only</span>
         </div>
       </div>
+      <div class="l i1"><span class="head">▸</span> <span class="dim">Want the full output of any case? say </span><span class="hi">show #1455</span><span class="dim">  ·  or open </span><span class="cite">.edog-qa/runs/4471/evidence/</span></div>
       <div class="l i1 gate"><span class="head">▸</span> Post this summary to PR #982144?&nbsp;&nbsp;<span class="opt">y · edit · no</span></div>
       <div class="l i1"><span class="ok">✓</span> Posted the summary to PR #982144</div>
       <div class="l i1"><span class="ok">✓</span> Cleaned up — removed everything I created, undid the deploy, stopped the server. <span class="dim">Nothing left behind.</span></div>
@@ -428,6 +524,24 @@
         <div class="vr i1"><span class="vd"><span class="warn">▲</span> <span class="hi">SUSPECTED</span></span><span class="vd">very long filter may time out</span><span class="cite"></span></div>
         <div class="vr i1"><span></span><span class="vsub"><span class="tcl">tool:</span> large valid API call · <span class="tcl">checks:</span> no 5xx · responds gracefully</span><span class="cite"></span></div>
         <div class="l dim" style="margin-top:6px;">each case names <b>how</b> it's checked and <b>against what</b> — more than just API calls (we read data back, recompute, diff contracts, toggle flags). Counts still total across <b>all</b> cases.</div>
+      </div>
+    </div>
+
+    <div class="alt">
+      <div class="cap"><span class="tag note">RAW</span><span class="nm">Proof is one keystroke away</span></div>
+      <div class="ab">
+        <div class="vr i1"><span class="vd"><span class="ok">✓</span> <span class="hi">PASS</span></span><span class="vd">the chain of steps ends in "Completed"</span><span class="cite">run #1402</span></div>
+        <div class="vr i1"><span></span><span class="vsub"><span class="tcl">tool:</span> run the DAG, then read the data back · <span class="tcl">checks:</span> Completed · matches a fresh recompute · no warnings</span><span class="cite"></span></div>
+        <details class="raw" open><summary><span class="show"><span class="mk">▸</span> show raw output</span><span class="hide"><span class="mk">▾</span> hide raw output</span>  ·  run #1402  ·  ran the chain of steps, then read the data back</summary>
+<div class="rawbody">iteration 9c2f&hellip; · 2 steps
+  sales_daily     <span class="ok">Completed</span>   incremental   1240 rows   2.1s
+  sales_summary   <span class="ok">Completed</span>   full          312 rows   3.4s   no warnings
+final state: <span class="ok">Completed</span>
+data check — stored result vs a fresh recompute of the query:
+  stored      312 rows
+  recompute   312 rows
+  <span class="ok">✓</span> exact match, row for row</div></details>
+        <div class="l dim" style="margin-top:6px;">quiet by default; the full output is <b>saved as the run goes</b> and <b>printed on demand</b> — say <span class="hi">show #1402</span>. Each case proves itself in the tool's own words (more than API calls).</div>
       </div>
     </div>
 
