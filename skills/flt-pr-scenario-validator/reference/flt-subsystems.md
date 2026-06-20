@@ -50,17 +50,17 @@ Cross-cutting truths that apply to **any** subsystem are in `flt-model.md` (mana
 **Owns:** turning a `runDAG` call into ordered node execution to a terminal state.
 
 **Read first:**
-- `Core/V2/DagExecutionHandlerV2.cs` — `ExecuteAsync` (entry, wrapped in `LiveTableRunCodeMarker.RunDAG` ✓:126; `iterationId = metadata.OpId` ✓:128), `ExecuteInternalAsync` (the node fan-out/fan-in loop ✓:912), `CheckDagExecCanContinueAsync` (failover/idempotency guard ✓:850), completion poll loop (✓:420-525).
+- `Core/V2/DagExecutionHandlerV2.cs` — `ExecuteAsync` (entry, wrapped in `LiveTableRunCodeMarker.RunDAG`; `iterationId = metadata.OpId`), `ExecuteInternalAsync` (the node fan-out/fan-in loop), `CheckDagExecCanContinueAsync` (failover/idempotency guard), completion poll loop.
 - `Core/V2/NodeExecutor.cs` — `ExecuteNodeAsync` / `ExecuteNodeWithRetryAsync` (per-node submit + retry).
 - `DataModel/Dag/{NodeExecutionStatus,DagExecutionStatus}.cs` ✓, `DataModel/Dag/DagExecutionInstance.cs` (`OnDagExecutionBegin/End/SkipAsync`, `OnNodeExecutionSkipAsync`).
 
 **Oracles:** node/run status; `NodeExecutionMetrics`; the receipts (§7).
 
 **Traps & known issues (verified in code):**
-- **Cascade-skip:** a `Failed`/`Skipped` parent marks the child `Skipped` (✓:939-944). A skip is upstream collateral, not the change's fault.
-- **Fire-and-forget parallelism:** nodes run on `Task.Run` (✓:987), capped by `ParallelNodeLimit` (default 5 ✓:969), coordinated by `visiting/visited/failed` concurrent collections + a per-iteration `AsyncLock` (✓:925). The engine itself flags the orchestration as not clean layer-by-layer (TODO ✓:910).
-- **Admitted gaps:** non-terminal "limbo" after a failover/lock-delete race (TODO ✓:885, WI 1673947) — this is what the "every run terminates" invariant guards; run-level error code **not propagated** (TODO ✓:448) → read failures per-node; `ParallelNodeLimit` may be stored as default 5 even when set (TODO ✓:1168).
-- **ReliableOperation:** retry regenerates context from the store (✓:148); don't mistake a reliable-ops retry for a flaky failure.
+- **Cascade-skip:** a `Failed`/`Skipped` parent marks the child `Skipped`. A skip is upstream collateral, not the change's fault.
+- **Fire-and-forget parallelism:** nodes run on `Task.Run`, capped by `ParallelNodeLimit` (default 5), coordinated by `visiting/visited/failed` concurrent collections + a per-iteration `AsyncLock`. The engine itself flags the orchestration as not clean layer-by-layer (TODO).
+- **Admitted gaps:** non-terminal "limbo" after a failover/lock-delete race (TODO WI 1673947) — this is what the "every run terminates" invariant guards; run-level error code **not propagated** (TODO) → read failures per-node; `ParallelNodeLimit` may be stored as default 5 even when set (TODO).
+- **ReliableOperation:** retry regenerates context from the store; don't mistake a reliable-ops retry for a flaky failure.
 
 **A PR here can break:** node ordering (missed/extra runs), the cascade rule (wrong skip propagation), termination (new hang paths), parallelism (capacity pressure), status correctness. Concurrency/scheduling PRs → **re-run critical passes N times** (real nondeterminism here).
 
@@ -76,14 +76,14 @@ Cross-cutting truths that apply to **any** subsystem are in `flt-model.md` (mana
 - `Controllers/LiveTableSchedulerRunController.cs` — `RunDagAsync` (the `runDAG/{iterationId}` entry, returns **202**), `getDAGExecStatus`, `cancelDAG`.
 - `Controllers/LiveTableMaintenanceController.cs` — `updateExecutionStatus` (maintenance **force-terminal** override for stuck runs).
 - `Core/RefreshTrigger/RefreshTriggersHandler.cs` — trigger CRUD → Reflex/Activator provisioning.
-- `DataModel/Dag/SchedulerRunStatus.cs` — `MappingForScheduler` ✓:84-97.
+- `DataModel/Dag/SchedulerRunStatus.cs` — `MappingForScheduler`.
 
 **Oracles:** `getDAGExecStatus` → `SchedulerRunStatus`; the receipts (§7).
 
 **Traps & known issues (verified):**
-- **Polled status is translated:** `Skipped → Cancelled`, `Cancelling → Running` (✓:94-95). A run blocked by another shows as "Cancelled." Read the raw status / receipts for attribution.
+- **Polled status is translated:** `Skipped → Cancelled`, `Cancelling → Running`. A run blocked by another shows as "Cancelled." Read the raw status / receipts for attribution.
 - **Schedule vs trigger:** schedule = platform JobScheduler (cron lives **outside** this repo) → `runDAG`. Trigger = event-driven via a Reflex "FMLV Refresh Activator" → notebook → `RunDAG`; gated by `FLTEnableRefreshTriggers`. Both converge on `runDAG` + the same lock (§3).
-- **Trigger lost-update race:** concurrent delete/update on the same Reflex overwrite each other — no ETag/optimistic concurrency (TODO ✓ `RefreshTriggersHandler.cs:254`, WI 5054194).
+- **Trigger lost-update race:** concurrent delete/update on the same Reflex overwrite each other — no ETag/optimistic concurrency (TODO ✓ `RefreshTriggersHandler.cs`, WI 5054194).
 
 **A PR here can break:** missed/double-fired refreshes, the status mapping (silently misreports to the scheduler → false alerts or missed refresh), trigger CRUD (orphaned shared Reflex entities break all triggers on the lakehouse).
 
@@ -105,7 +105,7 @@ Cross-cutting truths that apply to **any** subsystem are in `flt-model.md` (mana
 - Different schedules (`mlvExecutionDefinitionId`) → different lock files → run in parallel.
 - Lock self-heals via expiry (`maxDagExecutionTime + delta`).
 - **Design-vs-code lie:** `ConcurrentSchedulesLockingDesign.md` says `{displayName}.lock`; code uses `{DagName}.lock`.
-- Moniker omits DagName (reported `DagUtils.cs:143-149`) → possible cross-schedule serialization.
+- Moniker omits DagName (reported `DagUtils.cs`) → possible cross-schedule serialization.
 
 **A PR here can break:** lock keying (collapse schedules → missed refresh, or split a schedule → double-fire), the no-unlock-on-skip branch (lock leak → stuck schedule), expiry handling.
 
@@ -120,12 +120,12 @@ Cross-cutting truths that apply to **any** subsystem are in `flt-model.md` (mana
 **Read first:**
 - `Utils/DagUtils.cs` — `GetDagFromCatalogAsync`, `PerformTopologicalSort`.
 - `Catalog/*` — listing databases (bronze/silver/gold), MVs, source entities.
-- `DataModel/Dag/Node.cs` — `IsExecutable()` ✓:237-256 (only local MLV, not shortcut/external — sources are ordering scaffolding), **`GetCode()`** ✓:331-558 (the PySpark wrapper).
+- `DataModel/Dag/Node.cs` — `IsExecutable()` (only local MLV, not shortcut/external — sources are ordering scaffolding), **`GetCode()`** (the PySpark wrapper).
 
 **Traps & known issues (verified):**
-- **The PySpark wrapper is high-blast-radius.** A node's SQL is wrapped in PySpark **only** when one of these flags is on: `FLTMLVWarnings`, `FLTEnableDqChecks`, `FLTDqMetricsBatchWrite`, `FLTDqMetricsSetTableLogRetentionDays`, `FLTIRDeletesDisabled` (✓:368-379). The wrapper carries **warning capture, DQ, IR-deletes, and metrics at once** — a change to this one block (✓:374-382) can silently affect all of them. No flag → raw SQL → **warnings/DQ never captured even if real**.
-- Refresh mode → conf: `RefreshMode.Full` sets the refresh-policy conf True/False (✓:552).
-- `Node.IsExecutable` has a failover/deserialization edge for nodes serialized by older code (✓:243-252, WI 1789760).
+- **The PySpark wrapper is high-blast-radius.** A node's SQL is wrapped in PySpark **only** when one of these flags is on: `FLTMLVWarnings`, `FLTEnableDqChecks`, `FLTDqMetricsBatchWrite`, `FLTDqMetricsSetTableLogRetentionDays`, `FLTIRDeletesDisabled`. The wrapper carries **warning capture, DQ, IR-deletes, and metrics at once** — a change to this one block can silently affect all of them. No flag → raw SQL → **warnings/DQ never captured even if real**.
+- Refresh mode → conf: `RefreshMode.Full` sets the refresh-policy conf True/False.
+- `Node.IsExecutable` has a failover/deserialization edge for nodes serialized by older code ( WI 1789760).
 
 **A PR here can break:** which nodes run (executability), dependency edges (wrong order/cycles), the generated SQL/PySpark (wrong data, lost warnings/DQ), `REFRESH MATERIALIZED VIEW` statement shape.
 
@@ -139,8 +139,8 @@ Cross-cutting truths that apply to **any** subsystem are in `flt-model.md` (mana
 
 **Read first:**
 - `Core/CdfEnablement/CdfEnablementExecutor.cs` — `enableCdf` (ALTER TABLE SET `delta.enableChangeDataFeed=true` per source).
-- `Common/Constants.cs` — `{Incremental,Full,No}RefreshPolicyValue` ✓:125/132/139.
-- `DataModel/Dag/Node.cs` — `RefreshPolicy` (filled from Spark/GTS response ✓:211-215).
+- `Common/Constants.cs` — `{Incremental,Full,No}RefreshPolicyValue`/132/139.
+- `DataModel/Dag/Node.cs` — `RefreshPolicy` (filled from Spark/GTS response).
 
 **Oracles:** per-node `refreshPolicy` (`INCREMENTALREFRESH`/`FULLREFRESH`/**`NOREFRESH`**); `CDFDisabled` warning (§7).
 
@@ -161,7 +161,7 @@ Cross-cutting truths that apply to **any** subsystem are in `flt-model.md` (mana
 
 **Read first:**
 - `Core/FileIngestion/*` — change-detection pipeline (list → hash-bucket → per-bucket diff → `changes.json` → manifest), `FileIngestionNodeHandler.IsFileSourcedNode` (table prop `fabric.source.sourceType = OneLake_Files`).
-- `Core/V2/DagExecutionHandlerV2.cs` — `IsFileSourcedIngestionEnabled` ✓:1265, `ExecuteFileSourcedNodeAsync` ✓:1338.
+- `Core/V2/DagExecutionHandlerV2.cs` — `IsFileSourcedIngestionEnabled` `ExecuteFileSourcedNodeAsync`.
 - `DataModel/FileIngestion/{CheckpointStatus,DriftClassification}.cs` ✓.
 
 **Traps & known issues (verified):**
@@ -182,8 +182,8 @@ Cross-cutting truths that apply to **any** subsystem are in `flt-model.md` (mana
 
 **Read first:**
 - `DagExecutionHooks/Insights/*` — `InsightsMetricsWriteHook`, `RunMetricsTableWriter`, `NodeMetricsTableWriter` (PySpark MERGE into Delta).
-- `DataModel/Dag/NodeExecutionMetrics.cs` — the per-node oracle object; row-count math `SetMetricFields` ✓:579-610, `-1` defaults ✓:49-50.
-- `DataModel/Dag/NodeWarning.cs` — `WarningType` ✓:20,25.
+- `DataModel/Dag/NodeExecutionMetrics.cs` — the per-node oracle object; row-count math `SetMetricFields` `-1` defaults.
+- `DataModel/Dag/NodeWarning.cs` — `WarningType`.
 - `SparkHttp/Model/MLVRefreshOutput.cs` — what Spark returns (parsed into the metrics).
 
 **Oracles (cite these):**
@@ -227,7 +227,7 @@ Cross-cutting truths that apply to **any** subsystem are in `flt-model.md` (mana
 **Owns:** keeping FLT and the capacity stable under load. **All signals here are INFRA, never a verdict on the change.**
 
 **Read first:**
-- `SparkHttp/GTSBasedSparkClient.cs` — GTS submit + status mapping: **HTTP 430 → `MLV_SPARK_JOB_CAPACITY_THROTTLING`** (Retriable) ✓:497-503; **429 → `MLV_TOO_MANY_REQUESTS`** ✓:488.
+- `SparkHttp/GTSBasedSparkClient.cs` — GTS submit + status mapping: **HTTP 430 → `MLV_SPARK_JOB_CAPACITY_THROTTLING`** (Retriable); **429 → `MLV_TOO_MANY_REQUESTS`**.
 - `RetryPolicy/V2/Strategies/CapacityRetryStrategy.cs` — admission window `20/40/60/90/90/90s`, then extended `60/90s` until DAG timeout if any node still running, else fail-fast.
 - `Throttling/Services/HierarchicalThrottlingService.cs` — token-bucket inbound throttling; **fail-open** (any exception → request allowed).
 

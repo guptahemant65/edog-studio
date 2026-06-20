@@ -210,7 +210,7 @@ infra_requirements:
   tables:
     - name: bronze.orders
       properties:
-        delta.enableChangeDataFeed: "false"   # MUST be false — set at seed time
+        delta.enableChangeDataFeed: "false" # MUST be false — set at seed time
   mlvs:
     - name: silver.orders_agg
       sql: "SELECT id, SUM(amount) AS total FROM bronze.orders GROUP BY id"
@@ -251,9 +251,9 @@ title: "Notebook session — create, trivial query, close"
 category: HappyPath
 stimulus:
   sequence:
-    - POST /api/notebook/create-session  {workspaceId, notebookId, kernel: synapse_pyspark}
-    - POST /api/notebook/execute-cell    {sessionId, code: "spark.sql('SELECT 1 AS alive').show()"}
-    - POST /api/notebook/close-session   {sessionId}
+    - POST /api/notebook/create-session {workspaceId, notebookId, kernel: synapse_pyspark}
+    - POST /api/notebook/execute-cell {sessionId, code: "spark.sql('SELECT 1 AS alive').show()"}
+    - POST /api/notebook/close-session {sessionId}
 observations:
   - create-session: assert sessionId returned, no error
   - execute-cell: assert status == "ok", output contains "alive"
@@ -304,7 +304,7 @@ Seed in this exact order. Record each create to the teardown ledger **before** i
    → sessionId = SESSION_ID
    Cold-start: poll until ready, up to 10 minutes
 
-7. POST /api/notebook/execute-cell  (seed tables with required properties)
+7. POST /api/notebook/execute-cell (seed tables with required properties)
    code: |
      spark.sql("""
        CREATE TABLE bronze.orders (
@@ -314,7 +314,7 @@ Seed in this exact order. Record each create to the teardown ledger **before** i
        TBLPROPERTIES ('delta.enableChangeDataFeed'='true')
      """)
 
-8. POST /api/notebook/execute-cell  (create SQL MLV)
+8. POST /api/notebook/execute-cell (create SQL MLV)
    code: |
      spark.sql("""
        CREATE MATERIALIZED LAKE VIEW silver.orders_agg
@@ -338,7 +338,7 @@ Each `execute-cell` response has `status: "ok"` or `status: "error"`. Treat `"er
 ```python
 import uuid, requests
 
-iteration_id = str(uuid.uuid4())   # fresh GUID for this run
+iteration_id = str(uuid.uuid4()) # fresh GUID for this run
 
 # Trigger
 requests.post(
@@ -380,15 +380,15 @@ Read from the `getDAGExecStatus` response, the synchronous OneLake JSON (`node_m
 
 | Oracle | Location | What it tells you (code-verified) |
 |---|---|---|
-| `warnings` | per-node metrics · `sys_node_metrics.warnings` | A **closed set of exactly two** (`NodeWarning.cs:20,25`): `CDFDisabled` (a source lacks CDF → node fell back to full) and `DeleteWithoutHints` (delete ran without pruning hints). On node metadata, **never on output rows**. Authoritative value comes from Spark at execution-end, and is only captured when the SQL is PySpark-wrapped (`FLTMLVWarnings` etc., `Node.cs:368-379`) — **no flag → no captured warning even if the condition is real**. |
-| `refreshPolicy` | per-node | One of `INCREMENTALREFRESH` / `FULLREFRESH` / `NOREFRESH` (`Constants.cs:125/132/139`). **`NOREFRESH` = nothing changed = success — never flag it.** Distinct from the run-level `RefreshMode` (`Optimal`/`Full`, the upfront request). |
+| `warnings` | per-node metrics · `sys_node_metrics.warnings` | A **closed set of exactly two** (`NodeWarning.cs`): `CDFDisabled` (a source lacks CDF → node fell back to full) and `DeleteWithoutHints` (delete ran without pruning hints). On node metadata, **never on output rows**. Authoritative value comes from Spark at execution-end, and is only captured when the SQL is PySpark-wrapped (`FLTMLVWarnings` etc., `Node.cs`) — **no flag → no captured warning even if the condition is real**. |
+| `refreshPolicy` | per-node | One of `INCREMENTALREFRESH` / `FULLREFRESH` / `NOREFRESH` (`Constants.cs/132/139`). **`NOREFRESH` = nothing changed = success — never flag it.** Distinct from the run-level `RefreshMode` (`Optimal`/`Full`, the upfront request). |
 | `addedRowsCount` / `droppedRowsCount` | per-node | `long`; **`-1` = "not reported"** (default, → SQL `null`). **`0` ≠ "no rows" — `0` is a real zero.** `added = processed − dropped`. Drops ≠ violations. |
 | `status` + `errorCode` + `errorSource` | per-node | `errorSource` is `System` or `User` (the catalog-grounded attribution); `errorCode` e.g. `MLV_COLUMN_DQ_CHECK_FAILED`. |
 | `sys_run_metrics` / `sys_node_metrics` / `sys_error_metrics` | `_mlv_system` (Spark query) | Run/node aggregates; `sys_error_metrics.upstream_mlv_id` gives the failure cascade chain. `sys_dq_metrics` lives in `dbo`, not `_mlv_system`. |
 
 **Two traps that will fool a naive read (code-verified):**
-- **`Failed` ≠ `Skipped`.** A failed node marks everything downstream `Skipped` (`DagExecutionHandlerV2.cs:939-944`). A `Skipped` node is normally upstream collateral — trace it to the failed ancestor (`upstream_mlv_id`); never blame the change for a skip.
-- **The polled status is translated.** `getDAGExecStatus` maps `Skipped → Cancelled` and `Cancelling → Running` (`SchedulerRunStatus.cs:84-97`). A run blocked by another run shows as "Cancelled." Read the raw status / receipts when attribution matters.
+- **`Failed` ≠ `Skipped`.** A failed node marks everything downstream `Skipped` (`DagExecutionHandlerV2.cs`). A `Skipped` node is normally upstream collateral — trace it to the failed ancestor (`upstream_mlv_id`); never blame the change for a skip.
+- **The polled status is translated.** `getDAGExecStatus` maps `Skipped → Cancelled` and `Cancelling → Running` (`SchedulerRunStatus.cs`). A run blocked by another run shows as "Cancelled." Read the raw status / receipts when attribution matters.
 
 ### Layer C — OneLake Rows (data landed)
 
@@ -443,7 +443,7 @@ Flag-gated changes are DORMANT until the flag is in the right state. Running a f
 3. SET + VERIFY
    POST /api/edog/feature-flags/overrides
    Header: X-EDOG-Control-Token: <token>
-   Body: {"flag": "<wireKey>", "value": true}   // or false for force-OFF
+   Body: {"flag": "<wireKey>", "value": true} // or false for force-OFF
 
    Success response echoes: {"applied": {"hash": "...", "revision": N}}
 
@@ -502,13 +502,13 @@ Decode every failure through `qa_error_classify` before attributing:
 # error-sim-catalog.js: 115 codes tagged errorSource (User/System), category, httpStatus, fltCodePath
 
 # Classification:
-# User + validation/auth  → change-attributable
+# User + validation/auth → change-attributable
 # System + throttling/execution/deploy → infra / harness
 
 # Token-related attribution:
 # Read GET /api/edog/health: bearerExpiresIn, tokenExpired
 # Capacity saturation: HTTP 430 -> MLV_SPARK_JOB_CAPACITY_THROTTLING (Retriable) -> infra, never a change verdict.
-#   There is NO "404 capacity_routing_not_ready" in FLT. FLT auto-retries 430 (~6min admission window, then extended).
+# There is NO "404 capacity_routing_not_ready" in FLT. FLT auto-retries 430 (~6min admission window, then extended).
 # Inbound/GTS throttle: HTTP 429 -> MLV_TOO_MANY_REQUESTS; throttling is fail-open, so a 429 rarely causes a refresh failure.
 ```
 
@@ -527,8 +527,8 @@ A scenario's `preconditions` are enforced **before** stimulus, every time the sc
 # 1. Set required flag overrides (POST /api/edog/feature-flags/overrides)
 # 2. Verify effectiveForMyWorkspace flipped (GET catalog)
 # 3. Confirm table properties are as required (GET table-metadata)
-#    — properties that require seed-time creation (like CDF=false) cannot be patched here;
-#    — they must have been set in the seeding step
+# — properties that require seed-time creation (like CDF=false) cannot be patched here;
+# — they must have been set in the seeding step
 ```
 
 `qa_infra_spec` carries:

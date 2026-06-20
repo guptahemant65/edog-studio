@@ -10,9 +10,9 @@ This is the skill's map of what it can call, and **through which door**. Use it 
 
 | # | Surface | Door (EDOG path) | Token / audience | Real upstream | What lives here |
 |---|---|---|---|---|---|
-| 1 | **Fabric control-plane** | `/api/fabric/*` (`:3266`, `_proxy_fabric :3542`); `/api/fabric/capacities` (`:3264`) | Power BI **bearer** (`_ensure_bearer`) | `REDIRECT_HOST = https://biazure-int-edog-redirect.analysis-df.windows.net` (`:87`) — the EDOG **int** redirect fronting the Fabric/PBI public APIs | workspaces, lakehouses, **capacities** (`/v1.0/myorg/capacities` `:3650`), notebooks, items. **Infra** — used in Beat 4 to pick/seed/inspect a target. |
-| 2 | **FLT workload** (the thing under test) | `POST /api/playground/dispatch` with `tokenType:"mwc"` (`:3458`); `_proxy_to_flt :4704` | **mwc** service token (encodes ws+lh routing) | `localhost:5557` (`FLT_INTERNAL_PORT = 5557` `:397`) | insights, DAG runs, iteration listing, maintenance, CDF, triggers. **The PR changes this.** Most scenarios are dispatch calls here. |
-| 3 | **OneLake / data (the receipts)** | `/api/onelake/*` (`:3299-3304`), `/api/mwc/tables` (`:3293`), `/api/mwc/table-stats` (`:3297`), `/api/mwc/table-details` (`:3428`) | OneLake **storage** bearer, aud `https://storage.azure.com` (`ONELAKE_RESOURCE :89`, `_ensure_onelake_bearer :1648`) — **a different audience from surface 1's bearer** | `ONELAKE_HOST = https://onelake-int-edog.dfs.pbidedicated.windows-int.net` (`:88`) + MWC `/schemas/{name}/tables` | the actual stored data: list tables, **read rows back**, table metadata, row counts. **This is how you prove data is correct** (Beat 5 / `qa_mlv_convergence`). |
+| 1 | **Fabric control-plane** | `/api/fabric/*` (handler `_proxy_fabric`); `/api/fabric/capacities` | Power BI **bearer** (`_ensure_bearer`) | `REDIRECT_HOST` (= `https://biazure-int-edog-redirect.analysis-df.windows.net`) — the EDOG **int** redirect fronting the Fabric/PBI public APIs | workspaces, lakehouses, **capacities** (upstream `/v1.0/myorg/capacities`), notebooks, items. **Infra** — used in Beat 4 to pick/seed/inspect a target. |
+| 2 | **FLT workload** (the thing under test) | `POST /api/playground/dispatch` with `tokenType:"mwc"`; handler `_proxy_to_flt` | **mwc** service token (encodes ws+lh routing) | `localhost:5557` (`FLT_INTERNAL_PORT`) | insights, DAG runs, iteration listing, maintenance, CDF, triggers. **The PR changes this.** Most scenarios are dispatch calls here. |
+| 3 | **OneLake / data (the receipts)** | `/api/onelake/*`, `/api/mwc/tables`, `/api/mwc/table-stats`, `/api/mwc/table-details` | OneLake **storage** bearer, aud `https://storage.azure.com` (`ONELAKE_RESOURCE`, `_ensure_onelake_bearer`) — **a different audience from surface 1's bearer** | `ONELAKE_HOST` (= `https://onelake-int-edog.dfs.pbidedicated.windows-int.net`) + MWC `/schemas/{name}/tables` | the actual stored data: list tables, **read rows back**, table metadata, row counts. **This is how you prove data is correct** (Beat 5 / `qa_mlv_convergence`). |
 
 **Do not conflate two things that share the letters "mwc":** the **mwc *token*** (surface 2, the FLT service token used by `dispatch`) is unrelated to the **`/api/mwc/*` *endpoints*** (surface 3, EDOG's own lakehouse-data explorer that reads OneLake with a PBI bearer + a storage bearer). Different concept, same three letters.
 
@@ -22,11 +22,11 @@ This is the skill's map of what it can call, and **through which door**. Use it 
 
 A scenario is not validated by an API status. For anything that writes or reads an MLV, **read the stored data back through surface 3** and compare. Exact endpoints (all `GET` unless noted), grounded:
 
-- **List tables in the locked lakehouse** — `/api/mwc/tables?wsId={GUID}&lhId={GUID}&capId={GUID}` (`_serve_mwc_tables :6987`). **All three params required** or it returns `400 missing_params` (`:7008`). Returns `{tables:[…], schemas:[{name,isShortcut,tableCount}], errors:[…]}`. (This is the endpoint to use — *not* a guessed `/api/onelake/tables`, which does not exist and returns 404.)
-- **Read the first N rows of a Delta table** — `/api/onelake/table-preview-rows` (`_serve_onelake_table_rows :7529`). The data-correctness oracle: read the materialized rows, compare to an independent recompute.
-- **Table catalog metadata** — `/api/onelake/table-metadata` (`:7423`) reads `{lh}/Tables/{schema}/{table}/_metadata/table.json.gz` from OneLake DFS.
-- **Row count & size from the delta log** — `/api/mwc/table-stats` (`:7294`).
-- **Filesystem timestamps** — `/api/onelake/item-timestamps` (`:7731`) — to confirm *when* a write landed.
+- **List tables in the locked lakehouse** — `/api/mwc/tables?wsId={GUID}&lhId={GUID}&capId={GUID}` (`_serve_mwc_tables`). **All three params required** or it returns `400 missing_params`. Returns `{tables:[…], schemas:[{name,isShortcut,tableCount}], errors:[…]}`. (This is the endpoint to use — *not* a guessed `/api/onelake/tables`, which does not exist and returns 404.)
+- **Read the first N rows of a Delta table** — `/api/onelake/table-preview-rows` (`_serve_onelake_table_rows`). The data-correctness oracle: read the materialized rows, compare to an independent recompute.
+- **Table catalog metadata** — `/api/onelake/table-metadata` (`_serve_onelake_table_metadata`) reads `{lh}/Tables/{schema}/{table}/_metadata/table.json.gz` from OneLake DFS.
+- **Row count & size from the delta log** — `/api/mwc/table-stats`.
+- **Filesystem timestamps** — `/api/onelake/item-timestamps` (`_serve_onelake_item_timestamps`) — to confirm *when* a write landed.
 
 For the FLT-native receipts (`_mlv_system.sys_run_metrics`, `node_metrics.json`, warnings, row-count deltas), see `reference/flt-subsystems.md §7` — read those via surface 2 (the insights endpoints) or the synchronous JSON on OneLake (surface 3).
 
@@ -36,14 +36,14 @@ For the FLT-native receipts (`_mlv_system.sys_run_metrics`, `node_metrics.json`,
 
 Never assume the endpoint list — read it live from the deployed FLT:
 
-- **`GET /api/playground/swagger/spec`** (`:3346`) — the live runtime swagger (Swashbuckle). The **complete** FLT endpoint list, including PublicAPI/MLV controllers the curated catalog omits. Each path entry carries its method, params (name, `in`, `required`), and response codes. Use it to pull a changed endpoint's full input space.
-- **`GET /api/playground/catalog`** (`:3340`) — a curated subset (from `scripts/flt_catalog.py`). Convenience for grouping by controller; **not** the coverage boundary — the swagger is.
+- **`GET /api/playground/swagger/spec`** — the live runtime swagger (Swashbuckle). The **complete** FLT endpoint list, including PublicAPI/MLV controllers the curated catalog omits. Each path entry carries its method, params (name, `in`, `required`), and response codes. Use it to pull a changed endpoint's full input space.
+- **`GET /api/playground/catalog`** — a curated subset (from `scripts/flt_catalog.py`). Convenience for grouping by controller; **not** the coverage boundary — the swagger is.
 
 ---
 
 ## Token + path rules (the trap that costs round-trips)
 
-A `dispatch` call fails fast if the token type and path prefix don't match (`dev-server.py:329-335`, verified):
+A `dispatch` call fails fast if the token type and path prefix don't match (`dev-server.py` prefixes `_PLAYGROUND_BEARER_PATH_PREFIXES` / `_PLAYGROUND_MWC_PATH_PREFIXES`, verified):
 
 - **`mwc`** (surface 2) → path must start with `/liveTable`, `/liveTableSchedule`, or `/liveTableMaintanance`, and be **FLT-relative**. Strip the `/v1/workspaces/{ws}/lakehouses/{lh}` prefix the swagger shows — the mwc token already encodes ws+lh routing. Swagger `…/liveTable/insights/cards` → dispatch `/liveTable/insights/cards`. (Sending the full `/v1/…` path with `mwc` → `400 invalid_path`.)
 - **`bearer`** (surface 1) → path must start with `/v1/`, `/v1.0/`, `/metadata/`, or `/workspaces`.

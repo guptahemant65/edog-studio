@@ -30,7 +30,7 @@ This does NOT open a browser. The default `python edog.py` opens the EDOG Studio
 }
 ```
 
-`tokenType`: `"bearer"` or `"mwc"`, and **the path prefix MUST match the token type** (`dev-server.py:330-335`, verified at runtime):
+`tokenType`: `"bearer"` or `"mwc"`, and **the path prefix MUST match the token type** (`dev-server.py`, verified at runtime):
 - **`mwc`** (FLT service calls) — path must start with **`/liveTable`**, `/liveTableSchedule`, or `/liveTableMaintanance`. The path is **FLT-relative** — do NOT include `/v1/workspaces/{ws}/lakehouses/{lh}/...`; the MWC token already encodes the workspace/lakehouse routing. (Sending the full `/v1/...` path with `mwc` returns `400 invalid_path`.) So an endpoint whose swagger path is `/v1/workspaces/{ws}/lakehouses/{lh}/liveTable/listDAGExecutionIterationIds` is dispatched as just `/liveTable/listDAGExecutionIterationIds`.
 - **`bearer`** (Fabric/control-plane calls) — path must start with `/v1/`, `/v1.0/`, `/metadata/`, or `/workspaces`.
 
@@ -92,7 +92,7 @@ curl -s http://localhost:5555/api/flt/config
 
 ### `GET /api/ado-proxy/pr-diff`
 
-Fetch the PR diff and metadata. **The query param is `prUrl` (the full PR URL), NOT `prId`** (verified: `dev-server.py:3880` reads `prUrl`; passing `prId` returns `400 "prUrl query parameter required"`).
+Fetch the PR diff and metadata. **The query param is `prUrl` (the full PR URL), NOT `prId`** (verified: `dev-server.py` reads `prUrl`; passing `prId` returns `400 "prUrl query parameter required"`).
 
 ```bash
 curl -s "http://localhost:5555/api/ado-proxy/pr-diff?prUrl=https://dev.azure.com/powerbi/MWC/_git/workload-fabriclivetable/pullrequest/985969"
@@ -394,32 +394,32 @@ curl -s -X POST http://localhost:5555/api/mwc/table-details \
 
 | Endpoint | Confirmed in dev-server.py |
 |----------|---------------------------|
-| `POST /api/playground/dispatch` | ✓ line 3458 |
-| `GET /api/playground/swagger/spec` | ✓ line 3346 |
-| `GET /api/playground/catalog` | ✓ line 3340 |
-| `GET /api/edog/health` | ✓ line 3270 |
-| `GET /api/flt/config` | ✓ line 3262 |
-| `GET /api/ado-proxy/pr-diff` | ✓ line 3338 |
-| `POST /api/ado-proxy/pr-comment` | ✓ line 3462 |
-| `GET /api/fabric/capacities` | ✓ line 3264 |
-| `GET/POST /api/fabric/*` (workspaces, lakehouses, notebooks) | ✓ line 3266 wildcard |
-| `POST /api/command/deploy` | ✓ line 3442 |
-| `GET /api/command/deploy-stream` (SSE) | ✓ line 3315 |
-| `POST /api/flt-proxy/liveTableSchedule/runDAG/{id}` | ✓ line 3324/3372/3380/3388 wildcard |
+| `POST /api/playground/dispatch` | ✓ present |
+| `GET /api/playground/swagger/spec` | ✓ present |
+| `GET /api/playground/catalog` | ✓ present |
+| `GET /api/edog/health` | ✓ present |
+| `GET /api/flt/config` | ✓ present |
+| `GET /api/ado-proxy/pr-diff` | ✓ present |
+| `POST /api/ado-proxy/pr-comment` | ✓ present |
+| `GET /api/fabric/capacities` | ✓ present |
+| `GET/POST /api/fabric/*` (workspaces, lakehouses, notebooks) | ✓ present wildcard |
+| `POST /api/command/deploy` | ✓ present |
+| `GET /api/command/deploy-stream` (SSE) | ✓ present |
+| `POST /api/flt-proxy/liveTableSchedule/runDAG/{id}` | ✓ present/3372/3380/3388 wildcard |
 | `GET /api/flt-proxy/liveTableSchedule/getDAGExecStatus/{id}` | ✓ wildcard |
-| `POST /api/notebook/create-session` | ✓ line 3436 |
-| `POST /api/notebook/execute-cell` | ✓ line 3438 |
-| `POST /api/notebook/close-session` | ✓ line 3440 |
-| `GET /api/edog/feature-flags/catalog` | ✓ line 3286 |
-| `POST /api/edog/feature-flags/overrides` | ✓ line 3420 |
-| `DELETE /api/edog/feature-flags/overrides/{flag}` | ✓ line 3394 (startswith) |
-| `POST /api/edog/feature-flags/overrides/reset` | ✓ line 3422 |
-| `GET /api/logs` | ✓ line 3318 |
-| `GET /api/telemetry` | ✓ line 3319 |
-| `GET /api/executions` | ✓ line 3321 |
-| `GET /api/edog/interceptors-status` | ✓ line 3284 |
-| `GET /api/onelake/table-preview-rows` | ✓ line 3301 |
-| `GET /api/onelake/table-metadata` | ✓ line 3299 |
-| `POST /api/mwc/table-details` | ✓ line 3428 |
+| `POST /api/notebook/create-session` | ✓ present |
+| `POST /api/notebook/execute-cell` | ✓ present |
+| `POST /api/notebook/close-session` | ✓ present |
+| `GET /api/edog/feature-flags/catalog` | ✓ present |
+| `POST /api/edog/feature-flags/overrides` | ✓ present |
+| `DELETE /api/edog/feature-flags/overrides/{flag}` | ✓ present (startswith) |
+| `POST /api/edog/feature-flags/overrides/reset` | ✓ present |
+| `GET /api/logs` | ✓ present |
+| `GET /api/telemetry` | ✓ present |
+| `GET /api/executions` | ✓ present |
+| `GET /api/edog/interceptors-status` | ✓ present |
+| `GET /api/onelake/table-preview-rows` | ✓ present |
+| `GET /api/onelake/table-metadata` | ✓ present |
+| `POST /api/mwc/table-details` | ✓ present |
 | `POST /api/edog/feature-flags/overrides/bulk` | DOES NOT EXIST — stale spec reference; loop the single POST or use `/overrides/reset` |
 | **`GET /api/qa/trace-bundle`** | **NEW (Phase 3) — not yet built** |
