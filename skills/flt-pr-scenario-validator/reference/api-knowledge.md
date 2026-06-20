@@ -1,53 +1,76 @@
-# API Knowledge — FLT + Fabric Surface (for crafting & validating scenarios)
+# API Knowledge — the EDOG / FLT / OneLake surfaces (for crafting & validating scenarios)
 
-This is the skill's map of what it can call. Use it in Beat 2 (understand) and Beat 3 (craft scenarios) so scenarios are **complete** — covering the real endpoints a change affects — not just the one path in the diff. It is pointer-based: discover the live surface at runtime, and load the deep references only when a change needs them.
+This is the skill's map of what it can call, and **through which door**. Use it in Beat 2 (understand), Beat 3 (craft scenarios), Beat 4 (seed/inspect infra), and Beat 5 (exercise + read the data back). It is pointer-based: discover the live surface at runtime, load the deep references only when a change needs them.
 
-There are **two API surfaces**, with different token types and path rules (see `tools.md` §1 for the dispatch prefix rules):
-
-| Surface | Token | What it is | Where it's used |
-|---|---|---|---|
-| **FLT service** (`:5557`) | `mwc` | The materialized-view engine: DAG runs, iteration listing, maintenance, insights, CDF, triggers. Paths are FLT-relative (`/liveTable`, `/liveTableSchedule`, `/liveTableMaintanance`). | The thing under test — most scenarios |
-| **Fabric control-plane** | `bearer` | Workspaces, lakehouses, capacities, notebooks, OneLake. Paths `/v1/…`, `/workspaces…`. | Seeding/inspecting infra (Beat 4) |
+**The single most important thing to internalise:** EDOG's dev-server (`scripts/dev-server.py`, on `:5555`) is a *proxy in front of three different upstreams*, each with its **own token audience**. Calling the right path through the wrong door is the #1 source of wasted round-trips (a `400 invalid_path`, a `404`, or a wrong-target read). Know the door before you knock.
 
 ---
 
-## 1. Discover the COMPLETE FLT surface at runtime (do this first)
+## The three surfaces (grounded in `dev-server.py`)
+
+| # | Surface | Door (EDOG path) | Token / audience | Real upstream | What lives here |
+|---|---|---|---|---|---|
+| 1 | **Fabric control-plane** | `/api/fabric/*` (`:3266`, `_proxy_fabric :3542`); `/api/fabric/capacities` (`:3264`) | Power BI **bearer** (`_ensure_bearer`) | `REDIRECT_HOST = https://biazure-int-edog-redirect.analysis-df.windows.net` (`:87`) — the EDOG **int** redirect fronting the Fabric/PBI public APIs | workspaces, lakehouses, **capacities** (`/v1.0/myorg/capacities` `:3650`), notebooks, items. **Infra** — used in Beat 4 to pick/seed/inspect a target. |
+| 2 | **FLT workload** (the thing under test) | `POST /api/playground/dispatch` with `tokenType:"mwc"` (`:3458`); `_proxy_to_flt :4704` | **mwc** service token (encodes ws+lh routing) | `localhost:5557` (`FLT_INTERNAL_PORT = 5557` `:397`) | insights, DAG runs, iteration listing, maintenance, CDF, triggers. **The PR changes this.** Most scenarios are dispatch calls here. |
+| 3 | **OneLake / data (the receipts)** | `/api/onelake/*` (`:3299-3304`), `/api/mwc/tables` (`:3293`), `/api/mwc/table-stats` (`:3297`), `/api/mwc/table-details` (`:3428`) | OneLake **storage** bearer, aud `https://storage.azure.com` (`ONELAKE_RESOURCE :89`, `_ensure_onelake_bearer :1648`) — **a different audience from surface 1's bearer** | `ONELAKE_HOST = https://onelake-int-edog.dfs.pbidedicated.windows-int.net` (`:88`) + MWC `/schemas/{name}/tables` | the actual stored data: list tables, **read rows back**, table metadata, row counts. **This is how you prove data is correct** (Beat 5 / `qa_mlv_convergence`). |
+
+**Do not conflate two things that share the letters "mwc":** the **mwc *token*** (surface 2, the FLT service token used by `dispatch`) is unrelated to the **`/api/mwc/*` *endpoints*** (surface 3, EDOG's own lakehouse-data explorer that reads OneLake with a PBI bearer + a storage bearer). Different concept, same three letters.
+
+---
+
+## Reading the data and infra back (surface 3 — the receipts)
+
+A scenario is not validated by an API status. For anything that writes or reads an MLV, **read the stored data back through surface 3** and compare. Exact endpoints (all `GET` unless noted), grounded:
+
+- **List tables in the locked lakehouse** — `/api/mwc/tables?wsId={GUID}&lhId={GUID}&capId={GUID}` (`_serve_mwc_tables :6987`). **All three params required** or it returns `400 missing_params` (`:7008`). Returns `{tables:[…], schemas:[{name,isShortcut,tableCount}], errors:[…]}`. (This is the endpoint to use — *not* a guessed `/api/onelake/tables`, which does not exist and returns 404.)
+- **Read the first N rows of a Delta table** — `/api/onelake/table-preview-rows` (`_serve_onelake_table_rows :7529`). The data-correctness oracle: read the materialized rows, compare to an independent recompute.
+- **Table catalog metadata** — `/api/onelake/table-metadata` (`:7423`) reads `{lh}/Tables/{schema}/{table}/_metadata/table.json.gz` from OneLake DFS.
+- **Row count & size from the delta log** — `/api/mwc/table-stats` (`:7294`).
+- **Filesystem timestamps** — `/api/onelake/item-timestamps` (`:7731`) — to confirm *when* a write landed.
+
+For the FLT-native receipts (`_mlv_system.sys_run_metrics`, `node_metrics.json`, warnings, row-count deltas), see `reference/flt-subsystems.md §7` — read those via surface 2 (the insights endpoints) or the synchronous JSON on OneLake (surface 3).
+
+---
+
+## Discover the COMPLETE FLT surface at runtime (do this first, Beat 2/3)
 
 Never assume the endpoint list — read it live from the deployed FLT:
 
-- **`GET /api/playground/swagger/spec`** — the live runtime swagger (Swashbuckle). This is the **complete** FLT endpoint list, including PublicAPI/MLV controllers the curated catalog omits. Each path entry has its method, parameters (name, `in`, `required`), and responses. This is how Beat 5 found `/v1/workspaces/{ws}/lakehouses/{lh}/liveTable/listDAGExecutionIterationIds` and confirmed a new param was additive.
-- **`GET /api/playground/catalog`** — a curated subset of FLT endpoints (from `scripts/flt_catalog.py`, which scans the FLT C# controllers). Convenience for grouping by controller; **not** the coverage boundary — the swagger spec is.
-
-**Scenario-crafting use:** for a changed controller/endpoint, pull its full operation from the swagger (all params, all response codes), and craft scenarios that exercise each meaningful input class — valid, boundary, missing, and the flag-on/flag-off paths — not just the happy path the diff shows.
+- **`GET /api/playground/swagger/spec`** (`:3346`) — the live runtime swagger (Swashbuckle). The **complete** FLT endpoint list, including PublicAPI/MLV controllers the curated catalog omits. Each path entry carries its method, params (name, `in`, `required`), and response codes. Use it to pull a changed endpoint's full input space.
+- **`GET /api/playground/catalog`** (`:3340`) — a curated subset (from `scripts/flt_catalog.py`). Convenience for grouping by controller; **not** the coverage boundary — the swagger is.
 
 ---
 
-## 2. The deep references (load on demand, by change type)
+## Token + path rules (the trap that costs round-trips)
+
+A `dispatch` call fails fast if the token type and path prefix don't match (`dev-server.py:329-335`, verified):
+
+- **`mwc`** (surface 2) → path must start with `/liveTable`, `/liveTableSchedule`, or `/liveTableMaintanance`, and be **FLT-relative**. Strip the `/v1/workspaces/{ws}/lakehouses/{lh}` prefix the swagger shows — the mwc token already encodes ws+lh routing. Swagger `…/liveTable/insights/cards` → dispatch `/liveTable/insights/cards`. (Sending the full `/v1/…` path with `mwc` → `400 invalid_path`.)
+- **`bearer`** (surface 1) → path must start with `/v1/`, `/v1.0/`, `/metadata/`, or `/workspaces`.
+- The dispatch returns an envelope `{status, statusText, headers, body}` — **assert the INNER `status`/`body`**, not the dispatch HTTP 200. A `400`/`500` from FLT still arrives inside a `200` envelope.
+
+**Surface-3 endpoints are NOT dispatched** — call them directly on `:5555` (e.g. `curl "http://localhost:5555/api/mwc/tables?wsId=…&lhId=…&capId=…"`). They mint their own storage bearer internally.
+
+**Environment errors on shared int hosts are harness conditions, not verdicts.** Surface 1 (the EDOG int redirect) and surface 3 (OneLake int) are shared infra; a `502 Bad Gateway` / `503` from them is the *environment*, not the PR. Surface it honestly, retry once, then move on or use a cached value — never chase it as a bug and never let it stall the run.
+
+---
+
+## The deep references (load on demand, by change type)
 
 | Change touches | Read this | For |
 |---|---|---|
-| Fabric infra (workspace/lakehouse/capacity/notebook/OneLake) | `docs/fabric-api-reference.md` (EDOG repo, ~50KB — grep the relevant `# Fxx` section) | exact hosts, token types, request/response shapes for the control-plane calls used to seed and inspect infra |
-| FLT controller/endpoint internals | `scripts/flt_catalog.py` + the FLT repo's `Service/.../Controllers/*.cs` | how the curated catalog is built; the real controller routes and `tokenType` |
-| FLT subsystem behavior (engine, triggers, insights, CDF, file ingestion, …) | `reference/flt-subsystems.md` | the blast-radius index — read-first files, oracles, traps per subsystem |
+| Fabric infra (workspace/lakehouse/capacity/notebook) | `docs/fabric-api-reference.md` (EDOG repo, ~50KB — grep the `# Fxx` section) | exact hosts, token types, request/response shapes for the surface-1 calls |
+| FLT controller/endpoint internals | `scripts/flt_catalog.py` + the FLT repo `Service/.../Controllers/*.cs` | the real routes and `tokenType` |
+| FLT subsystem behaviour (engine, triggers, insights, CDF, …) | `reference/flt-subsystems.md` | blast-radius index: read-first files, oracles, traps per subsystem |
 | The contract the change alters | the two-spec swagger diff (`qa_contract_diff`) | additive vs breaking |
 
-`docs/fabric-api-reference.md` is organized by EDOG feature area (`# F01` Fabric APIs, `# F02` logs, `# F03` DAG studio, `# F04` Spark inspector, `# F05` maintenance + feature flags, `# F06` IPC/command). Grep for the section your change needs; do not load it whole.
+`docs/fabric-api-reference.md` is organised by EDOG feature area (`# F01` Fabric APIs, `# F02` logs, `# F03` DAG studio, `# F04` Spark inspector, `# F05` maintenance + feature flags, `# F06` IPC/command). Grep for the section your change needs; do not load it whole.
 
 ---
 
-## 3. Token-type rule (the trap that cost a round-trip)
+## From surface to scenarios (the crafting loop)
 
-A call fails fast if the token type and path prefix don't match (`dev-server.py:330-335`):
-- **`mwc`** → path must start with `/liveTable`, `/liveTableSchedule`, `/liveTableMaintanance`, and be **FLT-relative** (NOT the full `/v1/workspaces/{ws}/lakehouses/{lh}/…` swagger path — the MWC token already encodes the routing). The swagger path `…/liveTable/listDAGExecutionIterationIds` is dispatched as just `/liveTable/listDAGExecutionIterationIds`.
-- **`bearer`** → path must start with `/v1/`, `/v1.0/`, `/metadata/`, `/workspaces`.
-
-When you read an endpoint from the swagger, strip the `/v1/workspaces/{ws}/lakehouses/{lh}` prefix and dispatch the FLT-relative remainder with `mwc`.
-
----
-
-## 4. From surface to scenarios (the crafting loop)
-
-1. **Map the change to its endpoints.** From the diff (Beat 2), find every endpoint the change touches — directly (a changed controller action) and indirectly (an endpoint that calls the changed code). Use the swagger to get each one's full shape.
-2. **Pull the full input space per endpoint.** Params (required/optional), body, response codes, and any caps/limits read from the code (e.g. a `Max…Items = N`). Each is a candidate scenario.
-3. **Add the cross-cutting scenarios** the surface implies: a contract-diff for controller/DTO changes; a flag-on/flag-off pair for flag-gated paths; a data-correctness check (`qa_mlv_convergence`) for anything that writes an MLV; an execution-proof check (`qa_execution_proof`) for any changed symbol.
-4. **Pick the right token + path** per §3, and validate with the **full signal stack** (Beat 5) — response body, data that landed, FLT-native outputs, traces, execution proof — never the API status alone.
+1. **Map the change to its endpoints.** From the diff (Beat 2), find every endpoint the change touches — directly (a changed controller action) and indirectly (an endpoint that calls the changed code). Pull each one's full shape from the live swagger.
+2. **Pull the full input space per endpoint.** Params (required/optional), body, response codes, caps read from the code (e.g. `MaxRelatedIterationIds = 500`). Each meaningful input class — valid, boundary, missing, disallowed, the flag-on/flag-off pair — is a candidate scenario.
+3. **Add the cross-cutting scenarios** the surface implies: a contract-diff for controller/DTO changes; a flag-on/off pair for flag-gated paths; a **data-correctness** check (`qa_mlv_convergence`, read back via surface 3) for anything that writes an MLV; an **execution-proof** check (`qa_execution_proof`) for any changed symbol.
+4. **Pick the right door + token** per the rules above, and validate with the **full signal stack** (Beat 5) — inner response body, the data that landed (surface 3), FLT-native receipts, traces, execution proof — **never the API status alone.**
