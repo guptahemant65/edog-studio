@@ -190,7 +190,7 @@ Checks are grouped by **category**; a category can hold **several cases**, each 
 | Setting applied | a required toggle was switched and re-checked | dim: `✓ Feature toggle "FLTMLVWarnings" is ON and confirmed active in this workspace` |
 | Couldn't switch a toggle | a toggle is locked / missing here | `▲ Couldn't switch the "X" toggle — it's locked in this environment. A test-setup limit; I'm surfacing it, not guessing.` |
 | Check passed | the rule held and was asserted | `✓ <check>` + the cited evidence |
-| Evidence saved | any case ran | as each case runs, its **full raw output** is written to `.edog-qa/runs/{runId}/evidence/{ref}.{json\|log\|txt}` (the citation is the key) — nothing printed inline; available via `show #<ref>` in Beat 7 (§8) |
+| Evidence saved | any case ran | as each case runs, its **full raw output** is written to `.edog-qa/runs/{runId}/evidence/{ref}.json` via `qa_evidence.save` (the citation is the key) — nothing printed inline; available via `show #<ref>` in Beat 7 (§8) |
 | Check broken | the change makes it fail | `✕ <check> — your change breaks this` + the failing fact, cited |
 | Service was busy | a busy / capacity / rate-limit error | retry once; if it recurs `▲ Still busy after a retry (capacity limit) — that's the environment, not your change`; otherwise pass |
 | Nothing to refresh | a step had nothing changed to refresh | `✓ <check> — nothing had changed, so nothing needed refreshing (correct)` (a success) |
@@ -302,7 +302,7 @@ If a third domain term ever feels unavoidable, that's a signal to rewrite the li
 Every claim already trails a citation (`request #1455`, `run #1402`, `token #1203`). That citation is also the **key to the full, raw output** of the tool that produced it. The default stays quiet — status + result + the `tool: … · checks: …` line. The complete output is **saved, not dumped**: a terminal can't truly fold text, so "expandable" means *kept aside and printed on request*.
 
 **How it works**
-- Every case that runs writes its full tool output to `.edog-qa/runs/{runId}/evidence/{ref}.{json|log|txt}` as it happens. The citation *is* the filename key (`request #1455` → `evidence/1455.json`).
+- Every case that runs writes its full tool output to `.edog-qa/runs/{runId}/evidence/{ref}.json` (one record per case, via `qa_evidence.save`) as it happens. The citation *is* the filename key (`request #1455` → `evidence/1455.json`); the record holds the printable block plus its kind and a one-line summary.
 - The results block ends with **one** standing offer, not a line per case:
   `▸ Want the full output of any case? say  show #1455  ·  or open .edog-qa/runs/4471/evidence/`
 - On `show #<ref>`, the skill prints that case's raw block inline — tool-shaped (below). It is the captured bytes replayed; nothing is re-derived or invented.
