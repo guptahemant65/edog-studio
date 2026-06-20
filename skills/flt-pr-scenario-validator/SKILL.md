@@ -91,7 +91,7 @@ Seven beats. Each names its **gate** (what must be true to proceed), the **primi
 - **Append-before-act ledger.** `qa_teardown_ledger.record(...)` **before** any mutating action (flag override, infra create, worktree checkout, config repoint). Cleanup is `qa_cleanup` / `edog --qa-cleanup {runId}`, replayable even if you crash.
 - **Locked GUID target.** Address only the locked `(workspaceId, lakehouseId, capacityId)` tuple, by GUID. Treat a "backward compatibility mode" / name-based-resolution log line as a **locked-target violation** — name resolution can silently hit the wrong lakehouse.
 - **Evidence-first.** No claim ships unless it cites a real trace event (or the asserted response body) and survives `qa_verdict.verify`.
-- **Harness ≠ verdict.** HEAD mismatch, token expiry, capacity-not-ready (404), `infra`-classified errors, locked/missing flags — all harness conditions, surfaced honestly, never a PASS or FAIL *on the change*.
+- **Harness ≠ verdict.** HEAD mismatch, token expiry, capacity throttling (HTTP 430 `MLV_SPARK_JOB_CAPACITY_THROTTLING`) or inbound throttling (429 `MLV_TOO_MANY_REQUESTS`), `infra`-classified errors, locked/missing flags — all harness conditions, surfaced honestly, never a PASS or FAIL *on the change*.
 - **Detect-only for auth.** Never run a runtime auth/authz "test" — EDOG disables auth, so it always falsely passes. Static-flag only.
 
 ## Grounding Protocol

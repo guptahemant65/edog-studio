@@ -134,7 +134,7 @@ observations:
   - Assert each node in the DAG reached "Completed" state (not "Failed" or stuck "Running")
   - Read NodeExecutionMetrics: added/dropped row counts, status, error_code
   - Read node.warnings for NodeWarning values
-  - Read refresh_policy per node (Incremental vs Full)
+  - Read refresh_policy per node (INCREMENTALREFRESH / FULLREFRESH / NOREFRESH; NOREFRESH = nothing changed = success)
   - Verify output via GET /api/onelake/table-preview-rows — confirm data landed
   - Read /api/executions (discover real query params at runtime) for timing
 invariants:
@@ -184,7 +184,7 @@ stimulus:
 observations:
   - Assert node.warnings contains NodeWarning with type "CDFDisabled"
   - Assert relatedSourceEntities includes the source table
-  - Assert refresh_policy == "Full" (not Incremental)
+  - Assert refresh_policy == "FULLREFRESH" (fell back from incremental; not INCREMENTALREFRESH)
   - Check sys_node_metrics.warnings for the warning record
   - NOTE: output rows are IDENTICAL with or without CDF — do NOT assert row content as the oracle here
 invariants:
@@ -362,17 +362,19 @@ Never hallucinate an expected payload. Schema + computable invariants = grounded
 
 ### Layer B — FLT-Native Structured Outputs (the real semantic oracles)
 
-Read from `getDAGExecStatus` response and FLT insights tables:
+Read from the `getDAGExecStatus` response, the synchronous OneLake JSON (`node_metrics.json` / `dag_metrics.json` — the DAG-critical source of truth, always written), and the `_mlv_system` insights tables (best-effort ~99%). **Cite the JSON or the metrics object, not the design docs — they drift from the code.**
 
-| Oracle | Location | What it tells you |
+| Oracle | Location | What it tells you (code-verified) |
 |---|---|---|
-| `node.warnings` | `getDAGExecStatus` response, per-node | `NodeWarning` typed values, e.g. `CDFDisabled` — the ONLY signal for CDF fallback (rows are identical) |
-| `refresh_policy` | per-node in status response | `Incremental` or `Full` — which path the node took |
-| `NodeExecutionMetrics` | per-node | `added`/`dropped` row counts, `status`, `error_code`, `error_source` |
-| `sys_node_metrics` | FLT insights table (query via spark cell) | Per-node run metrics, warning records |
-| `sys_run_metrics` | FLT insights table | Per-run aggregate metrics |
+| `warnings` | per-node metrics · `sys_node_metrics.warnings` | A **closed set of exactly two** (`NodeWarning.cs:20,25`): `CDFDisabled` (a source lacks CDF → node fell back to full) and `DeleteWithoutHints` (delete ran without pruning hints). On node metadata, **never on output rows**. Authoritative value comes from Spark at execution-end, and is only captured when the SQL is PySpark-wrapped (`FLTMLVWarnings` etc., `Node.cs:368-379`) — **no flag → no captured warning even if the condition is real**. |
+| `refreshPolicy` | per-node | One of `INCREMENTALREFRESH` / `FULLREFRESH` / `NOREFRESH` (`Constants.cs:125/132/139`). **`NOREFRESH` = nothing changed = success — never flag it.** Distinct from the run-level `RefreshMode` (`Optimal`/`Full`, the upfront request). |
+| `addedRowsCount` / `droppedRowsCount` | per-node | `long`; **`-1` = "not reported"** (default, → SQL `null`). **`0` ≠ "no rows" — `0` is a real zero.** `added = processed − dropped`. Drops ≠ violations. |
+| `status` + `errorCode` + `errorSource` | per-node | `errorSource` is `System` or `User` (the catalog-grounded attribution); `errorCode` e.g. `MLV_COLUMN_DQ_CHECK_FAILED`. |
+| `sys_run_metrics` / `sys_node_metrics` / `sys_error_metrics` | `_mlv_system` (Spark query) | Run/node aggregates; `sys_error_metrics.upstream_mlv_id` gives the failure cascade chain. `sys_dq_metrics` lives in `dbo`, not `_mlv_system`. |
 
-These carry FLT semantics that raw rows and logs do not.
+**Two traps that will fool a naive read (code-verified):**
+- **`Failed` ≠ `Skipped`.** A failed node marks everything downstream `Skipped` (`DagExecutionHandlerV2.cs:939-944`). A `Skipped` node is normally upstream collateral — trace it to the failed ancestor (`upstream_mlv_id`); never blame the change for a skip.
+- **The polled status is translated.** `getDAGExecStatus` maps `Skipped → Cancelled` and `Cancelling → Running` (`SchedulerRunStatus.cs:84-97`). A run blocked by another run shows as "Cancelled." Read the raw status / receipts when attribution matters.
 
 ### Layer C — OneLake Rows (data landed)
 
@@ -491,12 +493,14 @@ Decode every failure through `qa_error_classify` before attributing:
 
 # Token-related attribution:
 # Read GET /api/edog/health: bearerExpiresIn, tokenExpired
-# 404 with capacity_routing_not_ready → infra (retriable), never a verdict on the change
+# Capacity saturation: HTTP 430 -> MLV_SPARK_JOB_CAPACITY_THROTTLING (Retriable) -> infra, never a change verdict.
+#   There is NO "404 capacity_routing_not_ready" in FLT. FLT auto-retries 430 (~6min admission window, then extended).
+# Inbound/GTS throttle: HTTP 429 -> MLV_TOO_MANY_REQUESTS; throttling is fail-open, so a 429 rarely causes a refresh failure.
 ```
 
 Never attribute a failure by LLM guess. Attribution tier is set mechanically by the catalog.
 
-**Retry-once on infra-shaped failures:** a transient 429/503 is environment noise. Retry the scenario once; only a reproducible failure counts.
+**Retry-once on infra-shaped failures:** a transient 429 (`MLV_TOO_MANY_REQUESTS`) or 430 (`MLV_SPARK_JOB_CAPACITY_THROTTLING`) is environment noise. Retry the scenario once; only a reproducible failure counts.
 
 ---
 
