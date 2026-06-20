@@ -111,6 +111,19 @@
   .vr .vsub{color:var(--mut);}
   .vlbl{display:inline-block;color:var(--meta);}
 
+  /* change-summary groups & category groups */
+  .grp{margin-top:8px;}
+  .cat{color:var(--ink-hi);font-weight:700;}
+  .cat .cc{color:var(--mut);font-weight:400;}
+  .fl{display:grid;grid-template-columns:2.5ch 9ch 1fr;column-gap:.5ch;align-items:baseline;}
+  .fl .fk{color:var(--mut);}
+  .files{display:grid;grid-template-columns:23ch 11ch 1fr;column-gap:1ch;align-items:baseline;}
+  .files .fn{color:var(--ink-hi);}
+  .files .fc,.files .fd{color:var(--mut);}
+  .add{color:var(--ok);}
+  .del{color:var(--bad);}
+  @media (max-width:620px){.files{grid-template-columns:1fr;row-gap:0;}.files .fc,.files .fd{padding-left:0;}}
+
   /* section heading between transcript and gallery */
   .shead{margin:40px 0 4px;font-size:13px;font-weight:700;letter-spacing:.04em;
     text-transform:uppercase;color:var(--mut);}
@@ -173,7 +186,7 @@
 
       <!-- Step 1 -->
       <div class="l"><span class="head">◆</span> <span class="hi">Step 1 of 7 · Find the pull request</span></div>
-      <div class="l i1 row"><span><span class="ok">✓</span> Found open PR #982144 — "retry policy + token mint reorder"</span><span class="cite">4 files · 142 lines · by a.lee</span></div>
+      <div class="l i1 row"><span><span class="ok">✓</span> Found open PR #982144 — "insights filter + token mint reorder"</span><span class="cite">4 files · <span class="add">+178</span> / <span class="del">−13</span> · by a.lee</span></div>
       <div class="l i1"><span class="ok">✓</span> Started a local test server on port 5555</div>
       <div class="l i1"><span class="ok">✓</span> Sign-in token valid for 58m — long enough for this run</div>
       <div class="sp"></div>
@@ -182,31 +195,70 @@
       <div class="l"><span class="head">◆</span> <span class="hi">Step 2 of 7 · Understand the change</span></div>
       <div class="l i1"><span class="head">▸</span> <span class="dim">Reading the diff and the FLT code it touches&hellip;</span></div>
       <div class="card">
-        <div class="l"><span class="head">◆</span> <span class="hi">What this change touches</span></div>
-        <div class="kv i1" style="margin-top:5px;">
-          <span class="k">Areas</span><span class="v">retry policy · sign-in token flow</span>
-          <span class="k">Entry points</span><span class="v">runDAG · POST /insights/summary</span>
-          <span class="k">Settings</span><span class="v">max retries = 3 · token lifetime = 15 min</span>
-          <span class="k">Out of reach</span><span class="v">ComputeJitter() — a private helper I can't trigger&nbsp;&nbsp;<span class="warn">▲</span></span>
+        <div class="l"><span class="head">◆</span> <span class="hi">What changed in this PR</span></div>
+
+        <div class="grp">
+          <div class="cat">Feature flags</div>
+          <div class="fl i1"><span class="head">+</span><span class="fk">New</span><span><span class="hi">FLTInsightsMetrics</span> <span class="dim">— turns on the new insights filter</span></span></div>
+          <div class="fl i1"><span class="meta">−</span><span class="fk">Removed</span><span><span class="hi">FLTLegacyRetryCap</span> <span class="dim">— old retry ceiling, no longer used</span></span></div>
+          <div class="fl i1"><span class="faint">·</span><span class="fk">Uses</span><span><span class="hi">FLTMLVWarnings</span> <span class="dim">— existing, unchanged</span></span></div>
+        </div>
+
+        <div class="grp">
+          <div class="cat">Files <span class="cc">(4)</span></div>
+          <div class="files i1"><span class="fn">LiveTableController.cs</span><span class="fc"><span class="add">+155</span> / <span class="del">−2</span></span><span class="fd">the insights-listing endpoint</span></div>
+          <div class="files i1"><span class="fn">TokenManager.cs</span><span class="fc"><span class="add">+12</span> / <span class="del">−9</span></span><span class="fd">when the sign-in token is created</span></div>
+          <div class="files i1"><span class="fn">RetryPolicy.cs</span><span class="fc"><span class="add">+8</span> / <span class="del">−1</span></span><span class="fd">retry count and backoff</span></div>
+          <div class="files i1"><span class="fn">FeatureNames.cs</span><span class="fc"><span class="add">+3</span> / <span class="del">−1</span></span><span class="fd">flag definitions</span></div>
+        </div>
+
+        <div class="grp">
+          <div class="cat">What the code does now</div>
+          <div class="l i1 row"><span><span class="faint">·</span> Adds <span class="hi">GET /insights/summary</span> — lists insights with an optional filter</span><span class="cite">LiveTableController.cs:64</span></div>
+          <div class="l i1 row"><span><span class="faint">·</span> Creates the sign-in token earlier in the request</span><span class="cite">TokenManager.cs:88</span></div>
+          <div class="l i1 row"><span><span class="faint">·</span> Caps results at <span class="hi">200 items</span> per request</span><span class="cite">LiveTableController.cs:131</span></div>
+          <div class="l i1 row"><span><span class="faint">·</span> Retries up to <span class="hi">3 times</span> on a transient error</span><span class="cite">RetryPolicy.cs:42</span></div>
+        </div>
+
+        <div class="grp">
+          <div class="kv i1" style="grid-template-columns:17ch 1fr;">
+            <span class="k">API change</span><span class="v"><span class="ok">safe</span> — only adds GET /insights/summary (+ optional "filter"); nothing removed</span>
+            <span class="k">Who's allowed in</span><span class="v">no change — safe</span>
+            <span class="k">Out of reach</span><span class="v">ComputeJitter() — a private helper I can't trigger&nbsp;&nbsp;<span class="warn">▲</span></span>
+          </div>
         </div>
       </div>
-      <div class="l i1 row"><span><span class="ok">✓</span> The retry count comes from max retries = 3</span><span class="cite">RetryPolicy.cs:42</span></div>
-      <div class="l i1 row"><span><span class="ok">✓</span> The sign-in token is now created earlier than before</span><span class="cite">TokenManager.cs:88</span></div>
       <div class="sp"></div>
 
       <!-- Step 3 -->
       <div class="l"><span class="head">◆</span> <span class="hi">Step 3 of 7 · Plan the tests</span></div>
       <div class="l i1"><span class="dim">I'll run these checks. Edit before I touch anything.</span></div>
-      <div class="sp-sm"></div>
-      <div class="menu i1">
-        <span class="mk">1</span><span class="mn">Happy path</span><span class="md">the chain of steps runs and ends in "Completed"</span>
-        <span class="mk">2</span><span class="mn">New endpoint</span><span class="md">/insights/summary returns 200 with a valid body</span>
-        <span class="mk">3</span><span class="mn">Edge case</span><span class="md">missing capacity returns a clean 400, not a crash</span>
-        <span class="mk">4</span><span class="mn">Risk</span><span class="md">does the sign-in token outlive a long write?</span>
+      <div class="grp i1">
+        <div class="cat">Happy path <span class="cc">(2)</span></div>
+        <div class="l i1 dim">the insights endpoint returns 200 with a valid body</div>
+        <div class="l i1 dim">the chain of steps runs and ends in "Completed"</div>
+      </div>
+      <div class="grp i1">
+        <div class="cat">Edge cases <span class="cc">(3)</span></div>
+        <div class="l i1 dim">201 items is rejected with a clean 400</div>
+        <div class="l i1 dim">an empty filter lists everything</div>
+        <div class="l i1 dim">a very long filter doesn't crash</div>
+      </div>
+      <div class="grp i1">
+        <div class="cat">Risk <span class="cc">(1)</span></div>
+        <div class="l i1 dim">does the sign-in token outlive a long write?</div>
+      </div>
+      <div class="grp i1">
+        <div class="cat">API contract <span class="cc">(1)</span> <span class="faint">· added automatically</span></div>
+        <div class="l i1 dim">compare the API before and after — catch breaking changes</div>
+      </div>
+      <div class="grp i1">
+        <div class="cat">Feature flag <span class="cc">(1)</span> <span class="faint">· added automatically</span></div>
+        <div class="l i1 dim">run with FLTInsightsMetrics both ON and OFF</div>
       </div>
       <div class="sp-sm"></div>
       <div class="l i1 gate"><span class="head">▸</span> Run this plan?&nbsp;&nbsp;<span class="opt">edit · drop &lt;n&gt; · add "&lt;your own&gt;" · y to start</span></div>
-      <div class="l i1"><span class="ok">✓</span> 4 checks locked in <span class="dim">· 2 happy path · 1 edge · 1 risk</span></div>
+      <div class="l i1"><span class="ok">✓</span> 8 checks locked in across 5 categories <span class="dim">· 2 happy · 3 edge · 1 risk · 1 contract · 1 flag</span></div>
       <div class="sp"></div>
 
       <!-- Step 4 -->
@@ -237,15 +289,35 @@
       <div class="l i1"><span class="ok">✓</span> FLT is running with your change <span class="dim">(took 3m 12s)</span></div>
       <div class="sp-sm"></div>
       <div class="l i1 dim">Running the checks — saving progress as I go, so you can step away.</div>
-      <div class="l i1 row"><span><span class="ok">✓</span> The chain of steps finishes, ending in "Completed"</span><span class="cite">run #1402</span></div>
-      <div class="l i1 row"><span><span class="ok">✓</span> GET /insights/summary → 200, body valid</span><span class="cite">request #1455</span></div>
-      <div class="l i1 row"><span><span class="ok">✓</span> Missing capacity → clean 400, no crash</span><span class="cite">request #1460</span></div>
-      <div class="l i1"><span class="warn">▲</span> One check looks risky — digging in next.</div>
+      <div class="grp i1">
+        <div class="cat">Happy path <span class="cc">(2)</span></div>
+        <div class="vr i1"><span class="vd"><span class="ok">✓</span> <span class="hi">PASS</span></span><span class="vd">GET /insights/summary → 200, body valid</span><span class="cite">request #1455</span></div>
+        <div class="vr i1"><span class="vd"><span class="ok">✓</span> <span class="hi">PASS</span></span><span class="vd">The chain of steps finishes, ending in "Completed"</span><span class="cite">run #1402</span></div>
+      </div>
+      <div class="grp i1">
+        <div class="cat">Edge cases <span class="cc">(3)</span></div>
+        <div class="vr i1"><span class="vd"><span class="ok">✓</span> <span class="hi">PASS</span></span><span class="vd">201 items → clean 400, no crash</span><span class="cite">request #1460</span></div>
+        <div class="vr i1"><span class="vd"><span class="ok">✓</span> <span class="hi">PASS</span></span><span class="vd">Empty filter lists everything</span><span class="cite">request #1462</span></div>
+        <div class="vr i1"><span class="vd"><span class="warn">▲</span> <span class="hi">SUSPECTED</span></span><span class="vd">A very long filter may time out — digging in next</span><span class="cite">request #1471</span></div>
+      </div>
+      <div class="grp i1">
+        <div class="cat">Risk <span class="cc">(1)</span></div>
+        <div class="vr i1"><span class="vd"><span class="warn">▲</span> <span class="hi">SUSPECTED</span></span><span class="vd">Token may expire during a long write — digging in next</span><span class="cite">request #1881</span></div>
+      </div>
       <div class="sp"></div>
 
       <!-- Step 6 -->
       <div class="l"><span class="head">◆</span> <span class="hi">Step 6 of 7 · Dig into anything suspicious</span></div>
-      <div class="l i1"><span class="head">▸</span> <span class="dim">Re-running the token check with a longer write&hellip;</span></div>
+      <div class="l i1"><span class="head">▸</span> <span class="dim">Re-running the two risky cases with harder inputs&hellip;</span></div>
+      <div class="card">
+        <div class="l"><span class="warn">▲</span> <span class="hi">SUSPECTED</span> — a very long filter may time out</div>
+        <div class="kv i1" style="margin-top:5px;grid-template-columns:13ch 1fr;">
+          <span class="k">In the code</span><span class="v row"><span>the filter scans every row, unbounded</span><span class="cite">LiveTableController.cs:212</span></span>
+          <span class="k">What I saw</span><span class="v row"><span>a 900-char filter took 9.4s</span><span class="cite">request #1471</span></span>
+          <span class="k">My read</span><span class="v">a longer filter could cross the timeout.</span>
+        </div>
+        <div class="l i1 dim" style="margin-top:5px;">Couldn't prove it without a bigger dataset — not set up here.</div>
+      </div>
       <div class="card">
         <div class="l"><span class="warn">▲</span> <span class="hi">SUSPECTED</span> — the sign-in token may expire during a long write</div>
         <div class="kv i1" style="margin-top:5px;grid-template-columns:13ch 1fr;">
@@ -260,29 +332,53 @@
       <!-- Step 7 -->
       <div class="l"><span class="head">◆</span> <span class="hi">Step 7 of 7 · Results</span></div>
       <div class="card verdict">
-        <div class="l"><span class="head">◆</span> <span class="hi">Validation results — PR #982144 "retry policy + token mint reorder"</span></div>
-        <div class="l i1 dim">checked commit abc1234 · run #4471 · took 16.2s</div>
+        <div class="l"><span class="head">◆</span> <span class="hi">Validation results — PR #982144 "insights filter + token mint reorder"</span></div>
+        <div class="l i1 dim">checked commit abc1234 · run #4471 · took 24.6s</div>
         <div class="sp-sm"></div>
         <div class="l i1 hi">What this means for the reviewer</div>
         <div class="kv i2" style="grid-template-columns:11ch 1fr;margin-top:3px;">
-          <span class="k">Watch</span><span class="v">token lifetime (reliability) · 1 new endpoint</span>
+          <span class="k">Watch</span><span class="v">token lifetime (reliability) · 1 new endpoint · 1 new flag</span>
           <span class="k">Looks safe</span><span class="v">the API change only adds things · core checks green · data lines up</span>
-          <span class="k">Your call</span><span class="v">1 suspected token risk (couldn't prove it) · 1 path never ran</span>
+          <span class="k">Your call</span><span class="v">2 suspected risks (couldn't prove them) · 1 path never ran</span>
         </div>
         <div class="sp-sm"></div>
-        <div class="vr i1"><span class="vd"><span class="ok">✓</span> <span class="hi">PASS</span></span><span class="vd">The chain of steps finishes, ending in "Completed"</span><span class="cite">run #1402</span></div>
-        <div class="vr i1"><span class="vd"><span class="ok">✓</span> <span class="hi">PASS</span></span><span class="vd">GET /insights/summary → 200, body valid</span><span class="cite">request #1455</span></div>
-        <div class="vr i1"><span class="vd"><span class="ok">✓</span> <span class="hi">PASS</span></span><span class="vd">Missing capacity → clean 400, no crash</span><span class="cite">request #1460</span></div>
-        <div class="vr i1"><span class="vd"><span class="warn">▲</span> <span class="hi">SUSPECTED</span></span><span class="vd">The sign-in token may expire during a long write</span><span class="cite"></span></div>
-        <div class="vr i1"><span></span><span class="vsub"><span class="vlbl">In the code:</span>&nbsp;&nbsp;the token is created earlier now</span><span class="cite">TokenManager.cs:88</span></div>
-        <div class="vr i1"><span></span><span class="vsub"><span class="vlbl">What I saw:</span>&nbsp;&nbsp;token created at 2.3s, write at 14.1s</span><span class="cite">token #1203 · request #1881</span></div>
-        <div class="vr i1"><span></span><span class="vsub"><span class="vlbl">My read:</span>&nbsp;&nbsp;a longer run could outlive the token before the last write.</span><span class="cite"></span></div>
-        <div class="vr i1"><span></span><span class="vsub faint">Couldn't prove it without fault injection (not available yet).</span><span class="cite"></span></div>
-        <div class="vr i1"><span class="vd"><span class="meta">◌</span> <span class="hi">NEVER RAN</span></span><span class="vd">ComputeJitter() — nothing I sent reached it; check this one by hand</span><span class="cite"></span></div>
+
+        <div class="grp i1">
+          <div class="cat">Happy path <span class="cc">(2)</span></div>
+          <div class="vr i1"><span class="vd"><span class="ok">✓</span> <span class="hi">PASS</span></span><span class="vd">GET /insights/summary → 200, body valid</span><span class="cite">request #1455</span></div>
+          <div class="vr i1"><span class="vd"><span class="ok">✓</span> <span class="hi">PASS</span></span><span class="vd">The chain of steps finishes, ending in "Completed"</span><span class="cite">run #1402</span></div>
+        </div>
+        <div class="grp i1">
+          <div class="cat">Edge cases <span class="cc">(3)</span></div>
+          <div class="vr i1"><span class="vd"><span class="ok">✓</span> <span class="hi">PASS</span></span><span class="vd">201 items → clean 400, no crash</span><span class="cite">request #1460</span></div>
+          <div class="vr i1"><span class="vd"><span class="ok">✓</span> <span class="hi">PASS</span></span><span class="vd">Empty filter lists everything</span><span class="cite">request #1462</span></div>
+          <div class="vr i1"><span class="vd"><span class="warn">▲</span> <span class="hi">SUSPECTED</span></span><span class="vd">A very long filter may time out</span><span class="cite"></span></div>
+          <div class="vr i1"><span></span><span class="vsub"><span class="vlbl">In the code:</span>&nbsp;&nbsp;the filter scans every row, unbounded</span><span class="cite">LiveTableController.cs:212</span></div>
+          <div class="vr i1"><span></span><span class="vsub"><span class="vlbl">What I saw:</span>&nbsp;&nbsp;a 900-char filter took 9.4s</span><span class="cite">request #1471</span></div>
+          <div class="vr i1"><span></span><span class="vsub"><span class="vlbl">My read:</span>&nbsp;&nbsp;a longer filter could cross the timeout.</span><span class="cite"></span></div>
+          <div class="vr i1"><span></span><span class="vsub faint">Couldn't prove it without a bigger dataset (not set up here).</span><span class="cite"></span></div>
+        </div>
+        <div class="grp i1">
+          <div class="cat">Risk <span class="cc">(1)</span></div>
+          <div class="vr i1"><span class="vd"><span class="warn">▲</span> <span class="hi">SUSPECTED</span></span><span class="vd">The sign-in token may expire during a long write</span><span class="cite"></span></div>
+          <div class="vr i1"><span></span><span class="vsub"><span class="vlbl">In the code:</span>&nbsp;&nbsp;the token is created earlier now</span><span class="cite">TokenManager.cs:88</span></div>
+          <div class="vr i1"><span></span><span class="vsub"><span class="vlbl">What I saw:</span>&nbsp;&nbsp;token created at 2.3s, write at 14.1s</span><span class="cite">token #1203 · request #1881</span></div>
+          <div class="vr i1"><span></span><span class="vsub"><span class="vlbl">My read:</span>&nbsp;&nbsp;a longer run could outlive the token before the last write.</span><span class="cite"></span></div>
+          <div class="vr i1"><span></span><span class="vsub faint">Couldn't prove it without fault injection (not available yet).</span><span class="cite"></span></div>
+        </div>
+        <div class="grp i1">
+          <div class="cat">API contract <span class="cc">(1)</span></div>
+          <div class="vr i1"><span class="vd"><span class="ok">✓</span> <span class="hi">PASS</span></span><span class="vd">Only adds GET /insights/summary (+ optional "filter")</span><span class="cite">nothing removed</span></div>
+        </div>
+        <div class="grp i1">
+          <div class="cat">Feature flag <span class="cc">(1)</span></div>
+          <div class="vr i1"><span class="vd"><span class="meta">◌</span> <span class="hi">NEVER RAN</span></span><span class="vd">FLTInsightsMetrics OFF path — nothing reached it; check by hand</span><span class="cite"></span></div>
+        </div>
+
         <div class="sp-sm"></div>
         <div class="kv i1" style="grid-template-columns:14ch 1fr;">
-          <span class="k">What I tested</span><span class="v">3 checked · 1 suspected · 1 never ran</span>
-          <span class="k">How sure</span><span class="v">data &amp; API checks: high (repeatable) · token risk: suspected only</span>
+          <span class="k">What I tested</span><span class="v"><span class="em">8 cases</span> · 5 passed · 2 suspected · 1 never ran</span>
+          <span class="k">How sure</span><span class="v">data &amp; API checks: high (repeatable) · the 2 risks: suspected only</span>
         </div>
       </div>
       <div class="l i1 gate"><span class="head">▸</span> Post this summary to PR #982144?&nbsp;&nbsp;<span class="opt">y · edit · no</span></div>
@@ -298,6 +394,26 @@
   <b>"couldn't check this"</b>, never a pass or fail. Anything we can't prove is <b>"suspected"</b>, never "confirmed".</p>
 
   <div class="gallery">
+
+    <div class="alt">
+      <div class="cap"><span class="tag note">GROUPED</span><span class="nm">Several cases in one category</span></div>
+      <div class="ab">
+        <div class="cat">Edge cases <span class="cc">(3)</span></div>
+        <div class="vr i1"><span class="vd"><span class="ok">✓</span> <span class="hi">PASS</span></span><span class="vd">201 items is rejected</span><span class="cite"></span></div>
+        <div class="vr i1"><span class="vd"><span class="ok">✓</span> <span class="hi">PASS</span></span><span class="vd">empty filter lists everything</span><span class="cite"></span></div>
+        <div class="vr i1"><span class="vd"><span class="warn">▲</span> <span class="hi">SUSPECTED</span></span><span class="vd">very long filter may time out</span><span class="cite"></span></div>
+        <div class="l dim" style="margin-top:6px;">one category, mixed results — counts still total across <b>all</b> cases, not per category</div>
+      </div>
+    </div>
+
+    <div class="alt">
+      <div class="cap"><span class="tag bad">BREAKING</span><span class="nm">API change removes something</span></div>
+      <div class="ab">
+        <div class="l"><span class="warn">▲</span> <span class="hi">API change: breaking</span></div>
+        <div class="l i1">removes <span class="hi">GET /insights/legacy</span> · drops the "sort" param</div>
+        <div class="l i1 dim" style="margin-top:3px;">added an "API contract" check to confirm the break is intended.</div>
+      </div>
+    </div>
 
     <div class="alt">
       <div class="cap"><span class="tag stop">STOP</span><span class="nm">No open pull request</span></div>

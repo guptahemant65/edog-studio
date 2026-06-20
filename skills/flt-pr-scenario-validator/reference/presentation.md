@@ -59,14 +59,36 @@ Emphasis: **bold** only the single number that matters in a line (`**3 of 4** be
   ✓ The chain of steps finishes, ending in "Completed"        (run #1402)
 ```
 
-**Named box** (headline + aligned key/value — for the change map, the locked target, the verdict):
+**Named box** (a headline + grouped, aligned detail — for the change summary, the locked target, the verdict):
 ```
-◆ What this change touches
-  Areas         retry policy · sign-in token flow
-  Entry points  runDAG · POST /insights/summary
-  Settings      max retries = 3 · token lifetime = 15 min
-  Out of reach  ComputeJitter() — a private helper I can't trigger   ▲
+◆ What changed in this PR
+  Feature flags
+    +  New      FLTInsightsMetrics — turns on the new insights filter
+    −  Removed  FLTLegacyRetryCap — old retry ceiling, no longer used
+    ·  Uses     FLTMLVWarnings — existing, unchanged
+  Files (4)
+    LiveTableController.cs   +155 / −2    the insights-listing endpoint
+    TokenManager.cs          +12 / −9     when the sign-in token is created
+    RetryPolicy.cs           +8 / −1      retry count and backoff
+    FeatureNames.cs          +3 / −1      flag definitions
+  What the code does now
+    · Adds GET /insights/summary — lists insights with an optional filter
+    · Creates the sign-in token earlier in the request
+    · Caps results at 200 items per request
+  API change        safe — only adds GET /insights/summary (+ optional "filter"); nothing removed
+  Who's allowed in  no change — safe
+  Out of reach      ComputeJitter() — a private helper I can't trigger   ▲
 ```
+Direction is always visible, never just a name: `+ New` · `− Removed` · `· Uses` for flags; `+155 / −2` for each file. The `API change` line says plainly whether it is **safe** (only adds) or **breaking** (removes/changes a shape). If sign-in / permission wiring changed, replace `Who's allowed in  no change` with the `▲ NEEDS A HUMAN` line (Beat 2).
+
+**Category group** (several cases under one category — used in the plan and the verdict; the count rides the header, the status rides each case):
+```
+Edge cases (3)
+  ✓ PASS       201 items → clean 400, no crash
+  ✓ PASS       empty filter lists everything
+  ▲ SUSPECTED  a very long filter may time out
+```
+A category can hold a mix of statuses. Counts always total across **every** case, not per category.
 
 **Menu** (selectable rows — letter/marker · name · plain meta):
 ```
@@ -112,21 +134,24 @@ Each beat declares **every** state it can render — not just the happy path. Th
 
 | State | When | Render |
 |---|---|---|
-| Change map | the change has something that runs | the `◆ What this change touches` box (§3) + `▸` reasoning lines, each `✓` cited to `file:line` |
+| Change summary | the change has something that runs | the `◆ What changed in this PR` box (§3): **feature flags introduced / removed / referenced** (with direction), **files with `+/−` line counts**, **key code touched** (in plain terms), **limits read from the code** (e.g. "200 items per request"), the **API change** line (safe vs breaking), and a **who's-allowed-in** line. Each fact cited to `file:line`. |
 | Nothing runs | docs / build / config-file-only diff | `STOP`: `Nothing here runs at the FLT service — this PR only changes docs/build files. Stopped: there's nothing to deploy or try out.` |
-| Touches who's allowed in | sign-in / permission / authorization wiring changed | `▲ NEEDS A HUMAN — this change touches who's allowed in. The test environment turns sign-in checks off, so any test here would falsely pass. Flagged for security review — I won't claim this passed.` (detect-only, never "passed") |
+| Touches who's allowed in | sign-in / permission / authorization wiring changed | in the box, the who's-allowed-in line becomes `▲ NEEDS A HUMAN — this change touches who's allowed in. The test environment turns sign-in checks off, so any test here would falsely pass. Flagged for security review — I won't claim this passed.` (detect-only, never "passed") |
+| Breaking API change | an endpoint / param / shape was removed or changed | the `API change` line reads `▲ breaking — removes <x> / changes <y>` (not "safe"); a contract case is auto-added in Beat 3 |
 | New area | the change is in code I haven't mapped | dim note: `(new area — not in my map yet; reading the FLT source directly)` then proceed |
 | Wiring unclear | dynamic / conditional setup | dim note: `(couldn't tell how this is wired from the code alone — asking the running service)` |
 
 ### Beat 3 — Plan the tests
 
+Checks are grouped by **category**; a category can hold **several cases**, each its own row. The locked summary counts cases across all categories.
+
 | State | When | Render |
 |---|---|---|
-| Plan proposed | checks derived | the numbered checklist + `▸ Run this plan?` gate |
-| Edited | user types `drop N` / `add …` / `edit` | `✓ Updated — dropped 3, added "two refreshes in a row don't double-count"` then the locked summary line |
-| API check added | a controller/DTO changed | auto-listed: `+  Compare the API before and after — catch breaking changes   (added automatically)` |
-| Toggle check added | a feature toggle appears in the diff | auto-listed: `+  Run with the new feature toggle both ON and OFF   (added automatically)` |
-| Locked in | user accepts (`y`) | `◆ 4 checks locked in · 2 happy path · 1 edge · 1 risk` |
+| Plan proposed | checks derived | category groups (§3), each `<Category> (N)` with one case per line, then the `▸ Run this plan?` gate |
+| Edited | user types `drop N` / `add …` / `edit` | `✓ Updated — dropped "201 items", added "filter with special characters"` then the locked summary line |
+| API check added | a controller/DTO changed | an `API contract (1)` category appears: `Compare the API before and after — catch breaking changes   (added automatically)` |
+| Toggle check added | a feature flag appears in the diff | a `Feature flag (1)` category appears: `run with FLTInsightsMetrics both ON and OFF   (added automatically)` |
+| Locked in | user accepts (`y`) | `◆ 8 checks locked in across 5 categories · 2 happy · 3 edge · 1 risk · 1 contract · 1 flag` |
 
 ### Beat 4 — Pick where to test
 
@@ -170,8 +195,8 @@ Each beat declares **every** state it can render — not just the happy path. Th
 | State | When | Render |
 |---|---|---|
 | Reviewer summary | always, first | the `What this means for the reviewer` block: *watch · looks safe · your call* |
-| Per-check result | each check | `✓ PASS` / `✕ BROKEN` / `▲ SUSPECTED` / `▲ COULDN'T CHECK` / `◌ NEVER RAN` |
-| What I tested | always | `What I tested   3 checked · 1 suspected · 1 never ran (named honestly)` |
+| Per-case result, grouped | each case under its category | `<Category> (N)` header, then one row per case: `✓ PASS` / `✕ BROKEN` / `▲ SUSPECTED` / `▲ COULDN'T CHECK` / `◌ NEVER RAN`. A category may mix statuses. |
+| What I tested | always | `What I tested   8 cases · 5 passed · 2 suspected · 1 never ran` — totals across **all** cases, not per category |
 | Out of date | the PR moved on since the run | `▲ OUT OF DATE — I checked commit abc1234, but the PR is now at def5678. Re-run before trusting this.` |
 | Ask before posting | before any PR comment | `▸ Post this summary to PR #982144?   y · edit · no` — never posts silently |
 | Posted | the author approves | `✓ Posted the summary to PR #982144` |
@@ -183,29 +208,43 @@ Each beat declares **every** state it can render — not just the happy path. Th
 ## 5. The results template (honest about confidence)
 
 ```
-◆ Validation results — PR #982144 "retry policy + token mint reorder"
-  checked commit abc1234 · run #4471 · took 16.2s
+◆ Validation results — PR #982144 "insights filter + token mint reorder"
+  checked commit abc1234 · run #4471 · took 24.6s
 
   What this means for the reviewer
-    Watch         token lifetime (reliability) · 1 new endpoint
+    Watch         token lifetime (reliability) · 1 new endpoint · 1 new flag
     Looks safe    the API change only adds things · core checks green · data lines up
-    Your call     1 suspected token risk (couldn't prove it) · 1 path never ran
+    Your call     2 suspected risks (couldn't prove them) · 1 path never ran
 
-  ✓ PASS         The chain of steps finishes, ending in "Completed"     (run #1402)
-  ✓ PASS         GET /insights/summary → 200, body valid                (request #1455)
-  ✓ PASS         Missing capacity → clean 400, no crash                 (request #1460)
-  ▲ SUSPECTED    The sign-in token may expire during a long write
-                   In the code:  the token is created earlier now       (TokenManager.cs:88)
-                   What I saw:    token created at 2.3s, write at 14.1s  (token #1203, request #1881)
-                   My read:       a longer run could outlive the token before the last write.
-                   I couldn't prove it — that needs fault injection, which isn't available yet.
-  ◌ NEVER RAN    ComputeJitter() — nothing I sent reached it; check this one by hand
+  Happy path (2)
+    ✓ PASS        GET /insights/summary → 200, body valid              (request #1455)
+    ✓ PASS        The chain of steps finishes, ending in "Completed"   (run #1402)
+  Edge cases (3)
+    ✓ PASS        201 items → clean 400, no crash                      (request #1460)
+    ✓ PASS        Empty filter lists everything                        (request #1462)
+    ▲ SUSPECTED   A very long filter may time out
+                    In the code:  the filter scans every row unbounded (LiveTableController.cs:212)
+                    What I saw:    a 900-char filter took 9.4s         (request #1471)
+                    My read:       a longer filter could cross the timeout.
+                    Couldn't prove it without a bigger dataset (not set up here).
+  Risk (1)
+    ▲ SUSPECTED   The sign-in token may expire during a long write
+                    In the code:  the token is created earlier now     (TokenManager.cs:88)
+                    What I saw:    token created at 2.3s, write at 14.1s  (token #1203, request #1881)
+                    My read:       a longer run could outlive the token before the last write.
+                    Couldn't prove it without fault injection (not available yet).
+  API contract (1)
+    ✓ PASS        Only adds GET /insights/summary (+ optional "filter")  (nothing removed)
+  Feature flag (1)
+    ◌ NEVER RAN   FLTInsightsMetrics OFF path — nothing I sent reached it; check this by hand
 
-  What I tested  3 checked · 1 suspected · 1 never ran
-  How sure       data & API checks: high (repeatable) · token risk: suspected only
+  What I tested  8 cases · 5 passed · 2 suspected · 1 never ran
+  How sure       data & API checks: high (repeatable) · the 2 risks: suspected only
 
 ▸ Post this summary to PR #982144?   y · edit · no
 ```
+
+Cases are grouped by category; the count on each header is for that category, but the `What I tested` line totals across **all** cases (here `5 + 2 + 1 = 8`). A category may hold a mix of statuses (Edge above is 2 `PASS` + 1 `SUSPECTED`).
 
 `◌` (never ran) is hollow on purpose — it is clearly neither a pass nor a fail. The rich Phase-3 HTML board does not replace this; it is *linked* from the PR comment.
 
