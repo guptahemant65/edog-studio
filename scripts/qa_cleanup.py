@@ -6,6 +6,8 @@ catalog can never silently drop an orphaned resource.
 
 from __future__ import annotations
 
+import os
+import signal
 import urllib.request
 
 from scripts import qa_run_lock
@@ -55,11 +57,31 @@ def _config_restore(s: dict) -> bool:
     return True
 
 
+def _server_stop(s: dict) -> bool:
+    """Stop the headless dev-server the skill spawned in Beat 1 (by recorded PID).
+
+    Idempotent: a process that is already gone counts as success, so cleanup is
+    safe to retry. Only ever targets the exact PID the skill recorded — never a
+    pre-existing server the skill did not start.
+    """
+    pid = s.get("pid")
+    if not pid:
+        return False
+    try:
+        os.kill(int(pid), signal.SIGTERM)
+        return True
+    except ProcessLookupError:
+        return True  # already stopped
+    except (OSError, ValueError):
+        return False
+
+
 REVERSERS = {
     "flag_clear": _flag_clear,
     "capacity_delete": _capacity_delete,
     "worktree_remove": _worktree_remove,
     "config_restore": _config_restore,  # restore flt_repo_path after worktree deploy
+    "server_stop": _server_stop,  # stop the headless dev-server started in Beat 1
     "chaos_remove": lambda s: True,  # wired in Phase N (chaos is SignalR-only today)
     "lock_release": lambda s: True,
 }

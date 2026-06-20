@@ -38,8 +38,8 @@ Seven beats. Each names its **gate** (what must be true to proceed), the **primi
 
 ### Beat 1 — Acquire & resolve
 - Acquire the lock: `qa_run_lock.acquire(runId, pr)`. If refused, report the current holder and STOP — another validation is live.
-- Resolve the PR: `GET /api/ado-proxy/pr-diff` → `{prId, title, author, diff, sourceCommit, commonCommit}`. Pin `sourceCommit` as the commit under validation.
-- Start the server **headless**: launch `python scripts/dev-server.py` directly (it does **not** open a browser). Do **not** run `python edog.py` — its default opens the EDOG Studio webpage, which this skill must not do. API-only on `:5555`.
+- Resolve the PR: `GET /api/ado-proxy/pr-diff?prUrl=<full PR URL>` → `{prId, title, author, diff, sourceCommit, commonCommit}` (the param is `prUrl`, not `prId`; fallback: `az repos pr show` + `git diff origin/main...<sourceCommit>`). Pin `sourceCommit` as the commit under validation.
+- Start the server **headless**: launch `python scripts/dev-server.py` directly (it does **not** open a browser). Do **not** run `python edog.py` — its default opens the EDOG Studio webpage, which this skill must not do. API-only on `:5555`. **Record the server start to the ledger** (`qa_teardown_ledger.record(runId, "server_start", {"pid": <pid>}, reverse={"op":"server_stop","pid":<pid>})`) so teardown — or a crash-recovery `qa_cleanup` — stops the exact process the skill spawned. **Exception:** if `:5555` was *already healthy* when you arrived (someone else's server), do NOT record/stop it — you didn't start it; just use it.
 - Check `GET /api/edog/health` → `bearerExpiresIn`, `tokenExpired`, `mwcToken`. Ensure a username/session is saved so the bearer auto-refreshes across a long run.
 - **Gate:** lock held, PR resolved, server answering on `:5555`. Resolve the PR *before* starting the server — never spin up infra for a PR that doesn't exist.
 
@@ -85,7 +85,7 @@ Seven beats. Each names its **gate** (what must be true to proceed), the **primi
 - Build the verdict: assemble `qa_verdict.Claim`s, run `qa_verdict.verify(claims, bundle)` — **any claim whose evidence is not in the bundle is dropped.** Set `attribution` from `qa_error_classify`, not by hand. Render the per-scenario verdicts + a PR-level risk synthesis (the reviewer's 30-second read: blast radius, change type, security flag, flag-gating, coverage).
 - State the validated `sourceCommit`. Re-query the PR's current source commit; if HEAD advanced, mark the verdict **STALE**.
 - **Author-approval gate:** post to the PR (`POST /api/ado-proxy/pr-comment` — creates a real thread) **only after the author confirms.** Never post silently.
-- Clean up: on pass, auto-run `qa_cleanup.run(runId)` (reverses the ledger LIFO, releases the lock). On fail, offer to keep infra for debugging. Confirm zero orphans (`git worktree list` clean, no leftover overrides).
+- Clean up: on pass, auto-run `qa_cleanup.run(runId)` (reverses the ledger LIFO, releases the lock). On fail, offer to keep infra for debugging. **Always tear down what the skill itself started**, in reverse order: clear flag overrides → revert the deploy injections (`edog --revert`) → remove the worktree → **stop the headless dev-server the skill spawned in Beat 1** (the `server_stop` ledger op — kill the recorded PID; never stop a server you did not start). Confirm zero orphans: `git worktree list` clean, no leftover flag overrides, FLT repo `git status` clean, and `:5555` down (unless the env was pre-existing). The run is not complete until the environment is exactly as the skill found it.
 
 ## Guardrails
 

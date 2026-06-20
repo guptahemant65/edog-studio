@@ -17,3 +17,24 @@ def test_unknown_op_is_failure(monkeypatch, tmp_path):
     ledger.record("r1", "x", {}, reverse={"op": "nope"})
     monkeypatch.setattr(qa_cleanup, "REVERSERS", {})
     assert qa_cleanup.run("r1")["failed"] == 1
+
+
+def test_server_stop_kills_recorded_pid(monkeypatch):
+    killed = []
+    monkeypatch.setattr(qa_cleanup.os, "kill", lambda pid, sig: killed.append(pid))
+    assert qa_cleanup._server_stop({"pid": 4321}) is True
+    assert killed == [4321]
+
+
+def test_server_stop_already_gone_is_success(monkeypatch):
+    def _gone(pid, sig):
+        raise ProcessLookupError
+
+    monkeypatch.setattr(qa_cleanup.os, "kill", _gone)
+    # a process that already exited is a successful (idempotent) stop
+    assert qa_cleanup._server_stop({"pid": 4321}) is True
+
+
+def test_server_stop_no_pid_is_failure():
+    assert qa_cleanup._server_stop({}) is False
+

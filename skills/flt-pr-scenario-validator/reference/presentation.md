@@ -164,8 +164,8 @@ Each beat declares **every** state it can render — not just the happy path. `S
 | Stale | PR HEAD advanced since validation | `▲ STALE — validated abc123; PR HEAD is now def456. Re-run.` |
 | Approval gate | before any PR post | `▸ Post this to PR #982144?  y / edit / no` — never posts silently |
 | Posted | author approves | `✓ Comment posted to PR #982144` |
-| Cleanup (pass) | verdict clean | `✓ Cleaned up — 0 leaked rules, 0 flag overrides, sandbox released (ledger reversed)` |
-| Cleanup (fail) | a real regression | `▸ Keep the environment for debugging?  keep / teardown` |
+| Cleanup (pass) | verdict clean | `✓ Cleaned up — 0 leaked rules, 0 flag overrides, deploy reverted, server stopped (ledger reversed)` |
+| Cleanup (fail) | a real regression | `▸ Keep the environment for debugging?  keep / teardown` (on `keep`, the skill still stops nothing it must keep, but says what's left running) |
 
 ---
 
