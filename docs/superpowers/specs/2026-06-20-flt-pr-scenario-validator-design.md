@@ -86,7 +86,7 @@ An earlier draft proposed deploying the base branch, capturing a behavioral "fin
 │  EDOG dev-server — THE BODY (tool provider)              │
 │   EYES:    /api/logs, /api/telemetry,                    │
 │            /api/edog/interceptors-status,                 │
-│            /api/qa/trace-bundle (NEW)                     │
+│            /api/qa/trace-bundle (NEW — Phase 3)           │
 │   HANDS:   deploy, runDAG, playground, spark, infra       │
 │   REFLEX:  chaos (F24), feature-flag overrides            │
 │   MEMORY:  EdogQaRunStore (run history) + trace bundles   │
@@ -170,6 +170,9 @@ BEAT 2 — ORIENT (the skill thinks out loud)
     escalate only if ambiguous: runtime DI registry → self-spun OmniSharp
   • GET /api/playground/catalog → entry-point mapping       [EXISTING]
   → grounded structural map (subsystems, entry points, config facts)
+  • NO RUNTIME SURFACE? If the diff is docs/build/IaC/test-only (nothing the
+    deployed FLT can exercise), say so plainly and STOP — do not deploy or
+    fabricate scenarios. "No runtime-validatable surface in this PR."
 
 BEAT 3 — PLAN GATE  (no backend calls — pure reasoning)
   • Skill GENERATES scenarios per reference/scenarios.md protocol:
@@ -293,7 +296,12 @@ BEAT 7 — VERDICT
     (not-provably-exercised + blind-spots: AUTH can't be tested in EDOG,
     security-sensitive diffs flagged for review)                  [NEW]
   • qa_verdict.Verdict.to_json per scenario (+ flaky re-runs)      [NEW]
+  • COMMIT-PINNED: the verdict states the validated commit (sourceCommit);
+    at finalize, re-query the PR's current source commit — if HEAD advanced,
+    mark the verdict STALE ("validated abc123; PR HEAD is now def456 — re-run")
   • PR comment: MARKDOWN in Phase 1 (rich causal-board HTML = Phase 3)
+    → AUTHOR APPROVES the comment at the Beat-7 gate BEFORE it posts to the
+      real PR (ado-proxy/pr-comment creates a real thread — never silent)
     → ADO REST (az rest / ado-proxy)                          [EXISTING]
   • REPLAY artifact: pinned sourceCommit + seed DDL + scenarios persisted
     → `edog qa --replay {runId}` (equivalent verdict, not byte-identical) [NEW]
@@ -328,18 +336,18 @@ No schema, ever. Scenarios are **plain-language intents the skill generates from
 - **preconditions** are scenario-specific setup the env step must enforce *before* stimulus: required **flag state** and required **table/MLV properties** (set at seed time, not patched after). Grounded example — to fire a `CDFDisabled` warning you need **all three**: `FLTMLVWarnings` **ON** (else warnings are never parsed), `FLTIRDeltaPhysicalCDFEnabled` **OFF** (physical CDF would suppress the source-CDF-missing warning), and the **source table seeded with `delta.enableChangeDataFeed=false`** — then the MLV falls back to full refresh and emits `NodeWarning{CDFDisabled}`, observed on `node.warnings` (not on the output rows).
 - **sub-scenarios** let one scenario (e.g. "CDF insights card") fan out into several cases that **share infra** but each have their own stimulus/observations — so a single complex DAG is seeded once and exercised many ways.
 
-**Observations are grounded on real evidence**, including the **API response body** of the stimulus call itself (asserted + cited), not only logs/telemetry. Categories reuse the existing `ScenarioCategory` taxonomy (`HappyPath, ErrorPath, EdgeCase, Regression, Performance`); failure-injection scenarios are generated but **deferred to Phase N (timing TBD)** until chaos is ready. Execution uses existing tools:
+**Observations are grounded on real evidence**, including the **API response body** of the stimulus call itself (asserted + cited), not only logs/telemetry. **What "assert the response body" means** (it is *not* a guessed exact body — that would reintroduce the oracle problem): the body is checked against its **OpenAPI schema** + **invariants** + any **values computable from code and inputs** (e.g. an echoed id, a status enum the controller sets unconditionally, a count derivable from the seeded data) — never a hallucinated expected payload. Categories reuse the existing `ScenarioCategory` taxonomy (`HappyPath, ErrorPath, EdgeCase, Regression, Performance`); failure-injection scenarios are generated but **deferred to Phase N (timing TBD)** until chaos is ready. Execution uses existing tools:
 
 
 | Change type | Category | Derived scenario (plain English) | Stimulus tool |
 |-------------|----------|----------------------------------|---------------|
-| Retry policy | Failure | "Inject a transient 429, confirm backoff stays within `maxRetries`=3 and eventually succeeds" | chaos + DAG/API |
-| Token flow | Failure | "Run a long DAG; watch for mid-run token expiry" | runDAG + trace-bundle |
-| New endpoint | Happy / Edge | "Call with valid + boundary inputs; assert schema + no 5xx" | playground |
+| Retry policy | Failure *(Phase N)* | "Inject a transient 429, confirm backoff stays within `maxRetries`=3 and eventually succeeds" | chaos + DAG/API |
+| Token flow | Failure *(Phase N)* | "Run a long DAG; watch for mid-run token expiry" — *Phase 1 can only **observe** the token-vs-write timing gap (token interceptor + http timing) and mark it SUSPECTED* | runDAG + token interceptor (P1) / trace-bundle (P3) |
+| New endpoint | Happy / Edge | "Call with valid + boundary inputs; assert schema + response body + no 5xx" | playground |
 | DAG node logic | Happy | "Trigger DAG, verify node transitions and final state Completed" | runDAG + getDAGExecStatus |
 | Any hot path | Performance | "Run under load; assert completion within the config/SLA bound read from code" | runDAG / playground |
 | Spark client | Happy | "Create session, run trivial query, verify pool responsive" | notebook session |
-| Feature flag | Edge | "Detect `FeatureNames.` refs in the diff; **flip the flag ON to exercise the new path**, then run ON and OFF and verify each behaves per its contract" | flag override + re-run |
+| Feature flag | Edge | "Detect `FeatureNames.` refs in the diff; **set the flag to the scenario's required state** (resolve wire key → FM `Id`), then run ON and OFF and verify each behaves per its contract" | flag override + re-run |
 
 The applicable categories are chosen by the LLM from the blast radius — a retry-policy change pulls in failure-injection scenarios; a new endpoint pulls in happy + boundary + **contract-diff**; a hot-path change pulls in performance.
 
@@ -355,30 +363,38 @@ The applicable categories are chosen by the LLM from the blast radius — a retr
 **Per-scenario, intent-framed** — not a bare PASS/FAIL, and not a baseline diff (there is no baseline). Each scenario gets a grounded verdict; the headline frames them against the change's intent:
 
 ```
-FLT PR Scenario Validator — retry policy + token flow
+FLT PR Scenario Validator — PR #1234 "token mint reorder + /insights/summary"
 
-  ✓ HAPPY PATH (2/2)
-    • DAG completes, final state Completed          [evt#1402]
-    • New endpoint /insights/summary → 200, schema valid [evt#1455]
+  RISK  ▸ touches: token lifecycle (reliability) · 1 new endpoint (API contract)
+        ▸ proven safe: contract additive · core-smoke green · data converges
+        ▸ needs your eyes: 1 SUSPECTED token regression (unconfirmable in P1) ·
+          1 branch not provably exercised
 
-  ✓ PERFORMANCE (1/1)
-    • DAG completed in 4.2s, under the 30s config bound  [evt#1402,#1511]
+  ✓ HAPPY (2/2)
+    • DAG completes, final state Completed                  [dag #1402]
+        execution proof: TokenManager.MintEarly ran         [marker #1410]
+    • GET /insights/summary → 200, schema valid, body asserted [http #1455]
 
-  ✗ FAILURE INJECTION (2/3)
-    • Transient 429 → backoff recovered                  [evt#1620–24]
-    • Null capacity → handled gracefully, 400 returned   [evt#1701]
-    • Retry overshoot: fired 5 times, but maxRetries=3
-        Code fact: maxRetries=3 (RetryPolicy.cs:142)      [Layer-1]
-        Observed:  5 retry events                         [evt#1847–51]
-        Inference (confirmed via chaos re-run): your
-        HttpClientFactory timeout change lowered the
-        per-attempt deadline, so the same transient now
-        triggers 2 extra retries.
+  ✓ DATA CORRECTNESS (1/1)
+    • silver.orders == full-refresh of its defining SELECT (12,403 rows match) [onelake]
 
-  Confidence: high (root cause confirmed by follow-up experiment)
+  ✓ CONTRACT (1/1)
+    • /insights/summary added [ch-003] — additive, non-breaking
+
+  ⚠ SUSPECTED — token lifetime (could NOT confirm without fault injection · Phase N)
+        Code fact:  mint moved earlier (TokenManager.cs:88)        [Layer-1]
+        Observed:   15-min MWC minted at T+2.3s [token #1203];
+                    OneLakeWriter reached at T+14.1s [http #1881]
+        Inference (SUSPECTED): a longer DAG could outlive the token before the
+                    final write. Phase 1 observes the gap; it can't provoke it.
+
+  ◍ NOT PROVABLY EXERCISED
+    • TokenManager.RefreshFallback — no stimulus reached it; manual check needed
+
+  Confidence: data + contract HIGH (deterministic). Token regression SUSPECTED.
 ```
 
-Ground truth: invariant suite + Layer-1 code facts. Diagnosis: Opus, with every factual sub-claim cited (§9.B). Confidence rises when a follow-up experiment confirmed the cause.
+Ground truth: invariant suite (incl. the convergence oracle) + Layer-1 code facts + execution proof. Diagnosis: Opus, with every factual sub-claim cited (§9.B). In Phase 1 an unconfirmable cause is honestly labeled **SUSPECTED**; confidence rises to *confirmed* only when a follow-up fault-injection experiment reproduces it (Phase N).
 
 ### Invariant suite (always-true properties, deterministic, no baseline)
 - No 5xx responses
@@ -461,7 +477,7 @@ Every mutating action — flag override, chaos rule, created infra, deployed bra
 Every run carries a hard budget: max wall-clock (default 30 min), max capacities created (default **0** — reuse-only unless explicitly told), max DAG triggers, max chaos rules, max tokens. A watchdog **independent of the agent loop** (the agent cannot be trusted to check its own budget) tears down everything via the ledger if the budget blows or the run goes silent. (Reuses the `EdogQaExecutionEngine._runLock` + 30-min ceiling pattern, made authoritative.)
 
 **4-bis. Single-validation lock (the environment is a singleton).**
-EDOG drives exactly one FLT instance (port 5557). Two concurrent validations would deploy competing branches onto the same FLT and clash on flag overrides and DAG runs — both verdicts garbage, silently. So **one validation runs at a time, globally.** A second invocation detects the lock and **refuses** with a clear message ("a validation is already running against this environment; wait for it to finish") rather than silently queueing a 20-minute job. The lock is held by EDOG (survives skill death) and released by the same teardown path as the ledger.
+EDOG drives exactly one FLT instance (port 5557). Two concurrent validations would deploy competing branches onto the same FLT and clash on flag overrides and DAG runs — both verdicts garbage, silently. So **one validation runs at a time, globally.** A second invocation detects the lock and **refuses** with a clear message ("a validation is already running against this environment; wait for it to finish") rather than silently queueing a 20-minute job. The lock is held by EDOG (survives skill death) and released by the same teardown path as the ledger. It **self-expires via a heartbeat TTL** — if the holding skill dies without releasing, the stale lock is reclaimable after `stale_after` (the skill heartbeats it each turn; a missed heartbeat past the TTL frees it), so a crashed run never blocks the environment forever. (This is a global-serialization tradeoff: a team shares one FLT instance, so throughput is one validation at a time — a known limitation until multi-instance/ephemeral envs.)
 
 **5. Phase action allowlist.**
 The per-phase confirmation gate is not just "proceed Y/N" — each phase declares the **exact set of mutating operations it is permitted**. PHASE 2 (deploy & run) may deploy + trigger + observe; it **cannot** create infra or post to a PR. An out-of-phase action is refused at the tool boundary, not by asking the model nicely.

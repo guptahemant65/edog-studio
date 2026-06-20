@@ -92,6 +92,14 @@ Confirmed by reading the real handlers; the tasks below reflect them:
 - **Replay** (§10 + Beat 7) — pinned `sourceCommit` + seed DDL + scenarios → `edog qa --replay {runId}`; equivalent verdict, not byte-identical (time/GUID fields differ).
 - **Incremental re-validation** (§10) — diff commit N→N+1, re-run only affected scenarios + sentinel; preconditions re-established via the existing ledger machinery.
 
+**Sixth-pass: Tier-3 doubts/idiot-missing resolved (mostly spec-internal consistency):**
+- **Stale-lock TTL — already handled.** `qa_run_lock` (Task 1) has `test_stale_lock_is_reclaimed` + `stale_after` + per-turn `heartbeat`; a dead skill's lock self-expires, so a crash never blocks the env forever. Noted in spec §9.A-bis (+ the global-serialization throughput tradeoff).
+- **Phase drift fixed.** The §8 hero verdict example was rewritten Phase-1-honest (risk synthesis + execution proof + convergence oracle + contract-diff + honest SUSPECTED) instead of leaning on Phase-N chaos; §3 diagram marks trace-bundle `(Phase 3)`; §7 scenario table marks the Retry/Token Failure rows `(Phase N)` and softens the trace-bundle dependency (Phase 1 observes token timing via the token interceptor).
+- **Commit-pinned verdict + HEAD-moved warning** (Beat 7) — verdict states the validated `sourceCommit`; at finalize re-query the PR's current source commit and mark STALE if HEAD advanced.
+- **Author approves before public post** (Beat 7) — the PR comment posts only after the author confirms at the Beat-7 gate (`ado-proxy/pr-comment` creates a real thread — never silent).
+- **No-runtime-surface PRs** (Beat 2) — docs/build/IaC/test-only diff → say "no runtime-validatable surface" and STOP; don't deploy or fabricate.
+- **Response-body oracle clarified** (§7) — "assert the response body" = schema + invariants + values computable from code/inputs, NOT a guessed exact payload.
+
 ---
 
 # PHASE 1 — MVP
