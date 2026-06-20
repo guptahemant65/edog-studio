@@ -1,211 +1,231 @@
 # Presentation Contract — How the Skill Renders
 
-This is the **UX source of truth**. The skill is a terminal conversation, so its UI *is* its output. Every beat must render to the layout, symbols, and **state matrix** below — consistently, on every run. The companion visual is `docs/design/mocks/flt-pr-scenario-validator-journey.html`.
+This is the **UX source of truth**. The skill is a terminal conversation, so its UI *is* its output. The skill prints **plain Markdown + Unicode marks** into a chat-style CLI (it cannot redraw the screen, move the cursor, or set arbitrary colors). State is therefore carried by **symbol + word + layout**, never by color. Every beat must render to the symbols, layouts, and **state matrix** below — the same way, on every run. The companion visual is `docs/design/mocks/flt-pr-scenario-validator-tui-v3.html`.
 
-The skill emits **Markdown + Unicode**. It cannot set arbitrary terminal colors, so **state is carried by symbol + label + structure**, never by color alone.
-
----
-
-## 1. Design principles (Palantir-calm)
-
-1. **Restraint is the default.** Healthy, expected states are plain — no decoration, no celebration. A passing scenario is a quiet `✓`, not a banner.
-2. **Marks signal exceptions.** Reserve `▲` and `✕` for things that need attention (a regression, a needs-human-eyes item, a harness blockage). If everything is marked, nothing is.
-3. **Honesty over polish.** A `SUSPECTED`, a `not provably exercised`, or a `COULD NOT VALIDATE` is shown plainly and never dressed up as a pass. Phase-1 confidence is stated, not implied.
-4. **Every fact carries its citation.** Inline, dim, right after the claim: `retry fired 5× [retry #1851]`. No citation → the claim does not appear.
-5. **The user is always oriented.** Each beat opens with one `▸` action line saying what is happening and why; each gate states exactly what will happen on `y`.
-6. **No emoji, ever.** Unicode marks only (§2). (The current mock uses a `lock emoji` — do **not** reproduce it; use `▣`.)
+**The reader is a smart engineer who does not know FLT's internals.** Every line they read must be plain English. No internal jargon (no "oracle", "blast radius", "harness", "idempotent", "attribution", "NOREFRESH", "cascade-skip", "fitness", "bearer", "stimulus", "invariant"). Two domain words are allowed because they have no short plain synonym — **DAG** and **MLV** — and each is glossed the first time it appears (see §7).
 
 ---
 
-## 2. Symbol vocabulary (Unicode only)
+## 1. Design principles
 
-| Mark | Meaning | Use |
-|---|---|---|
-| `◆` | Headline / named block | Section titles, result boxes |
-| `▸` | Action in progress | The one-line "what I'm doing" per beat |
-| `✓` | Success / grounded fact | A passed check, a confirmed fact |
-| `✕` | Failure / regression | A change-attributable failure |
-| `▲` | Warning / needs human eyes | Security-sensitive, prod-like, suspected, harness limit |
-| `◇` | Coverage / meta | The coverage line, run metadata |
-| `▣` | Locked | The locked-target block (replaces the mock's emoji) |
-| `▹` | Pending / queued sub-step | A step not yet run in a progress list |
-| `…` | Working | Trailing an in-flight reasoning/step line |
-| `·` | Separator | Inline metadata: `F4 · empty lh · safe` |
+Drawn from the output craft of the best terminal tools — Charm's `gum`/`lipgloss`/`glow` (restraint, whitespace, alignment), Claude Code & GitHub Copilot CLI (a leading glyph headline with dim, indented sub-results), Turborepo/Vercel CLI (aligned columns, dim secondary text, a final summary line with counts), and the Command Line Interface Guidelines (`clig.dev`: plain language, progressive disclosure, "never rely on color alone — pair every symbol with a word").
 
-Emphasis: **bold** for the one number that matters in a line (`**3 of 4** behave as intended`); dim/parenthetical for citations and asides. Never bold a whole line.
+1. **Plain language always wins.** Say "couldn't check this" not "harness blockage"; "the running build doesn't match your PR" not "HEAD mismatch"; "nothing needed refreshing" not "NOREFRESH". If a reviewer would need an FLT glossary to parse a line, rewrite the line.
+2. **Restraint is the default.** Healthy, expected states are quiet — no banners, no celebration. A passing check is a plain `✓`, nothing more. If everything is decorated, nothing stands out.
+3. **Marks signal exceptions.** Reserve `▲` (needs attention) and `✕` (broken by the change) for things that genuinely need eyes. They should be rare on a clean run.
+4. **Honesty over polish.** "Suspected", "couldn't check", and "never ran" are shown plainly and are never dressed up as a pass. We state our confidence; we never imply more than we proved.
+5. **Every fact carries its source.** Trailing, dim, right after the claim: `retry fired 5 times  (retry #1851)`. No source → the claim does not print.
+6. **The reader is always oriented.** Each step opens with a one-line headline saying what is happening and why. Each decision states plainly what will happen for each choice.
+7. **Hierarchy by indent, not noise.** Headline at the margin; supporting facts indented two spaces; the source dim and trailing. Scannable top-to-bottom.
+8. **No emoji, ever.** Unicode marks only (§2) — terminal-safe codepoints that never render as colour emoji.
+
+---
+
+## 2. Symbol vocabulary (Unicode only — no emoji)
+
+| Mark | Name | Means | Used for |
+|---|---|---|---|
+| `◆` | headline | a section or result block | step headers, the map, the locked target, the verdict |
+| `▸` | doing / asking | an action underway, or a decision prompt | the one-line "what I'm doing now"; every gate |
+| `✓` | good | a check passed, or a confirmed fact | passes, grounded facts |
+| `✕` | broken | this change makes it fail | a failure caused by the change |
+| `▲` | needs attention | risky, suspected, needs a human, or couldn't be checked | the only "stop and look" mark |
+| `◇` | side note | meta, coverage, or "not caused by your change" | the coverage line, skipped-by-an-earlier-failure |
+| `▣` | locked | the one test target we're allowed to touch | the locked-target block |
+| `◌` | never ran | a code path nothing reached during the run | "never ran" verdict rows (hollow — clearly not a pass or fail) |
+| `▹` | queued | a sub-step not run yet | progress rails |
+| `…` | working | trailing an in-flight line | live progress |
+| `·` | separator | inline metadata | `4 files · 142 lines · by a.lee` |
+
+Emphasis: **bold** only the single number that matters in a line (`**3 of 4** behaved as intended`); dim for sources and asides. Never bold a whole line. Status words are written in a small fixed set so they read the same every run: **PASS · BROKEN · SUSPECTED · COULDN'T CHECK · NEVER RAN** (see §5).
 
 ---
 
 ## 3. Layout primitives
 
-**Action line** (opens every beat):
+**Step headline** (opens every beat — orient the reader):
 ```
-▸ Understanding the change — reading the diff and the FLT repo myself
-```
-
-**Fact / result line** (indented two spaces, citation trailing):
-```
-  ✓ DAG completes, final state Completed            [dag #1402]
+◆ Step 2 of 7 · Understand the change
+  Reading your PR and the FLT code it touches.
 ```
 
-**Named box** (headline + key-value; for the structural map, locked target, root cause, verdict):
+**Action line** (while working):
 ```
-◆ Grounded structural map
-  Subsystems    retry policy · token flow
+▸ Reading the diff and the code it changes…
+```
+
+**Fact / result line** (indented two spaces; source dim and trailing):
+```
+  ✓ The chain of steps finishes, ending in "Completed"        (run #1402)
+```
+
+**Named box** (headline + aligned key/value — for the change map, the locked target, the verdict):
+```
+◆ What this change touches
+  Areas         retry policy · sign-in token flow
   Entry points  runDAG · POST /insights/summary
-  Config facts  maxRetries=3 · tokenTTL=15m
-  Not reachable ComputeJitter() — private helper        ▲
+  Settings      max retries = 3 · token lifetime = 15 min
+  Out of reach  ComputeJitter() — a private helper I can't trigger   ▲
 ```
 
-**Menu** (selectable rows; marker · name · meta):
+**Menu** (selectable rows — letter/marker · name · plain meta):
 ```
-  +  Create fresh sandbox                  F2 · ~$0.36/hr · auto-torn-down
-  a  robust_goodfellow_18                  F4 · empty lh · safe
-  b  prod-mirror-eastus                    F64 · has data · ▲ prod-like
-```
-
-**Gate** (a decision; always state the consequence and the options):
-```
-▸ Run this plan?   edit / drop N / add … / y
+  +  Create a fresh sandbox          new · ~$0.36/hr · deleted when done
+  a  robust_goodfellow_18            empty · safe to use freely
+  b  prod-mirror-eastus              has real data · looks like production   ▲
 ```
 
-**Progress** (long fire-and-poll op; percent + step rail):
+**Gate** (a decision — always state the choices and what each does):
 ```
-▸ Deploy · 50%   3/6 dotnet build…
-  ✓ fetch MWC token   ✓ patch FLT source   ✓ inject DevMode   ▹ dotnet build   ▹ launch FLT   ▹ await DevConnection
+▸ Run this plan?   edit · drop <n> · add "<your own>" · y to start
 ```
 
-**Checkpoint** (before a multi-minute background phase):
+**Progress** (a long build/run — percent + step rail):
 ```
-▸ Running scenarios — checkpointing as I go, you can step away.
+▸ Deploying your branch · 50%   building (3 of 6)…
+  ✓ get token   ✓ point to your branch   ✓ turn on dev mode   ▹ build   ▹ launch   ▹ connect
+```
+
+**Checkpoint** (before a multi-minute background phase — let them step away):
+```
+▸ Running the checks now — I'll save progress as I go, so you can step away.
 ```
 
 ---
 
 ## 4. State matrices (per beat)
 
-Each beat declares **every** state it can render — not just the happy path. `STOP` = end the run cleanly here. `harness` = a blockage that is never a verdict on the change.
+Each beat declares **every** state it can render — not just the happy path. The left columns are the skill's internal trigger (not shown to the user); the **Render** column is exactly what the user reads, and must be plain. `STOP` = end the run cleanly here. **Couldn't-check** = a limit of the test setup, never a verdict on the change.
 
-### Beat 1 — Invoke
+### Beat 1 — Find the pull request
+
+| State | When | Render (what the user sees) |
+|---|---|---|
+| PR found | open PR on the branch, or an explicit `#`/URL | `✓ Found open PR #982144 — "title"` + `repo · 4 files · 142 lines · by a.lee`, then `✓ Started a local test server on port 5555` |
+| No PR | no open PR and none given | `STOP`: `▲ No open pull request on this branch.` + `Point me at one:  edog qa <PR number or URL>` + `Stopped — I didn't start anything, so there's nothing to clean up.` **(Server never started.)** |
+| Already running | another validation is live | `STOP`: `▲ A validation is already running (PR #1004, started 4 min ago). Only one runs at a time — I'll wait for it to finish or time out.` |
+| Cleared a stale lock | the previous run's heartbeat is dead | proceed, dim note: `(cleared a leftover lock from a run that crashed earlier)` |
+| Server wouldn't start | `:5555` won't come up | **couldn't check**: `▲ COULDN'T CHECK — the local test server wouldn't start (<reason>). That's a test-setup problem, not a verdict on your change.` |
+| Sign-in expiring | token nearly expired / no saved session | `▲ Your sign-in token expires in 6 min and nothing is saved to refresh it. Sign in again before the long run, or it may stop partway through.` |
+
+### Beat 2 — Understand the change
 
 | State | When | Render |
 |---|---|---|
-| PR resolved | open PR on branch, or explicit `#/URL` | `✓ Found open PR #982144 — "title"` + repo · file/line counts |
-| No PR | no open PR and none given | `STOP`: `▲ No open PR on this branch. Point me at one: edog qa <PR#\|URL>`. **Server not started.** |
-| Lock held | another validation is live | `STOP`: `▲ A validation is already running (PR #X, started 4m ago). It finishes or times out before I can start.` |
-| Lock reclaimed | prior holder's heartbeat is stale | proceed, dim note: `(reclaimed a stale lock from a crashed run)` |
-| Server failed | `:5555` won't come up | `harness`: `▲ Couldn't start the EDOG server — <reason>. Not a verdict on your change.` |
-| Bearer expiring | `bearerExpiresIn` low / no saved session | `▲ Bearer expires in Nm and no session is saved to auto-refresh — re-auth before the long run.` |
+| Change map | the change has something that runs | the `◆ What this change touches` box (§3) + `▸` reasoning lines, each `✓` cited to `file:line` |
+| Nothing runs | docs / build / config-file-only diff | `STOP`: `Nothing here runs at the FLT service — this PR only changes docs/build files. Stopped: there's nothing to deploy or try out.` |
+| Touches who's allowed in | sign-in / permission / authorization wiring changed | `▲ NEEDS A HUMAN — this change touches who's allowed in. The test environment turns sign-in checks off, so any test here would falsely pass. Flagged for security review — I won't claim this passed.` (detect-only, never "passed") |
+| New area | the change is in code I haven't mapped | dim note: `(new area — not in my map yet; reading the FLT source directly)` then proceed |
+| Wiring unclear | dynamic / conditional setup | dim note: `(couldn't tell how this is wired from the code alone — asking the running service)` |
 
-### Beat 2 — Orient
-
-| State | When | Render |
-|---|---|---|
-| Structural map | runtime surface exists | the map box (§3) + `▸` reasoning lines, each `✓` cited to `file:line` |
-| No runtime surface | docs/build/IaC/test-only diff | `STOP`: `No runtime-validatable surface in this PR — nothing to deploy or exercise.` |
-| Security-sensitive | auth posture / permission filter / authenticator wiring changed | `▲ Authorization config changed — NOT validatable in EDOG (auth disabled in dev). Flagged for human/security review.` (detect-only, never "passed") |
-| Novel area | no subsystem-map match | dim note: `(novel area — investigating the FLT source directly)` then proceed |
-| Ambiguous wiring | dynamic/conditional DI | dim note: `(static read ambiguous — querying the runtime DI registry)` |
-
-### Beat 3 — Plan gate
+### Beat 3 — Plan the tests
 
 | State | When | Render |
 |---|---|---|
-| Plan proposed | scenarios derived | the scenario menu + `▸ Run this plan?` gate |
-| Edited | user types `drop N` / `add …` / `edit` | `✓ Updated — dropped X, added "Y"` then the locked summary line |
-| Contract-diff added | controller/DTO change | a `contract` scenario auto-listed |
-| Flag scenario added | `FeatureNames.` in diff | a `flag ON/OFF` scenario auto-listed |
-| Locked | user accepts (`y`) | `◆ N scenarios locked · 2 happy · 1 edge · 1 …` |
+| Plan proposed | checks derived | the numbered checklist + `▸ Run this plan?` gate |
+| Edited | user types `drop N` / `add …` / `edit` | `✓ Updated — dropped 3, added "two refreshes in a row don't double-count"` then the locked summary line |
+| API check added | a controller/DTO changed | auto-listed: `+  Compare the API before and after — catch breaking changes   (added automatically)` |
+| Toggle check added | a feature toggle appears in the diff | auto-listed: `+  Run with the new feature toggle both ON and OFF   (added automatically)` |
+| Locked in | user accepts (`y`) | `◆ 4 checks locked in · 2 happy path · 1 edge · 1 risk` |
 
-### Beat 4 — Environment
-
-| State | When | Render |
-|---|---|---|
-| Menu | candidates listed | enriched workspace menu (cost · empty/has-data · prod flag) + select gate |
-| Existing fits | `qa_infra_spec.fitness` ok | `✓ Reusing <name> (empty lakehouse — full freedom)` |
-| Existing short | fitness gap | a "what's missing" box (`missing tables`, `mlvs`, `property_mismatch: cdf`) + offer fresh |
-| Fresh seed | user picks `+` | seed progress: `▸ Seeding · schema lakehouse → notebook → tables → MLVs` (each step `✓`/`▹`) |
-| Prod-like / has-data | risk `prod_like`/`has_data` chosen | extra gate: `▲ <name> holds real data. Writes/chaos touch it. Proceed?` |
-| Locked | after selection | the `▣ Target locked` box (workspace/lakehouse/capacity GUIDs) + `No other target is addressable. I only destroy what I create.` |
-
-### Beat 5 — Deploy & Run
+### Beat 4 — Pick where to test
 
 | State | When | Render |
 |---|---|---|
-| Deploy | gate `y` | `▸ Deploy · %` progress rail; on done `✓ FLT running on :5557 (3m12s)` |
-| Deploy failed | SSE error / build error | `harness`: `▲ COULD NOT VALIDATE — deploy failed at step N (<reason>). Environment problem, not a verdict.` |
-| HEAD mismatch | deployed commit ≠ PR commit (minus injection set) | `harness`: `▲ Deployed commit ≠ PR commit — re-deploying / aborting. Not a verdict.` |
-| Precondition set | flag forced + re-read confirms | dim: `✓ FLTMLVWarnings ON (effectiveForMyWorkspace confirmed)` |
-| Flag unforceable | flag `locked`/`missing` | `▲ Flag <X> can't be forced (locked) — harness limitation, surfaced not failed.` |
-| Scenario pass | invariants hold, asserted | `✓ <scenario>` + cited evidence |
-| Scenario regression | reproduced, change-attributable | `✕ <scenario>` + the failing fact, cited |
-| Infra-shaped | 429/430/503 | retry once; if it recurs `▲ infra (430 capacity throttling) — not your change`; else pass |
-| NoRefresh | node policy `NOREFRESH` | `✓ <scenario> — nothing changed to refresh (NOREFRESH)` (a success) |
-| Cascade skip | node `Skipped` from a failed parent | `◇ <node> skipped (upstream <parent> failed) — not attributed to this change` |
-| Token expiring | `bearerExpiresIn` low mid-run | `▸ Re-checking token before the next long op…` then refresh/re-auth |
+| Menu | candidate workspaces listed | the menu (§3): each row `cost · empty/has-data · risk`, then `▸ Which one?` |
+| Reuse one | an existing one has what's needed | `✓ Reusing robust_goodfellow_18 — empty, so I have full freedom` |
+| Missing pieces | an existing one is short | a `◆ … is missing what these tests need` box (`Missing tables`, `Missing MLVs`, `Wrong setting: change-tracking is off`) + offer a fresh sandbox |
+| Building a sandbox | user picks `+` | a progress rail: `▸ Building the sandbox · 3/4   creating tables…` with `✓`/`▹` steps (workspace · storage · notebook · tables · MLVs) |
+| Real data — confirm | a "has real data" / "production-like" target is chosen | extra gate: `▲ prod-mirror-eastus holds real data. Tests will write to it and may disrupt it.` + `▸ Use it anyway?   yes · pick another` |
+| Locked | after the pick | the `▣ Test target locked` box (workspace · storage · capacity) + `I can only touch this one target, and I only delete what I create.` |
 
-### Beat 6 — Investigate (Phase-1 honest)
+### Beat 5 — Build, deploy, and run the checks
 
 | State | When | Render |
 |---|---|---|
-| Retry-once | transient infra-shaped failure | dim: `(retrying once — transient 430)` |
-| Flag A/B | flag-gated path | re-run ON vs OFF, show both outcomes |
-| Suspected | anomaly that needs fault injection to confirm | `▲ SUSPECTED` box: the code fact (cited) + the observed gap (cited) + the labeled inference + `could NOT confirm without fault injection (Phase N)` |
-| Flaky | a pass that isn't reproducible | `▲ FLAKY — passed 2/3 re-runs; reported as flaky, not pass` |
-| (Confirmed) | — | **Phase N only.** Do not render a "confirmed root cause" in Phase 1. |
+| Deploy | gate `y` | the `▸ Deploying your branch · %` rail; on done `✓ FLT is running with your change (took 3m 12s)` |
+| Deploy failed | build / connect error | **couldn't check**: `▲ COULDN'T CHECK — the build/deploy failed at step 4 (<reason>). A test-setup problem, not a verdict on your change.` |
+| Wrong build running | the running commit ≠ the PR commit | **couldn't check**: `▲ COULDN'T CHECK — the running build doesn't match your PR. Re-deploying with the exact commit before I trust any result.` |
+| Setting applied | a required toggle was switched and re-checked | dim: `✓ Feature toggle "FLTMLVWarnings" is ON and confirmed active in this workspace` |
+| Couldn't switch a toggle | a toggle is locked / missing here | `▲ Couldn't switch the "X" toggle — it's locked in this environment. A test-setup limit; I'm surfacing it, not guessing.` |
+| Check passed | the rule held and was asserted | `✓ <check>` + the cited evidence |
+| Check broken | the change makes it fail | `✕ <check> — your change breaks this` + the failing fact, cited |
+| Service was busy | a busy / capacity / rate-limit error | retry once; if it recurs `▲ Still busy after a retry (capacity limit) — that's the environment, not your change`; otherwise pass |
+| Nothing to refresh | a step had nothing changed to refresh | `✓ <check> — nothing had changed, so nothing needed refreshing (correct)` (a success) |
+| Skipped after an earlier failure | a step was skipped because an upstream step failed | `◇ "<step>" was skipped because an earlier step failed — not caused by your change` |
+| Sign-in expiring mid-run | token nearly expired between steps | `▸ Checking the sign-in token before the next long step…` then refresh / re-auth |
 
-### Beat 7 — Verdict
+### Beat 6 — Dig into anything suspicious (honest about what we can't prove)
 
 | State | When | Render |
 |---|---|---|
-| Risk synthesis | always, first | the `◆ Risk` block: *threatens · proven safe · needs your eyes* |
-| Per-scenario | each scenario | `✓ PASS` / `✕ REGRESSION` / `▲ SUSPECTED` / `▲ COULD NOT VALIDATE` (harness) / `◌ NOT PROVABLY EXERCISED` |
-| Coverage | always | `◇ coverage: 3 tested · 1 suspected · 1 not-reachable (named, honestly)` |
-| Stale | PR HEAD advanced since validation | `▲ STALE — validated abc123; PR HEAD is now def456. Re-run.` |
-| Approval gate | before any PR post | `▸ Post this to PR #982144?  y / edit / no` — never posts silently |
-| Posted | author approves | `✓ Comment posted to PR #982144` |
-| Cleanup (pass) | verdict clean | `✓ Cleaned up — 0 leaked rules, 0 flag overrides, deploy reverted, server stopped (ledger reversed)` |
-| Cleanup (fail) | a real regression | `▸ Keep the environment for debugging?  keep / teardown` (on `keep`, the skill still stops nothing it must keep, but says what's left running) |
+| Retry once | a one-off glitch | dim: `(retrying once — looked like a temporary glitch)` |
+| Toggle on vs off | a toggle-gated path | `▸ Running the same check with the toggle ON, then OFF…` + both outcomes |
+| Suspected | something looks risky but we can't force it to happen | a `▲ SUSPECTED` box: the code fact (cited) + what we saw (cited) + a clearly-labelled "my read" + `I couldn't prove it — that needs fault injection, which isn't available yet.` |
+| Flaky | a pass that doesn't repeat | `▲ FLAKY — passed 2 of 3 re-runs. Reporting as flaky, not a clean pass.` |
+| (Proven cause) | — | **Not in this phase.** We can't yet inject faults, so we never print a "proven root cause" — only `SUSPECTED`. |
+
+### Beat 7 — Results, post, clean up
+
+| State | When | Render |
+|---|---|---|
+| Reviewer summary | always, first | the `What this means for the reviewer` block: *watch · looks safe · your call* |
+| Per-check result | each check | `✓ PASS` / `✕ BROKEN` / `▲ SUSPECTED` / `▲ COULDN'T CHECK` / `◌ NEVER RAN` |
+| What I tested | always | `What I tested   3 checked · 1 suspected · 1 never ran (named honestly)` |
+| Out of date | the PR moved on since the run | `▲ OUT OF DATE — I checked commit abc1234, but the PR is now at def5678. Re-run before trusting this.` |
+| Ask before posting | before any PR comment | `▸ Post this summary to PR #982144?   y · edit · no` — never posts silently |
+| Posted | the author approves | `✓ Posted the summary to PR #982144` |
+| Cleaned up (clean run) | results are clean | `✓ Cleaned up — removed everything I created, undid the deploy, stopped the server. Nothing left behind.` |
+| Keep for debugging? | a real break was found | `▸ Keep the test environment so you can debug?   keep · tear down` (on `keep`, it says exactly what's left running) |
 
 ---
 
-## 5. The verdict template (Phase-1-honest)
+## 5. The results template (honest about confidence)
 
 ```
-◆ FLT PR Scenario Validator — PR #982144 "retry policy + token mint reorder"
-  validated commit abc1234 · run #4471 · 16.2s
+◆ Validation results — PR #982144 "retry policy + token mint reorder"
+  checked commit abc1234 · run #4471 · took 16.2s
 
-◆ Risk
-  threatens     token lifecycle (reliability) · 1 new endpoint (API contract)
-  proven safe   contract additive · core-smoke green · data converges
-  needs eyes    1 SUSPECTED token regression (unconfirmable in Phase 1)
-                1 path not provably exercised
+  What this means for the reviewer
+    Watch         token lifetime (reliability) · 1 new endpoint
+    Looks safe    the API change only adds things · core checks green · data lines up
+    Your call     1 suspected token risk (couldn't prove it) · 1 path never ran
 
-  ✓ PASS        DAG completes, final state Completed              [dag #1402]
-  ✓ PASS        GET /insights/summary → 200, schema valid, body asserted [http #1455]
-  ✓ PASS        Null capacity → graceful 400                      [http #1460]
-  ▲ SUSPECTED   Token lifetime across a long DAG write
-                  code:     mint moved earlier (TokenManager.cs:88)
-                  observed: token minted T+2.3s [token #1203]; write reached T+14.1s [http #1881]
-                  inference (suspected): a longer DAG could outlive the token before the final write.
-                  could NOT confirm without fault injection (Phase N).
+  ✓ PASS         The chain of steps finishes, ending in "Completed"     (run #1402)
+  ✓ PASS         GET /insights/summary → 200, body valid                (request #1455)
+  ✓ PASS         Missing capacity → clean 400, no crash                 (request #1460)
+  ▲ SUSPECTED    The sign-in token may expire during a long write
+                   In the code:  the token is created earlier now       (TokenManager.cs:88)
+                   What I saw:    token created at 2.3s, write at 14.1s  (token #1203, request #1881)
+                   My read:       a longer run could outlive the token before the last write.
+                   I couldn't prove it — that needs fault injection, which isn't available yet.
+  ◌ NEVER RAN    ComputeJitter() — nothing I sent reached it; check this one by hand
 
-  ◌ NOT PROVABLY EXERCISED   ComputeJitter() — no stimulus reached it; manual check needed
+  What I tested  3 checked · 1 suspected · 1 never ran
+  How sure       data & API checks: high (repeatable) · token risk: suspected only
 
-  ◇ coverage: 3 tested · 1 suspected · 1 not-reachable
-  ◇ confidence: data + contract HIGH (deterministic) · token regression SUSPECTED
-
-▸ Post this to PR #982144?   y / edit / no
+▸ Post this summary to PR #982144?   y · edit · no
 ```
 
-(`◌` = not-provably-exercised; a hollow mark, distinct from pass/fail.) The Phase-3 HTML "causal board" replaces nothing here — it links from the PR comment.
+`◌` (never ran) is hollow on purpose — it is clearly neither a pass nor a fail. The rich Phase-3 HTML board does not replace this; it is *linked* from the PR comment.
 
 ---
 
-## 6. Cross-cutting honesty rules (Phase-1 boundaries)
+## 6. Honesty rules (what we will and won't claim)
 
-- **Harness ≠ test.** A deploy failure, HEAD mismatch, capacity 430, token expiry, or unforceable flag renders as `▲ COULD NOT VALIDATE` / a surfaced limitation — **never** `✓` or `✕`.
-- **Suspected ≠ confirmed.** Phase 1 cannot inject faults, so a cause it can't reproduce is `▲ SUSPECTED`, with the gap named. No "confirmed root cause" boxes (that is the mock's Phase-N state).
-- **Skipped ≠ failed.** A cascade-skipped node is `◇` collateral, attributed to the failed ancestor, never `✕` against this change.
-- **`0` ≠ unknown.** Render a real `0` plainly; render `-1`/null as `not reported`.
-- **Output is markdown.** The Phase-3 rich HTML board is a *link* from the PR comment, not a replacement for this terminal verdict.
+- **A test-setup problem is not a verdict.** A failed deploy, the wrong build running, a busy/capacity error, an expired sign-in, or a toggle we couldn't switch all print as `▲ COULDN'T CHECK` (or a surfaced limit) — **never** `✓` or `✕`.
+- **Suspected is not confirmed.** We can't yet force a fault to happen, so a cause we can't reproduce is `▲ SUSPECTED`, with the gap named. We never print a "proven root cause".
+- **Skipped is not broken.** A step skipped because an earlier step failed is a `◇` side note, blamed on the earlier failure — never `✕` against this change.
+- **`0` is not unknown.** Print a real `0` plainly; print a missing/`-1` value as `not reported`.
+- **It's just Markdown.** The rich HTML board is a *link* in the PR comment, not a replacement for this terminal summary.
+
+---
+
+## 7. The two allowed domain words (glossed on first use)
+
+Everything else must be plain English. These two have no short plain synonym, so they may appear — each glossed the first time it shows in a run:
+
+- **DAG** — the chain of steps FLT runs in order. Prefer "the chain of steps" in user-facing lines; use "DAG" only when the exact term matters, e.g. `the DAG (chain of steps) finished`.
+- **MLV** — a managed table FLT keeps up to date automatically (a "materialized lake view"). First use: `Missing MLVs (managed tables FLT auto-refreshes): sales_summary`.
+
+If a third domain term ever feels unavoidable, that's a signal to rewrite the line in plain language instead.

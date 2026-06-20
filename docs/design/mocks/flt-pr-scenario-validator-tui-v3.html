@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FLT PR Scenario Validator — what the run prints (v3)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --page:#f4f5f7; --ink:#343a45; --ink-hi:#171a21; --mut:#6b7280; --faint:#9aa0ac;
+    --line:#e8eaef; --line-2:#dfe2e8; --panel:#ffffff; --panel-2:#fbfbfd; --chrome:#eef0f3;
+    --ok:#1f8f53; --bad:#cf3b2e; --warn:#a96f08; --meta:#737a88; --head:#4f48c4; --lock:#4f48c4;
+    --cite:#a6abb6;
+    --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:'Inter',system-ui,-apple-system,sans-serif;
+    --sh:0 1px 2px rgba(20,24,38,.04),0 6px 20px rgba(20,24,38,.06),0 18px 44px rgba(20,24,38,.05);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{background:var(--page);}
+  body{
+    font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;line-height:1.5;
+    padding:46px 22px 90px;min-height:100vh;
+  }
+  .wrap{max-width:880px;margin:0 auto;}
+
+  /* ---- header ---- */
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:11px;font-weight:600;
+    letter-spacing:.14em;text-transform:uppercase;color:var(--head);margin-bottom:13px;}
+  .eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--head);opacity:.6;}
+  h1{font-size:27px;line-height:1.12;font-weight:800;letter-spacing:-.02em;color:var(--ink-hi);}
+  .sub{margin-top:12px;font-size:14px;line-height:1.6;color:var(--mut);max-width:660px;}
+  .sub b{color:var(--ink);font-weight:600;}
+
+  /* ---- legend ---- */
+  .legend{margin:22px 0 14px;display:flex;flex-wrap:wrap;gap:7px 16px;align-items:center;
+    padding:13px 16px;background:var(--panel);border:1px solid var(--line);border-radius:11px;box-shadow:var(--sh);}
+  .legend .li{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--mut);}
+  .legend .gm{font-family:var(--mono);font-size:13px;font-weight:700;width:14px;text-align:center;}
+  .legend .note{flex-basis:100%;font-size:11.5px;color:var(--faint);margin-top:3px;line-height:1.5;}
+  .legend .note b{color:var(--mut);font-weight:600;}
+
+  /* ---- terminal panel ---- */
+  .term{margin:18px 0 8px;background:var(--panel);border:1px solid var(--line-2);border-radius:13px;
+    box-shadow:var(--sh);overflow:hidden;}
+  .chrome{display:flex;align-items:center;gap:9px;padding:11px 16px;background:var(--chrome);
+    border-bottom:1px solid var(--line);}
+  .chrome .dots{display:flex;gap:6px;}
+  .chrome .dots i{width:11px;height:11px;border-radius:50%;background:#d4d7dd;}
+  .chrome .dots i:nth-child(1){background:#e6a09a;}
+  .chrome .dots i:nth-child(2){background:#e6cf9a;}
+  .chrome .dots i:nth-child(3){background:#a8d3b0;}
+  .chrome .ttl{font-family:var(--mono);font-size:11.5px;color:var(--mut);margin-left:4px;}
+  .chrome .right{margin-left:auto;font-size:11px;color:var(--faint);font-family:var(--mono);}
+
+  .body{padding:20px 24px 24px;font-family:var(--mono);font-size:12.5px;line-height:1.85;
+    color:var(--ink);background:var(--panel);}
+  @media (max-width:620px){.body{font-size:11.5px;padding:16px 14px;}}
+
+  /* lines */
+  .l{white-space:pre-wrap;word-break:break-word;}
+  .i1{padding-left:2ch;}.i2{padding-left:4ch;}.i3{padding-left:6ch;}
+  .sp{height:11px;}
+  .sp-sm{height:5px;}
+  .prompt{color:var(--faint);}
+  .prompt .pc{color:var(--meta);}
+
+  /* marks */
+  .ok{color:var(--ok);font-weight:700;}
+  .bad{color:var(--bad);font-weight:700;}
+  .warn{color:var(--warn);font-weight:700;}
+  .meta{color:var(--meta);font-weight:700;}
+  .head{color:var(--head);font-weight:700;}
+  .lock{color:var(--lock);font-weight:700;}
+  .hi{color:var(--ink-hi);font-weight:700;}
+  .dim{color:var(--mut);}
+  .faint{color:var(--faint);}
+  .cite{color:var(--cite);}
+  .em{color:var(--ink-hi);font-weight:700;}
+
+  /* line with right-aligned source */
+  .row{display:flex;justify-content:space-between;gap:2ch;align-items:baseline;}
+  .row .cite{flex:0 0 auto;white-space:nowrap;}
+
+  /* key/value blocks */
+  .kv{display:grid;grid-template-columns:14ch 1fr;row-gap:1px;}
+  .kv .k{color:var(--mut);}
+  .kv .v{color:var(--ink);}
+
+  /* menu */
+  .menu{display:grid;grid-template-columns:3ch 22ch 1fr;row-gap:2px;}
+  .menu .mk{color:var(--head);font-weight:700;}
+  .menu .mn{color:var(--ink-hi);}
+  .menu .md{color:var(--mut);}
+
+  /* named card box (map, locked target, verdict) */
+  .card{margin:9px 0;padding:13px 15px;background:var(--panel-2);border:1px solid var(--line);
+    border-radius:9px;}
+  .card.lockcard{border-color:#e2e0f4;background:#fbfaff;}
+  .card.verdict{border-color:var(--line-2);background:#fcfcfd;}
+
+  /* gate */
+  .gate{color:var(--ink-hi);}
+  .gate .opt{color:var(--mut);}
+
+  /* verdict rows */
+  .vr{display:grid;grid-template-columns:12ch 1fr auto;column-gap:1ch;align-items:baseline;}
+  .vr .vd{color:var(--ink);}
+  .vr .vsub{color:var(--mut);}
+  .vlbl{display:inline-block;color:var(--meta);}
+
+  /* section heading between transcript and gallery */
+  .shead{margin:40px 0 4px;font-size:13px;font-weight:700;letter-spacing:.04em;
+    text-transform:uppercase;color:var(--mut);}
+  .snote{font-size:13px;color:var(--mut);margin-bottom:14px;max-width:660px;line-height:1.6;}
+
+  /* alternate-state gallery */
+  .gallery{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  @media (max-width:720px){.gallery{grid-template-columns:1fr;}}
+  .alt{background:var(--panel);border:1px solid var(--line);border-radius:11px;
+    box-shadow:var(--sh);overflow:hidden;}
+  .alt .cap{display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid var(--line);
+    background:var(--panel-2);}
+  .alt .cap .tag{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.02em;
+    padding:2px 7px;border-radius:5px;white-space:nowrap;}
+  .tag.stop{background:#f1f2f4;color:var(--meta);}
+  .tag.cant{background:#f6efe1;color:var(--warn);}
+  .tag.eyes{background:#f6efe1;color:var(--warn);}
+  .tag.note{background:#eef0f3;color:var(--meta);}
+  .tag.bad{background:#f7e8e6;color:var(--bad);}
+  .alt .cap .nm{font-size:12.5px;font-weight:600;color:var(--ink-hi);}
+  .alt .ab{padding:13px 15px;font-family:var(--mono);font-size:11.8px;line-height:1.8;color:var(--ink);}
+
+  footer{margin-top:46px;font-size:12px;color:var(--faint);line-height:1.7;}
+  footer b{color:var(--mut);font-weight:600;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow"><span class="dot"></span>FLT PR Scenario Validator · presentation contract v3</div>
+  <h1>What the run prints</h1>
+  <p class="sub">A Copilot CLI skill that validates an FLT pull request against a live environment. It can only print
+  <b>plain Markdown + Unicode marks</b> into the terminal — no colour control, no live redraw. So the design is all
+  hierarchy, restraint, and <b>plain English</b>: a smart engineer who has never seen FLT should understand every line.</p>
+
+  <div class="legend">
+    <span class="li"><span class="gm ok">✓</span>good</span>
+    <span class="li"><span class="gm bad">✕</span>broken by the change</span>
+    <span class="li"><span class="gm warn">▲</span>needs attention</span>
+    <span class="li"><span class="gm meta">◇</span>side note</span>
+    <span class="li"><span class="gm meta">◌</span>never ran</span>
+    <span class="li"><span class="gm lock">▣</span>locked target</span>
+    <span class="li"><span class="gm head">▸</span>doing / asking</span>
+    <span class="li"><span class="gm head">◆</span>headline / box</span>
+    <span class="note">Every mark is paired with a <b>word</b> — colour is never the only signal. Two domain words are allowed,
+    glossed once: <b>DAG</b> = the chain of steps FLT runs in order; <b>MLV</b> = a managed table FLT keeps up to date.</span>
+  </div>
+
+  <!-- =================== MAIN TRANSCRIPT =================== -->
+  <div class="term">
+    <div class="chrome">
+      <div class="dots"><i></i><i></i><i></i></div>
+      <span class="ttl">edog qa · PR #982144</span>
+      <span class="right">a clean run, top to bottom</span>
+    </div>
+    <div class="body">
+
+      <div class="l prompt"><span class="pc">$</span> edog qa https://dev.azure.com/&hellip;/pullrequest/982144</div>
+      <div class="sp"></div>
+
+      <!-- Step 1 -->
+      <div class="l"><span class="head">◆</span> <span class="hi">Step 1 of 7 · Find the pull request</span></div>
+      <div class="l i1 row"><span><span class="ok">✓</span> Found open PR #982144 — "retry policy + token mint reorder"</span><span class="cite">4 files · 142 lines · by a.lee</span></div>
+      <div class="l i1"><span class="ok">✓</span> Started a local test server on port 5555</div>
+      <div class="l i1"><span class="ok">✓</span> Sign-in token valid for 58m — long enough for this run</div>
+      <div class="sp"></div>
+
+      <!-- Step 2 -->
+      <div class="l"><span class="head">◆</span> <span class="hi">Step 2 of 7 · Understand the change</span></div>
+      <div class="l i1"><span class="head">▸</span> <span class="dim">Reading the diff and the FLT code it touches&hellip;</span></div>
+      <div class="card">
+        <div class="l"><span class="head">◆</span> <span class="hi">What this change touches</span></div>
+        <div class="kv i1" style="margin-top:5px;">
+          <span class="k">Areas</span><span class="v">retry policy · sign-in token flow</span>
+          <span class="k">Entry points</span><span class="v">runDAG · POST /insights/summary</span>
+          <span class="k">Settings</span><span class="v">max retries = 3 · token lifetime = 15 min</span>
+          <span class="k">Out of reach</span><span class="v">ComputeJitter() — a private helper I can't trigger&nbsp;&nbsp;<span class="warn">▲</span></span>
+        </div>
+      </div>
+      <div class="l i1 row"><span><span class="ok">✓</span> The retry count comes from max retries = 3</span><span class="cite">RetryPolicy.cs:42</span></div>
+      <div class="l i1 row"><span><span class="ok">✓</span> The sign-in token is now created earlier than before</span><span class="cite">TokenManager.cs:88</span></div>
+      <div class="sp"></div>
+
+      <!-- Step 3 -->
+      <div class="l"><span class="head">◆</span> <span class="hi">Step 3 of 7 · Plan the tests</span></div>
+      <div class="l i1"><span class="dim">I'll run these checks. Edit before I touch anything.</span></div>
+      <div class="sp-sm"></div>
+      <div class="menu i1">
+        <span class="mk">1</span><span class="mn">Happy path</span><span class="md">the chain of steps runs and ends in "Completed"</span>
+        <span class="mk">2</span><span class="mn">New endpoint</span><span class="md">/insights/summary returns 200 with a valid body</span>
+        <span class="mk">3</span><span class="mn">Edge case</span><span class="md">missing capacity returns a clean 400, not a crash</span>
+        <span class="mk">4</span><span class="mn">Risk</span><span class="md">does the sign-in token outlive a long write?</span>
+      </div>
+      <div class="sp-sm"></div>
+      <div class="l i1 gate"><span class="head">▸</span> Run this plan?&nbsp;&nbsp;<span class="opt">edit · drop &lt;n&gt; · add "&lt;your own&gt;" · y to start</span></div>
+      <div class="l i1"><span class="ok">✓</span> 4 checks locked in <span class="dim">· 2 happy path · 1 edge · 1 risk</span></div>
+      <div class="sp"></div>
+
+      <!-- Step 4 -->
+      <div class="l"><span class="head">◆</span> <span class="hi">Step 4 of 7 · Pick where to test</span></div>
+      <div class="menu i1" style="grid-template-columns:3ch 22ch 1fr;">
+        <span class="mk">+</span><span class="mn">Create a fresh sandbox</span><span class="md">new · ~$0.36/hr · deleted when done</span>
+        <span class="mk">a</span><span class="mn">robust_goodfellow_18</span><span class="md">empty · safe to use freely</span>
+        <span class="mk">b</span><span class="mn">prod-mirror-eastus</span><span class="md">has real data · looks like production&nbsp;&nbsp;<span class="warn">▲</span></span>
+      </div>
+      <div class="sp-sm"></div>
+      <div class="l i1 gate"><span class="head">▸</span> Which one?&nbsp;&nbsp;<span class="opt">+ · a · b</span></div>
+      <div class="l i1"><span class="ok">✓</span> Reusing robust_goodfellow_18 — empty, so I have full freedom</div>
+      <div class="card lockcard">
+        <div class="l"><span class="lock">▣</span> <span class="hi">Test target locked</span></div>
+        <div class="kv i1" style="margin-top:5px;grid-template-columns:12ch 1fr;">
+          <span class="k">Workspace</span><span class="v">a1b2c3d4-…-9f0</span>
+          <span class="k">Storage</span><span class="v">e5f6a7b8-…-2c1</span>
+          <span class="k">Capacity</span><span class="v">c9d0e1f2-…-7b4</span>
+        </div>
+        <div class="l i1 dim" style="margin-top:5px;">I can only touch this one target, and I only delete what I create.</div>
+      </div>
+      <div class="sp"></div>
+
+      <!-- Step 5 -->
+      <div class="l"><span class="head">◆</span> <span class="hi">Step 5 of 7 · Build, deploy, and run the checks</span></div>
+      <div class="l i1"><span class="head">▸</span> Deploying your branch · <span class="em">100%</span>&nbsp;&nbsp;<span class="dim">done</span></div>
+      <div class="l i2 dim"><span class="ok">✓</span> get token&nbsp;&nbsp;<span class="ok">✓</span> point to your branch&nbsp;&nbsp;<span class="ok">✓</span> turn on dev mode&nbsp;&nbsp;<span class="ok">✓</span> build&nbsp;&nbsp;<span class="ok">✓</span> launch&nbsp;&nbsp;<span class="ok">✓</span> connect</div>
+      <div class="l i1"><span class="ok">✓</span> FLT is running with your change <span class="dim">(took 3m 12s)</span></div>
+      <div class="sp-sm"></div>
+      <div class="l i1 dim">Running the checks — saving progress as I go, so you can step away.</div>
+      <div class="l i1 row"><span><span class="ok">✓</span> The chain of steps finishes, ending in "Completed"</span><span class="cite">run #1402</span></div>
+      <div class="l i1 row"><span><span class="ok">✓</span> GET /insights/summary → 200, body valid</span><span class="cite">request #1455</span></div>
+      <div class="l i1 row"><span><span class="ok">✓</span> Missing capacity → clean 400, no crash</span><span class="cite">request #1460</span></div>
+      <div class="l i1"><span class="warn">▲</span> One check looks risky — digging in next.</div>
+      <div class="sp"></div>
+
+      <!-- Step 6 -->
+      <div class="l"><span class="head">◆</span> <span class="hi">Step 6 of 7 · Dig into anything suspicious</span></div>
+      <div class="l i1"><span class="head">▸</span> <span class="dim">Re-running the token check with a longer write&hellip;</span></div>
+      <div class="card">
+        <div class="l"><span class="warn">▲</span> <span class="hi">SUSPECTED</span> — the sign-in token may expire during a long write</div>
+        <div class="kv i1" style="margin-top:5px;grid-template-columns:13ch 1fr;">
+          <span class="k">In the code</span><span class="v row"><span>the token is created earlier now</span><span class="cite">TokenManager.cs:88</span></span>
+          <span class="k">What I saw</span><span class="v row"><span>token created at 2.3s, write at 14.1s</span><span class="cite">token #1203 · request #1881</span></span>
+          <span class="k">My read</span><span class="v">a longer run could outlive the token before the last write.</span>
+        </div>
+        <div class="l i1 dim" style="margin-top:5px;">I couldn't prove it — that needs fault injection, which isn't available yet.</div>
+      </div>
+      <div class="sp"></div>
+
+      <!-- Step 7 -->
+      <div class="l"><span class="head">◆</span> <span class="hi">Step 7 of 7 · Results</span></div>
+      <div class="card verdict">
+        <div class="l"><span class="head">◆</span> <span class="hi">Validation results — PR #982144 "retry policy + token mint reorder"</span></div>
+        <div class="l i1 dim">checked commit abc1234 · run #4471 · took 16.2s</div>
+        <div class="sp-sm"></div>
+        <div class="l i1 hi">What this means for the reviewer</div>
+        <div class="kv i2" style="grid-template-columns:11ch 1fr;margin-top:3px;">
+          <span class="k">Watch</span><span class="v">token lifetime (reliability) · 1 new endpoint</span>
+          <span class="k">Looks safe</span><span class="v">the API change only adds things · core checks green · data lines up</span>
+          <span class="k">Your call</span><span class="v">1 suspected token risk (couldn't prove it) · 1 path never ran</span>
+        </div>
+        <div class="sp-sm"></div>
+        <div class="vr i1"><span class="vd"><span class="ok">✓</span> <span class="hi">PASS</span></span><span class="vd">The chain of steps finishes, ending in "Completed"</span><span class="cite">run #1402</span></div>
+        <div class="vr i1"><span class="vd"><span class="ok">✓</span> <span class="hi">PASS</span></span><span class="vd">GET /insights/summary → 200, body valid</span><span class="cite">request #1455</span></div>
+        <div class="vr i1"><span class="vd"><span class="ok">✓</span> <span class="hi">PASS</span></span><span class="vd">Missing capacity → clean 400, no crash</span><span class="cite">request #1460</span></div>
+        <div class="vr i1"><span class="vd"><span class="warn">▲</span> <span class="hi">SUSPECTED</span></span><span class="vd">The sign-in token may expire during a long write</span><span class="cite"></span></div>
+        <div class="vr i1"><span></span><span class="vsub"><span class="vlbl">In the code:</span>&nbsp;&nbsp;the token is created earlier now</span><span class="cite">TokenManager.cs:88</span></div>
+        <div class="vr i1"><span></span><span class="vsub"><span class="vlbl">What I saw:</span>&nbsp;&nbsp;token created at 2.3s, write at 14.1s</span><span class="cite">token #1203 · request #1881</span></div>
+        <div class="vr i1"><span></span><span class="vsub"><span class="vlbl">My read:</span>&nbsp;&nbsp;a longer run could outlive the token before the last write.</span><span class="cite"></span></div>
+        <div class="vr i1"><span></span><span class="vsub faint">Couldn't prove it without fault injection (not available yet).</span><span class="cite"></span></div>
+        <div class="vr i1"><span class="vd"><span class="meta">◌</span> <span class="hi">NEVER RAN</span></span><span class="vd">ComputeJitter() — nothing I sent reached it; check this one by hand</span><span class="cite"></span></div>
+        <div class="sp-sm"></div>
+        <div class="kv i1" style="grid-template-columns:14ch 1fr;">
+          <span class="k">What I tested</span><span class="v">3 checked · 1 suspected · 1 never ran</span>
+          <span class="k">How sure</span><span class="v">data &amp; API checks: high (repeatable) · token risk: suspected only</span>
+        </div>
+      </div>
+      <div class="l i1 gate"><span class="head">▸</span> Post this summary to PR #982144?&nbsp;&nbsp;<span class="opt">y · edit · no</span></div>
+      <div class="l i1"><span class="ok">✓</span> Posted the summary to PR #982144</div>
+      <div class="l i1"><span class="ok">✓</span> Cleaned up — removed everything I created, undid the deploy, stopped the server. <span class="dim">Nothing left behind.</span></div>
+
+    </div>
+  </div>
+
+  <!-- =================== ALTERNATE STATES =================== -->
+  <div class="shead">When the run doesn't go straight</div>
+  <p class="snote">The same calm, plain voice handles every other state. A test-setup problem is shown as
+  <b>"couldn't check this"</b>, never a pass or fail. Anything we can't prove is <b>"suspected"</b>, never "confirmed".</p>
+
+  <div class="gallery">
+
+    <div class="alt">
+      <div class="cap"><span class="tag stop">STOP</span><span class="nm">No open pull request</span></div>
+      <div class="ab">
+        <div class="l"><span class="warn">▲</span> No open pull request on this branch.</div>
+        <div class="l i1 dim">Point me at one:&nbsp;&nbsp;edog qa &lt;PR number or URL&gt;</div>
+        <div class="l dim" style="margin-top:4px;">Stopped — I didn't start anything, so there's nothing to clean up.</div>
+      </div>
+    </div>
+
+    <div class="alt">
+      <div class="cap"><span class="tag stop">STOP</span><span class="nm">Already running</span></div>
+      <div class="ab">
+        <div class="l"><span class="warn">▲</span> A validation is already running (PR #1004, started 4 min ago).</div>
+        <div class="l i1 dim">Only one runs at a time — I'll wait for it to finish or time out.</div>
+      </div>
+    </div>
+
+    <div class="alt">
+      <div class="cap"><span class="tag stop">STOP</span><span class="nm">Nothing here runs</span></div>
+      <div class="ab">
+        <div class="l">This PR only changes docs and build files —</div>
+        <div class="l">nothing here runs at the FLT service.</div>
+        <div class="l dim" style="margin-top:4px;">Stopped: there's nothing to deploy or try out.</div>
+      </div>
+    </div>
+
+    <div class="alt">
+      <div class="cap"><span class="tag eyes">NEEDS A HUMAN</span><span class="nm">Touches who's allowed in</span></div>
+      <div class="ab">
+        <div class="l"><span class="warn">▲</span> This change touches who's allowed in (authorization).</div>
+        <div class="l i1 dim">The test environment turns sign-in checks off, so any</div>
+        <div class="l i1 dim">test here would falsely pass. Flagged for security review —</div>
+        <div class="l i1 dim">I won't claim this passed.</div>
+      </div>
+    </div>
+
+    <div class="alt">
+      <div class="cap"><span class="tag cant">COULDN'T CHECK</span><span class="nm">Build / deploy failed</span></div>
+      <div class="ab">
+        <div class="l"><span class="warn">▲</span> The build/deploy failed at step 4 (build error).</div>
+        <div class="l i1 dim">A test-setup problem, not a verdict on your change.</div>
+      </div>
+    </div>
+
+    <div class="alt">
+      <div class="cap"><span class="tag cant">COULDN'T CHECK</span><span class="nm">Wrong build running</span></div>
+      <div class="ab">
+        <div class="l"><span class="warn">▲</span> The running build doesn't match your PR.</div>
+        <div class="l i1 dim">Re-deploying the exact commit before I trust any result.</div>
+      </div>
+    </div>
+
+    <div class="alt">
+      <div class="cap"><span class="tag note">ENVIRONMENT</span><span class="nm">Service was busy</span></div>
+      <div class="ab">
+        <div class="l dim">(the service was busy — capacity limit; retried once)</div>
+        <div class="l"><span class="warn">▲</span> Still busy after a retry (capacity limit) —</div>
+        <div class="l i1 dim">that's the environment, not your change.</div>
+      </div>
+    </div>
+
+    <div class="alt">
+      <div class="cap"><span class="tag note">PASS</span><span class="nm">Nothing to refresh</span></div>
+      <div class="ab">
+        <div class="l"><span class="ok">✓</span> Nothing had changed, so nothing needed</div>
+        <div class="l i1">refreshing — that's correct.</div>
+      </div>
+    </div>
+
+    <div class="alt">
+      <div class="cap"><span class="tag note">SIDE NOTE</span><span class="nm">Skipped after a failure</span></div>
+      <div class="ab">
+        <div class="l"><span class="meta">◇</span> "sales_summary" was skipped because an earlier</div>
+        <div class="l i1">step failed — not caused by your change.</div>
+      </div>
+    </div>
+
+    <div class="alt">
+      <div class="cap"><span class="tag eyes">CONFIRM</span><span class="nm">Real data — are you sure?</span></div>
+      <div class="ab">
+        <div class="l"><span class="warn">▲</span> prod-mirror-eastus holds real data. Tests will write</div>
+        <div class="l i1">to it and may disrupt it.</div>
+        <div class="l gate" style="margin-top:4px;"><span class="head">▸</span> Use it anyway?&nbsp;&nbsp;<span class="opt">yes · pick another</span></div>
+      </div>
+    </div>
+
+    <div class="alt">
+      <div class="cap"><span class="tag note">MISSING</span><span class="nm">Environment is short</span></div>
+      <div class="ab">
+        <div class="l"><span class="head">◆</span> robust_goodfellow_18 is missing what these tests need</div>
+        <div class="kv i1" style="grid-template-columns:14ch 1fr;margin-top:3px;">
+          <span class="k">Missing tables</span><span class="v">sales_raw · sales_daily</span>
+          <span class="k">Missing MLVs</span><span class="v">sales_summary <span class="faint">(auto-refreshed tables)</span></span>
+          <span class="k">Wrong setting</span><span class="v">change-tracking is off on sales_raw</span>
+        </div>
+        <div class="l" style="margin-top:4px;"><span class="head">+</span> <span class="dim">Create a fresh sandbox instead?</span></div>
+      </div>
+    </div>
+
+    <div class="alt">
+      <div class="cap"><span class="tag bad">FLAKY</span><span class="nm">A pass that didn't repeat</span></div>
+      <div class="ab">
+        <div class="l"><span class="warn">▲</span> FLAKY — passed 2 of 3 re-runs.</div>
+        <div class="l i1 dim">Reporting as flaky, not a clean pass.</div>
+      </div>
+    </div>
+
+    <div class="alt">
+      <div class="cap"><span class="tag eyes">OUT OF DATE</span><span class="nm">The PR moved on</span></div>
+      <div class="ab">
+        <div class="l"><span class="warn">▲</span> I checked commit abc1234, but the PR is now</div>
+        <div class="l i1">at def5678.</div>
+        <div class="l i1 dim">Re-run before trusting this.</div>
+      </div>
+    </div>
+
+    <div class="alt">
+      <div class="cap"><span class="tag bad">FOUND A BREAK</span><span class="nm">Keep for debugging?</span></div>
+      <div class="ab">
+        <div class="l"><span class="bad">✕</span> New endpoint returns 500 instead of 200 —</div>
+        <div class="l i1">your change breaks this. <span class="cite">request #1455</span></div>
+        <div class="l gate" style="margin-top:4px;"><span class="head">▸</span> Keep the test environment to debug?&nbsp;&nbsp;<span class="opt">keep · tear down</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>
+    <b>Design principles</b> · plain language first (clig.dev) · restraint by default — healthy states are quiet, marks signal exceptions (Charm lipgloss/glow) ·
+    a leading glyph headline with dim indented sub-results (Claude Code, GitHub Copilot CLI) ·
+    aligned columns and right-aligned dim sources with a final summary of counts (Turborepo / Vercel CLI) ·
+    every mark paired with a word — colour is never the only signal (clig.dev).<br>
+    <b>Contract:</b> skills/flt-pr-scenario-validator/reference/presentation.md
+  </footer>
+
+</div>
+</body>
+</html>

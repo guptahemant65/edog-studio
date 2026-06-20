@@ -65,3 +65,6 @@ tests/_csbuild/bin/
 # F27 P3 - E2E harness build artifacts
 tests/dotnet/EdogQaE2E.Tests/bin/
 tests/dotnet/EdogQaE2E.Tests/obj/
+
+# FLT PR Scenario Validator run state (never committed)
+.edog-qa/
