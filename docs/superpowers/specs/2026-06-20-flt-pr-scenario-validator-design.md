@@ -135,78 +135,108 @@ The skill does not preload 400K lines of FLT or every doc. Two layers, mirroring
 
 ---
 
-## 6. End-to-End Flow (the agentic loop)
+## 6. End-to-End Flow (the seven-beat journey)
 
-Phase-gated per the UX decisions: the skill **confirms at every phase boundary**, runs in the **background** with **checkpoint updates**, and **auto-investigates** anomalies.
+Phase-gated per the UX decisions: the skill **confirms at every phase boundary**, runs in the **background** with **checkpoint updates**, and (Phase 2) **auto-investigates** anomalies. The journey is mapped beat-by-beat to backend events below; **NEW** = a `qa_*` primitive or endpoint this project builds, **EXISTING** = already in EDOG.
 
 ```
-PHASE 0 — ORIENT & UNDERSTAND
-  • Resolve the PR: open PR on the current branch, or an explicit
-    "validate PR #1234" / PR URL. (PR-based only — no local-diff mode.)
-  • Blast radius is computed from the CLEAN PR DIFF (ADO API), NOT from
-    `git diff` on the local tree — because EDOG's deploy PATCHES the tree
-    (injects DevMode files, edits Program.cs / DagExecutionHandlerV2.cs).
-    Diffing the patched tree would attribute EDOG's injections to the PR.
-  • FLT repo is read LOCALLY (flt_repo_path from /api/flt/config) for the
-    Roslyn/OmniSharp semantic layer; HARD-CHECK the deployed FLT is running
-    the PR's commit (ignoring EDOG's known injection set) → mismatch is a
-    HARNESS failure, not a silent wrong answer
-  • DETERMINISTIC CODE UNDERSTANDING — done by the skill itself:
-    read clean PR diff (ADO) + grep/read the local FLT repo
-    → blast radius, statically-resolved DI bindings, config values.
-    Escalate only if ambiguous: runtime DI registry → self-spun OmniSharp.
-    (Legacy C# EdogQaCodeAnalyzer is NOT used.)
-  • LLM derives applicable scenarios from that map:
-    happy path, performance, edge cases (failure injection: Phase 2)
-    — every category that applies to THIS diff
-  ┌─ GATE: present editable plan ─────────────────────────┐
-  │ "Your change touches retry policy + token flow.       │
-  │  I'll run: 2 happy-path, 1 performance, 3 failure.    │
-  │  [plain-language list]. Proceed?"                     │
-  │ User can: approve / drop one / add a null-capacity case│
+BEAT 1 — INVOKE
+  • Acquire single-validation lock (qa_run_lock)            [NEW]
+  • Resolve the PR via DIRECT git + ADO REST (gh/az)        — no server yet
+      open PR on current branch, or explicit "validate PR #1234"
+  • NO PR → stop. Do not start the server.
+  • PR confirmed → START the edog server (edog), await :5555 healthy
+  • GET /api/flt/config + /api/edog/health                  [EXISTING]
+
+BEAT 2 — ORIENT (the skill thinks out loud)
+  • Blast radius from the CLEAN PR DIFF (ADO), never git diff on the
+    deploy-patched tree (EDOG injects DevMode/Program.cs/etc.)
+  • GET /api/ado-proxy/pr-diff → qa_pr_diff.parse_diff      [EXISTING/NEW]
+  • Skill greps/reads the LOCAL FLT repo itself (no caged engine);
+    escalate only if ambiguous: runtime DI registry → self-spun OmniSharp
+  • GET /api/playground/catalog → entry-point mapping       [EXISTING]
+  → grounded structural map (subsystems, entry points, config facts)
+
+BEAT 3 — PLAN GATE  (no backend calls — pure reasoning)
+  • Skill GENERATES scenarios per reference/scenarios.md protocol:
+    change-type → scenario-pattern catalog. Each scenario declares
+    title · category · stimulus · observations · invariants · INFRA NEEDS
+  • Categories Phase 1: happy · edge · config-bound performance
+    (failure-injection scenarios: Phase 2)
+  ┌─ GATE: editable plan ─────────────────────────────────┐
+  │ "Touches retry + token. I'll run 2 happy, 1 edge,     │
+  │  1 perf. [list]. Proceed? edit / drop N / add …"      │
   └───────────────────────────────────────────────────────┘
 
-PHASE 1 — ENVIRONMENT
-  • Interactive enriched target selection (workspace → lakehouse →
-    capacity), or "create fresh sandbox". Target then LOCKED (§9.A)
-  • Reuse existing if chosen, else provision via wizard APIs
-  ┌─ GATE: "Spin up F2 capacity (~$X/hr) + lakehouse? ~3min"┐
+BEAT 4 — ENVIRONMENT (scenario-aware)
+  • Aggregate every scenario's infra needs → REQUIRED-INFRA SPEC
+    (qa_infra_spec: N lakehouses, tables+schema, M MLVs+DAG shape) [NEW]
+  • USER CHOOSES FIRST: existing infra  OR  new infra
+  • EXISTING → probe (GET /api/fabric/workspaces, …/lakehouses) and
+    DIFF against the required spec. If it falls short → show a CLEAR
+    LIST of what's missing → user may switch to new.
+  • NEW → skill-SEEDED, tailored provisioning: create lakehouse →
+    write sample tables → define the MLV/DAG each scenario needs.
+    Each create → ledger.record (auto-cleaned).                [NEW]
+  • qa_targets.lock_target → tuple frozen for the run         [NEW]
+  ┌─ GATE: "Use existing rg_18 / spin fresh (~$X)?" ──────┐
   └───────────────────────────────────────────────────────┘
 
-PHASE 2 — DEPLOY & RUN
-  • Deploy HEAD (the change) → wait for phase:running
-  • Run the curated scenarios, capturing a trace bundle per scenario
-  ┌─ GATE: "Deploy your change and run 6 scenarios? ~6min" ┐
+BEAT 5 — DEPLOY & RUN
+  • PR code onto FLT via a SEPARATE GIT WORKTREE at the PR commit
+    (.edog-qa/worktrees/{runId}) — never touches your working tree;
+    worktree is a ledger entry, removed on cleanup.            [NEW]
+  • ledger.record("deploy") → POST /api/command/deploy → poll SSE
+    deploy-stream until phase:running                          [EXISTING]
+  • qa_head_match.compare (deployed == PR commit, minus injections) [NEW]
+  • qa_run_lock.heartbeat each turn                            [NEW]
+  • Scenarios run HAPPY → EDGE → PERF, sequential, self-cleaning:
+      stimulus (runDAG / flt-proxy / notebook)               [EXISTING]
+      observe (logs / telemetry / interceptors-status)        [EXISTING]
+      qa_invariants.* over the observation window             [NEW]
+  ┌─ GATE: "Deploy PR + run 4 scenarios? ~6min" ──────────┐
   └───────────────────────────────────────────────────────┘
 
-PHASE 3 — JUDGE & INVESTIGATE
-  • Run invariant suite per scenario (deterministic ground truth)
-  • Opus judges each scenario, grounding every claim in cited
-    trace events + Layer-1 code facts (no baseline, no diff)
-  • AUTO-INVESTIGATE: on a suspicious signal, design and run a
-    follow-up experiment (inject the fault, flip the flag, re-run)
-    to CONFIRM root cause before reporting
-  ┌─ GATE: "Suspected retry regression — run a confirming  ┐
-  │  chaos experiment? ~2min"                              │
-  └───────────────────────────────────────────────────────┘
+BEAT 6 — INVESTIGATE  (lighter in Phase 1)
+  • Phase 1: retry-once on infra-shaped failures (429/503),
+    flag-flip-and-rerun, deeper signal correlation.
+  • Cannot confirm a cause without fault injection → say honestly
+    "SUSPECTED — could not confirm without fault injection (Phase 2)".
+  • Full chaos-augmented confirmation = Phase 2.
+  • qa_verdict.verify drops any un-cited / unverifiable claim   [NEW]
 
-PHASE 4 — REPORT
-  • Terminal: per-scenario, intent-framed verdict
-  • HTML report auto-opens (correlated causal timeline)
-  • PR comment auto-posted to ADO
+BEAT 7 — VERDICT
+  • qa_verdict.Verdict.to_json per scenario                    [NEW]
+  • PR comment: MARKDOWN in Phase 1 (rich causal-board HTML = Phase 3)
+    → ADO REST (az rest / ado-proxy)                          [EXISTING]
+  • CLEANUP: on PASS → auto-teardown; on FAIL → OFFER TO KEEP the
+    environment for inspection (edog --qa-cleanup {runId} later).
+  • qa_cleanup.run → reverse ledger LIFO → qa_run_lock.release [NEW]
 ```
 
 Background execution means each gate posts a checkpoint and waits; the user can step away and return to confirm.
 
 ### Execution model — fire-and-poll across turns
 
-EDOG's slow operations (OmniSharp warm-up ~15–30s, deploy *minutes*, DAG runs *minutes*) far exceed a single skill turn. The skill must **not block** a turn waiting. Instead it **fires** an operation against EDOG's existing async surfaces — `POST /api/command/deploy` + the SSE `deploy-stream`, `runDAG` + `getDAGExecStatus` polling, the studio-status endpoint — **ends the turn**, and **resumes on the next checkpoint**. The skill orchestrates the validation as a state machine spanning multiple turns, persisting its run state (current phase, locked target, teardown ledger reference) so it can pick up exactly where it left off. This is what makes a 15–20-minute validation survivable inside a CLI skill rather than timing out mid-deploy.
+EDOG's slow operations (deploy *minutes*, DAG runs *minutes*, optional OmniSharp warm-up) far exceed a single skill turn. The skill must **not block** a turn waiting. It **fires** an operation against EDOG's async surfaces — `POST /api/command/deploy` + the SSE `deploy-stream`, `runDAG` + `getDAGExecStatus` polling, studio-status — **ends the turn**, and **resumes on the next checkpoint**, persisting run state to `.edog-qa/runs/{runId}/state.json` (current beat, locked target, ledger ref, scenario progress) so it picks up exactly where it left off. This is what makes a 15–20-minute validation survivable inside a CLI skill rather than timing out mid-deploy.
 
 ---
 
-## 7. Scenario Model
+## 7. Scenario Model & Generation Protocol
 
-No schema, ever. Scenarios are **plain-language intents the LLM derives from the grounded structural map** (Layer 1), covering every category applicable to the diff — happy path, performance, failure/error paths, edge cases, regression. Categories reuse the existing `ScenarioCategory` taxonomy (`HappyPath, ErrorPath, EdgeCase, Regression, Performance`) and execute through existing tools:
+No schema, ever. Scenarios are **plain-language intents the skill generates from the grounded structural map**, following an explicit protocol in `reference/scenarios.md` — a **change-type → scenario-pattern catalog** so generation is repeatable, not improvised:
+
+| Change touches | Scenarios generated | Infra it needs |
+|----------------|--------------------|----------------|
+| API controller / endpoint | Happy (valid → 2xx + schema valid); Edge (null / boundary / missing params → graceful 4xx) | lakehouse; maybe 1 table |
+| DAG node / scheduling | Trigger DAG → verify node transitions → final `Completed` | an MLV with a multi-node DAG over ≥1 table |
+| Retry / resilience policy | P1: observe the path under normal stimulus · P2: inject fault → backoff ≤ `maxRetries` | depends on path |
+| Token / auth flow | Long-running DAG → observe token lifetime across the write | a longer MLV DAG |
+| Spark client / session | session → trivial query → close → pool health | lakehouse + notebook |
+| Cache / DI / file-system | exercise via the nearest entry point, observe the interceptor | varies |
+
+**Every generated scenario carries six fields:** `title · category · stimulus (tool + args) · observations to collect · invariants to check · infra requirements`. The infra-requirements field is what feeds Beat 4's required-infra spec (`qa_infra_spec`). Categories reuse the existing `ScenarioCategory` taxonomy (`HappyPath, ErrorPath, EdgeCase, Regression, Performance`); failure-injection scenarios are generated but **deferred to Phase 2** until chaos is ready. Execution uses existing tools:
+
 
 | Change type | Category | Derived scenario (plain English) | Stimulus tool |
 |-------------|----------|----------------------------------|---------------|
@@ -377,13 +407,18 @@ Orthogonal walls catching different escapes. **Operational** protects the enviro
 |-----------|----------|
 | Name | **FLT PR Scenario Validator** |
 | Invocation | PR-based only (open PR on branch, or explicit PR #/URL) |
+| Server lifecycle | Skill starts the edog server **after** PR detection (no PR → no server) |
 | Confirmation | Confirm at every phase boundary |
 | Run rhythm | Background + checkpoint updates |
-| Investigation | Auto-investigate & confirm root cause |
+| Investigation | Auto-investigate (Phase 2 chaos); Phase 1 = retry/flag/correlate + honest "suspected" |
 | Curation | Editable plan before run (conversational) |
+| Scenario generation | Explicit protocol in `reference/scenarios.md`; each scenario declares infra needs |
+| Infra | User picks existing/new first; existing → fitness-check + "what's missing"; new → skill-seeded, tailored |
+| PR checkout | Separate git worktree at the PR commit (never touches the working tree) |
 | Verdict | Per-scenario, intent-framed |
 | Harness vs test failure | Clearly separated |
-| Output | Terminal + HTML (auto-open) + PR comment (auto-post) |
+| Output | Terminal + PR comment (markdown P1; rich HTML board P3) |
+| Cleanup | On pass → auto-teardown; on fail → offer to keep env for inspection |
 | Safety | Fully autonomous, gated at phase boundaries |
 | Location | Versioned in repo (`skills/`), symlinked to user-global `~/.copilot/skills/` |
 
@@ -417,13 +452,15 @@ Dark, Palantir aesthetic (per EDOG design bible). The **hero is the correlated c
 - `qa-panel.js` and all frontend QA modules — replaced by the skill + HTML report
 
 ### New
-- The skill itself (`~/.copilot/skills/flt-pr-scenario-validator/`)
-- `GET /api/qa/trace-bundle` unified observation endpoint (stable IDs, unsampled) — correlation source + citable evidence ledger
-- Invariant suite (deterministic property checks, no baseline)
-- **Teardown ledger** + `edog qa --cleanup` standalone reverser (EDOG-owned, survives skill death)
+- The skill itself, versioned at `skills/flt-pr-scenario-validator/` → symlinked to user-global, with `reference/{flt-model,tools,scenarios}.md`
+- **`reference/scenarios.md`** — the scenario-generation protocol (change-type → pattern catalog; each scenario declares infra needs)
+- **Python primitives** (`scripts/qa_*.py`, TDD'd): `qa_run_lock`, `qa_teardown_ledger`, `qa_cleanup`, `qa_pr_diff`, `qa_head_match`, `qa_targets`, `qa_infra_spec` (required-vs-available infra diff), `qa_invariants`, `qa_verdict`
+- `edog --qa-cleanup {runId}` standalone ledger reverser (EDOG-owned, survives skill death)
+- Worktree-based PR checkout (`.edog-qa/worktrees/{runId}`) — never touches the working tree
 - **Locked-target enforcement** + created-vs-reused gating at the tool boundary
-- **Verification pass** — deterministic checker that confirms every cited assertion against the trace bundle
-- Independent dead-man's-switch watchdog (budget + silence teardown)
+- **Verification pass** (`qa_verdict.verify`) — deterministic checker that confirms every cited assertion against the trace bundle
+- `GET /api/qa/trace-bundle` unified observation endpoint (stable IDs, unsampled) — *Phase 3*
+- Independent dead-man's-switch watchdog (budget + silence teardown) — *Phase 4*
 
 ---
 
@@ -432,7 +469,7 @@ Dark, Palantir aesthetic (per EDOG design bible). The **hero is the correlated c
 1. Engineer says "validate my change" → gets a confirmed, plain-language verdict end-to-end.
 2. Zero hallucinated assertions — every claim cites a verified trace-bundle event; the verification pass rejects or downgrades anything it can't confirm.
 3. Catches a real blast-radius regression an engineer would have missed (the OneLakeWriter-three-layers-away case).
-4. Root causes are *confirmed* by follow-up experiments, not guessed.
+4. Root causes are *confirmed* by follow-up experiments (Phase 2); in Phase 1, unconfirmable causes are honestly marked "suspected".
 5. Harness failures never masquerade as test failures.
 6. The HTML report is good enough to paste into a design review as evidence.
 7. **No orphaned state ever** — a killed/crashed run leaves zero billing capacities, zero lingering chaos rules, zero leaked flag overrides; `edog qa --cleanup` fully reverses the ledger even with the skill process gone.
@@ -444,9 +481,9 @@ Dark, Palantir aesthetic (per EDOG design bible). The **hero is the correlated c
 
 Guardrails are **not** a late phase. The locked target, teardown ledger, phase allowlist, and evidence-cited verdict are **foundational** — they ship with the first thing that can mutate state or emit a claim.
 
-- **Phase 1 (MVP):** skill skeleton + PR resolution + FLT-repo-local HEAD-match check + fire-and-poll cross-turn orchestration + **skill-native code understanding** (read diff + grep repo) + invariant grounding + locked-target selection + teardown ledger + `edog qa --cleanup` + deploy + **happy-path / edge / config-bound performance** scenarios + invariant suite + **evidence-cited** terminal verdict + **PR comment auto-post** (plain-text is fine — it's the reason a *PR* validator exists). **No failure injection** (chaos feature not yet ready), no auto-investigation.
-- **Phase 2:** **failure-injection scenarios** (once the chaos/error-sim feature matures) + auto-investigation (chaos-augmented follow-up experiments) + destructive-op gating on reused-with-data.
-- **Phase 3:** trace-bundle endpoint (stable IDs, unsampled) + verification pass + full cross-signal correlation + rich HTML report (richer PR comment links to it).
-- **Phase 4:** infra auto-provisioning + independent dead-man's-switch watchdog.
+- **Phase 1 (MVP):** run-lock → PR resolution (direct git/ADO) → **start server after PR** → skill-native code understanding (diff + repo grep) → scenario generation (`reference/scenarios.md`) with infra needs → **scenario-aware environment** (user picks existing/new; existing fitness-check; new = skill-seeded, tailored) → **worktree** PR checkout → deploy + HEAD-match → **happy/edge/perf** scenarios (self-cleaning) → invariant grounding + evidence-cited verdict (`qa_verdict.verify`) → **markdown PR comment** → cleanup (auto on pass, **offer-keep on fail**) + `edog --qa-cleanup`. **No failure injection, no chaos investigation.**
+- **Phase 2:** **failure-injection scenarios** (once chaos/error-sim matures) + auto-investigation (chaos-augmented confirmation; upgrades Phase-1 "suspected" to "confirmed") + destructive-op gating on reused-with-data.
+- **Phase 3:** trace-bundle endpoint (stable IDs, unsampled) + verification pass over the unified bundle + full cross-signal correlation + rich HTML causal-board report (richer PR comment links to it).
+- **Phase 4:** infra auto-provisioning polish + independent dead-man's-switch watchdog.
 
 **To resolve during planning:** how the skill self-spins OmniSharp on demand (binary discovery, warm-up cost, when it's worth it vs plain code-reading); how cross-turn run state is persisted (session store vs a file EDOG owns); trace-bundle retention window and the unsampled-window cost; concurrency (single-validation lock, like `EdogQaExecutionEngine._runLock`); how the verification pass handles claims whose shape isn't mechanically checkable (semantic interpretation → forced into the inference tier); the repo `skills/` → user-global symlink install step.
