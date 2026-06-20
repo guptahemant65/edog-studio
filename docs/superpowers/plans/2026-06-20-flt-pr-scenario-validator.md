@@ -23,7 +23,7 @@
 | `scripts/qa_teardown_ledger.py` | Append-before-act ledger of mutating actions; reverse-replay for cleanup. |
 | `scripts/qa_targets.py` | Enriched workspace/lakehouse/capacity listing + locked-target record. |
 | `scripts/qa_invariants.py` | Deterministic invariant checks over a response/log/trace snapshot. |
-| `scripts/qa_contract_diff.py` | Fetch `/api/playground/swagger/diff`; normalize to `{changed, totalChanges, breaking[], changes[]}` with stable `ch-NNN` IDs. |
+| `scripts/qa_contract_diff.py` | Diff two generated OpenAPI specs (main vs PR runtime swagger) → `{changed, totalChanges, breaking[], changes[]}` with stable `ch-NNN` IDs. NOT the stale committed baseline. |
 | `scripts/qa_error_classify.py` | Map a decoded error (`errorSource`/`category`/`httpStatus`) to an attribution tier (`change`/`infra`/`unknown`) from the error catalog. |
 | `scripts/qa_verdict.py` | Verdict + cited-claim data model; evidence verification pass; JSON serialization. |
 | `scripts/qa_trace_bundle.py` | (Phase 3) Assemble the unified, unsampled, stable-ID trace bundle. |
@@ -60,13 +60,20 @@ Confirmed by reading the real handlers; the tasks below reflect them:
 - **Chaos is SignalR-only** → Phase 2 adds a `POST /api/error-sim/rule` REST shim (Task 13).
 
 **Second-pass audit (repo-wide mining — folded into Tasks 11a, 11b, 3, 6, 10, 11):**
-- **Swagger contract-diff is a deterministic grounding source.** `GET /api/playground/swagger/diff` diffs runtime swagger vs the FLT repo's committed `Swagger/Swagger.json` → `{summary, changes[]}` with **stable `ch-NNN` IDs**; `summary.totalChanges>0` = contract changed; removed/modified endpoints = breaking. New primitive `qa_contract_diff` (Task 11a) + a contract-diff scenario.
+- **Swagger contract-diff is a deterministic grounding source — but diff main vs PR, NOT vs the committed baseline.** The committed `Swagger/Swagger.json` is updated infrequently and drifts, so `/api/playground/swagger/diff` (runtime-vs-committed) is misleading. Instead generate the runtime swagger from the PR deploy (`GET /api/playground/swagger/spec`) and from the base-commit (main) worktree (`dotnet swagger tofile` preferred, else a transient runtime capture) and diff the two → `{changed, totalChanges, breaking[], changes[]}` with stable `ch-NNN` IDs; removed/modified endpoints = breaking. New primitive `qa_contract_diff` (Task 7a, two-spec differ) + a contract-diff scenario.
 - **Flag-gating is a correctness gate.** A change behind `FeatureNames.<X>` is dormant until the flag is flipped ON; validating flag-OFF yields a **false PASS**. `qa_pr_diff` (Task 3) must surface `FeatureNames.` refs; SKILL.md (Task 11) must flip ON to exercise + run ON/OFF. Override push = `POST /api/edog/feature-flags/overrides(/bulk)` with `X-EDOG-Control-Token`, success = hash+revision `applied` echo.
 - **Failure attribution is catalog-grounded, not guessed.** `error-sim-catalog.js` (115 codes: `errorSource` User/System · `category` · `httpStatus` · `fltCodePath`) + `error-decoder.js` → classify failure as change-attributable vs infra mechanically. New primitive `qa_error_classify` (Task 11b); feeds `qa_verdict.attribution` (Task 5) + the harness-vs-test split.
 - **Token-expiry mid-run is handled, not feared.** Bearer (~1h, 5-min buffer) auto-refreshes iff a username/session is saved; MWC has a 15-min buffer. The skill checks `GET /api/edog/health → bearerExpiresIn` before long ops; 401/403 → re-auth; 404 → `capacity_routing_not_ready` (retryable). SKILL.md (Task 11) Beat-5 instruction.
 - **Pin GUIDs, never names.** Name-based resolution can silently target the WRONG lakehouse (logs "backward compatibility mode"); the locked tuple is `(workspaceId, lakehouseId, capacityId)` GUIDs and the boundary check compares GUIDs (`qa_targets`, Task 6).
 - **Config-repoint must not nuke tokens.** Saving config via `--config` deletes `.edog-token-cache`; the worktree repoint **edits `edog-config.json` directly** (ledger `config_restore`, Task 2) and preserves `.edog-session.json`/`.edog-*-cache`/the worktree's own `workload-dev-mode.json` (whose `CapacityGuid` must match the locked target).
 - **Evidence-access reality (constrains Phase-1 grounding).** Real stable IDs exist today (`TopicEvent.SequenceId` per topic + payload `IterationId/CorrelationId/dagId/nodeId`), but the rich topic-event stream is **SignalR-primary**; REST gives `/api/logs`, `/telemetry`, `/stats`, `/executions`, `/interceptors-status`. So **Phase 1 grounds on logs/telemetry/onelake/http/swagger-diff/error-codes**; topic-event citation (`retry:#…`, `dag:#…`) is the **Phase-3 trace-bundle's** job (Task 17). Interceptors do **not** capture method return values — ground on captured fields only.
+
+**Third-pass refinements (user review of the seven-beat journey — folded into Beat 1/3/5/6, Tasks 9, 7, 10, 11, 7a):**
+- **Headless server start (Beat 1).** Default `python edog.py` opens the EDOG Studio webpage (`edog.py:5219 webbrowser.open`); the skill must NOT. Start the server headless — launch `scripts/dev-server.py` directly (it has no browser-open) or add an `edog --no-browser` flag (Task 9). API-only on :5555.
+- **Scenarios carry preconditions + can be composite (Beat 3).** Beyond infra counts, a scenario declares **preconditions** — required **flag state** (e.g. a CDF-warning test needs `IRPhysicalCDF` *disabled*) and **table/MLV properties** (e.g. source table seeded with `CDF = false`, set at seed time) — and may have **sub-scenarios** sharing infra plus a **complex multi-node DAG shape**. `qa_infra_spec` (Task 7) must carry table properties + DAG shape; `scenarios.md` (Task 10) documents the eight-field model.
+- **Assert the API response body (Beat 5).** The stimulus call's response is first-class evidence — assert + cite the response body/output, not just status/logs (`scenarios.md` Task 10, SKILL.md Task 11).
+- **Contract-diff is main-vs-PR, not vs committed baseline (Beat 5).** See the swagger bullet above; `qa_contract_diff` is a **two-spec differ** (Task 7a).
+- **Fault injection → Phase N (timing TBD), not Phase 2.** All chaos/failure-injection work is deferred to an undetermined later phase (relabel Phase 2 header + Beat 6 honesty text).
 
 ---
 
@@ -492,7 +499,11 @@ def parse_diff(diff_text: str) -> dict:
     files = [{"path": m.group("b")} for m in _FILE_RE.finditer(diff_text)]
     symbols, facts, flags, seen = [], [], set(), set()
     for line in diff_text.splitlines():
-        if line.startswith("+") and not line.startswith("++"):
+        if line.startswith("@@"):
+            # Hunk header: the trailing context (after the 2nd @@) names the
+            # enclosing class/method the change lives in -> attribute it.
+            added = line.split("@@")[-1]
+        elif line.startswith("+") and not line.startswith("++"):
             added = line[1:]
         elif line.startswith("-") and not line.startswith("--"):
             added = line[1:]
@@ -787,7 +798,7 @@ def is_addressable(locked: dict, workspace: str, lakehouse: str) -> bool:
 
 **Files:** Create `scripts/qa_infra_spec.py`; Test `tests/test_qa_infra_spec.py`
 
-Aggregates each scenario's `infra requirements` into one required spec, then diffs it against what an existing target actually has — producing the "here's what's missing" list that drives Beat 4's recommend-fresh path.
+Aggregates each scenario's `infra requirements` into one required spec, then diffs it against what an existing target actually has — producing the "here's what's missing" list that drives Beat 4's recommend-fresh path. Beyond counts, scenarios may demand specific **table properties** (e.g. `cdf=false`), a **flag precondition** state (e.g. `IRPhysicalCDF` disabled), and a **DAG shape** (node count) — so a property mismatch on a same-named table makes an existing target unfit even when the table exists.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -798,6 +809,11 @@ from scripts import qa_infra_spec as spec
 SCENARIOS = [
     {"infra": {"lakehouses": 1, "tables": ["orders"], "mlvs": 1}},
     {"infra": {"lakehouses": 1, "tables": ["orders", "customers"], "mlvs": 2}},
+]
+CDF = [
+    {"infra": {"lakehouses": 1, "tables": ["orders"], "mlvs": 1,
+               "table_properties": {"orders": {"cdf": False}}, "dag_nodes": 4},
+     "preconditions": {"flags": {"IRPhysicalCDF": False}}},
 ]
 
 def test_aggregate_takes_the_max_and_union():
@@ -818,6 +834,20 @@ def test_fitness_passes_when_satisfied():
     req = spec.required(SCENARIOS)
     have = {"lakehouses": 2, "tables": ["orders", "customers", "extra"], "mlvs": 3}
     assert spec.fitness(req, have)["fits"] is True
+
+def test_required_carries_table_props_flags_and_dag_shape():
+    req = spec.required(CDF)
+    assert req["table_properties"]["orders"]["cdf"] is False
+    assert req["flags"]["IRPhysicalCDF"] is False
+    assert req["dag_nodes"] == 4
+
+def test_fitness_flags_property_mismatch():
+    req = spec.required(CDF)
+    have = {"lakehouses": 1, "tables": ["orders"], "mlvs": 1,
+            "table_properties": {"orders": {"cdf": True}}, "dag_nodes": 4}
+    gap = spec.fitness(req, have)
+    assert gap["fits"] is False
+    assert gap["missing"]["property_mismatch"]["orders"]["cdf"] is False
 ```
 
 - [ ] **Step 2: Run to verify fail** — `ModuleNotFoundError`.
@@ -826,30 +856,54 @@ def test_fitness_passes_when_satisfied():
 
 ```python
 # scripts/qa_infra_spec.py
-"""Derive the required-infra spec from the scenario plan, and diff it against
-an existing target's actual infra to produce the 'what's missing' list."""
+"""Derive the required-infra spec from the scenario plan, and diff it against an
+existing target's actual infra to produce the 'what is missing' list. Beyond
+counts, scenarios may demand specific TABLE PROPERTIES (e.g. cdf=False), a flag
+PRECONDITION state (e.g. IRPhysicalCDF disabled), and a DAG SHAPE (node count)."""
 from __future__ import annotations
 
 def required(scenarios: list[dict]) -> dict:
-    lakehouses = mlvs = 0
+    lakehouses = mlvs = dag_nodes = 0
     tables: set[str] = set()
+    table_props: dict[str, dict] = {}
+    flags: dict[str, bool] = {}
     for s in scenarios:
         infra = s.get("infra", {})
         lakehouses = max(lakehouses, int(infra.get("lakehouses", 0)))
         mlvs = max(mlvs, int(infra.get("mlvs", 0)))
+        dag_nodes = max(dag_nodes, int(infra.get("dag_nodes", 0)))
         tables.update(infra.get("tables", []))
-    return {"lakehouses": lakehouses, "tables": sorted(tables), "mlvs": mlvs}
+        for name, props in (infra.get("table_properties") or {}).items():
+            table_props.setdefault(name, {}).update(props)
+            tables.add(name)
+        for flag, state in (s.get("preconditions", {}).get("flags") or {}).items():
+            flags[flag] = bool(state)
+    return {"lakehouses": lakehouses, "tables": sorted(tables), "mlvs": mlvs,
+            "table_properties": table_props, "flags": flags, "dag_nodes": dag_nodes}
 
 def fitness(req: dict, have: dict) -> dict:
-    missing_tables = [t for t in req["tables"] if t not in set(have.get("tables", []))]
+    have_tables = set(have.get("tables", []))
+    missing_tables = [t for t in req["tables"] if t not in have_tables]
     missing_mlvs = max(0, req["mlvs"] - int(have.get("mlvs", 0)))
     missing_lh = max(0, req["lakehouses"] - int(have.get("lakehouses", 0)))
-    fits = not missing_tables and missing_mlvs == 0 and missing_lh == 0
-    return {"fits": fits, "missing": {"tables": missing_tables, "mlvs": missing_mlvs, "lakehouses": missing_lh}}
+    dag_short = max(0, req.get("dag_nodes", 0) - int(have.get("dag_nodes", 0)))
+    have_props = have.get("table_properties") or {}
+    prop_mismatch = {}
+    for name, props in req.get("table_properties", {}).items():
+        if name in have_tables:
+            bad = {k: v for k, v in props.items() if have_props.get(name, {}).get(k) != v}
+            if bad:
+                prop_mismatch[name] = bad
+    fits = (not missing_tables and missing_mlvs == 0 and missing_lh == 0
+            and not prop_mismatch and dag_short == 0)
+    return {"fits": fits,
+            "missing": {"tables": missing_tables, "mlvs": missing_mlvs, "lakehouses": missing_lh,
+                        "property_mismatch": prop_mismatch, "dag_nodes": dag_short},
+            "required_flags": req.get("flags", {})}
 ```
 
-- [ ] **Step 4: Run to verify pass** — 3 passed.
-- [ ] **Step 5: Commit** — `feat(qa): scenario-aware required-infra spec + fitness diff`.
+- [ ] **Step 4: Run to verify pass** — `python -m pytest tests/test_qa_infra_spec.py -v` → 5 passed.
+- [ ] **Step 5: Commit** — `feat(qa): scenario-aware required-infra spec + fitness diff (table props, flag preconditions, DAG shape)`.
 
 ---
 
@@ -857,7 +911,9 @@ def fitness(req: dict, have: dict) -> dict:
 
 **Files:** Create `scripts/qa_contract_diff.py`; Test `tests/test_qa_contract_diff.py`
 
-Wraps `GET /api/playground/swagger/diff` into a normalized, citable result. `summary.totalChanges > 0` means the PR changed the API contract; removed/signature-changed endpoints are **breaking**. Each change keeps its stable `ch-NNN` id so the verdict can cite it.
+**Two-spec differ — NOT the committed-baseline endpoint.** The FLT repo's committed `Swagger/Swagger.json` is updated infrequently and drifts from reality, so diffing runtime-vs-committed (`/api/playground/swagger/diff`) is misleading. Instead the caller generates the swagger spec **from the PR branch and from its merge-base (main)** and passes both here; the diff then reflects exactly what *this PR* changed. An endpoint = `(METHOD, path)`; a removed or signature/response-shape-changed endpoint is **breaking**, a pure addition is not. Each change carries a stable, content-derived `ch-NNN` id for citation.
+
+> **Spec generation (caller's job, documented in `scenarios.md`/SKILL.md):** PR spec = `GET /api/playground/swagger/spec` after the PR deploy (live Swashbuckle runtime spec). Main spec = build the **base-commit worktree** (`commonCommit` from `pr-diff`, which Beat 5 already creates) and emit its swagger — preferred via `dotnet swagger tofile` on the built assembly (no second full FLT deploy), fallback to a runtime capture from a transient main deploy. Only run this for controller/DTO-touching PRs.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -865,37 +921,49 @@ Wraps `GET /api/playground/swagger/diff` into a normalized, citable result. `sum
 # tests/test_qa_contract_diff.py
 from scripts import qa_contract_diff as cd
 
-RAW = {
-    "summary": {"totalChanges": 3, "added": 1, "removed": 1, "modified": 1},
-    "changes": [
-        {"id": "ch-001", "kind": "added",    "path": "/insights/summary", "method": "GET"},
-        {"id": "ch-002", "kind": "removed",  "path": "/legacy/run",       "method": "POST"},
-        {"id": "ch-003", "kind": "modified", "path": "/dag/run",          "method": "POST",
-         "detail": "response schema changed"},
-    ],
-}
+def _op(params=None, responses=("200",), body=False):
+    op = {"responses": {c: {} for c in responses}}
+    if params: op["parameters"] = params
+    if body: op["requestBody"] = {}
+    return op
 
-def test_normalizes_summary_and_flags_changed():
-    res = cd.normalize(RAW)
-    assert res["changed"] is True and res["totalChanges"] == 3
+MAIN = {"paths": {
+    "/a":      {"get":  _op()},
+    "/legacy": {"post": _op(responses=("200",))},
+    "/gone":   {"delete": _op()},
+}}
+PR = {"paths": {
+    "/a":      {"get":  _op()},
+    "/legacy": {"post": _op(responses=("200", "400"))},
+    "/new":    {"get":  _op()},
+}}
 
-def test_flags_removed_and_modified_as_breaking():
-    breaking = {c["id"] for c in cd.normalize(RAW)["breaking"]}
-    assert breaking == {"ch-002", "ch-003"}
+def test_changed_true_with_three_changes():
+    r = cd.diff(MAIN, PR)
+    assert r["changed"] is True and r["totalChanges"] == 3
 
-def test_added_only_is_not_breaking():
-    raw = {"summary": {"totalChanges": 1}, "changes": [
-        {"id": "ch-001", "kind": "added", "path": "/x", "method": "GET"}]}
-    assert cd.normalize(raw)["breaking"] == []
+def test_added_removed_modified_classified():
+    kinds = {c["endpoint"]: c["kind"] for c in cd.diff(MAIN, PR)["changes"]}
+    assert kinds["GET /new"] == "added"
+    assert kinds["DELETE /gone"] == "removed"
+    assert kinds["POST /legacy"] == "modified"
 
-def test_empty_diff_is_unchanged():
-    res = cd.normalize({"summary": {"totalChanges": 0}, "changes": []})
-    assert res["changed"] is False and res["breaking"] == []
+def test_breaking_excludes_pure_additions():
+    eps = {c["endpoint"] for c in cd.diff(MAIN, PR)["breaking"]}
+    assert eps == {"DELETE /gone", "POST /legacy"}
 
-def test_fetch_uses_injected_client():
-    seen = {}
-    res = cd.fetch(client=lambda path: seen.update(p=path) or RAW)
-    assert seen["p"].endswith("/api/playground/swagger/diff") and res["totalChanges"] == 3
+def test_identical_specs_unchanged():
+    r = cd.diff(MAIN, MAIN)
+    assert r["changed"] is False and r["breaking"] == []
+
+def test_ids_are_stable_and_contiguous():
+    ids = [c["id"] for c in cd.diff(MAIN, PR)["changes"]]
+    assert ids == ["ch-001", "ch-002", "ch-003"]
+
+def test_param_change_is_modified():
+    main = {"paths": {"/x": {"get": _op(params=[{"name": "id", "in": "query", "required": False}])}}}
+    pr   = {"paths": {"/x": {"get": _op(params=[{"name": "id", "in": "query", "required": True}])}}}
+    assert cd.diff(main, pr)["changes"][0]["kind"] == "modified"
 ```
 
 - [ ] **Step 2: Run to verify fail** — `python -m pytest tests/test_qa_contract_diff.py -v` → `ModuleNotFoundError`.
@@ -904,38 +972,58 @@ def test_fetch_uses_injected_client():
 
 ```python
 # scripts/qa_contract_diff.py
-"""Normalize EDOG's swagger contract-diff into a citable grounding result.
+"""Deterministic API-contract diff between two generated OpenAPI specs.
 
-`GET /api/playground/swagger/diff` diffs the live runtime swagger against the
-FLT repo's committed Swagger/Swagger.json baseline. A removed or modified
-endpoint is a breaking change; each change carries a stable `ch-NNN` id used as
-evidence in the verdict.
+We do NOT use the committed Swagger/Swagger.json baseline -- it is updated
+infrequently and drifts from reality, which makes a runtime-vs-baseline diff
+misleading. Instead the caller generates the swagger spec from the PR branch
+and from its merge-base (main) and passes both here, so the diff reflects
+exactly what THIS PR changed. An endpoint = (METHOD, path); a removed or
+signature/response-shape-changed endpoint is breaking, a pure addition is not.
+Each change carries a stable, content-derived `ch-NNN` id for citation.
 """
 from __future__ import annotations
-from typing import Callable
 
 _BREAKING_KINDS = {"removed", "modified"}
-_ENDPOINT = "http://127.0.0.1:5555/api/playground/swagger/diff"
 
-def normalize(raw: dict) -> dict:
-    changes = raw.get("changes", []) or []
-    total = int(raw.get("summary", {}).get("totalChanges", len(changes)))
-    breaking = [c for c in changes if c.get("kind") in _BREAKING_KINDS]
+def _endpoints(spec: dict) -> dict:
+    out = {}
+    for path, methods in (spec.get("paths") or {}).items():
+        for method, op in (methods or {}).items():
+            if isinstance(op, dict):
+                out[f"{method.upper()} {path}"] = op
+    return out
+
+def _signature(op: dict) -> dict:
+    # The pieces a consumer depends on: params + request body + response codes.
     return {
-        "changed": total > 0,
-        "totalChanges": total,
-        "changes": changes,
-        "breaking": breaking,
-        "evidence": [c["id"] for c in changes if "id" in c],
+        "params": sorted(
+            (p.get("name"), p.get("in"), bool(p.get("required")))
+            for p in op.get("parameters", []) if isinstance(p, dict)),
+        "requestBody": "requestBody" in op,
+        "responses": sorted((op.get("responses") or {}).keys()),
     }
 
-def fetch(*, client: Callable[[str], dict]) -> dict:
-    """`client(path)` performs the GET and returns parsed JSON (injected for tests)."""
-    return normalize(client(_ENDPOINT))
+def diff(main_spec: dict, pr_spec: dict) -> dict:
+    main_eps, pr_eps = _endpoints(main_spec), _endpoints(pr_spec)
+    raw = []
+    for key in sorted(set(main_eps) | set(pr_eps)):
+        if key not in main_eps:
+            raw.append(("added", key))
+        elif key not in pr_eps:
+            raw.append(("removed", key))
+        elif _signature(main_eps[key]) != _signature(pr_eps[key]):
+            raw.append(("modified", key))
+    changes = [{"id": f"ch-{i:03d}", "kind": kind, "endpoint": key}
+               for i, (kind, key) in enumerate(raw, start=1)]
+    breaking = [c for c in changes if c["kind"] in _BREAKING_KINDS]
+    return {"changed": bool(changes), "totalChanges": len(changes),
+            "changes": changes, "breaking": breaking,
+            "evidence": [c["id"] for c in changes]}
 ```
 
-- [ ] **Step 4: Run to verify pass** — `python -m pytest tests/test_qa_contract_diff.py -v` → 5 passed.
-- [ ] **Step 5: Commit** — `git add scripts/qa_contract_diff.py tests/test_qa_contract_diff.py && git commit -m "feat(qa): swagger contract-diff grounding primitive"` (add the Co-authored-by trailer).
+- [ ] **Step 4: Run to verify pass** — `python -m pytest tests/test_qa_contract_diff.py -v` → 6 passed.
+- [ ] **Step 5: Commit** — `git add scripts/qa_contract_diff.py tests/test_qa_contract_diff.py && git commit -m "feat(qa): two-spec (main vs PR) contract-diff grounding primitive"` (add the Co-authored-by trailer).
 
 ---
 
@@ -1159,8 +1247,8 @@ if __name__ == "__main__":
 **Files:** Create `skills/flt-pr-scenario-validator/reference/flt-model.md`, `…/tools.md`, `…/scenarios.md`
 
 - [ ] **Step 1:** `flt-model.md` — the always-loaded mental model: DAG / iteration-ID / MWC token / capacity routing / the 11 interceptors / deploy lifecycle / ports (5555 dev-server, 5557 FLT). ≤2 pages.
-- [ ] **Step 2:** `tools.md` — the EDOG HTTP tool surface, one row per endpoint the skill calls (from §4 of the spec) with a concrete `curl` example each. **Primary stimulus = `POST /api/playground/dispatch`** — dispatches ANY well-formed path (NOT catalog-limited; the whole FLT API surface is reachable). **Complete discovery = `GET /api/playground/swagger/spec`** (the live runtime swagger — the full endpoint list, including PublicAPI/MLV controllers the static `/api/playground/catalog` omits). Document that the curated catalog is convenience-only, not the coverage boundary. Plus: config, health, ado-proxy/pr-diff + **pr-comment**, fabric/workspaces+lakehouses+capacities, command/deploy + deploy-stream, flt-proxy/runDAG + getDAGExecStatus, **notebook session trio (also the table/MLV seeding path)**, feature-flags/overrides, logs, telemetry, **`/api/executions`** (DAG history+timing), interceptors-status, **`/api/onelake/table-preview-rows`+`table-metadata` (verify output landed)**.
-- [ ] **Step 3:** `scenarios.md` — **the generation protocol**: the change-type → scenario-pattern catalog (the table from spec §7), and for each pattern a worked example showing the six scenario fields (`title · category · stimulus · observations · invariants · infra requirements`). Include: (a) the **AUDITED infra-seeding recipe** — `create workspace → assignToCapacity → create SCHEMA-ENABLED lakehouse (pass the Fabric schema flag; default is non-schema and MLVs need schemas) → create a NOTEBOOK artifact → create-session → execute-cell running Python spark.sql("CREATE TABLE …") then spark.sql("CREATE MATERIALIZED LAKE VIEW silver.<n> AS …") → close-session` (kernel is synapse_pyspark, `language` ignored; cold-start ≤10min; outputs give ok/error; a SQL MLV is catalog-registered + runnable via runDAG with no separate MLVExecutionDefinition — FLT-owner verified); record each create to the ledger; (b) **runDAG** — the skill generates a fresh GUID `iterationId`; body optional; (c) **output verification** — DAG scenarios check `/api/onelake/table-preview-rows` (live parquet) that the write landed correctly; (d) **observation discovery** — `/api/logs`,`/telemetry`,`/executions` are FLT-log-server proxies whose query interface the skill must DISCOVER at runtime (don't assume `?since=&level=`); (e) **stimulus via `/api/playground/dispatch`** (any path) as the default; (f) **contract-diff scenario** — for any controller/DTO change, call `GET /api/playground/swagger/diff` via `qa_contract_diff`, assert each `ch-NNN` is intended, and flag removed/modified endpoints as breaking; (g) **flag-gating rule (correctness gate, not edge case)** — if `qa_pr_diff` reports `feature_flags`, the changed path is dormant until ON; **flip the flag ON via `POST /api/edog/feature-flags/overrides` (X-EDOG-Control-Token, success = `applied` hash+revision echo) to exercise the PR's real behavior**, then run ON and OFF — skipping this yields a false PASS; (h) **failure attribution** — decode failures and run them through `qa_error_classify` so `change` vs `infra` is catalog-grounded, never guessed.
+- [ ] **Step 2:** `tools.md` — the EDOG HTTP tool surface, one row per endpoint the skill calls (from §4 of the spec) with a concrete `curl` example each. **Primary stimulus = `POST /api/playground/dispatch`** — dispatches ANY well-formed path (NOT catalog-limited; the whole FLT API surface is reachable). **Complete discovery = `GET /api/playground/swagger/spec`** (the live runtime swagger — the full endpoint list, including PublicAPI/MLV controllers the static `/api/playground/catalog` omits; also the per-branch spec source for the main-vs-PR contract diff — **do NOT use `/api/playground/swagger/diff` against the stale committed baseline**). Document that the curated catalog is convenience-only, not the coverage boundary. Plus: config, **health (`bearerExpiresIn`)**, ado-proxy/pr-diff + **pr-comment**, fabric/workspaces+lakehouses+capacities, command/deploy + deploy-stream, flt-proxy/runDAG + getDAGExecStatus, **notebook session trio (also the table/MLV seeding path)**, feature-flags/overrides (+`/bulk`, `X-EDOG-Control-Token`), logs, telemetry, **`/api/executions`** (DAG history+timing), interceptors-status, **`/api/onelake/table-preview-rows`+`table-metadata` (verify output landed)**. Note the **headless start** (`scripts/dev-server.py` direct / `edog --no-browser`) so no Studio webpage opens.
+- [ ] **Step 3:** `scenarios.md` — **the generation protocol**: the change-type → scenario-pattern catalog (the table from spec §7), and for each pattern a worked example showing the **eight scenario fields** (`title · category · stimulus · observations · invariants · infra requirements · preconditions · sub-scenarios`). Include: (a) the **AUDITED infra-seeding recipe** — `create workspace → assignToCapacity → create SCHEMA-ENABLED lakehouse (pass the Fabric schema flag; default is non-schema and MLVs need schemas) → create a NOTEBOOK artifact → create-session → execute-cell running Python spark.sql("CREATE TABLE …") then spark.sql("CREATE MATERIALIZED LAKE VIEW silver.<n> AS …") → close-session` (kernel is synapse_pyspark, `language` ignored; cold-start ≤10min; outputs give ok/error; a SQL MLV is catalog-registered + runnable via runDAG with no separate MLVExecutionDefinition — FLT-owner verified); record each create to the ledger; (b) **runDAG** — the skill generates a fresh GUID `iterationId`; body optional; (c) **output verification + response-body** — assert the stimulus call's **API response body/output** itself (cite it), AND DAG scenarios check `/api/onelake/table-preview-rows` (live parquet) that the write landed correctly; (d) **observation discovery** — `/api/logs`,`/telemetry`,`/executions` are FLT-log-server proxies whose query interface the skill must DISCOVER at runtime (don't assume `?since=&level=`); (e) **stimulus via `/api/playground/dispatch`** (any path) as the default; (f) **contract-diff scenario (main-vs-PR, NOT the committed baseline)** — for any controller/DTO change, generate the runtime swagger from the PR deploy (`GET /api/playground/swagger/spec`) and from the base-commit (main) worktree (`dotnet swagger tofile` preferred, else a transient runtime capture), diff via `qa_contract_diff.diff(main, pr)`, assert each `ch-NNN` is intended, flag removed/modified as breaking. The committed `Swagger.json` is unreliable (rarely updated); do not diff against it; (g) **flag-gating rule (correctness gate, not edge case)** — if `qa_pr_diff` reports `feature_flags`, the changed path is dormant until ON; **flip the flag ON via `POST /api/edog/feature-flags/overrides` (X-EDOG-Control-Token, success = `applied` hash+revision echo) to exercise the PR's real behavior**, then run ON and OFF — skipping this yields a false PASS; (h) **failure attribution** — decode failures and run them through `qa_error_classify` so `change` vs `infra` is catalog-grounded, never guessed; (i) **preconditions + composite scenarios** — a scenario declares `preconditions` (required flag STATE, e.g. a CDF-warning test needs `IRPhysicalCDF` *disabled*; and table/MLV properties set at seed time, e.g. source table with `cdf=false`) enforced BEFORE stimulus, and may carry `sub_scenarios` that share one seeded (possibly multi-node DAG) infra but exercise many cases — `qa_infra_spec` carries `table_properties`, `flags`, and `dag_nodes` for exactly this.
 - [ ] **Step 4: Validate** — `python -m pytest tests/test_qa_skill_install.py -v` → 3 passed.
 - [ ] **Step 5: Commit** — `docs(qa): skill reference docs (flt-model, tools, scenarios)`.
 
@@ -1170,7 +1258,7 @@ if __name__ == "__main__":
 
 **Files:** Modify `skills/flt-pr-scenario-validator/SKILL.md`
 
-Write the operational instructions the agent follows, mapping each beat to its primitives and gates. No code — this is the agent's playbook. Cover, in order: Beat 1 (lock → resolve PR via git/ADO → start server after PR → **check `/api/edog/health bearerExpiresIn`; ensure a username/session is saved so bearer auto-refresh works across a long run**), Beat 2 (clean-diff understanding via `qa_pr_diff` + repo grep; **note any `feature_flags` it surfaces**), Beat 3 (generate per `scenarios.md`, present editable plan; **controller changes get a `qa_contract_diff` scenario; flag-gated changes get a flag-ON scenario**), Beat 4 (derive `qa_infra_spec.required`, user picks existing/new, existing → `qa_infra_spec.fitness` + "what's missing", new → seed tailored infra recording each create to the ledger, `qa_targets.lock_target` — **store GUIDs, never names**), Beat 5 (**repoint `flt_repo_path` by editing `edog-config.json` directly — NOT `--config`, which deletes the token cache — recorded to the ledger as `config_restore`** → worktree checkout recorded to ledger → deploy → `qa_head_match` → **flip ON any flag-gated change before exercising it** → run happy/edge/perf + contract-diff, observe, `qa_invariants`), Beat 6 (retry-once/flag ON-vs-OFF/correlate; **classify every failure through `qa_error_classify` so attribution is catalog-grounded**; honest "suspected" when unconfirmable), Beat 7 (`qa_verdict` → markdown PR comment → cleanup auto-on-pass / offer-keep-on-fail → `qa_cleanup.run`). Explicitly instruct: heartbeat the lock each turn; persist state each turn; **never address a target outside the locked GUID tuple; treat a "backward compatibility mode" / name-based-resolution log as a locked-target violation**; re-check `bearerExpiresIn` before any multi-minute operation; every claim must cite a trace event and pass `qa_verdict.verify`.
+Write the operational instructions the agent follows, mapping each beat to its primitives and gates. No code — this is the agent's playbook. Cover, in order: Beat 1 (lock → resolve PR via git/ADO → **start the server HEADLESS — launch `scripts/dev-server.py` directly (or `edog --no-browser`); the default `python edog.py` opens the EDOG Studio webpage, which we must NOT do** → **check `/api/edog/health bearerExpiresIn`; ensure a username/session is saved so bearer auto-refresh works across a long run**), Beat 2 (clean-diff understanding via `qa_pr_diff` + repo grep; **note any `feature_flags` it surfaces**), Beat 3 (generate per `scenarios.md`, present editable plan; **controller changes get a main-vs-PR `qa_contract_diff` scenario; flag-gated changes get a flag-ON scenario; scenarios may declare `preconditions` and `sub_scenarios`**), Beat 4 (derive `qa_infra_spec.required` — **incl. `table_properties`, `flags`, `dag_nodes`** — user picks existing/new, existing → `qa_infra_spec.fitness` + "what's missing" (**incl. property mismatches like `cdf`**), new → seed tailored infra **enforcing preconditions at seed time** recording each create to the ledger, `qa_targets.lock_target` — **store GUIDs, never names**), Beat 5 (**repoint `flt_repo_path` by editing `edog-config.json` directly — NOT `--config`, which deletes the token cache — recorded to the ledger as `config_restore`** → worktree checkout recorded to ledger → deploy → `qa_head_match` → **enforce scenario preconditions (flag overrides + table props), then flip ON any flag-gated change before exercising it** → run happy/edge/perf + main-vs-PR contract-diff, **assert the API response body**, observe, `qa_invariants`), Beat 6 (retry-once/flag ON-vs-OFF/correlate; **classify every failure through `qa_error_classify` so attribution is catalog-grounded**; honest "suspected" — fault-injection confirmation is **Phase N, TBD**), Beat 7 (`qa_verdict` → markdown PR comment → cleanup auto-on-pass / offer-keep-on-fail → `qa_cleanup.run`). Explicitly instruct: heartbeat the lock each turn; persist state each turn; **never address a target outside the locked GUID tuple; treat a "backward compatibility mode" / name-based-resolution log as a locked-target violation**; re-check `bearerExpiresIn` before any multi-minute operation; every claim must cite a trace event (or the response body) and pass `qa_verdict.verify`.
 
 - [ ] **Step 1:** Author the seven-beat orchestration section.
 - [ ] **Step 2: Validate structure** — `python -m pytest tests/test_qa_skill_install.py -v` → 3 passed.
@@ -1191,9 +1279,9 @@ Write the operational instructions the agent follows, mapping each beat to its p
 
 ---
 
-# PHASE 2 — FAILURE INJECTION & AUTO-INVESTIGATION
+# PHASE N (TIMING TBD) — FAILURE INJECTION & AUTO-INVESTIGATION
 
-> Adds the chaos-driven scenarios and the confirm-the-root-cause loop. Upgrades Phase-1 "suspected" verdicts to "confirmed".
+> Adds the chaos-driven scenarios and the confirm-the-root-cause loop. Upgrades Phase-1 "suspected" verdicts to "confirmed". **Timing is undecided — this is deferred to an undetermined later phase ("Phase N"), not committed to immediately follow Phase 1.**
 
 - **Task 13:** **Chaos REST shim** — error-sim/chaos is SignalR-only today (no `/api/error-sim` routes); the curl-based skill can't reach it. Add `POST /api/error-sim/rule` + `DELETE /api/error-sim/rule/{id}` in `dev-server.py` that forwards to the existing hub (`ErrorSimAddRule`/`ErrorSimRemoveRule`), TDD the forward. Then wire it into the ledger as a stimulus + `chaos_remove` reverse op.
 - **Task 14:** Failure-injection scenario patterns in `scenarios.md` (inject transient 429 → assert backoff ≤ `maxRetries`; inject token-expiry → assert graceful handling).

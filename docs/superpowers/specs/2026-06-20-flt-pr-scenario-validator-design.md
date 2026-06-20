@@ -121,7 +121,7 @@ The skill has bash and `curl`s `localhost:5555`. Every capability already exists
 | Schema validation | `GET /api/playground/swagger/spec` → OpenAPI for the response-schema invariant | Exists |
 | Endpoint / flag catalog | `GET /api/playground/catalog`, `/api/edog/feature-flags/catalog` | Exists |
 | Read PR diff | `GET /api/ado-proxy/pr-diff` — returns `{prId, title, author, diff, sourceCommit, commonCommit, …}` (audited; `sourceCommit` feeds HEAD-match) | Exists |
-| **API-contract diff (deterministic grounding)** | **`GET /api/playground/swagger/diff`** — diffs the live runtime swagger vs the FLT repo's committed `Swagger/Swagger.json` baseline → typed `{summary, changes[]}` with **stable change IDs `ch-001…`**. `summary.totalChanges > 0` = the PR changed the API contract; removed/modified endpoints = breaking. A first-class, *deterministic* grounding source — every contract change is a citable fact and drives endpoint-test selection (see §7). | Exists |
+| **API-contract diff (deterministic grounding)** | Generate the runtime swagger **from main and from the PR branch** and diff the two (`qa_contract_diff`). PR spec = `GET /api/playground/swagger/spec` after the PR deploy; main spec = built from the base-commit worktree (`dotnet swagger tofile` preferred, else a transient runtime capture). **The committed `Swagger/Swagger.json` is NOT a reliable baseline — it is updated infrequently and drifts**, so runtime-vs-committed (`/api/playground/swagger/diff`) is misleading. The two-spec diff yields stable `ch-NNN` change IDs; removed/signature-changed endpoints = breaking. A deterministic grounding source + endpoint-test driver (see §7). | spec endpoint Exists; differ NEW |
 | **Deterministic failure attribution** | `src/frontend/js/error-sim-catalog.js` (115 codes tagged `errorSource` User/System · `category` · `httpStatus` · `fltCodePath`) + `error-decoder.js` (regex-scans logs for `MLV_/FLT_/SPARK_/GTS_` codes → O(1) lookup w/ severity, retryable, suggestedFix). Lets the skill classify a failure as **change-attributable** (`User`+validation/auth) vs **infra** (`System`+throttling/execution) *mechanically*, not by LLM guess (feeds §9.B attribution + harness-vs-test split). | Exists |
 | **Token-expiry / health check** | `GET /api/edog/health` → `bearerExpiresIn`, `tokenExpired`, `mwcToken` state; `/api/flt/config` reports `bearerToken`/MWC availability. Bearer (~1h, 5-min buffer) **auto-refreshes mid-run iff a username/session is saved**; MWC has a 15-min refresh buffer. 401/403 → re-auth required; 404 → `capacity_routing_not_ready` (retryable). The skill checks `bearerExpiresIn` before long ops. | Exists |
 
@@ -154,8 +154,12 @@ BEAT 1 — INVOKE
   • Resolve the PR via DIRECT git + ADO REST (gh/az)        — no server yet
       open PR on current branch, or explicit "validate PR #1234"
   • NO PR → stop. Do not start the server.
-  • PR confirmed → START the edog server (edog), await :5555 healthy
+  • PR confirmed → START the edog server HEADLESS (launch scripts/dev-server.py
+    directly, or `edog --no-browser`) — NO EDOG Studio webpage auto-opens;
+    the skill drives the API on :5555 only. await :5555 healthy
   • GET /api/flt/config + /api/edog/health                  [EXISTING]
+  • check health.bearerExpiresIn; ensure a saved username/session so the
+    bearer auto-refreshes across a long run
 
 BEAT 2 — ORIENT (the skill thinks out loud)
   • Blast radius from the CLEAN PR DIFF (ADO), never git diff on the
@@ -170,8 +174,18 @@ BEAT 3 — PLAN GATE  (no backend calls — pure reasoning)
   • Skill GENERATES scenarios per reference/scenarios.md protocol:
     change-type → scenario-pattern catalog. Each scenario declares
     title · category · stimulus · observations · invariants · INFRA NEEDS
+    · PRECONDITIONS · (optional) SUB-SCENARIOS
+  • PRECONDITIONS = scenario-specific setup beyond infra counts:
+      - required FLAG STATE (e.g. CDF-warning test needs IRPhysicalCDF
+        DISABLED in edog) — enforced via feature-flag override
+      - required TABLE/MLV PROPERTIES (e.g. source table created with
+        CDF = false) — enforced at seed time, not after
+  • SUB-SCENARIOS: one scenario can fan out into several (e.g. "CDF
+    insights card" → many cases) sharing infra, and may need a COMPLEX
+    MULTI-NODE DAG to exercise every path. infra-needs carries the DAG
+    SHAPE, not just counts.
   • Categories Phase 1: happy · edge · config-bound performance
-    (failure-injection scenarios: Phase 2)
+    (failure-injection scenarios: Phase N — timing TBD)
   ┌─ GATE: editable plan ─────────────────────────────────┐
   │ "Touches retry + token. I'll run 2 happy, 1 edge,     │
   │  1 perf. [list]. Proceed? edit / drop N / add …"      │
@@ -218,26 +232,35 @@ BEAT 5 — DEPLOY & RUN
     injection set (FILES: GTSBasedSparkClient, Program, WorkloadApp,
     DagExecutionHandlerV2, … + DevMode/*)                       [NEW]
   • qa_run_lock.heartbeat each turn                            [NEW]
+  • CONTRACT DIFF (controller/DTO PRs): generate runtime swagger from
+    main (base-commit worktree) + from the PR deploy, diff via
+    qa_contract_diff → cite ch-NNN; removed/modified = breaking.
+    (Do NOT use the stale committed Swagger.json baseline.)         [NEW]
+  • FLAG-GATED change: flip the flag ON (feature-flags/overrides) BEFORE
+    exercising — else you validate the OLD path (false PASS); run ON+OFF.
   • Scenarios run HAPPY → EDGE → PERF, sequential, self-cleaning:
+      enforce PRECONDITIONS first (flag overrides + table props e.g. CDF=false)
       stimulus: /api/playground/dispatch (any path) or runDAG
         — runDAG: the skill GENERATES a fresh GUID iterationId (= OpId);
           body optional; poll getDAGExecStatus/{guid}
-      observe: logs / telemetry / executions — AUDITED: these are
-        transparent proxies to the FLT log server; their query params +
-        shapes are FLT-DEFINED, so the skill DISCOVERS the contract at
-        runtime (do NOT assume ?since=&level=).
+      observe (grounded): (1) the API RESPONSE BODY/output of the stimulus
+        call itself — assert + cite it, not just the status code;
+        (2) logs / telemetry / executions — AUDITED: transparent proxies to
+        the FLT log server; query params + shapes are FLT-DEFINED, so the
+        skill DISCOVERS the contract at runtime (do NOT assume ?since=&level=).
       verify-output: /api/onelake/table-preview-rows (reads live Delta
         parquet — confirms the DAG wrote the RIGHT rows, not just "ran")
+      classify any failure via qa_error_classify (change vs infra)
       qa_invariants.* over the observation window             [NEW]
   ┌─ GATE: "Deploy PR + run 4 scenarios? ~6min" ──────────┐
   └───────────────────────────────────────────────────────┘
 
 BEAT 6 — INVESTIGATE  (lighter in Phase 1)
   • Phase 1: retry-once on infra-shaped failures (429/503),
-    flag-flip-and-rerun, deeper signal correlation.
+    flag ON-vs-OFF rerun, deeper signal correlation.
   • Cannot confirm a cause without fault injection → say honestly
-    "SUSPECTED — could not confirm without fault injection (Phase 2)".
-  • Full chaos-augmented confirmation = Phase 2.
+    "SUSPECTED — could not confirm without fault injection (Phase N, TBD)".
+  • Full chaos-augmented confirmation = Phase N (timing TBD).
   • qa_verdict.verify drops any un-cited / unverifiable claim   [NEW]
 
 BEAT 7 — VERDICT
@@ -263,14 +286,19 @@ No schema, ever. Scenarios are **plain-language intents the skill generates from
 
 | Change touches | Scenarios generated | Infra it needs |
 |----------------|--------------------|----------------|
-| API controller / endpoint | Happy (valid → 2xx + schema valid); Edge (null / boundary / missing params → graceful 4xx); **Contract-diff** (run `swagger/diff` → assert each `ch-NNN` change is intended, flag removed/modified endpoints as breaking) | lakehouse; maybe 1 table |
+| API controller / endpoint | Happy (valid → 2xx + schema valid + **assert response body**); Edge (null / boundary / missing params → graceful 4xx); **Contract-diff** (diff main-vs-PR runtime swagger → assert each `ch-NNN` change is intended, flag removed/modified endpoints as breaking) | lakehouse; maybe 1 table |
 | DAG node / scheduling | Trigger DAG → verify node transitions → final `Completed` | an MLV with a multi-node DAG over ≥1 table |
 | Retry / resilience policy | P1: observe the path under normal stimulus · P2: inject fault → backoff ≤ `maxRetries` | depends on path |
 | Token / auth flow | Long-running DAG → observe token lifetime across the write | a longer MLV DAG |
 | Spark client / session | session → trivial query → close → pool health | lakehouse + notebook |
 | Cache / DI / file-system | exercise via the nearest entry point, observe the interceptor | varies |
 
-**Every generated scenario carries six fields:** `title · category · stimulus (tool + args) · observations to collect · invariants to check · infra requirements`. The infra-requirements field is what feeds Beat 4's required-infra spec (`qa_infra_spec`). Categories reuse the existing `ScenarioCategory` taxonomy (`HappyPath, ErrorPath, EdgeCase, Regression, Performance`); failure-injection scenarios are generated but **deferred to Phase 2** until chaos is ready. Execution uses existing tools:
+**Every generated scenario carries eight fields:** `title · category · stimulus (tool + args) · observations to collect · invariants to check · infra requirements · preconditions · sub-scenarios`.
+- **infra requirements** feeds Beat 4's required-infra spec (`qa_infra_spec`) — and carries not just counts but **table/MLV properties** (e.g. a source table with `CDF = false`) and **DAG shape** (a multi-node DAG when the scenario needs to exercise many paths).
+- **preconditions** are scenario-specific setup the env step must enforce *before* stimulus: required **flag state** (e.g. a CDF-warning test needs `IRPhysicalCDF` **disabled**) and required **table/MLV properties** (set at seed time, not patched after).
+- **sub-scenarios** let one scenario (e.g. "CDF insights card") fan out into several cases that **share infra** but each have their own stimulus/observations — so a single complex DAG is seeded once and exercised many ways.
+
+**Observations are grounded on real evidence**, including the **API response body** of the stimulus call itself (asserted + cited), not only logs/telemetry. Categories reuse the existing `ScenarioCategory` taxonomy (`HappyPath, ErrorPath, EdgeCase, Regression, Performance`); failure-injection scenarios are generated but **deferred to Phase N (timing TBD)** until chaos is ready. Execution uses existing tools:
 
 
 | Change type | Category | Derived scenario (plain English) | Stimulus tool |
@@ -286,8 +314,8 @@ No schema, ever. Scenarios are **plain-language intents the skill generates from
 The applicable categories are chosen by the LLM from the blast radius — a retry-policy change pulls in failure-injection scenarios; a new endpoint pulls in happy + boundary + **contract-diff**; a hot-path change pulls in performance.
 
 **Two non-negotiable generation rules (audited):**
-- **Flag-gating is a correctness gate, not an edge case.** If the diff references `FeatureNames.<X>`, the changed code path is *dormant until the flag is ON*. The skill **must** flip the flag ON to exercise the PR's actual behavior; running flag-OFF only validates the pre-change path. Skipping this silently produces a **false PASS** — the most dangerous outcome the validator can emit. Detection is mechanical (grep the diff for `FeatureNames.`).
-- **Contract changes are grounded by `swagger/diff`, not by reading the diff.** Any controller/DTO change → call `GET /api/playground/swagger/diff` and cite the typed `ch-NNN` entries. A removed or signature-changed endpoint is a **breaking-change** finding regardless of test outcome.
+- **Flag-gating is a correctness gate, not an edge case.** If the diff references `FeatureNames.<X>`, the changed code path is *dormant until the flag is ON*. The skill **must** flip the flag ON to exercise the PR's actual behavior; running flag-OFF only validates the pre-change path. Skipping this silently produces a **false PASS** — the most dangerous outcome the validator can emit. Detection is mechanical (grep the diff for `FeatureNames.`). (Note: some scenarios instead require a flag **disabled** as a *precondition* — e.g. a CDF-warning test needs `IRPhysicalCDF` off; the flag direction comes from the scenario, not a blanket "always ON".)
+- **Contract changes are grounded by a main-vs-PR swagger diff, not by reading the diff and not by the committed baseline.** Any controller/DTO change → generate the runtime swagger from the base-commit (main) worktree and from the PR deploy, diff via `qa_contract_diff`, and cite the `ch-NNN` entries. **The committed `Swagger/Swagger.json` is unreliable (rarely updated, drifts)** so `/api/playground/swagger/diff` (runtime-vs-committed) is not trusted. A removed or signature-changed endpoint is a **breaking-change** finding regardless of test outcome.
 
 ---
 
@@ -500,7 +528,8 @@ Dark, Palantir aesthetic (per EDOG design bible). The **hero is the correlated c
 ### New
 - The skill itself, versioned at `skills/flt-pr-scenario-validator/` → symlinked to user-global, with `reference/{flt-model,tools,scenarios}.md`
 - **`reference/scenarios.md`** — the scenario-generation protocol (change-type → pattern catalog; each scenario declares infra needs)
-- **Python primitives** (`scripts/qa_*.py`, TDD'd): `qa_run_lock`, `qa_teardown_ledger`, `qa_cleanup`, `qa_pr_diff`, `qa_head_match`, `qa_targets`, `qa_infra_spec` (required-vs-available infra diff), `qa_invariants`, `qa_verdict`
+- **Python primitives** (`scripts/qa_*.py`, TDD'd): `qa_run_lock`, `qa_teardown_ledger`, `qa_cleanup`, `qa_pr_diff`, `qa_head_match`, `qa_targets`, `qa_infra_spec` (required-vs-available infra diff), `qa_invariants`, `qa_verdict`, `qa_contract_diff` (main-vs-PR swagger diff), `qa_error_classify` (catalog-grounded attribution)
+- **Headless server start** — the skill launches `scripts/dev-server.py` directly (it has no browser-open), so **no EDOG Studio webpage** appears; an optional `edog --no-browser` flag is a nicety. The default `python edog.py` opens the Studio webpage and is NOT used by the skill.
 - `edog --qa-cleanup {runId}` standalone ledger reverser (EDOG-owned, survives skill death)
 - Worktree-based PR checkout (`.edog-qa/worktrees/{runId}`) — never touches the working tree
 - **Locked-target enforcement** + created-vs-reused gating at the tool boundary
@@ -515,7 +544,7 @@ Dark, Palantir aesthetic (per EDOG design bible). The **hero is the correlated c
 1. Engineer says "validate my change" → gets a confirmed, plain-language verdict end-to-end.
 2. Zero hallucinated assertions — every claim cites a verified trace-bundle event; the verification pass rejects or downgrades anything it can't confirm.
 3. Catches a real blast-radius regression an engineer would have missed (the OneLakeWriter-three-layers-away case).
-4. Root causes are *confirmed* by follow-up experiments (Phase 2); in Phase 1, unconfirmable causes are honestly marked "suspected".
+4. Root causes are *confirmed* by follow-up experiments (Phase N, fault injection — timing TBD); in Phase 1, unconfirmable causes are honestly marked "suspected".
 5. Harness failures never masquerade as test failures.
 6. The HTML report is good enough to paste into a design review as evidence.
 7. **No orphaned state ever** — a killed/crashed run leaves zero billing capacities, zero lingering chaos rules, zero leaked flag overrides; `edog qa --cleanup` fully reverses the ledger even with the skill process gone.
@@ -527,8 +556,8 @@ Dark, Palantir aesthetic (per EDOG design bible). The **hero is the correlated c
 
 Guardrails are **not** a late phase. The locked target, teardown ledger, phase allowlist, and evidence-cited verdict are **foundational** — they ship with the first thing that can mutate state or emit a claim.
 
-- **Phase 1 (MVP):** run-lock → PR resolution (direct git/ADO) → **start server after PR** → skill-native code understanding (diff + repo grep, incl. **`FeatureNames.` flag-gating detection**) → scenario generation (`reference/scenarios.md`) with infra needs → **scenario-aware environment** (user picks existing/new; existing fitness-check; new = skill-seeded, tailored) → **worktree** PR checkout (config-repoint via direct `edog-config.json` edit, not `--config`) → deploy + HEAD-match → **happy/edge/perf + contract-diff (`swagger/diff`)** scenarios, **flag-ON exercise of flag-gated changes** (self-cleaning) → invariant grounding on **logs/telemetry/onelake/http/swagger-diff/error-codes** (REST-citable) + **catalog-grounded failure attribution** + evidence-cited verdict (`qa_verdict.verify`) → **token-expiry guard** (`/api/edog/health bearerExpiresIn`) + **GUID-pinned locked target** → **markdown PR comment** → cleanup (auto on pass, **offer-keep on fail**) + `edog --qa-cleanup`. **No failure injection, no chaos investigation.**
-- **Phase 2:** **failure-injection scenarios** (once chaos/error-sim matures) + auto-investigation (chaos-augmented confirmation; upgrades Phase-1 "suspected" to "confirmed") + destructive-op gating on reused-with-data.
+- **Phase 1 (MVP):** run-lock → PR resolution (direct git/ADO) → **start server HEADLESS after PR (no Studio webpage)** → skill-native code understanding (diff + repo grep, incl. **`FeatureNames.` flag-gating detection**) → scenario generation (`reference/scenarios.md`) with infra needs, **preconditions (flag state + table props e.g. CDF=false)**, and **composite sub-scenarios / complex DAG shapes** → **scenario-aware environment** (user picks existing/new; existing fitness-check; new = skill-seeded, tailored, preconditions enforced at seed time) → **worktree** PR checkout (config-repoint via direct `edog-config.json` edit, not `--config`) → deploy + HEAD-match → **happy/edge/perf + main-vs-PR contract-diff** scenarios, **flag-ON exercise of flag-gated changes** (self-cleaning) → grounding on **API response body + logs/telemetry/onelake/http/two-swagger-diff/error-codes** (REST-citable) + **catalog-grounded failure attribution** + evidence-cited verdict (`qa_verdict.verify`) → **token-expiry guard** (`/api/edog/health bearerExpiresIn`) + **GUID-pinned locked target** → **markdown PR comment** → cleanup (auto on pass, **offer-keep on fail**) + `edog --qa-cleanup`. **No failure injection, no chaos investigation.**
+- **Phase N (timing TBD — fault injection):** **failure-injection scenarios** (once chaos/error-sim matures) + auto-investigation (chaos-augmented confirmation; upgrades Phase-1 "suspected" to "confirmed") + destructive-op gating on reused-with-data.
 - **Phase 3:** trace-bundle endpoint (exposes the **SignalR-primary topic-event stream over REST** with the `TopicEvent.SequenceId` + canonical cross-topic trace ID; unsampled) + verification pass over the unified bundle + full cross-signal correlation + rich HTML causal-board report (richer PR comment links to it).
 - **Phase 4:** infra auto-provisioning polish + independent dead-man's-switch watchdog.
 
