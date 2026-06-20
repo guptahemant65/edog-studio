@@ -137,14 +137,17 @@ Phase-gated per the UX decisions: the skill **confirms at every phase boundary**
 
 ```
 PHASE 0 — ORIENT & UNDERSTAND
-  • Auto-detect target: open PR on this branch → validate PR;
-    else uncommitted/local changes → validate local diff
+  • Resolve the PR: open PR on the current branch, or an explicit
+    "validate PR #1234" / PR URL. (PR-based only — no local-diff mode.)
+  • Read the FLT repo LOCALLY (flt_repo_path from /api/flt/config) and
+    HARD-CHECK repo HEAD == the commit being validated → mismatch is a
+    HARNESS failure, not a silent wrong answer
   • DETERMINISTIC CODE UNDERSTANDING (before the LLM):
     Roslyn call-hierarchy + DI registry + graph blast-radius
     → grounded structural map (reachable entry points,
       DI-confirmed call chains, config values like maxRetries)
   • LLM derives applicable scenarios from that map:
-    happy path, performance, failure/error paths, edge cases
+    happy path, performance, edge cases (failure injection: Phase 2)
     — every category that applies to THIS diff
   ┌─ GATE: present editable plan ─────────────────────────┐
   │ "Your change touches retry policy + token flow.       │
@@ -184,6 +187,10 @@ PHASE 4 — REPORT
 ```
 
 Background execution means each gate posts a checkpoint and waits; the user can step away and return to confirm.
+
+### Execution model — fire-and-poll across turns
+
+EDOG's slow operations (OmniSharp warm-up ~15–30s, deploy *minutes*, DAG runs *minutes*) far exceed a single skill turn. The skill must **not block** a turn waiting. Instead it **fires** an operation against EDOG's existing async surfaces — `POST /api/command/deploy` + the SSE `deploy-stream`, `runDAG` + `getDAGExecStatus` polling, the studio-status endpoint — **ends the turn**, and **resumes on the next checkpoint**. The skill orchestrates the validation as a state machine spanning multiple turns, persisting its run state (current phase, locked target, teardown ledger reference) so it can pick up exactly where it left off. This is what makes a 15–20-minute validation survivable inside a CLI skill rather than timing out mid-deploy.
 
 ---
 
@@ -349,7 +356,7 @@ Orthogonal walls catching different escapes. **Operational** protects the enviro
 | Dimension | Decision |
 |-----------|----------|
 | Name | **FLT PR Scenario Validator** |
-| Invocation | Auto-detect (PR if on PR branch, else local changes) |
+| Invocation | PR-based only (open PR on branch, or explicit PR #/URL) |
 | Confirmation | Confirm at every phase boundary |
 | Run rhythm | Background + checkpoint updates |
 | Investigation | Auto-investigate & confirm root cause |
@@ -420,9 +427,9 @@ Dark, Palantir aesthetic (per EDOG design bible). The **hero is the correlated c
 
 Guardrails are **not** a late phase. The locked target, teardown ledger, phase allowlist, and evidence-cited verdict are **foundational** — they ship with the first thing that can mutate state or emit a claim.
 
-- **Phase 1 (MVP):** skill skeleton + auto-detect + deterministic blast-radius extraction (reuse `AnalyzeAsync` pre-LLM half) + invariant grounding + locked-target selection + teardown ledger + `edog qa --cleanup` + deploy + **happy-path / edge / config-bound performance** scenarios + invariant suite + **evidence-cited** terminal verdict. **No failure injection** (chaos feature not yet ready), no auto-investigation.
+- **Phase 1 (MVP):** skill skeleton + PR resolution + FLT-repo-local HEAD-match check + fire-and-poll cross-turn orchestration + deterministic blast-radius extraction (reuse `AnalyzeAsync` pre-LLM half) + invariant grounding + locked-target selection + teardown ledger + `edog qa --cleanup` + deploy + **happy-path / edge / config-bound performance** scenarios + invariant suite + **evidence-cited** terminal verdict + **PR comment auto-post** (plain-text is fine — it's the reason a *PR* validator exists). **No failure injection** (chaos feature not yet ready), no auto-investigation.
 - **Phase 2:** **failure-injection scenarios** (once the chaos/error-sim feature matures) + auto-investigation (chaos-augmented follow-up experiments) + destructive-op gating on reused-with-data.
-- **Phase 3:** trace-bundle endpoint (stable IDs, unsampled) + verification pass + full cross-signal correlation + HTML report.
-- **Phase 4:** PR auto-post + infra auto-provisioning + independent dead-man's-switch watchdog.
+- **Phase 3:** trace-bundle endpoint (stable IDs, unsampled) + verification pass + full cross-signal correlation + rich HTML report (richer PR comment links to it).
+- **Phase 4:** infra auto-provisioning + independent dead-man's-switch watchdog.
 
-**To resolve during planning:** confirm the analyzer is wired (not null) in a live DevMode deploy vs only the test harness (the hub falls back to synthetic scenarios when `CodeAnalyzer == null`); the OmniSharp-vs-regex-fallback semantic-depth gap; trace-bundle retention window and the unsampled-window cost; concurrency (one validation run at a time, like `EdogQaExecutionEngine._runLock`); how the verification pass handles claims whose shape isn't mechanically checkable (semantic interpretation → forced into the inference tier).
+**To resolve during planning:** confirm the analyzer is wired (not null) in a live DevMode deploy vs only the test harness (the hub falls back to synthetic scenarios when `CodeAnalyzer == null`); the OmniSharp-vs-regex-fallback semantic-depth gap; how cross-turn run state is persisted (session store vs a file EDOG owns); trace-bundle retention window and the unsampled-window cost; concurrency (one validation run at a time, like `EdogQaExecutionEngine._runLock`); how the verification pass handles claims whose shape isn't mechanically checkable (semantic interpretation → forced into the inference tier).
