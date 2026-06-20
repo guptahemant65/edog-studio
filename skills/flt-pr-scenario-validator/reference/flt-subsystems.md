@@ -14,9 +14,19 @@ This is the **second knowledge layer** (the first is `flt-model.md`, always load
 
 > Citations are `file:line` under `Service/Microsoft.LiveTable.Service/` in `workload-fabriclivetable`. **Line numbers drift; symbols don't** — prefer the symbol, confirm the line. Lines marked ✓ were verified directly this session.
 
+## When the map doesn't cover it (find it yourself)
+
+This index covers the major subsystems — **not every corner.** FLT evolves and new features land. If a changed path has **no** Routing Table match, or neither knowledge layer (`flt-model.md` or this map) answers the question, **do not guess and do not stop. Investigate the FLT source yourself:**
+
+1. Read the changed files; trace callers/callees to the nearest **observable surface** — a `CodeMarker` (`Monitoring/CodeMarkers.cs`), an interceptor stream, a log line, a metrics field (§7), or the API response body.
+2. Use the nearest `docs/design/*.md` only as a **lead** — verify everything in code (docs drift).
+3. If static reading is genuinely ambiguous (dynamic/conditional DI, deep generics), escalate: the **runtime DI registry** EDOG captures, then a **self-spun OmniSharp**.
+4. **Ground every fact at `file:line`.** If the change has no runtime-observable surface, say so honestly — *"no runtime surface found / not provably exercised"* — never fabricate a weak scenario to look thorough.
+5. Note the gap so this map can be extended next time.
+
 ---
 
-## Routing Table — changed path → section(s)
+
 
 | Changed path (under `Service/Microsoft.LiveTable.Service/`) | Read section |
 |---|---|
