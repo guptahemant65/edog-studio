@@ -19,6 +19,20 @@ This document is the authoritative protocol for generating scenarios. Every scen
 
 Applicable categories are chosen from the blast radius: a retry-policy change pulls in failure-injection scenarios (deferred Phase N); a new endpoint pulls in happy + boundary + contract-diff; a hot-path change pulls in performance.
 
+**The count is derived, never chosen.** `scripts/qa_scenario_plan.derive(features)` turns the parsed change into the scenario skeleton: each change-feature maps to a risk-dimension (a **category**, m) and to the input classes it makes meaningful (the **cases**, n). So m and n are a *function of the diff* — a one-line default flip yields `m=1, n=1`; a docs-only PR yields `m=0` (honestly no scenarios); a multi-feature PR yields more. The agent grounds each derived stub (the exact stimulus, the cited checks, the honest caveat); it never invents the count or pads to a template. The derivation guarantees completeness — loosening an allow-set automatically emits the `Input still rejected` guard and the `Limits` (cap+1) case; a controller/DTO change automatically emits the `API contract` diff — so coverage classes can never be silently dropped.
+
+| Change-feature (from `qa_pr_diff` + the Beat-2 read) | Emits category | Cases (input classes) |
+|---|---|---|
+| `param_enum_added` (a value added to an accepted set) | `Newly accepted input` + `Input still rejected` + `Limits` (if a cap) | newly-allowed (per value) · differential (it really filters) · multi-value (if a list) · negative (a still-disallowed value) · message (lists the new set) · boundary-over (cap+1) |
+| `default_changed` | `Default behaviour` | the no-arg result equals the new default and differs from the alternative |
+| `dto_breaking` (a field removed/renamed/retyped) | `API contract` | before-vs-after swagger diff · runtime-shape (if a cap on the new field) |
+| `flag` (a `FeatureNames.<X>` ref) | `Feature flag` | ON vs OFF (one per flag) |
+| `mlv_write` | `Data correctness` | stored output equals a fresh recompute (read back via the OneLake surface) |
+| `auth_posture` | `Security — needs a human` | detect-only finding, never tested |
+| `no_surface` (a changed symbol with no observable surface) | `Did the changed code run` | report not-provably-exercised |
+
+Identical behaviour across sibling endpoints (e.g. the same `statuses` param on `summary`/`runs`/`trends`/`errors`) collapses to **one representative case** that names the others as covered by the same binding — so n reflects distinct risk, not endpoint count.
+
 **Failure-injection scenarios** (chaos, fault injection) are generated but **deferred to Phase N** — not executed in Phase 1.
 
 ---
