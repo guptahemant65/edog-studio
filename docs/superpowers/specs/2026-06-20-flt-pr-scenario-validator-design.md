@@ -105,18 +105,22 @@ The skill has bash and `curl`s `localhost:5555`. Every capability already exists
 
 | Intent | Endpoint(s) | Status |
 |--------|-------------|--------|
+| **Generic stimulus (primary)** | **`POST /api/playground/dispatch`** + `GET /api/playground/catalog` — dispatch ANY catalogued FLT/Fabric endpoint with controlled method/body/headers, instead of hand-built URLs | Exists |
+| Stimulus discovery | `GET /api/contract/capabilities`, `/api/contract/catalog/` — what stimuli are available at runtime | Exists |
 | Provision infra | `/api/fabric/workspaces`, `/workspaces/{id}/assignToCapacity`, `/workspaces/{id}/lakehouses`, `/notebooks` | Exists |
+| **Seed tables + MLVs** | `/api/notebook/create-session` → `execute-cell` running Spark SQL `CREATE TABLE …` and **`CREATE MATERIALIZED LAKE VIEW <schema>.<name> AS SELECT … FROM <table>`** → `close-session` (verified: FLT `CreateCSTCluster.md`, `MLV_ALREADY_EXISTS`) | Exists |
 | Deploy FLT | `POST /api/command/deploy` + SSE `/api/command/deploy-stream` until `phase:running` | Exists |
-| Trigger DAG | `POST /api/flt-proxy/liveTableSchedule/runDAG/{iterationId}` + poll `getDAGExecStatus/{id}` | Exists |
-| Run API | `/api/flt-proxy/*`, `/api/fabric/*` (Playground surface) | Exists |
+| Trigger DAG | `POST /api/flt-proxy/liveTableSchedule/runDAG/{iterationId}` (skill mints the iteration GUID; `MLVExecutionDefinitionId` from the seeded MLV) + poll `getDAGExecStatus/{id}` | Exists |
+| Run API | `/api/flt-proxy/*`, `/api/fabric/*` | Exists |
 | Spark cell | `/api/notebook/create-session` → `execute-cell` → `close-session` | Exists |
 | Flip feature flag | `POST /api/edog/feature-flags/overrides`, `DELETE .../overrides/{flag}` | Exists |
-| Inject fault | F24 chaos `ErrorSimAddRule` / `ErrorSimRemoveRule` | Exists |
-| Observe (raw) | `/api/logs`, `/api/telemetry`, `/api/edog/interceptors-status`, error decode | Exists |
-| Endpoint catalog | `GET /api/playground/catalog` | Exists |
-| Flag catalog | `GET /api/edog/feature-flags/catalog` | Exists |
-| Read PR diff | `GET /api/ado-proxy/pr-diff` or local `git diff` | Exists |
-| Run history | `EdogQaRunStore` (optional, for past-run lookup) | Exists |
+| Inject fault | F24 chaos `ErrorSimAddRule` / `ErrorSimRemoveRule` — **SignalR-only, no REST** → Phase 2 needs a REST shim or a SignalR client | Exists (SignalR) |
+| Observe (raw) | `/api/logs`, `/api/telemetry`, `/api/executions` (DAG run history + timing), `/api/edog/interceptors-status`, error decode | Exists |
+| **Verify output landed** | `/api/onelake/table-preview-rows`, `/api/onelake/table-metadata`, `/api/mwc/table-details` — confirm a DAG wrote the *right data*, not just "it ran" | Exists |
+| Schema validation | `GET /api/playground/swagger/spec` → OpenAPI for the response-schema invariant | Exists |
+| Endpoint / flag catalog | `GET /api/playground/catalog`, `/api/edog/feature-flags/catalog` | Exists |
+| Read PR diff | `GET /api/ado-proxy/pr-diff` | Exists |
+| Post PR comment | `POST /api/ado-proxy/pr-comment` (Beat 7) | Exists |
 
 ### The one new piece of product work
 
@@ -175,9 +179,12 @@ BEAT 4 — ENVIRONMENT (scenario-aware)
   • EXISTING → probe (GET /api/fabric/workspaces, …/lakehouses) and
     DIFF against the required spec. If it falls short → show a CLEAR
     LIST of what's missing → user may switch to new.
-  • NEW → skill-SEEDED, tailored provisioning: create lakehouse →
-    write sample tables → define the MLV/DAG each scenario needs.
-    Each create → ledger.record (auto-cleaned).                [NEW]
+  • NEW → skill-SEEDED, tailored provisioning, all via the notebook path:
+      create lakehouse (/api/fabric/.../lakehouses)
+      → notebook create-session → execute-cell:
+          CREATE TABLE …                                   (seed tables)
+          CREATE MATERIALIZED LAKE VIEW silver.<name> AS … (seed MLVs)
+      → close-session.  Each create → ledger.record (auto-cleaned). [NEW]
   • qa_targets.lock_target → tuple frozen for the run         [NEW]
   ┌─ GATE: "Use existing rg_18 / spin fresh (~$X)?" ──────┐
   └───────────────────────────────────────────────────────┘
@@ -191,8 +198,10 @@ BEAT 5 — DEPLOY & RUN
   • qa_head_match.compare (deployed == PR commit, minus injections) [NEW]
   • qa_run_lock.heartbeat each turn                            [NEW]
   • Scenarios run HAPPY → EDGE → PERF, sequential, self-cleaning:
-      stimulus (runDAG / flt-proxy / notebook)               [EXISTING]
-      observe (logs / telemetry / interceptors-status)        [EXISTING]
+      stimulus: /api/playground/dispatch (generic) or runDAG / notebook
+      observe: logs / telemetry / executions / interceptors-status
+      verify-output: /api/onelake/table-preview-rows (DAG wrote right data)
+      schema: /api/playground/swagger/spec
       qa_invariants.* over the observation window             [NEW]
   ┌─ GATE: "Deploy PR + run 4 scenarios? ~6min" ──────────┐
   └───────────────────────────────────────────────────────┘
