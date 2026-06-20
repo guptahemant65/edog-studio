@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>FLT PR Scenario Validator — The Journey</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --bg:#07080b; --term:#0b0d12; --term-2:#0e1117; --chrome:#13161d;
+  --line:rgba(255,255,255,0.07); --line-2:rgba(255,255,255,0.12);
+  --txt:#c5cad6; --txt-hi:#eef0f5; --txt-mut:#7a8294; --txt-faint:#4c5365;
+  --accent:#6d5cff; --accent-2:#8b7bff; --accent-soft:rgba(109,92,255,0.14);
+  --cyan:#3fd0e0; --cyan-soft:rgba(63,208,224,0.12);
+  --ok:#34d17e; --ok-soft:rgba(52,209,126,0.13);
+  --fail:#ff5e54; --fail-soft:rgba(255,94,84,0.13);
+  --warn:#f0b341; --warn-soft:rgba(240,179,65,0.13);
+  --user:#9fd0ff;
+  --rail:#0a0c11;
+  --sh-1:0 1px 2px rgba(0,0,0,.5),0 2px 10px rgba(0,0,0,.4);
+  --sh-2:0 8px 26px rgba(0,0,0,.5),0 30px 70px rgba(0,0,0,.55);
+  --glow-accent:0 0 0 1px rgba(109,92,255,.4),0 0 16px rgba(109,92,255,.3);
+}
+:root[data-theme="light"]{
+  --bg:#e7e9ef; --term:#fbfbfd; --term-2:#f4f5f8; --chrome:#eceef2;
+  --line:rgba(15,20,40,.08); --line-2:rgba(15,20,40,.14);
+  --txt:#3a4150; --txt-hi:#13161d; --txt-mut:#697086; --txt-faint:#a0a6b4;
+  --accent:#5b46f0; --accent-2:#6d5cff; --accent-soft:rgba(91,70,240,.1);
+  --cyan:#0c97a8; --cyan-soft:rgba(12,151,168,.1);
+  --ok:#16924f; --ok-soft:rgba(22,146,79,.11);
+  --fail:#d33124; --fail-soft:rgba(211,49,36,.09);
+  --warn:#b07d10; --warn-soft:rgba(176,125,16,.12);
+  --user:#1668c2; --rail:#f4f5f8;
+  --sh-1:0 1px 2px rgba(15,20,40,.08),0 2px 10px rgba(15,20,40,.06);
+  --sh-2:0 10px 30px rgba(15,20,40,.12),0 30px 70px rgba(15,20,40,.14);
+  --glow-accent:0 0 0 1px rgba(91,70,240,.3),0 0 14px rgba(91,70,240,.18);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{height:100%;}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--txt);font-size:13px;-webkit-font-smoothing:antialiased;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:30px;transition:background .4s ease;}
+.mono{font-family:'JetBrains Mono',monospace;}
+::selection{background:var(--accent-soft);}
+::-webkit-scrollbar{width:9px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:5px;border:2px solid var(--term);}
+
+@keyframes winIn{from{opacity:0;transform:scale(.97) translateY(12px);}to{opacity:1;transform:scale(1) translateY(0);}}
+@keyframes lineIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+@keyframes caret{0%,100%{opacity:1;}50%{opacity:0;}}
+@keyframes spin{to{transform:rotate(360deg);}}
+@keyframes dots{0%{content:'';}25%{content:'.';}50%{content:'..';}75%{content:'...';}}
+@keyframes barFill{from{width:0;}}
+@keyframes pulseDot{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.5;transform:scale(.8);}}
+@keyframes glowPulse{0%,100%{box-shadow:0 0 0 0 var(--accent-soft);}50%{box-shadow:0 0 0 5px rgba(109,92,255,0);}}
+@keyframes railOn{from{transform:scale(.7);opacity:0;}to{transform:scale(1);opacity:1;}}
+@keyframes checkPop{0%{transform:scale(0);}60%{transform:scale(1.25);}100%{transform:scale(1);}}
+@keyframes slideRail{from{opacity:0;transform:translateX(-8px);}to{opacity:1;transform:translateX(0);}}
+@keyframes flashOk{0%{background:var(--ok-soft);}100%{background:transparent;}}
+@keyframes flashFail{0%{background:var(--fail-soft);}100%{background:transparent;}}
+@keyframes streamGlow{0%,100%{opacity:.4;}50%{opacity:1;}}
+@keyframes nextNudge{0%,100%{transform:translateX(0);}50%{transform:translateX(3px);}}
+@keyframes typeBar{to{background-position:200px 0;}}
+
+/* ── Window shell ── */
+.win{width:min(1080px,96vw);height:min(740px,92vh);background:var(--term);border:1px solid var(--line-2);border-radius:14px;box-shadow:var(--sh-2);display:flex;flex-direction:column;overflow:hidden;animation:winIn .6s cubic-bezier(.2,.8,.2,1) both;}
+.titlebar{height:42px;background:var(--chrome);border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 14px;gap:13px;flex-shrink:0;}
+.lights{display:flex;gap:7px;}
+.lights i{width:11px;height:11px;border-radius:50%;}
+.lights i:nth-child(1){background:#ff5f57;}
+.lights i:nth-child(2){background:#febc2e;}
+.lights i:nth-child(3){background:#28c840;}
+.title-c{flex:1;text-align:center;font-size:12px;color:var(--txt-mut);display:flex;align-items:center;justify-content:center;gap:8px;}
+.title-c b{color:var(--txt);font-weight:600;}
+.title-badge{font-size:10px;color:var(--accent);background:var(--accent-soft);padding:2px 7px;border-radius:5px;font-weight:600;}
+.theme-t{width:28px;height:28px;border-radius:7px;display:grid;place-items:center;color:var(--txt-mut);cursor:pointer;border:1px solid transparent;transition:all .15s;}
+.theme-t:hover{color:var(--txt-hi);border-color:var(--line);}
+
+.body{flex:1;display:flex;min-height:0;}
+/* ── Phase rail ── */
+.rail{width:188px;background:var(--rail);border-right:1px solid var(--line);padding:18px 14px;flex-shrink:0;display:flex;flex-direction:column;gap:3px;}
+.rail-h{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--txt-faint);padding:0 8px 12px;}
+.phase{display:flex;align-items:center;gap:11px;padding:9px 9px;border-radius:9px;font-size:12px;color:var(--txt-mut);transition:all .25s ease;position:relative;}
+.phase .pn{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--line-2);display:grid;place-items:center;font-size:10px;font-family:'JetBrains Mono',monospace;flex-shrink:0;transition:all .25s ease;}
+.phase.active{color:var(--txt-hi);background:var(--accent-soft);}
+.phase.active .pn{border-color:var(--accent);color:var(--accent);box-shadow:var(--glow-accent);animation:glowPulse 2s ease-in-out infinite;}
+.phase.done{color:var(--txt);}
+.phase.done .pn{border-color:var(--ok);background:var(--ok-soft);color:var(--ok);}
+.phase-rail-line{position:absolute;left:18.5px;top:34px;width:1.5px;height:11px;background:var(--line-2);}
+.phase.done .phase-rail-line{background:var(--ok);}
+.rail-foot{margin-top:auto;padding:12px 8px 4px;border-top:1px solid var(--line);font-size:10px;color:var(--txt-faint);line-height:1.6;}
+.rail-foot .mono{color:var(--txt-mut);}
+
+/* ── Terminal pane ── */
+.term{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--term);background-image:radial-gradient(circle at 50% 0,rgba(109,92,255,.04),transparent 60%);}
+.stream{flex:1;overflow-y:auto;padding:22px 26px 10px;font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.7;}
+.ln{animation:lineIn .28s ease both;white-space:pre-wrap;word-break:break-word;}
+.ln.gap{height:10px;}
+.cmd{color:var(--user);}
+.cmd .prompt{color:var(--accent);font-weight:600;}
+.sys{color:var(--txt-mut);}
+.skill{color:var(--txt);}
+.hl{color:var(--txt-hi);font-weight:500;}
+.acc{color:var(--accent-2);font-weight:500;}
+.cy{color:var(--cyan);}
+.ok{color:var(--ok);}
+.fail{color:var(--fail);font-weight:500;}
+.warn{color:var(--warn);}
+.dim{color:var(--txt-faint);}
+.banner{color:var(--accent);font-weight:600;}
+
+/* inline chips & structures inside the stream */
+.tag{display:inline-block;font-size:10.5px;padding:1px 7px;border-radius:5px;font-family:'JetBrains Mono',monospace;font-weight:600;vertical-align:middle;}
+.tag.ok{background:var(--ok-soft);color:var(--ok);}
+.tag.fail{background:var(--fail-soft);color:var(--fail);}
+.tag.cy{background:var(--cyan-soft);color:var(--cyan);}
+.tag.warn{background:var(--warn-soft);color:var(--warn);}
+.tag.acc{background:var(--accent-soft);color:var(--accent);}
+.box{border:1px solid var(--line);border-radius:9px;padding:12px 15px;margin:8px 0;background:var(--term-2);}
+.box.acc{border-color:var(--accent-soft);}
+.box.fail{border-color:var(--fail-soft);}
+.box.gate{border-color:var(--line-2);background:linear-gradient(180deg,var(--term-2),var(--term));box-shadow:var(--sh-1);}
+.box-h{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-mut);margin-bottom:9px;display:flex;align-items:center;gap:7px;}
+.kv{display:grid;grid-template-columns:120px 1fr;gap:3px 14px;font-size:12px;}
+.kv dt{color:var(--txt-mut);}
+.kv dd{color:var(--txt-hi);}
+.menu-row{display:flex;align-items:center;gap:10px;padding:7px 9px;border-radius:7px;border:1px solid transparent;cursor:default;}
+.menu-row.pick{background:var(--accent-soft);border-color:var(--accent-soft);}
+.menu-row .mk{color:var(--txt-faint);font-size:11px;width:14px;}
+.menu-row.pick .mk{color:var(--accent);}
+.menu-name{color:var(--txt-hi);flex:1;}
+.menu-meta{font-size:10.5px;color:var(--txt-mut);}
+.progress{height:5px;border-radius:3px;background:var(--term);overflow:hidden;margin:4px 0;border:1px solid var(--line);}
+.progress > i{display:block;height:100%;border-radius:3px;background:linear-gradient(90deg,var(--accent),var(--cyan));}
+.spinner{display:inline-block;width:11px;height:11px;border:1.6px solid var(--line-2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:-1px;}
+.check{display:inline-block;color:var(--ok);animation:checkPop .35s cubic-bezier(.34,1.56,.64,1) both;}
+.cursor-line{display:flex;align-items:center;gap:8px;}
+.caret{width:8px;height:15px;background:var(--accent);display:inline-block;animation:caret 1s step-end infinite;border-radius:1px;}
+.user-resp{color:var(--user);}
+
+/* ── Advance bar ── */
+.advance{flex-shrink:0;border-top:1px solid var(--line);background:var(--chrome);padding:13px 22px;display:flex;align-items:center;gap:14px;}
+.adv-hint{font-size:11.5px;color:var(--txt-mut);flex:1;display:flex;align-items:center;gap:8px;}
+.adv-hint kbd{font-family:'JetBrains Mono',monospace;font-size:10.5px;background:var(--term);border:1px solid var(--line-2);border-bottom-width:2px;border-radius:5px;padding:2px 7px;color:var(--txt);}
+.adv-progress{display:flex;gap:5px;align-items:center;}
+.adv-progress i{width:24px;height:4px;border-radius:3px;background:var(--line-2);transition:background .3s;}
+.adv-progress i.on{background:var(--accent);}
+.adv-progress i.done{background:var(--ok);}
+.next-btn{display:flex;align-items:center;gap:8px;background:var(--accent);color:#fff;border:none;padding:9px 18px;border-radius:9px;font-size:12.5px;font-weight:600;cursor:pointer;box-shadow:var(--glow-accent);transition:transform .14s ease,opacity .2s;}
+.next-btn:hover{transform:translateY(-1px);}
+.next-btn:active{transform:translateY(0);}
+.next-btn:disabled{opacity:.4;cursor:default;transform:none;box-shadow:none;}
+.next-btn svg{animation:nextNudge 1.4s ease-in-out infinite;}
+.next-btn.replay{background:var(--term);color:var(--txt-hi);border:1px solid var(--line-2);box-shadow:none;}
+
+@media (max-width:720px){.rail{display:none;}}
+</style>
+</head>
+<body>
+<!-- WIN -->
+<div class="win">
+  <div class="titlebar">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <div class="title-c"><span class="mono">edog qa</span> <b>FLT PR Scenario Validator</b> <span class="title-badge">Opus 4.8</span></div>
+    <div class="theme-t" id="themeT"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></div>
+  </div>
+  <div class="body">
+    <div class="rail">
+      <div class="rail-h">The Journey</div>
+      <div id="railList"></div>
+      <div class="rail-foot">
+        <div>Single FLT env · <span class="mono">:5557</span></div>
+        <div>Teardown ledger <span class="ok">armed</span></div>
+      </div>
+    </div>
+    <div class="term">
+      <div class="stream" id="stream"></div>
+      <div class="advance">
+        <div class="adv-hint" id="advHint"><kbd>Enter</kbd> or click Next to advance the session</div>
+        <div class="adv-progress" id="advProg"></div>
+        <button class="next-btn" id="nextBtn">Next <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="m9 18 6-6-6-6"/></svg></button>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- WIN -->
+<!-- SCRIPT -->
+<script>
+const PHASES = [
+  {id:'invoke',  n:'1', label:'Invoke'},
+  {id:'orient',  n:'2', label:'Orient'},
+  {id:'plan',    n:'3', label:'Plan gate'},
+  {id:'env',     n:'4', label:'Environment'},
+  {id:'run',     n:'5', label:'Deploy & run'},
+  {id:'invest',  n:'6', label:'Investigate'},
+  {id:'verdict', n:'7', label:'Verdict'},
+];
+
+// Each beat = one "Next". Lines stream in. `phase` drives the rail.
+// type: line | gate | user | block | progress(run-time animated)
+const BEATS = [
+  // 0 — INVOKE
+  { phase:'invoke', lines:[
+    {t:'user', html:'<span class="prompt">harvey@flt</span> <span class="dim">~/workload-fabriclivetable</span> $ <span class="cmd">edog qa</span>'},
+    {t:'gap'},
+    {t:'line', cls:'banner', html:'◆ FLT PR Scenario Validator'},
+    {t:'line', cls:'dim', html:'  grounded scenario validation · driven by Opus 4.8 · evidence-cited'},
+    {t:'gap'},
+    {t:'line', cls:'sys', html:'<span class="acc">▸</span> No PR specified — checking current branch…'},
+    {t:'line', cls:'skill', html:'  <span class="check">✓</span> Found open PR <span class="hl">#982144</span> — <span class="hl">"retry policy + token mint reorder"</span>'},
+    {t:'line', cls:'dim', html:'    powerbi/MWC · workload-fabriclivetable · 12 files, +340 −86'},
+  ]},
+  // 1 — ORIENT (the agent thinks out loud)
+  { phase:'orient', lines:[
+    {t:'line', cls:'sys', html:'<span class="acc">▸</span> Understanding the change <span class="dim">— reading the diff and the FLT repo myself</span>'},
+    {t:'reason', html:'reading PR diff (ADO) · 12 files'},
+    {t:'reason', html:'mapping blast radius from the changed symbols…'},
+    {t:'reason-ok', html:'<span class="hl">ExponentialRetryPolicy.Execute</span> reachable from <span class="hl">runDAG</span> via <span class="hl">OneLakeWriter</span> <span class="tag cy">DI-confirmed</span>'},
+    {t:'reason-ok', html:'MWC token mint path moved earlier in the pipeline <span class="tag warn">behavioral</span>'},
+    {t:'reason-ok', html:'config read: <span class="mono hl">maxRetries = 3</span> <span class="dim">(RetryPolicy.cs:142)</span> — a fact I read, not a guess'},
+    {t:'gap'},
+    {t:'block', cls:'box acc', html:'<div class="box-h"><span class="acc">◆</span> Grounded structural map</div><div class="kv"><dt>Subsystems</dt><dd>retry policy · token flow</dd><dt>Entry points</dt><dd>runDAG · POST /insights/summary</dd><dt>Config facts</dt><dd class="mono">maxRetries=3 · tokenTTL=15m · dagBound=30s</dd><dt>Not reachable</dt><dd class="warn">ComputeJitter() — private helper</dd></div>'},
+  ]},
+  // 2 — PLAN GATE (editable)
+  { phase:'plan', lines:[
+    {t:'line', cls:'sys', html:'<span class="acc">▸</span> Proposed scenarios <span class="dim">— derived from the blast radius, in plain language</span>'},
+    {t:'block', cls:'box', html:'<div class="box-h">Test plan · 4 scenarios</div>'+
+      '<div class="menu-row"><span class="mk mono">1</span><span class="menu-name">DAG completes, final state <span class="mono">Completed</span></span><span class="tag acc">happy</span></div>'+
+      '<div class="menu-row"><span class="mk mono">2</span><span class="menu-name">New endpoint <span class="mono">/insights/summary</span> → 200, schema valid</span><span class="tag acc">happy</span></div>'+
+      '<div class="menu-row"><span class="mk mono">3</span><span class="menu-name">Cold-cache DAG warm-up timing</span><span class="tag acc">perf</span></div>'+
+      '<div class="menu-row"><span class="mk mono">4</span><span class="menu-name">Token lifetime across a long DAG write</span><span class="tag warn">failure</span></div>'},
+    {t:'line', cls:'dim', html:'  <span class="warn">⚠</span> failure-injection (chaos) is Phase 2 — scenario 4 runs read-only this release'},
+    {t:'gate', q:'Run this plan? <span class="dim">edit / drop N / add … / y</span>', resp:'drop 3, add a null-capacity edge case'},
+    {t:'line', cls:'skill', html:'  <span class="check">✓</span> Updated — dropped <span class="dim">cold-cache timing</span>, added <span class="hl">"null capacity → graceful 400"</span>'},
+    {t:'line', cls:'ok', html:'  ◆ 4 scenarios locked · 2 happy · 1 edge · 1 failure(read-only)'},
+  ]},
+  // 3 — ENVIRONMENT (enriched, locked)
+  { phase:'env', lines:[
+    {t:'line', cls:'sys', html:'<span class="acc">▸</span> Pick a target <span class="dim">— I only touch what you choose</span>'},
+    {t:'block', cls:'box', html:'<div class="box-h">Workspaces · enriched</div>'+
+      '<div class="menu-row"><span class="mk">＋</span><span class="menu-name acc">Create fresh sandbox</span><span class="menu-meta">F2 · ~$0.36/hr · auto-torn-down</span></div>'+
+      '<div class="menu-row"><span class="mk mono">a</span><span class="menu-name">robust_goodfellow_18</span><span class="menu-meta">F4 · <span class="ok">empty lh</span> · safe</span></div>'+
+      '<div class="menu-row"><span class="mk mono">b</span><span class="menu-name">prod-mirror-eastus</span><span class="menu-meta">F64 · <span class="warn">has data</span> · ⚠ prod-like</span></div>'},
+    {t:'gate', q:'Select target <span class="dim">[＋ / a / b]</span>', resp:'a'},
+    {t:'line', cls:'skill', html:'  <span class="check">✓</span> Reusing <span class="hl">robust_goodfellow_18</span> <span class="dim">(empty lakehouse — full freedom, nothing real to break)</span>'},
+    {t:'block', cls:'box gate', html:'<div class="box-h"><span class="acc">🔒</span> Target locked for this run</div><div class="kv"><dt>Workspace</dt><dd class="mono">b90c2e39…</dd><dt>Lakehouse</dt><dd class="mono">robust_goodfellow_18_lh</dd><dt>Capacity</dt><dd class="mono">f876914f…</dd></div><div class="dim" style="margin-top:8px;font-size:11px">No other target is addressable. I only destroy what I create.</div>'},
+  ]},
+  // 4 — DEPLOY & RUN
+  { phase:'run', lines:[
+    {t:'gate', q:'Deploy HEAD to <span class="mono">robust_goodfellow_18_lh</span> and run 4 scenarios? <span class="dim">~6 min · runs in background</span>', resp:'y'},
+    {t:'line', cls:'sys', html:'<span class="acc">▸</span> Deploying <span class="dim">— patching FLT, injecting DevMode, building…</span>'},
+    {t:'deploy'},
+    {t:'line', cls:'skill', html:'  <span class="check">✓</span> FLT running on <span class="mono hl">:5557</span> <span class="dim">· DevConnection established (3m12s)</span>'},
+    {t:'gap'},
+    {t:'line', cls:'sys', html:'<span class="acc">▸</span> Running scenarios <span class="dim">— checkpointing as I go, you can step away</span>'},
+    {t:'run'},
+  ]},
+  // 5 — INVESTIGATE (live correction)
+  { phase:'invest', lines:[
+    {t:'line', cls:'warn', html:'<span class="warn">⚠</span> Scenario 4 looks off — <span class="hl">retry fired 5×</span> but <span class="mono">maxRetries=3</span>. That shouldn\'t happen.'},
+    {t:'reason', html:'this isn\'t a clean fail — designing a confirming experiment'},
+    {t:'reason', html:'hypothesis: the token mint reorder lets the 15m token expire before the write'},
+    {t:'reason-run', html:'restoring the original mint order · re-running scenario 4 in isolation…'},
+    {t:'reason-ok', html:'with the mint restored, the write <span class="ok">succeeds</span> — root cause <span class="hl">confirmed</span>'},
+    {t:'gap'},
+    {t:'block', cls:'box fail', html:'<div class="box-h"><span class="fail">◆</span> Confirmed root cause <span class="tag fail">high confidence</span></div><div class="skill" style="line-height:1.7">Your reorder mints the MWC token at <span class="mono">T+2.3s</span>; the Spark write reaches <span class="mono">OneLakeWriter</span> at <span class="mono">T+14.1s</span>, past the usable window. Long-running DAGs will fail their final write.<div class="dim" style="margin-top:7px;font-size:11px">Every fact above is cited to a trace event · verified against the bundle.</div></div>'},
+  ]},
+  // 6 — VERDICT
+  { phase:'verdict', lines:[
+    {t:'line', cls:'sys', html:'<span class="acc">▸</span> Verdict <span class="dim">— per scenario, framed against your intent</span>'},
+    {t:'block', cls:'box', html:'<div class="box-h">Results · run #4471 · 16.2s</div>'+
+      '<div class="menu-row"><span class="ok">✓</span><span class="menu-name">DAG completes, state Completed</span><span class="tag ok">PASS</span></div>'+
+      '<div class="menu-row"><span class="ok">✓</span><span class="menu-name"><span class="mono">/insights/summary</span> → 200, schema valid</span><span class="tag ok">PASS</span></div>'+
+      '<div class="menu-row"><span class="ok">✓</span><span class="menu-name">Null capacity → graceful 400</span><span class="tag ok">PASS</span></div>'+
+      '<div class="menu-row"><span class="fail">✕</span><span class="menu-name">Token lifetime across a long DAG write</span><span class="tag fail">REGRESSION</span></div>'},
+    {t:'line', cls:'skill', html:'  <span class="hl">3 of 4 behave as intended.</span> One change-attributable regression, root cause confirmed.'},
+    {t:'line', cls:'dim', html:'  ◇ coverage: 3 tested · 1 failure · 1 not-reachable <span class="dim">(ComputeJitter — said so honestly)</span>'},
+    {t:'gap'},
+    {t:'line', cls:'ok', html:'  <span class="check">✓</span> Full report → <span class="cy">report.html</span> <span class="dim">(causal investigation board)</span>'},
+    {t:'line', cls:'ok', html:'  <span class="check">✓</span> Comment posted to <span class="hl">PR #982144</span>'},
+    {t:'line', cls:'ok', html:'  <span class="check">✓</span> Cleaned up — 0 leaked rules, 0 flag overrides, sandbox released <span class="dim">(ledger reversed)</span>'},
+    {t:'gap'},
+    {t:'line', cls:'dim', html:'  <span class="mono">edog qa</span> · done in 16.2s · 100% of claims cited &amp; verified'},
+  ]},
+];
+
+// ── Engine ────────────────────────────────────────────────────
+const stream=document.getElementById('stream');
+const railList=document.getElementById('railList');
+const nextBtn=document.getElementById('nextBtn');
+const advProg=document.getElementById('advProg');
+const advHint=document.getElementById('advHint');
+let beatIdx=-1, busy=false;
+
+// rail
+PHASES.forEach((p,i)=>{
+  const el=document.createElement('div');el.className='phase';el.id='ph-'+p.id;
+  el.innerHTML=`<span class="pn">${p.n}</span><span>${p.label}</span>${i<PHASES.length-1?'<span class="phase-rail-line"></span>':''}`;
+  railList.appendChild(el);
+});
+PHASES.forEach(()=>{const i=document.createElement('i');advProg.appendChild(i);});
+
+function setPhase(id){
+  const order=PHASES.map(p=>p.id);const cur=order.indexOf(id);
+  PHASES.forEach((p,i)=>{
+    const el=document.getElementById('ph-'+p.id);el.classList.remove('active','done');
+    if(i<cur)el.classList.add('done'); else if(i===cur)el.classList.add('active');
+    const pn=el.querySelector('.pn');
+    if(i<cur)pn.innerHTML='<span class="check">✓</span>'; else pn.textContent=p.n;
+    advProg.children[i].className = i<cur?'done':(i===cur?'on':'');
+  });
+}
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+function scrollEnd(){stream.scrollTop=stream.scrollHeight;}
+function addLine(cls,html){const d=document.createElement('div');d.className='ln '+(cls||'');d.innerHTML=html;stream.appendChild(d);scrollEnd();return d;}
+
+async function streamReason(html,variant){
+  // agent "thinking out loud" — spinner → resolves to ✓
+  const d=document.createElement('div');d.className='ln';
+  const lead = variant==='ok' ? '<span class="check">✓</span>' : '<span class="spinner"></span>';
+  d.innerHTML=`  <span class="dim" style="opacity:.85">${lead} ${html}</span>`;
+  stream.appendChild(d);scrollEnd();
+  if(variant!=='ok' && variant!=='static'){
+    await wait(variant==='run'?900:520);
+    d.innerHTML=`  <span class="dim" style="opacity:.85"><span class="check">✓</span> ${html}</span>`;
+  }
+  scrollEnd();
+}
+
+async function streamDeploy(){
+  const steps=['fetch MWC token','patch FLT source','inject DevMode','dotnet build','launch FLT','await DevConnection'];
+  const wrap=document.createElement('div');wrap.className='ln';
+  wrap.innerHTML='<div class="box"><div class="box-h"><span class="acc">▸</span> Deploy · <span id="dpct">0%</span></div><div class="progress"><i id="dbar" style="width:0%"></i></div><div id="dstep" class="dim mono" style="font-size:11px;margin-top:6px"></div></div>';
+  stream.appendChild(wrap);scrollEnd();
+  const bar=wrap.querySelector('#dbar'),pct=wrap.querySelector('#dpct'),st=wrap.querySelector('#dstep');
+  for(let i=0;i<steps.length;i++){
+    st.innerHTML=`<span class="spinner"></span> ${i+1}/6 ${steps[i]}…`;
+    const target=Math.round((i+1)/steps.length*100);
+    await animateBar(bar,pct,target); await wait(160);
+    st.innerHTML=`<span class="check">✓</span> ${i+1}/6 ${steps[i]}`;
+  }
+}
+function animateBar(bar,pct,target){return new Promise(res=>{let v=parseInt(bar.style.width)||0;const id=setInterval(()=>{v+=3;if(v>=target){v=target;clearInterval(id);res();}bar.style.width=v+'%';pct.textContent=v+'%';},14);});}
+
+async function streamRun(){
+  const scns=[['DAG completes, state Completed','ok'],['/insights/summary → 200, schema valid','ok'],['Null capacity → graceful 400','ok'],['Token lifetime across long DAG write','fail']];
+  const wrap=document.createElement('div');wrap.className='ln';
+  wrap.innerHTML='<div class="box"><div class="box-h">Scenarios <span id="rprog" class="dim">0/4</span></div><div id="rrows"></div></div>';
+  stream.appendChild(wrap);scrollEnd();
+  const rows=wrap.querySelector('#rrows'),prog=wrap.querySelector('#rprog');
+  for(let i=0;i<scns.length;i++){
+    const r=document.createElement('div');r.className='menu-row';r.innerHTML=`<span class="mk"><span class="spinner"></span></span><span class="menu-name dim">${scns[i][0]}</span><span class="tag dim">running</span>`;rows.appendChild(r);scrollEnd();
+    await wait(820);
+    const ok=scns[i][1]==='ok';
+    r.style.animation=ok?'flashOk .8s ease':'flashFail .8s ease';
+    r.innerHTML=`<span class="mk ${ok?'ok':'fail'}">${ok?'✓':'✕'}</span><span class="menu-name">${scns[i][0]}</span><span class="tag ${ok?'ok':'fail'}">${ok?'pass':'flag'}</span>`;
+    prog.textContent=`${i+1}/4`;scrollEnd();
+  }
+}
+
+async function playBeat(beat){
+  busy=true;nextBtn.disabled=true;setPhase(beat.phase);
+  for(const l of beat.lines){
+    if(l.t==='gap'){addLine('gap','');await wait(60);continue;}
+    if(l.t==='reason'){await streamReason(l.html,'');await wait(120);continue;}
+    if(l.t==='reason-ok'){await streamReason(l.html,'ok');await wait(160);continue;}
+    if(l.t==='reason-run'){await streamReason(l.html,'run');await wait(120);continue;}
+    if(l.t==='deploy'){await streamDeploy();await wait(150);continue;}
+    if(l.t==='run'){await streamRun();await wait(150);continue;}
+    if(l.t==='gate'){
+      const g=addLine('','  <span class="acc">◆</span> <span class="hl">'+l.q+'</span>');
+      await wait(500);
+      const c=addLine('cursor-line','  <span class="dim">›</span> <span class="caret"></span>');
+      await wait(650);
+      // type the user's response
+      await typeInto(c,l.resp);
+      await wait(250);continue;
+    }
+    if(l.t==='block'){const d=addLine('',l.html);await wait(180);continue;}
+    if(l.t==='user'){addLine(l.cls||'',l.html);await wait(120);continue;}
+    addLine(l.cls,l.html);await wait(130);
+  }
+  busy=false;
+  if(beatIdx>=BEATS.length-1){ finish(); } else { nextBtn.disabled=false; }
+}
+function typeInto(el,text){return new Promise(res=>{let i=0;el.innerHTML='  <span class="dim">›</span> <span class="user-resp"></span><span class="caret"></span>';const span=el.querySelector('.user-resp');const id=setInterval(()=>{span.textContent=text.slice(0,++i);scrollEnd();if(i>=text.length){clearInterval(id);el.innerHTML='  <span class="dim">›</span> <span class="user-resp">'+text+'</span>';res();}},32);});}
+
+function next(){ if(busy)return; beatIdx++; if(beatIdx<BEATS.length){ playBeat(BEATS[beatIdx]); } }
+function finish(){
+  nextBtn.disabled=false;nextBtn.classList.add('replay');
+  nextBtn.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg> Replay';
+  advHint.innerHTML='<span class="ok">✓</span> Journey complete — invoke to verdict in one session.';
+  nextBtn.onclick=()=>location.reload();
+}
+nextBtn.addEventListener('click',next);
+document.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();if(!nextBtn.classList.contains('replay'))next();else location.reload();}});
+document.getElementById('themeT').addEventListener('click',()=>{const r=document.documentElement;r.setAttribute('data-theme',r.getAttribute('data-theme')==='dark'?'light':'dark');});
+
+// kick off
+next();
+</script>
+<!-- SCRIPT -->
+</body>
+</html>
