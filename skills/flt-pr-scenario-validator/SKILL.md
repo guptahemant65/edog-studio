@@ -30,7 +30,7 @@ Use this skill when the user asks to validate / QA / test / "run scenarios on" a
   - `qa_verdict` — claim/verdict model + the evidence-verification wall.
   - `qa_cleanup` — standalone ledger reverser (also `python edog.py --qa-cleanup {runId}`).
 
-Read `reference/flt-model.md` (DAG, iteration ID, tokens, capacity routing, the 11 interceptors, deploy lifecycle, ports) before Beat 1. Read `reference/tools.md` for every endpoint. Read `reference/scenarios.md` for the generation protocol and the audited infra-seeding recipe.
+Read `reference/flt-model.md` (DAG, iteration ID, tokens, capacity routing, the 11 interceptors, deploy lifecycle, ports) before Beat 1. Read `reference/tools.md` for every endpoint. Read `reference/scenarios.md` for the generation protocol and the audited infra-seeding recipe. **`reference/flt-subsystems.md` is the just-in-time blast-radius index — do not read it whole; in Beat 2 load only the section(s) for the subsystem the PR touches.**
 
 ## The Journey
 
@@ -45,7 +45,8 @@ Seven beats. Each names its **gate** (what must be true to proceed), the **primi
 
 ### Beat 2 — Understand the change
 - Run `qa_pr_diff.fetch_and_parse(prUrl, client=...)` (feed it the `pr-diff` `diff`). You get `files`, `symbols`, `config_facts`, `feature_flags`.
-- Grep the **local FLT repo** to trace the blast radius: who calls the changed symbols, where the DI binding lives, what config constants apply. These are facts you read.
+- **Route via `reference/flt-subsystems.md`:** map each changed file to its subsystem(s) using that doc's Routing Table, then **load only those sections**. Each gives you the real files to read, the oracles, the known traps/races, and what a PR there can break.
+- **Read the actual FLT code the diff touches — not just the diff.** Trace who calls the changed symbols, where the DI binding lives, what config constants apply. Read the changed subsystem's source deeply; treat the `docs/design/*.md` as leads to verify in code, never as truth (they drift). These are facts you read, not values you guess.
 - Note every `feature_flags` ref — a flag-gated change is dormant until the flag is in the right state (Beat 5).
 - **No-runtime-surface gate:** if the diff is docs / build / IaC / test-only with no runtime-validatable surface, say so plainly and STOP. Do not deploy or fabricate scenarios.
 - **Security gate (detect-only):** EDOG disables FLT auth wholesale, so a runtime auth test is a manufactured false PASS — forbidden. If the diff touches controller posture (`PublicUnprotectedController` / `PublicAadProtectedController` / `BaseApiController`), `[MwcV2RequirePermissionsFilter]`, or `ControllersConfig.cs` authenticator wiring, **statically flag it for human review** — never claim it "passed."
