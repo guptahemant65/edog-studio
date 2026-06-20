@@ -21,5 +21,5 @@ def test_skill_declares_required_sections():
 
 def test_reference_docs_exist():
     base = Path("skills/flt-pr-scenario-validator/reference")
-    for f in ("flt-model.md", "tools.md", "scenarios.md", "flt-subsystems.md"):
+    for f in ("flt-model.md", "tools.md", "scenarios.md", "flt-subsystems.md", "presentation.md"):
         assert (base / f).exists(), f"missing reference/{f}"

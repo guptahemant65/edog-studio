@@ -30,7 +30,7 @@ Use this skill when the user asks to validate / QA / test / "run scenarios on" a
   - `qa_verdict` — claim/verdict model + the evidence-verification wall.
   - `qa_cleanup` — standalone ledger reverser (also `python edog.py --qa-cleanup {runId}`).
 
-Read `reference/flt-model.md` (DAG, iteration ID, tokens, capacity routing, the 11 interceptors, deploy lifecycle, ports) before Beat 1. Read `reference/tools.md` for every endpoint. Read `reference/scenarios.md` for the generation protocol and the audited infra-seeding recipe. **`reference/flt-subsystems.md` is the just-in-time blast-radius index — do not read it whole; in Beat 2 load only the section(s) for the subsystem the PR touches.**
+Read `reference/flt-model.md` (DAG, iteration ID, tokens, capacity routing, the 11 interceptors, deploy lifecycle, ports) before Beat 1. Read `reference/tools.md` for every endpoint. Read `reference/scenarios.md` for the generation protocol and the audited infra-seeding recipe. **`reference/flt-subsystems.md` is the just-in-time blast-radius index — do not read it whole; in Beat 2 load only the section(s) for the subsystem the PR touches.** **`reference/presentation.md` is the rendering contract — every beat's terminal output (symbols, boxes, gates, the verdict, and the per-beat state matrix) must follow it. Honor it on every run.**
 
 ## The Journey
 
@@ -117,6 +117,16 @@ The complete EDOG HTTP surface — every endpoint, with `curl` examples and resp
 - Observe via `/api/logs`, `/api/telemetry`, `/api/executions`, `/api/edog/interceptors-status`; verify output landed via `/api/onelake/table-preview-rows` + `table-metadata`.
 
 You have `bash` and `curl`. Reach for a primitive (`scripts/qa_*.py`) for anything that must be deterministic; reach for `curl` for stimulus and observation.
+
+## Presentation
+
+The terminal conversation **is** the product, so render it to **`reference/presentation.md`** on every run — it is the UX source of truth. Non-negotiables from it:
+
+- **Restraint is the default.** Healthy/expected states are plain; reserve the marks `▲` (needs eyes) and `✕` (regression) for genuine exceptions. Color is never the signal (terminal can't be trusted to render it) — **symbol + label + structure** carry state.
+- **Unicode marks only — no emoji.** `◆` headline · `▸` action · `✓` fact/pass · `✕` regression · `▲` warning/needs-eyes · `◇` coverage/meta · `▣` locked · `◌` not-provably-exercised.
+- **Every fact trails its citation** (`retry fired 5× [retry #1851]`); uncited claims do not render.
+- **Each beat has a full state matrix** in `presentation.md` — render the *right* state (no-PR, lock-held, no-runtime-surface, deploy-failed, HEAD-mismatch, NOREFRESH, cascade-skip, suspected, stale, …), not just the happy path.
+- **Phase-1 honesty:** harness blockages render as `▲ COULD NOT VALIDATE` (never pass/fail); unconfirmable causes are `▲ SUSPECTED` (never "confirmed" — that is Phase N); skips are `◇` collateral, not `✕`.
 
 ## Cross-turn state
 
