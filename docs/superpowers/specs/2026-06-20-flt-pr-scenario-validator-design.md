@@ -121,7 +121,7 @@ The skill has bash and `curl`s `localhost:5555`. Every capability already exists
 | Schema validation | `GET /api/playground/swagger/spec` → OpenAPI for the response-schema invariant | Exists |
 | Endpoint / flag catalog | `GET /api/playground/catalog`, `/api/edog/feature-flags/catalog` | Exists |
 | Read PR diff | `GET /api/ado-proxy/pr-diff` — returns `{prId, title, author, diff, sourceCommit, commonCommit, …}` (audited; `sourceCommit` feeds HEAD-match) | Exists |
-| **API-contract diff (deterministic grounding)** | Generate the runtime swagger **from main and from the PR branch** and diff the two (`qa_contract_diff`). PR spec = `GET /api/playground/swagger/spec` after the PR deploy; main spec = built from the base-commit worktree (`dotnet swagger tofile` preferred, else a transient runtime capture). **The committed `Swagger/Swagger.json` is NOT a reliable baseline — it is updated infrequently and drifts**, so runtime-vs-committed (`/api/playground/swagger/diff`) is misleading. The two-spec diff yields stable `ch-NNN` change IDs; removed/signature-changed endpoints = breaking. A deterministic grounding source + endpoint-test driver (see §7). | spec endpoint Exists; differ NEW |
+| **API-contract diff (deterministic grounding)** | Generate the swagger **from main and from the PR branch with `dotnet swagger tofile`** (Swashbuckle CLI) on each branch's *built assembly*, then diff the two (`qa_contract_diff.diff`). Both specs via the **same** generator = apples-to-apples (no runtime-vs-tofile formatting noise); main needs only a **build, not a deploy** (PR is built by Beat 5 anyway). **The committed `Swagger/Swagger.json` is NOT used as a baseline — it drifts**, so `/api/playground/swagger/diff` (runtime-vs-committed) is not trusted. The two-spec diff yields stable `ch-NNN` change IDs; removed/signature-changed endpoints = breaking. Requires the `Swashbuckle.AspNetCore.Cli` tool + a loadable assembly (setup note in plan). | NEW |
 | **Deterministic failure attribution** | `src/frontend/js/error-sim-catalog.js` (115 codes tagged `errorSource` User/System · `category` · `httpStatus` · `fltCodePath`) + `error-decoder.js` (regex-scans logs for `MLV_/FLT_/SPARK_/GTS_` codes → O(1) lookup w/ severity, retryable, suggestedFix). Lets the skill classify a failure as **change-attributable** (`User`+validation/auth) vs **infra** (`System`+throttling/execution) *mechanically*, not by LLM guess (feeds §9.B attribution + harness-vs-test split). | Exists |
 | **Token-expiry / health check** | `GET /api/edog/health` → `bearerExpiresIn`, `tokenExpired`, `mwcToken` state; `/api/flt/config` reports `bearerToken`/MWC availability. Bearer (~1h, 5-min buffer) **auto-refreshes mid-run iff a username/session is saved**; MWC has a 15-min refresh buffer. 401/403 → re-auth required; 404 → `capacity_routing_not_ready` (retryable). The skill checks `bearerExpiresIn` before long ops. | Exists |
 
@@ -232,9 +232,10 @@ BEAT 5 — DEPLOY & RUN
     injection set (FILES: GTSBasedSparkClient, Program, WorkloadApp,
     DagExecutionHandlerV2, … + DevMode/*)                       [NEW]
   • qa_run_lock.heartbeat each turn                            [NEW]
-  • CONTRACT DIFF (controller/DTO PRs): generate runtime swagger from
-    main (base-commit worktree) + from the PR deploy, diff via
-    qa_contract_diff → cite ch-NNN; removed/modified = breaking.
+  • CONTRACT DIFF (controller/DTO PRs): generate swagger from main +
+    from the PR branch via `dotnet swagger tofile` on each BUILT assembly
+    (main = base-commit worktree, BUILD only — no deploy), diff via
+    qa_contract_diff.diff → cite ch-NNN; removed/modified = breaking.
     (Do NOT use the stale committed Swagger.json baseline.)         [NEW]
   • FLAG-GATED change: flip the flag ON (feature-flags/overrides) BEFORE
     exercising — else you validate the OLD path (false PASS); run ON+OFF.
@@ -286,7 +287,7 @@ No schema, ever. Scenarios are **plain-language intents the skill generates from
 
 | Change touches | Scenarios generated | Infra it needs |
 |----------------|--------------------|----------------|
-| API controller / endpoint | Happy (valid → 2xx + schema valid + **assert response body**); Edge (null / boundary / missing params → graceful 4xx); **Contract-diff** (diff main-vs-PR runtime swagger → assert each `ch-NNN` change is intended, flag removed/modified endpoints as breaking) | lakehouse; maybe 1 table |
+| API controller / endpoint | Happy (valid → 2xx + schema valid + **assert response body**); Edge (null / boundary / missing params → graceful 4xx); **Contract-diff** (diff main-vs-PR swagger via `dotnet swagger tofile` → assert each `ch-NNN` change is intended, flag removed/modified endpoints as breaking) | lakehouse; maybe 1 table |
 | DAG node / scheduling | Trigger DAG → verify node transitions → final `Completed` | an MLV with a multi-node DAG over ≥1 table |
 | Retry / resilience policy | P1: observe the path under normal stimulus · P2: inject fault → backoff ≤ `maxRetries` | depends on path |
 | Token / auth flow | Long-running DAG → observe token lifetime across the write | a longer MLV DAG |
@@ -315,7 +316,7 @@ The applicable categories are chosen by the LLM from the blast radius — a retr
 
 **Two non-negotiable generation rules (audited):**
 - **Flag-gating is a correctness gate, not an edge case.** If the diff references `FeatureNames.<X>`, the changed code path is *dormant until the flag is ON*. The skill **must** flip the flag ON to exercise the PR's actual behavior; running flag-OFF only validates the pre-change path. Skipping this silently produces a **false PASS** — the most dangerous outcome the validator can emit. Detection is mechanical (grep the diff for `FeatureNames.`). (Note: some scenarios instead require a flag **disabled** as a *precondition* — e.g. a CDF-warning test needs `IRPhysicalCDF` off; the flag direction comes from the scenario, not a blanket "always ON".)
-- **Contract changes are grounded by a main-vs-PR swagger diff, not by reading the diff and not by the committed baseline.** Any controller/DTO change → generate the runtime swagger from the base-commit (main) worktree and from the PR deploy, diff via `qa_contract_diff`, and cite the `ch-NNN` entries. **The committed `Swagger/Swagger.json` is unreliable (rarely updated, drifts)** so `/api/playground/swagger/diff` (runtime-vs-committed) is not trusted. A removed or signature-changed endpoint is a **breaking-change** finding regardless of test outcome.
+- **Contract changes are grounded by a main-vs-PR swagger diff, not by reading the diff and not by the committed baseline.** Any controller/DTO change → generate the swagger from the base-commit (main) worktree and the PR branch with **`dotnet swagger tofile`** on each built assembly (same generator both sides; main needs only a build), diff via `qa_contract_diff.diff`, and cite the `ch-NNN` entries. **The committed `Swagger/Swagger.json` is unreliable (rarely updated, drifts)** so `/api/playground/swagger/diff` (runtime-vs-committed) is not trusted. A removed or signature-changed endpoint is a **breaking-change** finding regardless of test outcome.
 
 ---
 
