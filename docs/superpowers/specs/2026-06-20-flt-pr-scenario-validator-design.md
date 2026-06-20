@@ -53,6 +53,7 @@ Properties that are correct or incorrect on their own terms, with nothing to com
 - Every response validates against its OpenAPI schema
 - No secrets (token/bearer patterns) in logs
 - No new ERROR/FATAL log lines during the scenario
+- **MLV refresh convergence** — the materialized MLV output equals an *independent full-refresh of its defining SELECT* over the current sources (the validator runs the SELECT in its own Spark/notebook session and compares). This holds regardless of whether the refresh took the incremental or full path — incremental and full **must converge** — so it directly catches IR/CDF drift. **Grounded caveat:** MLV refresh is policy-driven (incremental vs full) and stateful (the `FileIngestion` change-detection/`RefreshPolicy` machinery), so this is *not* "recompute = expected"; it's a convergence check, strongest on a **skill-seeded static fixture** (sources quiesced). For non-deterministic view SQL (`current_timestamp`, `rand`, nondeterministic order+limit) or live reused data, it auto-degrades to schema + rowcount + structured-metric checks (`MLVRefreshOutput.RefreshPolicy/TotalRowsProcessed/Dropped/Violations`).
 
 ### Layer 3 — Evidence-grounded judgment (where Opus earns its keep)
 
@@ -264,9 +265,17 @@ BEAT 5 — DEPLOY & RUN
         the FLT log server; query params + shapes are FLT-DEFINED, so the
         skill DISCOVERS the contract at runtime (do NOT assume ?since=&level=).
       verify-output: /api/onelake/table-preview-rows (reads live Delta
-        parquet — confirms the DAG wrote the RIGHT rows, not just "ran")
+        parquet) + CONVERGENCE ORACLE — run the MLV's defining SELECT in the
+        skill's own Spark/notebook session and assert the materialized output
+        equals that full-refresh (incremental MUST converge to full; catches
+        IR/CDF drift). Degrade to schema/rowcount/MLVRefreshOutput-metric
+        checks for non-deterministic SQL or live reused data.
+      execution proof: a changed symbol counts as TESTED only if its enclosing
+        CodeMarker (CurrentCodeMarkerName) / interceptor surface / log line
+        appears in the trace — else "not provably exercised" (no false PASS).
       classify any failure via qa_error_classify (change vs infra)
-      qa_invariants.* over the observation window             [NEW]
+      qa_invariants.* over the window — incl. the core-smoke SENTINEL run
+        every validation regardless of diff (collateral-damage net)   [NEW]
   ┌─ GATE: "Deploy PR + run 4 scenarios? ~6min" ──────────┐
   └───────────────────────────────────────────────────────┘
 
@@ -371,11 +380,13 @@ Ground truth: invariant suite + Layer-1 code facts. Diagnosis: Opus, with every 
 - Every DAG run that starts terminates (no hangs)
 - No new ERROR/FATAL log lines during the scenario
 - No interceptor exceptions
+- **MLV refresh convergence** — materialized output == an independent full-refresh of the defining SELECT (deterministic views, quiesced sources); auto-degrades to schema/rowcount/structured-metric checks otherwise (see §2 Layer 2). Catches IR/CDF drift.
+- **Core-smoke sentinel** — a fixed canonical fixture (seed table → MLV → full refresh → output == SELECT, no warnings, terminal `Completed`) runs on **every** validation regardless of the diff. It's the net for collateral damage *outside* the computed blast radius — a "harmless" change that breaks the core refresh path is caught only by an always-on baseline scenario.
 - Latency within the bound read from config/SLA, if one exists in code. **No invented thresholds** — if no bound is declared, timing is *reported as an observation*, not asserted (inventing a number is just the oracle problem with a stopwatch).
 
-### Coverage honesty (untestable code)
+### Coverage honesty — measured from the trace, not declared
 
-Some changed code has no entry point any available stimulus can reach (an internal helper, a branch only reachable under conditions we can't induce). The skill **says so plainly** — *"this path isn't reachable by any available stimulus; manual verification needed"* — and never fabricates a weak scenario to look thorough. Coverage is reported as `tested / reported-only / not-reachable`, not inflated. Honest "can't test this" beats theater.
+Coverage is **measured**, not asserted. FLT carries named `CodeMarkers` (`Monitoring/CodeMarkers.cs`, `MonitoredScope` — operation/handler/controller-action granularity) which the EDOG log interceptor surfaces as `CurrentCodeMarkerName`; a scenario counts a changed symbol as **`tested`** only when the trace shows its enclosing **code-marker** (or an http/dag/retry/token/spark interceptor surface, or a log line it emits) actually fired during the run. This is **execution proof** — it kills the false PASS where a scenario "passed" without ever running the new code. It is **scope-level, not line-level**: a change with no marker/interceptor/log surface (a pure internal helper) has **no runtime proof**, and the skill says so plainly — *"not reachable / not provably exercised by any available stimulus; manual verification needed"* — never fabricating a weak scenario to look thorough. Coverage is reported as `tested(proven) / reported-only / not-provably-exercised`, not inflated. Honest "can't prove this ran" beats theater.
 
 ### Flakiness & severity (a FAIL is not always a block)
 
@@ -564,6 +575,7 @@ Dark, Palantir aesthetic (per EDOG design bible). The **hero is the correlated c
 6. The HTML report is good enough to paste into a design review as evidence.
 7. **No orphaned state ever** — a killed/crashed run leaves zero billing capacities, zero lingering chaos rules, zero leaked flag overrides; `edog qa --cleanup` fully reverses the ledger even with the skill process gone.
 8. **The agent cannot address any target outside the locked tuple**, and never deletes anything it did not create.
+9. **Measured reliability (validate-the-validator).** Trust is *earned, not asserted*. A labeled corpus is built from FLT git history — **reverted PRs** (`Revert 'X'` → X is known-bad) + stable merged PRs (known-good) — **curated to runtime-detectable regressions** (some reverts are product/policy decisions out of scope) and **supplemented with synthetic fault injection** (deliberately break retry/CDF/token/refresh in a branch) since the real corpus is thin (~16 revert/hotfix of 844 commits / 24mo). The validator must **FAIL the known-bad and PASS the known-good**, and its **precision/recall is reported as a number** — the only honest basis for "full confidence." This corpus is also the regression harness for the validator itself.
 
 ---
 
@@ -571,9 +583,10 @@ Dark, Palantir aesthetic (per EDOG design bible). The **hero is the correlated c
 
 Guardrails are **not** a late phase. The locked target, teardown ledger, phase allowlist, and evidence-cited verdict are **foundational** — they ship with the first thing that can mutate state or emit a claim.
 
-- **Phase 1 (MVP):** run-lock → PR resolution (direct git/ADO) → **start server HEADLESS after PR (no Studio webpage)** → skill-native code understanding (diff + repo grep, incl. **`FeatureNames.` flag-gating detection**) → scenario generation (`reference/scenarios.md`) with infra needs, **preconditions (flag state + table props e.g. CDF=false)**, and **composite sub-scenarios / complex DAG shapes** → **scenario-aware environment** (user picks existing/new; existing fitness-check; new = skill-seeded, tailored, preconditions enforced at seed time) → **worktree** PR checkout (config-repoint via direct `edog-config.json` edit, not `--config`) → deploy + HEAD-match → **happy/edge/perf + main-vs-PR contract-diff** scenarios, **flag-ON exercise of flag-gated changes** (self-cleaning) → grounding on **API response body + logs/telemetry/onelake/http/two-swagger-diff/error-codes** (REST-citable) + **catalog-grounded failure attribution** + evidence-cited verdict (`qa_verdict.verify`) → **token-expiry guard** (`/api/edog/health bearerExpiresIn`) + **GUID-pinned locked target** → **markdown PR comment** → cleanup (auto on pass, **offer-keep on fail**) + `edog --qa-cleanup`. **No failure injection, no chaos investigation.**
+- **Phase 1 (MVP):** run-lock → PR resolution (direct git/ADO) → **start server HEADLESS after PR (no Studio webpage)** → skill-native code understanding (diff + repo grep, incl. **`FeatureNames.` flag-gating detection**) → scenario generation (`reference/scenarios.md`) with infra needs, **preconditions (flag state + table props e.g. CDF=false)**, and **composite sub-scenarios / complex DAG shapes** → **scenario-aware environment** (user picks existing/new; existing fitness-check; new = skill-seeded, tailored, preconditions enforced at seed time) → **worktree** PR checkout (config-repoint via direct `edog-config.json` edit, not `--config`) → deploy + HEAD-match → **happy/edge/perf + main-vs-PR contract-diff + always-on core-smoke sentinel** scenarios, **flag-ON exercise of flag-gated changes** (self-cleaning) → grounding on **API response body + FLT-native structured outputs (node.warnings/refresh_policy/MLVRefreshOutput) + MLV-convergence oracle + trace-measured execution proof (CodeMarkers) + logs/telemetry/onelake/http/two-swagger-diff/error-codes** (REST-citable) + **catalog-grounded failure attribution** + evidence-cited verdict (`qa_verdict.verify`) → **token-expiry guard** (`/api/edog/health bearerExpiresIn`) + **GUID-pinned locked target** → **markdown PR comment** → cleanup (auto on pass, **offer-keep on fail**) + `edog --qa-cleanup`. **No failure injection, no chaos investigation.**
 - **Phase N (timing TBD — fault injection):** **failure-injection scenarios** (once chaos/error-sim matures) + auto-investigation (chaos-augmented confirmation; upgrades Phase-1 "suspected" to "confirmed") + destructive-op gating on reused-with-data.
 - **Phase 3:** trace-bundle endpoint (exposes the **SignalR-primary topic-event stream over REST** with the `TopicEvent.SequenceId` + canonical cross-topic trace ID; unsampled) + verification pass over the unified bundle + full cross-signal correlation + rich HTML causal-board report (richer PR comment links to it).
 - **Phase 4:** infra auto-provisioning polish + independent dead-man's-switch watchdog.
+- **Validate-the-validator harness (ongoing, parallel to all phases):** build + curate the labeled corpus (reverted/known-bad + stable/known-good PRs from FLT git history) and a synthetic-fault set; run the validator against it and **report precision/recall** (§13.9). This gates whether the verdict can be *trusted*, so it starts as soon as Phase 1 can run end-to-end.
 
-**To resolve during planning:** how the skill self-spins OmniSharp on demand (binary discovery, warm-up cost, when it's worth it vs plain code-reading); how cross-turn run state is persisted (session store vs a file EDOG owns); trace-bundle retention window and the unsampled-window cost; concurrency (single-validation lock, like `EdogQaExecutionEngine._runLock`); how the verification pass handles claims whose shape isn't mechanically checkable (semantic interpretation → forced into the inference tier); the repo `skills/` → user-global symlink install step.
+**To resolve during planning:** how the skill self-spins OmniSharp on demand (binary discovery, warm-up cost, when it's worth it vs plain code-reading); how cross-turn run state is persisted (session store vs a file EDOG owns); trace-bundle retention window and the unsampled-window cost; concurrency (single-validation lock, like `EdogQaExecutionEngine._runLock`); how the verification pass handles claims whose shape isn't mechanically checkable (semantic interpretation → forced into the inference tier); the repo `skills/` → user-global symlink install step; **how the MLV-convergence oracle detects non-deterministic view SQL to know when to degrade; how execution-proof maps a changed symbol to its enclosing CodeMarker/interceptor surface.**

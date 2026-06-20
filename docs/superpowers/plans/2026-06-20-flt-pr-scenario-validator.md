@@ -25,6 +25,8 @@
 | `scripts/qa_invariants.py` | Deterministic invariant checks over a response/log/trace snapshot. |
 | `scripts/qa_contract_diff.py` | Diff two `dotnet swagger tofile`-generated OpenAPI specs (main vs PR) → `{changed, totalChanges, breaking[], changes[]}` with stable `ch-NNN` IDs. NOT the stale committed baseline. |
 | `scripts/qa_error_classify.py` | Map a decoded error (`errorSource`/`category`/`httpStatus`) to an attribution tier (`change`/`infra`/`unknown`) from the error catalog. |
+| `scripts/qa_execution_proof.py` | Map changed symbols → enclosing CodeMarker / interceptor surface; confirm it fired in the trace (else "not provably exercised"). Coverage measured, not declared. |
+| `scripts/qa_mlv_convergence.py` | Run the MLV's defining SELECT in a Spark/notebook session, compare to the materialized output (incremental must converge to full); degrade for non-deterministic SQL / live data. |
 | `scripts/qa_verdict.py` | Verdict + cited-claim data model; evidence verification pass; JSON serialization. |
 | `scripts/qa_trace_bundle.py` | (Phase 3) Assemble the unified, unsampled, stable-ID trace bundle. |
 | `scripts/qa_watchdog.py` | (Phase 4) Independent dead-man's-switch that reverses the ledger on budget/silence. |
@@ -75,6 +77,12 @@ Confirmed by reading the real handlers; the tasks below reflect them:
 - **Assert the API response body (Beat 5).** The stimulus call's response is first-class evidence — assert + cite the response body/output, not just status/logs (`scenarios.md` Task 10, SKILL.md Task 11).
 - **Contract-diff is main-vs-PR, not vs committed baseline (Beat 5).** See the swagger bullet above; `qa_contract_diff` is a **two-spec differ** (Task 7a).
 - **Fault injection → Phase N (timing TBD), not Phase 2.** All chaos/failure-injection work is deferred to an undetermined later phase (relabel Phase 2 header + Beat 6 honesty text).
+
+**Fourth-pass: Tier-1 audit grounded against FLT/EDOG code (new Phase-1 primitives + a meta-harness):**
+- **Execution proof (`qa_execution_proof`).** FLT carries named `CodeMarkers` (`Monitoring/CodeMarkers.cs`, `MonitoredScope`, operation/handler/controller-action granularity) surfaced by the EDOG log interceptor as `CurrentCodeMarkerName`. A changed symbol counts as **tested only if its enclosing code-marker / interceptor surface / log line appears in the trace** — else "not provably exercised." Coverage is **measured**, not declared; this is the primary false-PASS kill. Scope-level, not line-level (a pure internal helper with no surface → honest unknown).
+- **MLV-convergence oracle (`qa_mlv_convergence`).** MLV refresh is policy-driven (incremental vs full) and stateful (the `FileIngestion`/`RefreshPolicy` machinery), so "recompute = expected" is naive. The grounded invariant: **materialized output == an independent full-refresh of the defining SELECT** over current sources (incremental MUST converge to full) — the skill runs the SELECT in its own Spark/notebook session and compares. Strongest on a **skill-seeded static fixture**; auto-degrade to schema/rowcount + `MLVRefreshOutput.{RefreshPolicy,TotalRowsProcessed,TotalRowsDropped,TotalViolations}` for non-deterministic SQL or live reused data. Catches IR/CDF drift.
+- **Core-smoke sentinel.** A fixed canonical fixture (seed → MLV → full refresh → output==SELECT, no warnings, terminal Completed) runs on EVERY validation regardless of diff — the net for collateral damage outside the computed blast radius. (It's the convergence oracle on a known-good fixture.)
+- **Validate-the-validator corpus (meta-harness).** Labeled set from FLT git history — reverted PRs (`Revert 'X'` → X known-bad) + stable merged PRs (known-good); curate to runtime-detectable regressions and supplement with synthetic faults (real corpus is thin: ~16 revert/hotfix of 844 commits / 24mo). Validator must FAIL known-bad + PASS known-good; report **precision/recall**. This is how the verdict earns trust (spec §13.9) and is the validator's own regression harness.
 
 ---
 
