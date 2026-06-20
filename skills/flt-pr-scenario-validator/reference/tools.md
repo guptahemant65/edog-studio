@@ -21,25 +21,27 @@ This does NOT open a browser. The default `python edog.py` opens the EDOG Studio
 **Envelope:**
 ```json
 {
-  "tokenType": "bearer",
+  "tokenType": "mwc",
   "method": "GET",
-  "path": "/api/liveTable/...",
+  "path": "/liveTable/...",
   "headers": {},
   "body": null,
   "timeout": 30
 }
 ```
 
-`tokenType`: `"bearer"` or `"mwc"`. The correct type for each FLT path is constrained by EDOG path-prefix rules (bearer paths vs MWC paths are distinct prefix groups in dev-server.py:692-698).
+`tokenType`: `"bearer"` or `"mwc"`, and **the path prefix MUST match the token type** (`dev-server.py:330-335`, verified at runtime):
+- **`mwc`** (FLT service calls) — path must start with **`/liveTable`**, `/liveTableSchedule`, or `/liveTableMaintanance`. The path is **FLT-relative** — do NOT include `/v1/workspaces/{ws}/lakehouses/{lh}/...`; the MWC token already encodes the workspace/lakehouse routing. (Sending the full `/v1/...` path with `mwc` returns `400 invalid_path`.) So an endpoint whose swagger path is `/v1/workspaces/{ws}/lakehouses/{lh}/liveTable/listDAGExecutionIterationIds` is dispatched as just `/liveTable/listDAGExecutionIterationIds`.
+- **`bearer`** (Fabric/control-plane calls) — path must start with `/v1/`, `/v1.0/`, `/metadata/`, or `/workspaces`.
 
 **curl:**
 ```bash
 curl -s -X POST http://localhost:5555/api/playground/dispatch \
   -H "Content-Type: application/json" \
-  -d '{"tokenType":"bearer","method":"GET","path":"/api/liveTable/status","headers":{},"body":null,"timeout":30}'
+  -d '{"tokenType":"mwc","method":"GET","path":"/liveTable/listDAGExecutionIterationIds","headers":{},"body":null,"timeout":30}'
 ```
 
-**Key response fields:** the raw FLT response body (proxied), HTTP status code.
+**Key response fields:** the dispatch returns an envelope `{status, statusText, headers, body}` where `status` is the **inner** FLT HTTP status and `body` is the raw FLT response text. **Assert on the INNER `status`/`body`, not the dispatch HTTP 200** — a `400`/`500` from FLT still comes back inside a `200` dispatch envelope.
 
 ---
 
@@ -90,13 +92,13 @@ curl -s http://localhost:5555/api/flt/config
 
 ### `GET /api/ado-proxy/pr-diff`
 
-Fetch the PR diff and metadata. Accepts query params to identify the PR.
+Fetch the PR diff and metadata. **The query param is `prUrl` (the full PR URL), NOT `prId`** (verified: `dev-server.py:3880` reads `prUrl`; passing `prId` returns `400 "prUrl query parameter required"`).
 
 ```bash
-curl -s "http://localhost:5555/api/ado-proxy/pr-diff?prId=1234"
+curl -s "http://localhost:5555/api/ado-proxy/pr-diff?prUrl=https://dev.azure.com/powerbi/MWC/_git/workload-fabriclivetable/pullrequest/985969"
 ```
 
-**Key fields:** `prId`, `title`, `author`, `diff` (raw diff text), `sourceCommit` (HEAD-match anchor), `commonCommit`.
+**Key fields:** `prId`, `title`, `author`, `diff` (raw diff text), `sourceCommit` (HEAD-match anchor), `commonCommit`. **Fallback:** if the proxy is unavailable, resolve the PR with `az repos pr show --id <n> --org https://dev.azure.com/powerbi` and the diff with `git diff origin/main...<sourceCommit>` (the clean diff — never `git diff` on the deploy-patched tree).
 
 ### `POST /api/ado-proxy/pr-comment`
 
@@ -284,9 +286,11 @@ Resolve effective flag state against the test workspace. Use this before AND aft
 curl -s http://localhost:5555/api/edog/feature-flags/catalog
 ```
 
-**Key fields per flag:** `name` (C# const name), `wireKey` (FM Id — what to override), `effectiveForMyWorkspace` (bool — the only truth that matters), `locked` (can't be overridden), `isOverridden` (bool), `overrideValue` (current forced value).
+**Response shape** (verified at runtime): a top-level object `{generatedAt, fltRepoPath, fm, workspace, rows[], rowCount}`. **The flags are in `rows[]` — NOT `flags[]`.** Reading `.flags` returns nothing (this bit the first live run). Check `fm.stale`/`fm.syncInProgress` first: right after a deploy the FM cache is cold and `rows` may be sparse with `stale:true` — re-poll until `fm.stale` is false (`fm.indexedCount`/`rowCount` then populate, ~35-40 flags).
 
-`locked`/`missing` flags cannot be forced — this is a harness limitation, not a verdict on the change.
+**Key fields per row:** `name` (C# const name), `wireKey` (FM Id — what to override), `effectiveForMyWorkspace` (bool — the only truth that matters), `locked` (bool), `isOverridden` (bool), `overrideValue` (current forced value), `missingReason` (why a flag is `missing`), `perEnv` (per-env on/off/empty map).
+
+> **Observed nuance (first run):** a flag can report `locked:true` yet still be force-overridden successfully (the override force-pushes to FLT:5557 and the change is observable in behavior). When in doubt, **trust the behavioral oracle** (did the gated code path actually change) over the catalog's `locked` flag — re-read after the override and, for correctness-critical scenarios, confirm via the FLT response, not just the catalog.
 
 ### `POST /api/edog/feature-flags/overrides`
 
