@@ -121,9 +121,9 @@ The skill has bash and `curl`s `localhost:5555`. Every capability already exists
 
 ### The one new piece of product work
 
-**`GET /api/qa/trace-bundle?since={T0}&correlationId={id}`** — a unified observation endpoint returning logs + telemetry + all 11 interceptor streams + DAG state in **one correlated snapshot**.
+**`GET /api/qa/trace-bundle?since={T0}&correlationId={id}`** — a unified observation endpoint returning logs + telemetry + all 11 interceptor streams + DAG state in **one correlated snapshot**, every event carrying a **stable ID** and **unsampled** for the run window.
 
-Without it, the skill stitches 5+ endpoints per observation window. With it, correlation is a single call returning a time-ordered, correlation-ID-joined event stream. **This is the highest-leverage thing to build** — everything else the skill composes from existing APIs.
+It is load-bearing for two reasons: (1) correlation is a single call returning a time-ordered, correlation-ID-joined event stream instead of stitching 5+ endpoints; (2) it is the **citable evidence ledger** — every assertion in the verdict cites a stable event ID that exists in the bundle (see §9.B). Unsampled coverage is what makes absence claims ("no error occurred") provable. **This is the highest-leverage thing to build** — everything else the skill composes from existing APIs.
 
 ---
 
@@ -239,23 +239,97 @@ Ground truth (deterministic): differential diff + invariant suite. Diagnosis (Op
 
 ---
 
-## 9. Harness Failure vs Test Failure
+## 9. Guardrails
 
-A first-class distinction. If the **environment** breaks, that is NOT a test failure — the skill was *blocked*:
+The skill can do anything a user can do — provision capacities (real money), deploy code, trigger DAGs, inject chaos, override feature flags, post to PRs — and it is driven by a probabilistic model. The danger is not one catastrophic action; it is the **accumulation of plausible small ones**: an un-cleaned chaos rule, a capacity that keeps billing after the run dies, a flag override that leaks into the next session, a DAG triggered against the wrong lakehouse.
+
+Two orthogonal guardrail families, each a wall **at the tool boundary** — never the model policing itself.
+
+### 9.A Operational guardrails (protect the environment from the agent)
+
+**Core principle: never trust the agent to be the source of truth for safety or cleanup.** The failure mode that hurts is the one where the agent *crashed* and never reached its own cleanup step.
+
+**1. Locked target (interactive selection → frozen tuple).**
+At PHASE 0 the skill lists workspaces (`/api/fabric/workspaces`) and lakehouses (`/workspaces/{id}/lakehouses`) **enriched with decision context** — capacity SKU + rough cost, a flag on anything production-ish, and whether each lakehouse is empty (safe) or holds data (handle with care). The menu's first option is **"create fresh sandbox."** The user picks `(workspace, lakehouse, capacity)` — or fresh.
+
+That tuple is then **frozen for the entire run**. Every mutating tool call is checked against the locked target at the tool boundary. The agent physically cannot address a different lakehouse mid-run, no matter what an ID drift or hallucination suggests. Rejected alternative: trusting the model to "stay on the right environment" — that is asking the probabilistic thing to police its own probabilism.
+
+**2. Created-vs-reused (only destroy what you created).**
+
+| Target | Teardown | Destructive stimuli (DAG writes, file events, corrupting chaos) |
+|--------|----------|------------------------------------------------------------------|
+| **Fresh** (agent created) | Deleted on cleanup — recorded in the teardown ledger | Full freedom — nothing real to break |
+| **Existing** (user's real lakehouse) | **Never deleted** — not in the ledger, only exercised | **Extra confirmation** before anything that writes or mutates data |
+
+The rule underneath: **the agent may only destroy what it created.** A handed-over lakehouse is read, exercised, observed — never torn down. If it holds real data, a write-DAG or corrupting chaos rule is gated behind one more "this touches real data, proceed?" — the line between a test and an incident.
+
+**3. Teardown ledger (reversibility, owned by EDOG not the agent).**
+Every mutating action — flag override, chaos rule, created infra, deployed branch — is appended to a **persisted teardown ledger on disk** *before* it executes. Cleanup replays the ledger in reverse inside a `finally` that runs on normal completion, crash, Ctrl+C, or agent death. Critically, the ledger is owned by EDOG (the body) and replayable by a standalone `edog qa --cleanup` command that works **even if the skill process is gone.** Capacity that bills money after the agent died at 2am is the exact incident this prevents. (Extends the P10 `finally`-scoped disposal pattern into the spine.)
+
+**4. Resource ceilings + independent dead-man's switch.**
+Every run carries a hard budget: max wall-clock (default 30 min), max capacities created (default **0** — reuse-only unless explicitly told), max DAG triggers, max chaos rules, max tokens. A watchdog **independent of the agent loop** (the agent cannot be trusted to check its own budget) tears down everything via the ledger if the budget blows or the run goes silent. (Reuses the `EdogQaExecutionEngine._runLock` + 30-min ceiling pattern, made authoritative.)
+
+**5. Phase action allowlist.**
+The per-phase confirmation gate is not just "proceed Y/N" — each phase declares the **exact set of mutating operations it is permitted**. PHASE 2 (baseline) may deploy + trigger + observe; it **cannot** create infra or post to a PR. An out-of-phase action is refused at the tool boundary, not by asking the model nicely.
+
+**6. Confirmation gates (the last line, not the only line).**
+The human-in-the-loop layer chosen in §10: confirm at every phase boundary. Necessary, but it protects only against *intended* expensive actions — layers 1–5 catch what a confirmation prompt never sees.
+
+### 9.B Epistemic guardrails (protect the verdict from the agent)
+
+This is the structural fix for the original disease: F27's assertions "didn't go right" because the LLM emitted claims with nothing underneath them. Prompt-level grounding ("please cite evidence") produces *citation-shaped text*, not grounding. Grounding is enforced **mechanically, after the model speaks.**
+
+**1. No claim is free text — every assertion is a structured, cited object.**
+
+```
+{
+  claim:      "Retry fired 5 times on the OneLakeWriter path",
+  evidence:   ["evt:retry#1847", "evt:retry#1848", ..., "evt:retry#1851"],
+  kind:       "grounded_fact",
+  confidence: "high"
+}
+```
+
+An `evidence` reference is a **stable pointer into the trace bundle** — an interceptor event sequence number, a log line ID, a telemetry event with correlation ID, a spark session event. **Empty `evidence` → the claim never reaches the report.** This is the second reason `/api/qa/trace-bundle` is load-bearing: it is both the correlation source and the **citable evidence ledger.** A claim can only cite an ID that exists in the bundle.
+
+**2. The verification pass (the mutation-test of assertions).**
+Before the verdict finalizes, a **deterministic checker — not the LLM** — re-reads every cited eventRef and confirms the claim's checkable shape against the actual events:
+
+| Claim shape | Mechanically verified by |
+|-------------|--------------------------|
+| Count ("fired 5 times") | counting events with those IDs |
+| Presence ("a 401 occurred") | event exists with that field value |
+| Value ("returned Completed") | cited event's field equals the value |
+| Order ("mint before write") | cited timestamps are in that order |
+| Absence ("no error occurred") | query over the bundle returns zero — *see #4* |
+
+Model says "5 times, #1847–1851"; checker counts 4 → claim **rejected or downgraded to unverified.** The model cannot lie about anything mechanically checkable because something that isn't the model checks it.
+
+**3. Fact / inference split (keep Opus's correlation, never disguise it as fact).**
+Correlation is the whole value (§1, the cross-signal narrative) — but correlation is *inference*. We separate it, visibly:
+- **Grounded fact** — backed by ≥1 *verified* eventRef. Rendered plainly.
+- **Model inference** — a hypothesis chaining grounded facts ("these indicate a token-lifetime regression"). Rendered distinctly, and it **must reference the grounded facts it reasons over.** An inference with no underlying facts is rejected. Opus earns its keep here, but never floats free of evidence and is never dressed up as fact. The reviewer sees exactly where observation ends and reasoning begins.
+
+**4. Absence requires completeness (the trap that bites).**
+"No error occurred" is provable *only* if the trace bundle is **complete** for the window. The P10 telemetry spec sampled high-volume events — under sampling, absence is unprovable and "no regression" becomes a lie of omission. Therefore the QA trace-bundle is **unsampled for the run window**, or every absence claim auto-downgrades to "not observed (coverage incomplete)." Grounded negatives demand complete evidence, not sampled evidence.
+
+**5. Harness failure ≠ test failure (don't let the agent mislabel its own blockage).**
+If the *environment* breaks, that is NOT a verdict on the change — the skill was *blocked*:
 
 ```
 ⚠ COULD NOT VALIDATE — deploy failed at step 3 (build error)
-   This is an environment problem, not a verdict on your change.
-   [deploy log link]
+   Environment problem, not a verdict on your change. [deploy log link]
 ```
-
 vs.
-
 ```
 ✗ YOUR CHANGE broke retry logic on the OneLakeWriter path
 ```
 
-Conflating these erodes trust fast. They render in distinct categories everywhere (terminal, HTML, PR comment).
+Conflating these erodes trust fast. They render in distinct categories everywhere (terminal, HTML, PR comment), and a harness failure can never be reported as a PASS or a FAIL.
+
+### 9.C Why two families
+
+Orthogonal walls catching different escapes. **Operational** protects the environment from the agent's *actions*; **epistemic** protects the verdict from the agent's *claims*. Neither trusts the model to police itself; both enforce at the boundary.
 
 ---
 
@@ -307,29 +381,37 @@ Dark, Palantir aesthetic (per EDOG design bible). The **hero is the correlated c
 
 ### New
 - The skill itself (`~/.copilot/skills/flt-pr-scenario-validator/`)
-- `GET /api/qa/trace-bundle` unified observation endpoint
+- `GET /api/qa/trace-bundle` unified observation endpoint (stable IDs, unsampled) — correlation source + citable evidence ledger
 - Invariant suite (deterministic property checks)
 - Differential fingerprint diff engine (or extend `EdogQaRunStore.Compare`)
+- **Teardown ledger** + `edog qa --cleanup` standalone reverser (EDOG-owned, survives skill death)
+- **Locked-target enforcement** + created-vs-reused gating at the tool boundary
+- **Verification pass** — deterministic checker that confirms every cited assertion against the trace bundle
+- Independent dead-man's-switch watchdog (budget + silence teardown)
 
 ---
 
 ## 13. Success Criteria
 
 1. Engineer says "validate my change" → gets a confirmed, plain-language verdict end-to-end.
-2. Zero hallucinated assertions — every claim grounded in deterministic diff or correlated evidence.
+2. Zero hallucinated assertions — every claim cites a verified trace-bundle event; the verification pass rejects or downgrades anything it can't confirm.
 3. Catches a real blast-radius regression an engineer would have missed (the OneLakeWriter-three-layers-away case).
 4. Root causes are *confirmed* by follow-up experiments, not guessed.
 5. Harness failures never masquerade as test failures.
 6. The HTML report is good enough to paste into a design review as evidence.
+7. **No orphaned state ever** — a killed/crashed run leaves zero billing capacities, zero lingering chaos rules, zero leaked flag overrides; `edog qa --cleanup` fully reverses the ledger even with the skill process gone.
+8. **The agent cannot address any target outside the locked tuple**, and never deletes anything it did not create.
 
 ---
 
 ## 14. Open Questions / Phasing
 
-- **Phase 1 (MVP):** skill skeleton + auto-detect + deploy + invariant suite + terminal verdict. No differential, no chaos.
-- **Phase 2:** trace-bundle endpoint + correlation + HTML report.
-- **Phase 3:** differential fingerprinting (base vs head).
-- **Phase 4:** auto-investigation (chaos-augmented follow-up experiments).
-- **Phase 5:** PR auto-post + infra auto-provisioning.
+Guardrails are **not** a late phase. The locked target, teardown ledger, phase allowlist, and evidence-cited verdict are **foundational** — they ship with the first thing that can mutate state or emit a claim.
 
-**To resolve during planning:** exact fingerprint canonicalization (what's signal vs noise in a trace — timestamps, GUIDs, and ordering must be normalized before diffing); trace-bundle retention window; concurrency (one validation run at a time, like `EdogQaExecutionEngine._runLock`).
+- **Phase 1 (MVP):** skill skeleton + auto-detect + locked-target selection + teardown ledger + `edog qa --cleanup` + deploy + invariant suite + **evidence-cited** terminal verdict. No differential, no chaos.
+- **Phase 2:** trace-bundle endpoint (stable IDs, unsampled) + verification pass + correlation + HTML report.
+- **Phase 3:** differential fingerprinting (base vs head).
+- **Phase 4:** auto-investigation (chaos-augmented follow-up experiments) + destructive-op gating on reused-with-data.
+- **Phase 5:** PR auto-post + infra auto-provisioning + independent dead-man's-switch watchdog.
+
+**To resolve during planning:** exact fingerprint canonicalization (what's signal vs noise in a trace — timestamps, GUIDs, and ordering must be normalized before diffing); trace-bundle retention window and the unsampled-window cost; concurrency (one validation run at a time, like `EdogQaExecutionEngine._runLock`); how the verification pass handles claims whose shape isn't mechanically checkable (semantic interpretation → forced into the inference tier).
