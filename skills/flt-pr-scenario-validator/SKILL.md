@@ -32,7 +32,7 @@ Use this skill when the user asks to validate / QA / test / "run scenarios on" a
   - `qa_verdict` — claim/verdict model + the evidence-verification wall.
   - `qa_cleanup` — standalone ledger reverser (also `python edog.py --qa-cleanup {runId}`).
 
-Read `reference/flt-model.md` (DAG, iteration ID, tokens, capacity routing, the 11 interceptors, deploy lifecycle, ports) before Beat 1. Read `reference/tools.md` for every endpoint. Read `reference/scenarios.md` for the generation protocol and the audited infra-seeding recipe. **`reference/flt-subsystems.md` is the just-in-time blast-radius index — do not read it whole; in Beat 2 load only the section(s) for the subsystem the PR touches.** **`reference/presentation.md` is the rendering contract — every beat's terminal output (symbols, boxes, gates, the verdict, and the per-beat state matrix) must follow it. Honor it on every run.**
+Read `reference/flt-model.md` (DAG, iteration ID, tokens, capacity routing, the 11 interceptors, deploy lifecycle, ports) before Beat 1. Read `reference/tools.md` for every endpoint. Read `reference/scenarios.md` for the generation protocol and the audited infra-seeding recipe. **`reference/api-knowledge.md` is the map of the full FLT + Fabric API surface — read it in Beat 2/3 to craft *complete* scenarios (discover the live swagger; cover every endpoint the change touches), not just the one path in the diff.** **`reference/flt-subsystems.md` is the just-in-time blast-radius index — do not read it whole; in Beat 2 load only the section(s) for the subsystem the PR touches.** **`reference/presentation.md` is the rendering contract — every beat's terminal output (symbols, boxes, gates, the verdict, and the per-beat state matrix) must follow it. Honor it on every run.**
 
 ## The Journey
 
@@ -55,7 +55,7 @@ Seven beats. Each names its **gate** (what must be true to proceed), the **primi
 - **Security gate (detect-only):** EDOG disables FLT auth wholesale, so a runtime auth test is a manufactured false PASS — forbidden. If the diff touches controller posture (`PublicUnprotectedController` / `PublicAadProtectedController` / `BaseApiController`), `[MwcV2RequirePermissionsFilter]`, or `ControllersConfig.cs` authenticator wiring, **statically flag it for human review** — never claim it "passed."
 
 ### Beat 3 — Derive scenarios (editable)
-- Generate plain-language scenarios per `reference/scenarios.md`: change-type → pattern. Each scenario carries the eight fields: `title`, `category`, `stimulus`, `observations`, `invariants`, `infra requirements`, `preconditions`, `sub_scenarios`.
+- Generate plain-language scenarios per `reference/scenarios.md`: change-type → pattern. **Use `reference/api-knowledge.md` to find the complete surface the change touches** — discover the live swagger, pull each affected endpoint's full input space (params, caps, response codes), and cover every meaningful input class, not just the path in the diff. Each scenario carries the eight fields: `title`, `category`, `stimulus`, `observations`, `invariants`, `infra requirements`, `preconditions`, `sub_scenarios`.
 - Controller/DTO changes get a **main-vs-PR contract-diff** scenario. Flag-gated changes get a flag-in-required-state scenario. Scenarios may declare `preconditions` (flag state + table/MLV properties) and share infra via `sub_scenarios`.
 - Present the scenario plan to the user as an **editable** list. **Gate:** user approves/edits before any infra is touched.
 
@@ -133,11 +133,13 @@ You have `bash` and `curl`. Reach for a primitive (`scripts/qa_*.py`) for anythi
 
 The terminal conversation **is** the product, so render it to **`reference/presentation.md`** on every run — it is the UX source of truth. Non-negotiables from it:
 
-- **Restraint is the default.** Healthy/expected states are plain; reserve the marks `▲` (needs eyes) and `✕` (regression) for genuine exceptions. Color is never the signal (terminal can't be trusted to render it) — **symbol + label + structure** carry state.
-- **Unicode marks only — no emoji.** `◆` headline · `▸` action · `✓` fact/pass · `✕` regression · `▲` warning/needs-eyes · `◇` coverage/meta · `▣` locked · `◌` not-provably-exercised.
-- **Every fact trails its citation** (`retry fired 5× [retry #1851]`); uncited claims do not render.
-- **Each beat has a full state matrix** in `presentation.md` — render the *right* state (no-PR, lock-held, no-runtime-surface, deploy-failed, HEAD-mismatch, NOREFRESH, cascade-skip, suspected, stale, …), not just the happy path.
-- **Phase-1 honesty:** harness blockages render as `▲ COULD NOT VALIDATE` (never pass/fail); unconfirmable causes are `▲ SUSPECTED` (never "confirmed" — that is Phase N); skips are `◇` collateral, not `✕`.
+- **Plain language always.** The reader is a smart engineer who does not know FLT internals. Write what they read in plain English — "couldn't check this", "the running build doesn't match your PR", "nothing needed refreshing" — never internal jargon. Only `DAG` and `MLV` are allowed, each glossed on first use.
+- **Restraint is the default.** Healthy/expected states are plain; reserve the marks `▲` (needs attention) and `✕` (broken by the change) for genuine exceptions. Color is never the signal (terminal can't be trusted to render it) — **symbol + word + layout** carry state.
+- **Unicode marks only — no emoji.** `◆` headline · `▸` doing/asking · `✓` good/pass · `✕` broken · `▲` needs attention · `◇` side note/coverage · `▣` locked · `◌` never-ran.
+- **Status words are a fixed plain set:** `PASS · BROKEN · SUSPECTED · COULDN'T CHECK · NEVER RAN`.
+- **Every fact trails its source** (`retry fired 5 times  (retry #1851)`); uncited claims do not render.
+- **Each beat has a full state matrix** in `presentation.md` — render the *right* state (no-PR, already-running, nothing-runs, deploy-failed, wrong-build, nothing-to-refresh, skipped-after-failure, suspected, out-of-date, …), not just the happy path.
+- **Honest about confidence:** test-setup problems render as `▲ COULDN'T CHECK` (never pass/fail); causes we can't reproduce are `▲ SUSPECTED` (never "confirmed"); steps skipped after an earlier failure are `◇` side notes, not `✕`.
 
 ## Cross-turn state
 
