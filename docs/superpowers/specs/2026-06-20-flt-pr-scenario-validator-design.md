@@ -23,7 +23,9 @@ This redesign inverts the architecture. The brain becomes a **Copilot CLI skill 
 
 ### Why a skill, why now
 
-1. **Opus 4.8 is the brain.** Vastly stronger reasoning than the in-product GPT-class model F27 caged. No schema gymnastics needed to keep it safe.
+The sharpest reason, in one line: **the old C# engine had no reasoning — it pattern-matched; the skill reasons.** Everything else follows from that.
+
+1. **Opus 4.8 is the brain.** Vastly stronger reasoning than the in-product GPT-class model F27 caged. No schema gymnastics needed to keep it safe. It produces better scenarios and can actually *think* about what a change implies — the engine never could.
 2. **Scenarios in plain language.** No typed stimulus contracts. The skill expresses intent ("inject a transient 429, confirm backoff fires and eventually succeeds") and executes it through tools.
 3. **Cross-signal correlation** — the killer capability. A skill can ingest logs + telemetry + all 11 interceptor streams + DAG state *at once* and write the causal narrative no rule engine ever could.
 
@@ -139,8 +141,13 @@ Phase-gated per the UX decisions: the skill **confirms at every phase boundary**
 PHASE 0 — ORIENT & UNDERSTAND
   • Resolve the PR: open PR on the current branch, or an explicit
     "validate PR #1234" / PR URL. (PR-based only — no local-diff mode.)
-  • Read the FLT repo LOCALLY (flt_repo_path from /api/flt/config) and
-    HARD-CHECK repo HEAD == the commit being validated → mismatch is a
+  • Blast radius is computed from the CLEAN PR DIFF (ADO API), NOT from
+    `git diff` on the local tree — because EDOG's deploy PATCHES the tree
+    (injects DevMode files, edits Program.cs / DagExecutionHandlerV2.cs).
+    Diffing the patched tree would attribute EDOG's injections to the PR.
+  • FLT repo is read LOCALLY (flt_repo_path from /api/flt/config) for the
+    Roslyn/OmniSharp semantic layer; HARD-CHECK the deployed FLT is running
+    the PR's commit (ignoring EDOG's known injection set) → mismatch is a
     HARNESS failure, not a silent wrong answer
   • DETERMINISTIC CODE UNDERSTANDING (before the LLM):
     Roslyn call-hierarchy + DI registry + graph blast-radius
@@ -255,6 +262,13 @@ Ground truth: invariant suite + Layer-1 code facts. Diagnosis: Opus, with every 
 
 Some changed code has no entry point any available stimulus can reach (an internal helper, a branch only reachable under conditions we can't induce). The skill **says so plainly** — *"this path isn't reachable by any available stimulus; manual verification needed"* — and never fabricates a weak scenario to look thorough. Coverage is reported as `tested / reported-only / not-reachable`, not inflated. Honest "can't test this" beats theater.
 
+### Flakiness & severity (a FAIL is not always a block)
+
+A failed scenario is not automatically a verdict-blocking FAIL. Two filters apply before anything is reported as the PR's fault:
+
+1. **Retry-once on infra-shaped failures.** A transient INT-capacity 429, a deploy hiccup, a token-routing 503 — these are environment noise, not the change. The skill retries the scenario once; only a *reproducible* failure counts. (Single retry, not a retry storm — a flaky test that needs 5 retries is itself a signal.)
+2. **Rank by attribution confidence.** A schema violation on an endpoint the PR touched is **high-confidence "your change."** A 503 from the capacity gateway is **low-confidence "probably infra."** The verdict surfaces failures ranked by how attributable they are to the diff, tying directly into the harness-vs-test separation (§9.B). The headline FAIL is reserved for high-confidence, change-attributable, reproduced failures.
+
 ---
 
 ## 9. Guardrails
@@ -286,6 +300,9 @@ Every mutating action — flag override, chaos rule, created infra, deployed bra
 
 **4. Resource ceilings + independent dead-man's switch.**
 Every run carries a hard budget: max wall-clock (default 30 min), max capacities created (default **0** — reuse-only unless explicitly told), max DAG triggers, max chaos rules, max tokens. A watchdog **independent of the agent loop** (the agent cannot be trusted to check its own budget) tears down everything via the ledger if the budget blows or the run goes silent. (Reuses the `EdogQaExecutionEngine._runLock` + 30-min ceiling pattern, made authoritative.)
+
+**4-bis. Single-validation lock (the environment is a singleton).**
+EDOG drives exactly one FLT instance (port 5557). Two concurrent validations would deploy competing branches onto the same FLT and clash on flag overrides and DAG runs — both verdicts garbage, silently. So **one validation runs at a time, globally.** A second invocation detects the lock and **refuses** with a clear message ("a validation is already running against this environment; wait for it to finish") rather than silently queueing a 20-minute job. The lock is held by EDOG (survives skill death) and released by the same teardown path as the ledger.
 
 **5. Phase action allowlist.**
 The per-phase confirmation gate is not just "proceed Y/N" — each phase declares the **exact set of mutating operations it is permitted**. PHASE 2 (deploy & run) may deploy + trigger + observe; it **cannot** create infra or post to a PR. An out-of-phase action is refused at the tool boundary, not by asking the model nicely.
