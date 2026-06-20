@@ -242,7 +242,11 @@ Ground truth: invariant suite + Layer-1 code facts. Diagnosis: Opus, with every 
 - Every DAG run that starts terminates (no hangs)
 - No new ERROR/FATAL log lines during the scenario
 - No interceptor exceptions
-- Latency within the bound read from config/SLA (not vs a baseline)
+- Latency within the bound read from config/SLA, if one exists in code. **No invented thresholds** — if no bound is declared, timing is *reported as an observation*, not asserted (inventing a number is just the oracle problem with a stopwatch).
+
+### Coverage honesty (untestable code)
+
+Some changed code has no entry point any available stimulus can reach (an internal helper, a branch only reachable under conditions we can't induce). The skill **says so plainly** — *"this path isn't reachable by any available stimulus; manual verification needed"* — and never fabricates a weak scenario to look thorough. Coverage is reported as `tested / reported-only / not-reachable`, not inflated. Honest "can't test this" beats theater.
 
 ---
 
@@ -373,7 +377,7 @@ Dark, Palantir aesthetic (per EDOG design bible). The **hero is the correlated c
 ## 12. Migration from F27
 
 ### Reused
-- **The deterministic code-understanding layers** — Roslyn call-hierarchy, DI registry, graph blast-radius. These run *before* the LLM and hand it a grounded structural map (the layer your #2 decision preserves). Reuse whatever F27 already built here; extend if thin.
+- **The deterministic code-understanding layers — VERIFIED BUILT.** `EdogQaCodeAnalyzer.AnalyzeAsync` already runs graph blast-radius (`EdogQaGraphProvider`), Roslyn/OmniSharp enrichment (`EdogQaOmniSharpProvider`, with regex fallback), DI ground truth (`EdogQaDiRegistryProvider` + `EdogDiRegistryCapture`), `ClusterImpactZones`, and `EdogQaInvariantExtractor` — *all before* the LLM phase (Phase 7, ~line 634). It produces `AnalysisResult.ImpactZones` + entry points + interface resolutions + `CodeInvariant`s deterministically. **Layers 1 & 2 are reuse, not build** — we add a thin extraction that early-returns this `AnalysisResult` and skips the LLM phase. Already exercised by `test_qa_e2e.py` (asserts real impact zones).
 - `EdogQaStimulusDispatcher` — for advanced stimuli (DI invocation, SignalR broadcast)
 - `flt_catalog.py` + `/api/playground/catalog` — endpoint knowledge
 - `EdogQaRunStore` — optional, for past-run history lookup
@@ -381,12 +385,12 @@ Dark, Palantir aesthetic (per EDOG design bible). The **hero is the correlated c
 - The 11 interceptors — the evidence/trace source
 
 ### Retired
-- `EdogQaScenarioOrchestrator`, `EdogQaLlmClient`, `EdogQaAssertionEngine` (the caged-LLM scenario generation + assertion pipeline)
+- `EdogQaScenarioOrchestrator`, `EdogQaLlmClient`, `EdogQaLlmProvider`, `EdogQaAssertionEngine` — the LLM scenario generation + assertion pipeline (Phase 7 of `AnalyzeAsync` and downstream)
 - The typed stimulus/matcher contract schemas (P10) — replaced by plain-language intent
 - Curation stage UI, analysis UI, scenario editor — replaced by conversational curation
 - `qa-panel.js` and all frontend QA modules — replaced by the skill + HTML report
 
-> Note: only the **LLM-caging** layers are retired. The **deterministic code-understanding** layers are kept and promoted to a first-class grounding tool.
+> Note: only the **LLM-caging** layers are retired. The **deterministic code-understanding** half of `AnalyzeAsync` is kept and promoted to a first-class grounding tool via the early-return extraction.
 
 ### New
 - The skill itself (`~/.copilot/skills/flt-pr-scenario-validator/`)
@@ -416,10 +420,9 @@ Dark, Palantir aesthetic (per EDOG design bible). The **hero is the correlated c
 
 Guardrails are **not** a late phase. The locked target, teardown ledger, phase allowlist, and evidence-cited verdict are **foundational** — they ship with the first thing that can mutate state or emit a claim.
 
-- **Phase 1 (MVP):** skill skeleton + auto-detect + deterministic blast-radius (code-understanding layers) + locked-target selection + teardown ledger + `edog qa --cleanup` + deploy + invariant suite + **evidence-cited** terminal verdict. No chaos, no auto-investigation.
-- **Phase 2:** trace-bundle endpoint (stable IDs, unsampled) + verification pass + correlation + HTML report.
-- **Phase 3:** full scenario taxonomy (happy / performance / failure / edge) derived from the blast radius.
-- **Phase 4:** auto-investigation (chaos-augmented follow-up experiments) + destructive-op gating on reused-with-data.
-- **Phase 5:** PR auto-post + infra auto-provisioning + independent dead-man's-switch watchdog.
+- **Phase 1 (MVP):** skill skeleton + auto-detect + deterministic blast-radius extraction (reuse `AnalyzeAsync` pre-LLM half) + invariant grounding + locked-target selection + teardown ledger + `edog qa --cleanup` + deploy + **happy-path / edge / config-bound performance** scenarios + invariant suite + **evidence-cited** terminal verdict. **No failure injection** (chaos feature not yet ready), no auto-investigation.
+- **Phase 2:** **failure-injection scenarios** (once the chaos/error-sim feature matures) + auto-investigation (chaos-augmented follow-up experiments) + destructive-op gating on reused-with-data.
+- **Phase 3:** trace-bundle endpoint (stable IDs, unsampled) + verification pass + full cross-signal correlation + HTML report.
+- **Phase 4:** PR auto-post + infra auto-provisioning + independent dead-man's-switch watchdog.
 
-**To resolve during planning:** how much of F27's code-understanding engine (Roslyn/DI/graph) is already built vs needs extending; trace-bundle retention window and the unsampled-window cost; concurrency (one validation run at a time, like `EdogQaExecutionEngine._runLock`); how the verification pass handles claims whose shape isn't mechanically checkable (semantic interpretation → forced into the inference tier); how performance scenarios establish their bound (config/SLA read from code vs a fixed threshold).
+**To resolve during planning:** confirm the analyzer is wired (not null) in a live DevMode deploy vs only the test harness (the hub falls back to synthetic scenarios when `CodeAnalyzer == null`); the OmniSharp-vs-regex-fallback semantic-depth gap; trace-bundle retention window and the unsampled-window cost; concurrency (one validation run at a time, like `EdogQaExecutionEngine._runLock`); how the verification pass handles claims whose shape isn't mechanically checkable (semantic interpretation → forced into the inference tier).
