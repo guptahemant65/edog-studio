@@ -18,7 +18,7 @@ This redesign inverts the architecture. The brain becomes a **Copilot CLI skill 
 | **Brain** | C# orchestrator + caged Azure LLM | Opus 4.8 skill, reasoning freely |
 | **EDOG's role** | Does everything | **Tool provider** — sensory + motor system |
 | **Scenarios** | Rigid typed JSON, schema-validated | Plain-language intents the skill executes |
-| **Assertions** | Pattern-match engine guessing oracles | Skill correlates raw signals into a verdict |
+| **Assertions** | Pattern-match engine guessing oracles | Invariants + grounded, cited evidence; correlation labeled as inference |
 | **Where it runs** | In the FLT process | Copilot CLI, driving EDOG over HTTP |
 
 ### Why a skill, why now
@@ -29,41 +29,36 @@ This redesign inverts the architecture. The brain becomes a **Copilot CLI skill 
 
 ---
 
-## 2. Core Thesis: Correlation Over Oracles
+## 2. Core Thesis: Grounded Scenarios, Not Guessed Oracles
 
-Every testing tool needs an **oracle** — someone who knows what "correct" is and encodes it as an assertion. F27 made the LLM the oracle (read the code, guess "retry fires 3 times," write a matcher). That is irreducibly non-deterministic. You cannot make a guessing machine deterministic by adding schema.
+Every testing tool needs an **oracle** — something that knows what "correct" is. F27 made the LLM the oracle (read the code, *guess* "retry fires 3 times," write a matcher). That is irreducibly non-deterministic. You cannot make a guessing machine deterministic by adding schema.
 
 EDOG's superpower is that it **sits inside the FLT process and witnesses the complete internal causal chain** — every SQL query, retry with backoff, DI resolution, token mint, file write, DAG node transition, telemetry event. 11 interceptors, real time. No external tool (Postman, Playwright, integration tests) can see this.
 
-That changes what's possible. When you can observe *everything*, you replace the oracle with two stronger primitives:
+We do **not** solve the oracle problem by diffing against a baseline (that path was considered and rejected — see below). We solve it with three grounded layers, none of which require the LLM to guess absolute truth:
 
-### Primitive A — Differential behavioral fingerprinting (deterministic)
+### Layer 1 — Deterministic code understanding (runs *before* the LLM)
 
-Don't assert what the code *should* do. Capture what it *actually does* — completely — and diff it across versions.
+The Roslyn call-hierarchy, DI registry, and graph blast-radius analysis run first and hand the LLM a **grounded structural map**: *"your change to `ExponentialRetryPolicy.Execute` is reachable from `runDAG` via `OneLakeWriter` (DI-confirmed), and `maxRetries=3` per config."* The LLM never guesses the blast radius or the config — it **receives them as facts.** This is the layer that keeps interface/DI indirection from being missed (the exact failure the viability analysis warned naive grep would hit).
 
-```
-1. Skill reads the diff → identifies blast radius (changed code paths)
-2. Deploys BASE (pre-change) → exercises blast radius → captures full fingerprint
-3. Deploys HEAD (the change) → exercises the SAME paths → captures fingerprint
-4. Diffs the two fingerprints
-```
+### Layer 2 — Invariants (absolute truths, no oracle, no baseline)
 
-Verdict logic is mechanical — **no LLM judgment of "correct":**
+Properties that are correct or incorrect on their own terms, with nothing to compare against:
+- No 5xx responses; no unhandled exceptions; no interceptor exceptions
+- Every DAG run that starts terminates (no hangs)
+- Every response validates against its OpenAPI schema
+- No secrets (token/bearer patterns) in logs
+- No new ERROR/FATAL log lines during the scenario
 
-| Code path | Behavior changed? | Verdict |
-|-----------|-------------------|---------|
-| **Unchanged** by PR | Yes | 🔴 Regression — broke something elsewhere |
-| **Unchanged** by PR | No | ✅ Safe |
-| **Changed** by PR | Yes | 🟡 Expected — here's the delta, confirm intent |
-| **Changed** by PR | No | ⚠️ Suspicious — changed code, identical behavior (dead/untested path) |
+### Layer 3 — Evidence-grounded judgment (where Opus earns its keep)
 
-### Primitive B — Opus 4.8 correlation (the diagnosis)
+For the nuanced calls invariants can't make, the LLM judges — but **every factual sub-claim is grounded.** It may say *"retry fired 5 times, which for a transient 429 with `maxRetries=3` is wrong"* because `maxRetries=3` came from Layer 1 (reading the code) and "fired 5 times" is cited to real trace events (§9.B). Fact + fact → a clearly-labeled inference. The diagnosis Opus is uniquely good at:
 
-The deterministic diff says *what* changed. Opus 4.8 says *why it matters*, by correlating across all signal streams:
+> *"Your change moved the token mint earlier in the pipeline. `EdogTokenInterceptor` shows a 15-min MWC token minted at T+2.3s [evt#1203]. The Spark write phase didn't reach `OneLakeWriter` until T+14.1s [evt#1881]. `EdogRetryInterceptor` then shows three 401 retries [evt#1882–84]; telemetry confirms `EndpointNotFound` [evt#1885]. **Inference:** token-lifetime regression — long-running DAGs will now fail their final write."*
 
-> *"Your change moved the token mint earlier in the pipeline. `EdogTokenInterceptor` shows a 15-min MWC token minted at T+2.3s. The Spark write phase didn't reach `OneLakeWriter` until T+14.1s. `EdogRetryInterceptor` then shows three 401 retries; telemetry confirms `EndpointNotFound`; the log says 'token rejected.' This is a token-lifetime regression — long-running DAGs will now fail their final write."*
+### Rejected alternative — differential fingerprinting
 
-The LLM's job is narrowed to what it's genuinely good at: **selecting stimuli** (code reasoning) and **narrating correlated signals** (diagnosis). Neither requires guessing absolute truth.
+An earlier draft proposed deploying the base branch, capturing a behavioral "fingerprint," deploying HEAD, and mechanically diffing the two. Rejected for three reasons: (1) it doubles deploy cost (~4 min base deploy *every run* — 40 min on a 10-PR day); (2) it requires **trace canonicalization** — reliably separating run-to-run noise (timestamps, GUIDs, concurrent ordering) from real signal, which is unsolved and fragile, and which itself fails exactly when timing *is* the signal (perf regressions); (3) it answers a narrower question ("did behavior change") than what an engineer actually wants ("does my change work, across happy/perf/failure paths"). Grounded scenarios subsume it without the cost.
 
 ---
 
@@ -89,7 +84,7 @@ The LLM's job is narrowed to what it's genuinely good at: **selecting stimuli** 
 │            /api/qa/trace-bundle (NEW)                     │
 │   HANDS:   deploy, runDAG, playground, spark, infra       │
 │   REFLEX:  chaos (F24), feature-flag overrides            │
-│   MEMORY:  EdogQaRunStore (fingerprint baselines)         │
+│   MEMORY:  EdogQaRunStore (run history) + trace bundles   │
 └───────────────────────────┬─────────────────────────────┘
                             │ in-process interceptors
                             ▼
@@ -117,7 +112,7 @@ The skill has bash and `curl`s `localhost:5555`. Every capability already exists
 | Endpoint catalog | `GET /api/playground/catalog` | Exists |
 | Flag catalog | `GET /api/edog/feature-flags/catalog` | Exists |
 | Read PR diff | `GET /api/ado-proxy/pr-diff` or local `git diff` | Exists |
-| Fingerprint baselines | `EdogQaRunStore` compare-by-hash | Exists |
+| Run history | `EdogQaRunStore` (optional, for past-run lookup) | Exists |
 
 ### The one new piece of product work
 
@@ -141,47 +136,49 @@ The skill does not preload 400K lines of FLT or every doc. Two layers, mirroring
 Phase-gated per the UX decisions: the skill **confirms at every phase boundary**, runs in the **background** with **checkpoint updates**, and **auto-investigates** anomalies.
 
 ```
-PHASE 0 — ORIENT
+PHASE 0 — ORIENT & UNDERSTAND
   • Auto-detect target: open PR on this branch → validate PR;
     else uncommitted/local changes → validate local diff
-  • Read diff, map blast radius (grep FLT repo + JIT docs)
-  • Derive candidate scenarios in plain English
+  • DETERMINISTIC CODE UNDERSTANDING (before the LLM):
+    Roslyn call-hierarchy + DI registry + graph blast-radius
+    → grounded structural map (reachable entry points,
+      DI-confirmed call chains, config values like maxRetries)
+  • LLM derives applicable scenarios from that map:
+    happy path, performance, failure/error paths, edge cases
+    — every category that applies to THIS diff
   ┌─ GATE: present editable plan ─────────────────────────┐
-  │ "I'll run these 6 scenarios: [plain-language list].   │
-  │  Affected: token flow, retry policy. Proceed?"        │
-  │ User can: approve / drop #3 / add a null-capacity test│
+  │ "Your change touches retry policy + token flow.       │
+  │  I'll run: 2 happy-path, 1 performance, 3 failure.    │
+  │  [plain-language list]. Proceed?"                     │
+  │ User can: approve / drop one / add a null-capacity case│
   └───────────────────────────────────────────────────────┘
 
 PHASE 1 — ENVIRONMENT
-  • Reuse existing lakehouse/capacity if present & healthy,
-    else provision fresh via wizard APIs
+  • Interactive enriched target selection (workspace → lakehouse →
+    capacity), or "create fresh sandbox". Target then LOCKED (§9.A)
+  • Reuse existing if chosen, else provision via wizard APIs
   ┌─ GATE: "Spin up F2 capacity (~$X/hr) + lakehouse? ~3min"┐
   └───────────────────────────────────────────────────────┘
 
-PHASE 2 — BASELINE (compute on demand)
-  • Deploy BASE commit → exercise blast radius → capture
-    fingerprint via trace-bundle
-  ┌─ GATE: "Deploy base branch for diff baseline? ~4min"  ─┐
+PHASE 2 — DEPLOY & RUN
+  • Deploy HEAD (the change) → wait for phase:running
+  • Run the curated scenarios, capturing a trace bundle per scenario
+  ┌─ GATE: "Deploy your change and run 6 scenarios? ~6min" ┐
   └───────────────────────────────────────────────────────┘
 
-PHASE 3 — CANDIDATE
-  • Deploy HEAD → run the curated scenarios → capture fingerprints
-  ┌─ GATE: "Deploy your change and run scenarios? ~6min"  ─┐
+PHASE 3 — JUDGE & INVESTIGATE
+  • Run invariant suite per scenario (deterministic ground truth)
+  • Opus judges each scenario, grounding every claim in cited
+    trace events + Layer-1 code facts (no baseline, no diff)
+  • AUTO-INVESTIGATE: on a suspicious signal, design and run a
+    follow-up experiment (inject the fault, flip the flag, re-run)
+    to CONFIRM root cause before reporting
+  ┌─ GATE: "Suspected retry regression — run a confirming  ┐
+  │  chaos experiment? ~2min"                              │
   └───────────────────────────────────────────────────────┘
 
-PHASE 4 — CORRELATE & INVESTIGATE
-  • Diff HEAD vs BASE fingerprints
-  • Run invariant suite (deterministic ground truth)
-  • Opus correlates logs+telemetry+traces per scenario
-  • AUTO-INVESTIGATE: on a suspicious signal, design and run
-    a follow-up experiment (inject the fault, flip the flag,
-    re-run) to CONFIRM root cause before reporting
-  ┌─ GATE: "Found a suspected retry regression — run a    ─┐
-  │  confirming chaos experiment? ~2min"                   │
-  └───────────────────────────────────────────────────────┘
-
-PHASE 5 — REPORT
-  • Terminal: concise behavioral-diff verdict
+PHASE 4 — REPORT
+  • Terminal: per-scenario, intent-framed verdict
   • HTML report auto-opens (correlated causal timeline)
   • PR comment auto-posted to ADO
 ```
@@ -192,50 +189,60 @@ Background execution means each gate posts a checkpoint and waits; the user can 
 
 ## 7. Scenario Model
 
-No schema, ever. Scenarios are **plain-language intents the skill derives from the diff** and executes through tools:
+No schema, ever. Scenarios are **plain-language intents the LLM derives from the grounded structural map** (Layer 1), covering every category applicable to the diff — happy path, performance, failure/error paths, edge cases, regression. Categories reuse the existing `ScenarioCategory` taxonomy (`HappyPath, ErrorPath, EdgeCase, Regression, Performance`) and execute through existing tools:
 
-| Change type | Derived scenario (plain English) | Stimulus tool |
-|-------------|----------------------------------|---------------|
-| Retry policy | "Inject a transient 429, confirm backoff fires N times and eventually succeeds" | chaos + DAG/API |
-| Token flow | "Run a long DAG; watch for mid-run token expiry" | runDAG + trace-bundle |
-| New endpoint | "Call with valid + boundary inputs; assert schema + no 5xx" | playground |
-| DAG node logic | "Trigger DAG, verify node transitions and final state" | runDAG + getDAGExecStatus |
-| Spark client | "Create session, run trivial query, verify pool responsive" | notebook session |
-| Feature flag | "Run with flag ON and OFF, diff the behavior" | flag override + re-run |
+| Change type | Category | Derived scenario (plain English) | Stimulus tool |
+|-------------|----------|----------------------------------|---------------|
+| Retry policy | Failure | "Inject a transient 429, confirm backoff stays within `maxRetries`=3 and eventually succeeds" | chaos + DAG/API |
+| Token flow | Failure | "Run a long DAG; watch for mid-run token expiry" | runDAG + trace-bundle |
+| New endpoint | Happy / Edge | "Call with valid + boundary inputs; assert schema + no 5xx" | playground |
+| DAG node logic | Happy | "Trigger DAG, verify node transitions and final state Completed" | runDAG + getDAGExecStatus |
+| Any hot path | Performance | "Run under load; assert completion within the config/SLA bound read from code" | runDAG / playground |
+| Spark client | Happy | "Create session, run trivial query, verify pool responsive" | notebook session |
+| Feature flag | Edge | "Run with flag ON and OFF, verify each path behaves per its contract" | flag override + re-run |
+
+The applicable categories are chosen by the LLM from the blast radius — a retry-policy change pulls in failure-injection scenarios; a new endpoint pulls in happy + boundary; a hot-path change pulls in performance.
 
 ---
 
 ## 8. Verdict Model
 
-**Behavioral-diff-centric** — not a bare PASS/FAIL. Leads with *what changed and whether it was intended*:
+**Per-scenario, intent-framed** — not a bare PASS/FAIL, and not a baseline diff (there is no baseline). Each scenario gets a grounded verdict; the headline frames them against the change's intent:
 
 ```
-FLT PR Scenario Validator — 3 behaviors changed vs baseline
+FLT PR Scenario Validator — retry policy + token flow
 
-  🟡 INTENDED (2)
-    • New endpoint /insights/summary returns 200 with valid schema
-    • Retry backoff now caps at 30s (matches your stated change)
+  ✓ HAPPY PATH (2/2)
+    • DAG completes, final state Completed          [evt#1402]
+    • New endpoint /insights/summary → 200, schema valid [evt#1455]
 
-  🔴 REGRESSION (1)
-    • Retry count rose 3→5 on the UNCHANGED OneLakeWriter path
-      Root cause (confirmed via chaos re-run): your timeout change
-      in HttpClientFactory lowered the per-attempt deadline, so the
-      same transient now triggers 2 extra retries.
-      Evidence: [trace timeline link]
+  ✓ PERFORMANCE (1/1)
+    • DAG completed in 4.2s, under the 30s config bound  [evt#1402,#1511]
+
+  ✗ FAILURE INJECTION (2/3)
+    • Transient 429 → backoff recovered                  [evt#1620–24]
+    • Null capacity → handled gracefully, 400 returned   [evt#1701]
+    • Retry overshoot: fired 5 times, but maxRetries=3
+        Code fact: maxRetries=3 (RetryPolicy.cs:142)      [Layer-1]
+        Observed:  5 retry events                         [evt#1847–51]
+        Inference (confirmed via chaos re-run): your
+        HttpClientFactory timeout change lowered the
+        per-attempt deadline, so the same transient now
+        triggers 2 extra retries.
 
   Confidence: high (root cause confirmed by follow-up experiment)
 ```
 
-Ground truth (deterministic): differential diff + invariant suite. Diagnosis (Opus): the correlated narrative. A confidence signal rides alongside, raised when a follow-up experiment confirmed the cause.
+Ground truth: invariant suite + Layer-1 code facts. Diagnosis: Opus, with every factual sub-claim cited (§9.B). Confidence rises when a follow-up experiment confirmed the cause.
 
-### Invariant suite (always-true properties, deterministic)
+### Invariant suite (always-true properties, deterministic, no baseline)
 - No 5xx responses
 - Every response validates against its OpenAPI schema
 - No secrets (token/bearer patterns) in logs
 - Every DAG run that starts terminates (no hangs)
-- No new ERROR/FATAL log lines vs baseline
+- No new ERROR/FATAL log lines during the scenario
 - No interceptor exceptions
-- Latency within Nx of baseline
+- Latency within the bound read from config/SLA (not vs a baseline)
 
 ---
 
@@ -270,7 +277,7 @@ Every mutating action — flag override, chaos rule, created infra, deployed bra
 Every run carries a hard budget: max wall-clock (default 30 min), max capacities created (default **0** — reuse-only unless explicitly told), max DAG triggers, max chaos rules, max tokens. A watchdog **independent of the agent loop** (the agent cannot be trusted to check its own budget) tears down everything via the ledger if the budget blows or the run goes silent. (Reuses the `EdogQaExecutionEngine._runLock` + 30-min ceiling pattern, made authoritative.)
 
 **5. Phase action allowlist.**
-The per-phase confirmation gate is not just "proceed Y/N" — each phase declares the **exact set of mutating operations it is permitted**. PHASE 2 (baseline) may deploy + trigger + observe; it **cannot** create infra or post to a PR. An out-of-phase action is refused at the tool boundary, not by asking the model nicely.
+The per-phase confirmation gate is not just "proceed Y/N" — each phase declares the **exact set of mutating operations it is permitted**. PHASE 2 (deploy & run) may deploy + trigger + observe; it **cannot** create infra or post to a PR. An out-of-phase action is refused at the tool boundary, not by asking the model nicely.
 
 **6. Confirmation gates (the last line, not the only line).**
 The human-in-the-loop layer chosen in §10: confirm at every phase boundary. Necessary, but it protects only against *intended* expensive actions — layers 1–5 catch what a confirmation prompt never sees.
@@ -343,47 +350,48 @@ Orthogonal walls catching different escapes. **Operational** protects the enviro
 | Run rhythm | Background + checkpoint updates |
 | Investigation | Auto-investigate & confirm root cause |
 | Curation | Editable plan before run (conversational) |
-| Verdict | Behavioral-diff-centric |
+| Verdict | Per-scenario, intent-framed |
 | Harness vs test failure | Clearly separated |
 | Output | Terminal + HTML (auto-open) + PR comment (auto-post) |
 | Safety | Fully autonomous, gated at phase boundaries |
-| Baseline | Compute on demand |
 | Location | User-global (`~/.copilot/skills/`) |
 
 ---
 
 ## 11. HTML Report
 
-Dark, Palantir aesthetic (per EDOG design bible). The **hero is the correlated causal timeline** — a single time-axis showing all signal streams (logs, telemetry, interceptor events, DAG transitions) aligned, with the regression highlighted and its causal chain traced. Sections:
+Dark, Palantir aesthetic (per EDOG design bible). The **hero is the correlated causal timeline** — a single time-axis showing all signal streams (logs, telemetry, interceptor events, DAG transitions) aligned, with any failure highlighted and its causal chain traced. Sections:
 
-1. **Verdict banner** — behavioral-diff summary (intended vs regression counts)
-2. **Causal timeline** (hero) — multi-stream, correlation-ID-joined, regression path highlighted
-3. **Scenario cards** — each with stimulus, observed behavior, base-vs-head diff
-4. **Evidence** — raw trace bundles, expandable
-5. **Environment provenance** — capacity, commit SHAs, deploy timing
+1. **Verdict banner** — per-scenario summary (passed / failed by category)
+2. **Causal timeline** (hero) — multi-stream, correlation-ID-joined, failure path highlighted
+3. **Scenario cards** — each with stimulus, observed behavior, grounded verdict + cited evidence
+4. **Evidence** — raw trace bundles, expandable, each claim links to its event ID
+5. **Environment provenance** — capacity, commit SHA, deploy timing
 
 ---
 
 ## 12. Migration from F27
 
 ### Reused
-- `EdogQaStimulusDispatcher` — optional, for advanced stimuli (DI invocation, SignalR broadcast)
+- **The deterministic code-understanding layers** — Roslyn call-hierarchy, DI registry, graph blast-radius. These run *before* the LLM and hand it a grounded structural map (the layer your #2 decision preserves). Reuse whatever F27 already built here; extend if thin.
+- `EdogQaStimulusDispatcher` — for advanced stimuli (DI invocation, SignalR broadcast)
 - `flt_catalog.py` + `/api/playground/catalog` — endpoint knowledge
-- `EdogQaRunStore` — fingerprint baseline library (compare-by-hash)
+- `EdogQaRunStore` — optional, for past-run history lookup
 - ADO proxy, deploy pipeline, infra wizard APIs, chaos engine, flag override — all as tools
-- The 11 interceptors — the fingerprint source
+- The 11 interceptors — the evidence/trace source
 
 ### Retired
-- `EdogQaScenarioOrchestrator`, `EdogQaLlmClient`, `EdogQaAssertionEngine` (the caged-LLM pipeline)
+- `EdogQaScenarioOrchestrator`, `EdogQaLlmClient`, `EdogQaAssertionEngine` (the caged-LLM scenario generation + assertion pipeline)
 - The typed stimulus/matcher contract schemas (P10) — replaced by plain-language intent
 - Curation stage UI, analysis UI, scenario editor — replaced by conversational curation
 - `qa-panel.js` and all frontend QA modules — replaced by the skill + HTML report
 
+> Note: only the **LLM-caging** layers are retired. The **deterministic code-understanding** layers are kept and promoted to a first-class grounding tool.
+
 ### New
 - The skill itself (`~/.copilot/skills/flt-pr-scenario-validator/`)
 - `GET /api/qa/trace-bundle` unified observation endpoint (stable IDs, unsampled) — correlation source + citable evidence ledger
-- Invariant suite (deterministic property checks)
-- Differential fingerprint diff engine (or extend `EdogQaRunStore.Compare`)
+- Invariant suite (deterministic property checks, no baseline)
 - **Teardown ledger** + `edog qa --cleanup` standalone reverser (EDOG-owned, survives skill death)
 - **Locked-target enforcement** + created-vs-reused gating at the tool boundary
 - **Verification pass** — deterministic checker that confirms every cited assertion against the trace bundle
@@ -408,10 +416,10 @@ Dark, Palantir aesthetic (per EDOG design bible). The **hero is the correlated c
 
 Guardrails are **not** a late phase. The locked target, teardown ledger, phase allowlist, and evidence-cited verdict are **foundational** — they ship with the first thing that can mutate state or emit a claim.
 
-- **Phase 1 (MVP):** skill skeleton + auto-detect + locked-target selection + teardown ledger + `edog qa --cleanup` + deploy + invariant suite + **evidence-cited** terminal verdict. No differential, no chaos.
+- **Phase 1 (MVP):** skill skeleton + auto-detect + deterministic blast-radius (code-understanding layers) + locked-target selection + teardown ledger + `edog qa --cleanup` + deploy + invariant suite + **evidence-cited** terminal verdict. No chaos, no auto-investigation.
 - **Phase 2:** trace-bundle endpoint (stable IDs, unsampled) + verification pass + correlation + HTML report.
-- **Phase 3:** differential fingerprinting (base vs head).
+- **Phase 3:** full scenario taxonomy (happy / performance / failure / edge) derived from the blast radius.
 - **Phase 4:** auto-investigation (chaos-augmented follow-up experiments) + destructive-op gating on reused-with-data.
 - **Phase 5:** PR auto-post + infra auto-provisioning + independent dead-man's-switch watchdog.
 
-**To resolve during planning:** exact fingerprint canonicalization (what's signal vs noise in a trace — timestamps, GUIDs, and ordering must be normalized before diffing); trace-bundle retention window and the unsampled-window cost; concurrency (one validation run at a time, like `EdogQaExecutionEngine._runLock`); how the verification pass handles claims whose shape isn't mechanically checkable (semantic interpretation → forced into the inference tier).
+**To resolve during planning:** how much of F27's code-understanding engine (Roslyn/DI/graph) is already built vs needs extending; trace-bundle retention window and the unsampled-window cost; concurrency (one validation run at a time, like `EdogQaExecutionEngine._runLock`); how the verification pass handles claims whose shape isn't mechanically checkable (semantic interpretation → forced into the inference tier); how performance scenarios establish their bound (config/SLA read from code vs a fixed threshold).
