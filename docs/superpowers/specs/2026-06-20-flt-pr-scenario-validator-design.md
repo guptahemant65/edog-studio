@@ -105,8 +105,9 @@ The skill has bash and `curl`s `localhost:5555`. Every capability already exists
 
 | Intent | Endpoint(s) | Status |
 |--------|-------------|--------|
-| **Generic stimulus (primary)** | **`POST /api/playground/dispatch`** + `GET /api/playground/catalog` — dispatch ANY catalogued FLT/Fabric endpoint with controlled method/body/headers, instead of hand-built URLs | Exists |
-| Stimulus discovery | `GET /api/contract/capabilities`, `/api/contract/catalog/` — what stimuli are available at runtime | Exists |
+| **Generic stimulus (primary)** | **`POST /api/playground/dispatch`** — dispatches ANY well-formed path (validation is well-formedness only, `dev-server.py:676`; **not catalog-limited**) → the **entire FLT API surface** is reachable. Envelope `{tokenType, method, path, headers, body, timeout}`. | Exists |
+| **Complete API discovery** | **`GET /api/playground/swagger/spec`** → the live `/swagger/v1/swagger.json` (Swashbuckle runtime spec) — the *complete* endpoint list, including PublicAPI/MLV controllers the static catalog omits | Exists |
+| Stimulus discovery (curated) | `GET /api/playground/catalog`, `/api/contract/capabilities` — UI-curated subset (liveTable-prefixed); convenience only, NOT the coverage boundary | Exists |
 | Provision infra | `/api/fabric/workspaces`, `/workspaces/{id}/assignToCapacity`, `/workspaces/{id}/lakehouses`, `/notebooks` | Exists |
 | **Seed tables + MLVs** | `/api/notebook/create-session` → `execute-cell` running Spark SQL `CREATE TABLE …` and **`CREATE MATERIALIZED LAKE VIEW <schema>.<name> AS SELECT … FROM <table>`** → `close-session` (verified: FLT `CreateCSTCluster.md`, `MLV_ALREADY_EXISTS`) | Exists |
 | Deploy FLT | `POST /api/command/deploy` + SSE `/api/command/deploy-stream` until `phase:running` | Exists |
