@@ -175,11 +175,19 @@ BEAT 3 — PLAN GATE  (no backend calls — pure reasoning)
     change-type → scenario-pattern catalog. Each scenario declares
     title · category · stimulus · observations · invariants · INFRA NEEDS
     · PRECONDITIONS · (optional) SUB-SCENARIOS
-  • PRECONDITIONS = scenario-specific setup beyond infra counts:
-      - required FLAG STATE (e.g. CDF-warning test needs IRPhysicalCDF
-        DISABLED in edog) — enforced via feature-flag override
-      - required TABLE/MLV PROPERTIES (e.g. source table created with
-        CDF = false) — enforced at seed time, not after
+  • PRECONDITIONS = scenario-specific setup beyond infra counts. Real
+    grounded example — to fire the CDFDisabled warning, ALL THREE:
+      - FLAG: FLTMLVWarnings = ON  (else warnings are never parsed from
+        GTS output — Node.cs only PySpark-wraps the SQL when this is on)
+      - FLAG: FLTIRDeltaPhysicalCDFEnabled = OFF (physical CDF would
+        synthesize CDF and suppress the source-CDF-missing warning)
+      - TABLE PROP: source table created with delta.enableChangeDataFeed
+        = false — at SEED time, not patched after
+    → MLV refresh detects source lacks CDF → falls back to FULL refresh
+      → NodeWarning{CDFDisabled, relatedSourceEntities:[ws.lh.schema.tbl]}.
+      OBSERVE on node.warnings (DAG status) / node_exec_metrics.json /
+      sys_node_metrics.warnings — NOT on the output rows (data is identical
+      with or without the warning; the warning IS the signal).
   • SUB-SCENARIOS: one scenario can fan out into several (e.g. "CDF
     insights card" → many cases) sharing infra, and may need a COMPLEX
     MULTI-NODE DAG to exercise every path. infra-needs carries the DAG
@@ -246,7 +254,13 @@ BEAT 5 — DEPLOY & RUN
           body optional; poll getDAGExecStatus/{guid}
       observe (grounded): (1) the API RESPONSE BODY/output of the stimulus
         call itself — assert + cite it, not just the status code;
-        (2) logs / telemetry / executions — AUDITED: transparent proxies to
+        (2) FLT-NATIVE STRUCTURED OUTPUTS — the real semantic oracles:
+        node.warnings (e.g. CDFDisabled), refresh_policy, NodeExecutionMetrics
+        (added/dropped row counts, status, error_code/source), and the sys_*
+        insights tables (sys_node_metrics / sys_run_metrics). These carry FLT
+        semantics that raw rows + logs do NOT (a CDF change leaves the output
+        rows identical — the warning is the only signal);
+        (3) logs / telemetry / executions — AUDITED: transparent proxies to
         the FLT log server; query params + shapes are FLT-DEFINED, so the
         skill DISCOVERS the contract at runtime (do NOT assume ?since=&level=).
       verify-output: /api/onelake/table-preview-rows (reads live Delta
@@ -296,7 +310,7 @@ No schema, ever. Scenarios are **plain-language intents the skill generates from
 
 **Every generated scenario carries eight fields:** `title · category · stimulus (tool + args) · observations to collect · invariants to check · infra requirements · preconditions · sub-scenarios`.
 - **infra requirements** feeds Beat 4's required-infra spec (`qa_infra_spec`) — and carries not just counts but **table/MLV properties** (e.g. a source table with `CDF = false`) and **DAG shape** (a multi-node DAG when the scenario needs to exercise many paths).
-- **preconditions** are scenario-specific setup the env step must enforce *before* stimulus: required **flag state** (e.g. a CDF-warning test needs `IRPhysicalCDF` **disabled**) and required **table/MLV properties** (set at seed time, not patched after).
+- **preconditions** are scenario-specific setup the env step must enforce *before* stimulus: required **flag state** and required **table/MLV properties** (set at seed time, not patched after). Grounded example — to fire a `CDFDisabled` warning you need **all three**: `FLTMLVWarnings` **ON** (else warnings are never parsed), `FLTIRDeltaPhysicalCDFEnabled` **OFF** (physical CDF would suppress the source-CDF-missing warning), and the **source table seeded with `delta.enableChangeDataFeed=false`** — then the MLV falls back to full refresh and emits `NodeWarning{CDFDisabled}`, observed on `node.warnings` (not on the output rows).
 - **sub-scenarios** let one scenario (e.g. "CDF insights card") fan out into several cases that **share infra** but each have their own stimulus/observations — so a single complex DAG is seeded once and exercised many ways.
 
 **Observations are grounded on real evidence**, including the **API response body** of the stimulus call itself (asserted + cited), not only logs/telemetry. Categories reuse the existing `ScenarioCategory` taxonomy (`HappyPath, ErrorPath, EdgeCase, Regression, Performance`); failure-injection scenarios are generated but **deferred to Phase N (timing TBD)** until chaos is ready. Execution uses existing tools:
@@ -315,7 +329,7 @@ No schema, ever. Scenarios are **plain-language intents the skill generates from
 The applicable categories are chosen by the LLM from the blast radius — a retry-policy change pulls in failure-injection scenarios; a new endpoint pulls in happy + boundary + **contract-diff**; a hot-path change pulls in performance.
 
 **Two non-negotiable generation rules (audited):**
-- **Flag-gating is a correctness gate, not an edge case.** If the diff references `FeatureNames.<X>`, the changed code path is *dormant until the flag is ON*. The skill **must** flip the flag ON to exercise the PR's actual behavior; running flag-OFF only validates the pre-change path. Skipping this silently produces a **false PASS** — the most dangerous outcome the validator can emit. Detection is mechanical (grep the diff for `FeatureNames.`). (Note: some scenarios instead require a flag **disabled** as a *precondition* — e.g. a CDF-warning test needs `IRPhysicalCDF` off; the flag direction comes from the scenario, not a blanket "always ON".)
+- **Flag-gating is a correctness gate, not an edge case.** If the diff references `FeatureNames.<X>`, the changed code path is *dormant until the flag is ON*. The skill **must** flip the flag ON to exercise the PR's actual behavior; running flag-OFF only validates the pre-change path. Skipping this silently produces a **false PASS** — the most dangerous outcome the validator can emit. Detection is mechanical (grep the diff for `FeatureNames.`). (Note: flag *direction* comes from the scenario, not a blanket "always ON" — e.g. the CDF-warning scenario needs `FLTMLVWarnings` **on** but `FLTIRDeltaPhysicalCDFEnabled` **off** to fire the warning; the skill must read the FLT code to know which way each flag goes.)
 - **Contract changes are grounded by a main-vs-PR swagger diff, not by reading the diff and not by the committed baseline.** Any controller/DTO change → generate the swagger from the base-commit (main) worktree and the PR branch with **`dotnet swagger tofile`** on each built assembly (same generator both sides; main needs only a build), diff via `qa_contract_diff.diff`, and cite the `ch-NNN` entries. **The committed `Swagger/Swagger.json` is unreliable (rarely updated, drifts)** so `/api/playground/swagger/diff` (runtime-vs-committed) is not trusted. A removed or signature-changed endpoint is a **breaking-change** finding regardless of test outcome.
 
 ---
