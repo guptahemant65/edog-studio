@@ -27,6 +27,8 @@ Use this skill when the user asks to validate / QA / test / "run scenarios on" a
   - `qa_contract_diff` — two-spec (main vs PR) OpenAPI diff with stable `ch-NNN` ids.
   - `qa_error_classify` — catalog-grounded failure attribution (`change` / `infra` / `unknown`).
   - `qa_invariants` — deterministic absolute-truth checks with cited evidence.
+  - `qa_execution_proof` — did the changed code actually run? Maps changed symbols → their code-marker/log/interceptor surface and checks the trace; returns `proven` / `not_exercised` / `no_surface`. Coverage is measured, never declared.
+  - `qa_mlv_convergence` — did the data come out correct? Compares the materialized MLV output to an independent recompute of its SELECT (incremental must converge to full); degrades to schema+rowcount for non-deterministic SQL.
   - `qa_verdict` — claim/verdict model + the evidence-verification wall.
   - `qa_cleanup` — standalone ledger reverser (also `python edog.py --qa-cleanup {runId}`).
 
@@ -71,12 +73,21 @@ Seven beats. Each names its **gate** (what must be true to proceed), the **primi
 - Deploy: `POST /api/command/deploy` + watch SSE `/api/command/deploy-stream` to `event: complete`, phase `running`.
 - Confirm you ran the PR: `qa_head_match.compare(pr_commit, deployed_commit, dirty_files, injected)`. A mismatch is a **harness failure**, not a verdict — fix it or abort, never "fail" the PR for it.
 - Enforce preconditions: for each required flag, resolve **const name → wire key → FM `Id`** (the FM repo `Features/**/*.json` `Id` is the real key, and may differ from the C# const name — overriding the wrong key silently no-ops → false PASS). Read effective state via `GET /api/edog/feature-flags/catalog`, `set_override(wireKey, bool)` via `POST /api/edog/feature-flags/overrides` (`X-EDOG-Control-Token`, success = `applied` echo), then **re-read the catalog to confirm `effectiveForMyWorkspace` flipped**. `locked`/`missing` flags = harness limitation, not a verdict.
-- Run the scenarios: stimulus via `POST /api/playground/dispatch` (any well-formed path — the whole FLT API surface is reachable); for DAG scenarios generate a fresh GUID `iterationId` and `runDAG`. **Assert the API response body itself**, not just status. Observe via logs/telemetry/executions (discover their query interface at runtime) and the FLT-native oracles (`node.warnings`, `refresh_policy`, `NodeExecutionMetrics`, `sys_*` insights tables). Run `qa_invariants` checks on each response/log/DAG snapshot.
+- Run the scenarios: stimulus via `POST /api/playground/dispatch` (any well-formed path — the whole FLT API surface is reachable; for `mwc` use the FLT-relative path `/liveTable/...`, assert the INNER status/body in the envelope, not the outer 200); for DAG scenarios generate a fresh GUID `iterationId` and `runDAG`.
+- **Use EVERY signal, not just the API response.** The API status/body is the *thinnest* evidence — a scenario is only validated when the relevant streams agree. For each scenario, collect and cite across **all** of these (whichever apply):
+  1. **The API response body** — assert it (schema + invariants + computable values).
+  2. **The data that landed** — `GET /api/onelake/table-preview-rows` + `table-metadata` for the live Delta rows, and for any DAG/MLV change run **`qa_mlv_convergence`** (recompute the SELECT in a notebook Spark session, compare to the materialized output). A change that leaves the API green but the data wrong is the exact bug this catches.
+  3. **The FLT-native outputs** — `node.warnings`, `refresh_policy`, `NodeExecutionMetrics` (added/dropped rows), and the `sys_run_metrics`/`sys_node_metrics`/`sys_error_metrics` tables (query via a Spark cell or the executions endpoint).
+  4. **The traces** — `/api/logs`, `/api/telemetry`, `/api/executions`, `/api/edog/interceptors-status` (discover each query interface at runtime). These are the citable event stream.
+  5. **Execution proof** — feed the changed symbols + the collected trace to **`qa_execution_proof.prove`**; a symbol that never shows its code-marker/surface in the trace is `not_exercised` / `no_surface`, reported honestly — never counted as covered.
+  Run `qa_invariants` checks on each response/log/DAG snapshot. **Do not report a scenario as passed on the API response alone** when a data, trace, or execution-proof signal is available and unchecked.
+- Enforce preconditions (flags + table props) before each scenario's stimulus — see Beat 5 preconditions above.
 - For controller/DTO PRs, generate the swagger from the PR assembly and the base-commit (main) assembly with `dotnet swagger tofile` (main is **build-only**, no deploy) and `qa_contract_diff.diff(main, pr)`; assert each `ch-NNN` is intended; flag removed/modified as breaking.
 - Re-check `bearerExpiresIn` before any multi-minute operation.
 
 ### Beat 6 — Correlate & attribute
-- For each suspicious signal, write the causal narrative across streams (logs + telemetry + interceptors + DAG state), citing event ids.
+- For each suspicious signal, write the causal narrative across streams (logs + telemetry + interceptors + DAG state + the data/convergence result), citing event ids.
+- Run **`qa_execution_proof.summary`** over the changed symbols + collected trace and state the coverage honestly (`proven` / `not_exercised` / `no_surface`) — a green scenario whose changed code was never proven to run is reported as such, not as full coverage.
 - Classify every failure through `qa_error_classify.classify(meta)` so `change` vs `infra` is **catalog-grounded, never guessed**. An `infra`/`unknown` failure is a harness condition, not a verdict on the change.
 - Where you cannot confirm a root cause without fault injection, say **"suspected"** and name what would confirm it — fault-injection confirmation is Phase N (not available yet). Do not overclaim.
 - For concurrency/trigger-touching changes, re-run a critical pass N times; a non-reproducible pass is `flaky`, not `pass`.
