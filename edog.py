@@ -2907,6 +2907,31 @@ def revert_faulted_node_typed_throw_patch(content):
     return content.replace(patched, original, 1)
 
 
+def _discover_insights_engine_flag(content, default="FLTInsightsEngine"):
+    """Discover the FeatureNames flag that gates the normal-flow InsightDiscoveryHook
+    registration in the FLT source being patched.
+
+    The gating flag is NOT stable across branches: on current ``main`` the
+    InsightDiscoveryHook is gated by ``FLTInsightsEngine`` (a flag split out of
+    ``FLTInsightsMetrics`` to separate the discovery engine from the metrics
+    tables), while older branches that predate that split gate it under
+    ``FLTInsightsMetrics``. Hardcoding either literal breaks the build on the
+    other branch, so the flag MUST be read from the deployed source.
+
+    Heuristic: take the LAST ``new InsightDiscoveryHook(`` in the file — on
+    clean content that is the normal-flow registration; on already-patched
+    content the EDOG-injected copy appears earlier, so the last one is still the
+    normal-flow registration — and return the nearest preceding
+    ``IsEnabled(FeatureNames.X)`` flag that gates it. Falls back to ``default``
+    if no registration is found (e.g. a future refactor renames the hook).
+    """
+    anchor = content.rfind("new InsightDiscoveryHook(")
+    if anchor < 0:
+        return default
+    flags = re.findall(r"IsEnabled\(\s*FeatureNames\.(\w+)", content[:anchor])
+    return flags[-1] if flags else default
+
+
 def apply_register_hooks_before_faulted_throw_patch(content):
     """Patch DagExecutionHandlerV2.cs to pre-register InsightDiscoveryHook before the faulted-nodes throw.
 
@@ -2931,7 +2956,7 @@ def apply_register_hooks_before_faulted_throw_patch(content):
       - null-guards on dagExecutionContext (defensive — should always be set
         by this point, but a NRE here would mask the real failure);
       - gates on the SAME feature flag as the normal-flow registration
-        (FeatureNames.FLTInsightsEngine, L454);
+        (the flag the normal-flow registration uses -- discovered from source at patch time);
       - dedups via `dagExecutionHooks.Any(h => h.Name == "InsightDiscovery")`
         so a future re-order that runs both blocks does not double-register;
       - constructs InsightDiscoveryHook with the EXACT rules list at L457
@@ -2960,6 +2985,7 @@ def apply_register_hooks_before_faulted_throw_patch(content):
     if marker not in content:
         return content, "pattern_not_found"
 
+    engine_flag = _discover_insights_engine_flag(content)
     injection = (
         "                        // EDOG DevMode — register InsightDiscoveryHook before the faulted-nodes throw\n"
         "                        // so the outer-catch hook-firing safety net (line ~646) actually has hooks to\n"
@@ -2972,7 +2998,7 @@ def apply_register_hooks_before_faulted_throw_patch(content):
         "                        {\n"
         "                            if (dagExecutionContext != null\n"
         "                                && this.featureFlighter.IsEnabled(\n"
-        "                                    FeatureNames.FLTInsightsEngine,\n"
+        f"                                    FeatureNames.{engine_flag},\n"
         "                                    TryParseGuidOrNull(dagExecutionContext.TenantId),\n"
         "                                    TryParseGuidOrNull(GetCapacityObjectId()),\n"
         "                                    dagExecutionContext.WorkspaceId)\n"
@@ -3004,6 +3030,7 @@ def revert_register_hooks_before_faulted_throw_patch(content):
     separately by revert_faulted_node_typed_throw_patch).
     """
     marker = "                        // EDOG DevMode — throw a typed exception so the outer-catch mapper"
+    engine_flag = _discover_insights_engine_flag(content)
     injection = (
         "                        // EDOG DevMode — register InsightDiscoveryHook before the faulted-nodes throw\n"
         "                        // so the outer-catch hook-firing safety net (line ~646) actually has hooks to\n"
@@ -3016,7 +3043,7 @@ def revert_register_hooks_before_faulted_throw_patch(content):
         "                        {\n"
         "                            if (dagExecutionContext != null\n"
         "                                && this.featureFlighter.IsEnabled(\n"
-        "                                    FeatureNames.FLTInsightsEngine,\n"
+        f"                                    FeatureNames.{engine_flag},\n"
         "                                    TryParseGuidOrNull(dagExecutionContext.TenantId),\n"
         "                                    TryParseGuidOrNull(GetCapacityObjectId()),\n"
         "                                    dagExecutionContext.WorkspaceId)\n"
