@@ -84,6 +84,14 @@ Confirmed by reading the real handlers; the tasks below reflect them:
 - **Core-smoke sentinel.** A fixed canonical fixture (seed → MLV → full refresh → output==SELECT, no warnings, terminal Completed) runs on EVERY validation regardless of diff — the net for collateral damage outside the computed blast radius. (It's the convergence oracle on a known-good fixture.)
 - **Validate-the-validator corpus (meta-harness).** Labeled set from FLT git history — reverted PRs (`Revert 'X'` → X known-bad) + stable merged PRs (known-good); curate to runtime-detectable regressions and supplement with synthetic faults (real corpus is thin: ~16 revert/hotfix of 844 commits / 24mo). Validator must FAIL known-bad + PASS known-good; report **precision/recall**. This is how the verdict earns trust (spec §13.9) and is the validator's own regression harness.
 
+**Fifth-pass: Tier-2 audit grounded against FLT code (folded into spec §7/§8/§10/Beat 7):**
+- **Security/authz = DETECT-AND-FLAG only, never validated.** EDOG disables auth wholesale via the `DisableFLTAuth` host param: `Initialization/ControllersConfig.cs:57-64` swaps every authenticator to `GetNoAuthenticationAuthenticator()`, and `Authorization/MwcV2RequirePermissionsFilter.cs:44` + `RequiresPermissionFilter.cs:53` short-circuit the permission check. So a runtime auth test always "passes" = a manufactured false PASS — **forbidden**. The skill only **statically detects** auth-relevant diffs (controller posture `PublicUnprotectedController`/`PublicAadProtectedController`/`BaseApiController`; `[MwcV2RequirePermissionsFilter([Permissions.…])]` add/remove/weaken; `ControllersConfig.cs` authenticator wiring) → security-sensitive finding for human review (§7 rule 3).
+- **Environmental blind-spots** (new §8 subsection) — auth-disabled, chaos SignalR-only, no method-return-value capture, non-deterministic run metadata (time fields + GUID `iterationId`). Behavior depending on these → `not-testable-in-this-environment`, surfaced, never silently passed.
+- **Flaky-PASS detection** (§8 flakiness filter 2) — FLT has real races: `DagExecutionHandlerV2` (`ConcurrentDictionary`/`ConcurrentBag`/`AsyncLock` + race TODOs), `RefreshTriggersHandler.cs:254` lost-update race, Spark cold-start. Critical passes on concurrency/trigger-touching PRs re-run N times; non-reproducible pass = `flaky`, not `pass`.
+- **PR-level risk synthesis** (§8 + Beat 7) — reviewer's 30-sec read; aggregation of signals already computed (blast radius, change type, security flag, flag-gating, per-scenario verdicts + coverage). NOT by-owner (`owners.txt` is repo-coarse).
+- **Replay** (§10 + Beat 7) — pinned `sourceCommit` + seed DDL + scenarios → `edog qa --replay {runId}`; equivalent verdict, not byte-identical (time/GUID fields differ).
+- **Incremental re-validation** (§10) — diff commit N→N+1, re-run only affected scenarios + sentinel; preconditions re-established via the existing ledger machinery.
+
 ---
 
 # PHASE 1 — MVP

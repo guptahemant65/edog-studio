@@ -288,9 +288,15 @@ BEAT 6 — INVESTIGATE  (lighter in Phase 1)
   • qa_verdict.verify drops any un-cited / unverifiable claim   [NEW]
 
 BEAT 7 — VERDICT
-  • qa_verdict.Verdict.to_json per scenario                    [NEW]
+  • PR-LEVEL RISK SYNTHESIS first (the reviewer's 30-sec read): what this
+    PR threatens · proven-safe (with evidence) · needs-human-eyes
+    (not-provably-exercised + blind-spots: AUTH can't be tested in EDOG,
+    security-sensitive diffs flagged for review)                  [NEW]
+  • qa_verdict.Verdict.to_json per scenario (+ flaky re-runs)      [NEW]
   • PR comment: MARKDOWN in Phase 1 (rich causal-board HTML = Phase 3)
     → ADO REST (az rest / ado-proxy)                          [EXISTING]
+  • REPLAY artifact: pinned sourceCommit + seed DDL + scenarios persisted
+    → `edog qa --replay {runId}` (equivalent verdict, not byte-identical) [NEW]
   • CLEANUP: on PASS → auto-teardown; on FAIL → OFFER TO KEEP the
     environment for inspection (edog --qa-cleanup {runId} later).
   • qa_cleanup.run → reverse ledger LIFO → qa_run_lock.release [NEW]
@@ -337,9 +343,10 @@ No schema, ever. Scenarios are **plain-language intents the skill generates from
 
 The applicable categories are chosen by the LLM from the blast radius — a retry-policy change pulls in failure-injection scenarios; a new endpoint pulls in happy + boundary + **contract-diff**; a hot-path change pulls in performance.
 
-**Two non-negotiable generation rules (audited):**
+**Three non-negotiable generation rules (audited):**
 - **Flag-gating is a correctness gate, not an edge case.** If the diff references `FeatureNames.<X>`, the changed code path is *dormant until the flag is in the right state*. The skill **must** set it to exercise the PR's actual behavior; the wrong state silently produces a **false PASS** — the most dangerous outcome the validator can emit. The grounded four-step protocol: **(1) Detect** — grep the diff for `FeatureNames.<X>` (const name). **(2) Resolve** — const name → **wire key** → **FM `Id`** (the catalog gives `name`+`wireKey`; the FM repo's `Features/**/*.json` `Id` is what the FeatureFlighter consults, and `Id` ≠ filename ≠ const name — override the **wire key/Id**, never the const name, or it no-ops). **(3) Read effective state** — `GET /api/edog/feature-flags/catalog` resolves the FM repo (FMv2 clone) against the test env + locked-target GUIDs → `effectiveForMyWorkspace/locked/isOverridden`, telling the skill whether the path is on/off/partial/`missing` *by default*. **(4) Set + verify** — `set_override(wireKey, bool)` (force-ON *or* force-OFF), confirm the `applied` hash+revision echo, then **re-read the catalog to confirm `effectiveForMyWorkspace` actually changed** (don't trust the POST). A `locked`/`missing` flag that can't be forced is a **harness limitation**, surfaced honestly. Flag *direction* comes from the scenario (read the FLT code) — e.g. the CDF-warning scenario needs `FLTMLVWarnings` **on** but `FLTIRDeltaPhysicalCDFEnabled` **off**.
 - **Contract changes are grounded by a main-vs-PR swagger diff, not by reading the diff and not by the committed baseline.** Any controller/DTO change → generate the swagger from the base-commit (main) worktree and the PR branch with **`dotnet swagger tofile`** on each built assembly (same generator both sides; main needs only a build), diff via `qa_contract_diff.diff`, and cite the `ch-NNN` entries. **The committed `Swagger/Swagger.json` is unreliable (rarely updated, drifts)** so `/api/playground/swagger/diff` (runtime-vs-committed) is not trusted. A removed or signature-changed endpoint is a **breaking-change** finding regardless of test outcome.
+- **Authorization changes are DETECTED and flagged, never "validated" — EDOG can't test auth.** EDOG disables auth wholesale (`DisableFLTAuth` → `GetNoAuthenticationAuthenticator()` + short-circuited permission filters), so a runtime auth test is meaningless and would manufacture a false PASS. Instead the skill **statically detects** auth-relevant diffs — a controller base-class/posture change (`PublicUnprotectedController`/`PublicAadProtectedController`/`BaseApiController`), an added/removed/weakened `[MwcV2RequirePermissionsFilter([Permissions.…])]`, or authenticator wiring edits in `ControllersConfig.cs` — and emits a **security-sensitive finding routed to human/security review**: *"authorization config changed; NOT validatable in EDOG (auth disabled in dev)."* Detection draws the reviewer's eye to the scariest class of change; it does not pretend to verify it.
 
 ---
 
@@ -388,12 +395,34 @@ Ground truth: invariant suite + Layer-1 code facts. Diagnosis: Opus, with every 
 
 Coverage is **measured**, not asserted. FLT carries named `CodeMarkers` (`Monitoring/CodeMarkers.cs`, `MonitoredScope` — operation/handler/controller-action granularity) which the EDOG log interceptor surfaces as `CurrentCodeMarkerName`; a scenario counts a changed symbol as **`tested`** only when the trace shows its enclosing **code-marker** (or an http/dag/retry/token/spark interceptor surface, or a log line it emits) actually fired during the run. This is **execution proof** — it kills the false PASS where a scenario "passed" without ever running the new code. It is **scope-level, not line-level**: a change with no marker/interceptor/log surface (a pure internal helper) has **no runtime proof**, and the skill says so plainly — *"not reachable / not provably exercised by any available stimulus; manual verification needed"* — never fabricating a weak scenario to look thorough. Coverage is reported as `tested(proven) / reported-only / not-provably-exercised`, not inflated. Honest "can't prove this ran" beats theater.
 
+### Environmental blind-spots (what EDOG structurally cannot validate)
+
+Self-awareness about the harness's limits is itself a reliability feature — a validator that green-checks something it can't actually see is worse than one that says "I can't see this." EDOG has known blind spots; behavior that depends on them is routed to a **`not-testable-in-this-environment`** bucket and explicitly surfaced, never silently passed:
+
+- **Auth / authorization — DISABLED.** EDOG sets the `DisableFLTAuth` host parameter, which (a) swaps every controller's authenticator to `GetNoAuthenticationAuthenticator()` (`Initialization/ControllersConfig.cs:57-64`) and (b) short-circuits the permission filters (`Authorization/MwcV2RequirePermissionsFilter.cs:44`, `RequiresPermissionFilter.cs:53`). So **no negative-auth test is meaningful** — a no-token/under-privileged request always succeeds. The validator must **never run an auth scenario and report PASS** (that pass is fabricated). It can only **detect** auth-relevant diffs and flag them for human/security review (see §7).
+- **Chaos / fault injection — SignalR-only.** Not reachable from the curl-based skill until the Phase-N REST shim; failure-injection scenarios are deferred, not faked.
+- **Method return values — not captured.** Interceptors witness status/duration/errors/counts, not arbitrary return values — grounded claims cite captured fields only (§4 audited note).
+- **Run metadata is non-deterministic** — time fields (`MLVRefreshOutput.RefreshDate/RefreshTimestamp`, `sys_node_metrics.run_date/written_at`) and per-run GUID `iterationId` differ every run; the convergence oracle is replay-stable but metadata is not (see "Reproducibility" below).
+
 ### Flakiness & severity (a FAIL is not always a block)
 
-A failed scenario is not automatically a verdict-blocking FAIL. Two filters apply before anything is reported as the PR's fault:
+A failed scenario is not automatically a verdict-blocking FAIL. Three filters apply before anything is reported as the PR's fault:
 
 1. **Retry-once on infra-shaped failures.** A transient INT-capacity 429, a deploy hiccup, a token-routing 503 — these are environment noise, not the change. The skill retries the scenario once; only a *reproducible* failure counts. (Single retry, not a retry storm — a flaky test that needs 5 retries is itself a signal.)
-2. **Rank by attribution confidence.** A schema violation on an endpoint the PR touched is **high-confidence "your change."** A 503 from the capacity gateway is **low-confidence "probably infra."** The verdict surfaces failures ranked by how attributable they are to the diff, tying directly into the harness-vs-test separation (§9.B). The headline FAIL is reserved for high-confidence, change-attributable, reproduced failures.
+2. **Flaky-PASS detection (re-run the passes too).** A scenario that passes once but is actually nondeterministic is *false confidence*, not a pass. FLT has real nondeterminism — concurrent DAG node execution (`DagExecutionHandlerV2` uses `ConcurrentDictionary`/`ConcurrentBag`/per-iteration `AsyncLock` with documented race TODOs), a known lost-update race in `RefreshTriggersHandler.cs:254`, Spark cold-start, capacity routing. So for **concurrency/trigger/scheduling-touching PRs**, critical passing scenarios are re-run N times; a pass that isn't *reproducible* is reported as `flaky`, not `pass` — a finding in its own right.
+3. **Rank by attribution confidence.** A schema violation on an endpoint the PR touched is **high-confidence "your change."** A 503 from the capacity gateway is **low-confidence "probably infra."** The verdict surfaces failures ranked by how attributable they are to the diff, tying directly into the harness-vs-test separation (§9.B). The headline FAIL is reserved for high-confidence, change-attributable, reproduced failures.
+
+### PR-level risk synthesis (the reviewer's 30-second read)
+
+Above the per-scenario verdicts sits a single **risk synthesis** — the thing that actually saves reviewer time. It is an *aggregation of signals the validator already computes*, not new instrumentation: blast-radius subsystems, change type (controller → API-contract risk, DAG → execution risk, retry/token → reliability risk), the **security-sensitive flag** (§7), FM flag-gating, and the per-scenario verdicts + coverage. It renders as: *what this PR threatens · what's proven safe (with evidence) · what still needs human eyes (not-provably-exercised + environmental blind-spots like auth)*. Deliberately **not** organized "by owner" — `owners.txt` is repo-coarse, and ownership is the last thing a reviewer needs; risk is framed by *what could break*, not *who wrote it*.
+
+### Reproducibility / replay (so the author can present the case)
+
+The run is **reproducible by construction** — pin `sourceCommit`, persist the seed DDL + the generated scenarios + the locked-target spec, re-run in a fresh sandbox (`edog qa --replay {runId}`). It is **equivalent, not byte-identical**: timestamps and `iterationId` differ every run (see blind-spots), but the convergence oracle and invariant verdicts are stable. This is what lets an author hand a reviewer *"run it yourself"* instead of *"trust me."*
+
+### Incremental re-validation (the author's fix loop)
+
+On a new PR commit, the skill diffs commit N→N+1, maps changed files to **only the affected scenarios**, and re-runs those (plus the always-on core-smoke sentinel) — showing **run-N vs run-N+1** (*"you fixed scenario 3; scenario 5 regressed"*). Per-scenario preconditions (flag overrides, table props) are re-established each run via the existing teardown-ledger/precondition machinery, so a fast re-run stays isolated.
 
 ---
 
@@ -510,13 +539,17 @@ Orthogonal walls catching different escapes. **Operational** protects the enviro
 | Server lifecycle | Skill starts the edog server **after** PR detection (no PR → no server) |
 | Confirmation | Confirm at every phase boundary |
 | Run rhythm | Background + checkpoint updates |
-| Investigation | Auto-investigate (Phase 2 chaos); Phase 1 = retry/flag/correlate + honest "suspected" |
+| Investigation | Auto-investigate (Phase N chaos); Phase 1 = retry/flag/correlate + honest "suspected" |
 | Curation | Editable plan before run (conversational) |
 | Scenario generation | Explicit protocol in `reference/scenarios.md`; each scenario declares infra needs |
 | Infra | User picks existing/new first; existing → fitness-check + "what's missing"; new → skill-seeded, tailored |
 | PR checkout | Separate git worktree at the PR commit (never touches the working tree) |
-| Verdict | Per-scenario, intent-framed |
+| Verdict | **PR-level risk synthesis first** (threatens / proven-safe / needs-human-eyes), then per-scenario intent-framed |
 | Harness vs test failure | Clearly separated |
+| Security / auth | **Detect-and-flag only** — EDOG disables auth (`DisableFLTAuth`); never "validated" |
+| Flaky-pass | Critical passes re-run N times on concurrency-touching PRs; a non-reproducible pass = `flaky`, not `pass` |
+| Reproducibility | Replay artifact (pinned commit + seed + scenarios) → `edog qa --replay {runId}`; equivalent, not byte-identical |
+| Re-validation | Incremental — on a new commit, re-run only affected scenarios + the always-on sentinel; show run-N vs N+1 |
 | Output | Terminal + PR comment (markdown P1; rich HTML board P3) |
 | Cleanup | On pass → auto-teardown; on fail → offer to keep env for inspection |
 | Safety | Fully autonomous, gated at phase boundaries |
