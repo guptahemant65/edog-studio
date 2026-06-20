@@ -39,9 +39,11 @@ EDOG's superpower is that it **sits inside the FLT process and witnesses the com
 
 We do **not** solve the oracle problem by diffing against a baseline (that path was considered and rejected — see below). We solve it with three grounded layers, none of which require the LLM to guess absolute truth:
 
-### Layer 1 — Deterministic code understanding (runs *before* the LLM)
+### Layer 1 — Code understanding, done by the skill itself
 
-The Roslyn call-hierarchy, DI registry, and graph blast-radius analysis run first and hand the LLM a **grounded structural map**: *"your change to `ExponentialRetryPolicy.Execute` is reachable from `runDAG` via `OneLakeWriter` (DI-confirmed), and `maxRetries=3` per config."* The LLM never guesses the blast radius or the config — it **receives them as facts.** This is the layer that keeps interface/DI indirection from being missed (the exact failure the viability analysis warned naive grep would hit).
+The skill reads the **clean PR diff** (ADO API) and the **local FLT repo** (grep + file reads) to build the grounded structural map itself: *"your change to `ExponentialRetryPolicy.Execute` is reachable from `runDAG` via `OneLakeWriter`; the DI registration `services.AddSingleton<IRetryPolicy, ExponentialRetryPolicy>()` is right there in `Startup`; `maxRetries=3` per config."* Opus 4.8 reads code well — it does not need a caged engine to trace callers, resolve a statically-declared DI binding, or read a config constant. These are **facts it reads, not values it guesses.**
+
+For the rare case where DI registration is *dynamic/conditional* and static reading is genuinely ambiguous, the skill has two escalations, in order: (1) query the **runtime DI registry** EDOG already captures (ground truth — what's actually wired); (2) if true semantic resolution is needed (generics, deep interface dispatch), the skill **spins up its own OmniSharp** as a tool it controls. Neither depends on the legacy C# `EdogQaCodeAnalyzer` — that engine is out of the critical path.
 
 ### Layer 2 — Invariants (absolute truths, no oracle, no baseline)
 
@@ -149,10 +151,11 @@ PHASE 0 — ORIENT & UNDERSTAND
     Roslyn/OmniSharp semantic layer; HARD-CHECK the deployed FLT is running
     the PR's commit (ignoring EDOG's known injection set) → mismatch is a
     HARNESS failure, not a silent wrong answer
-  • DETERMINISTIC CODE UNDERSTANDING (before the LLM):
-    Roslyn call-hierarchy + DI registry + graph blast-radius
-    → grounded structural map (reachable entry points,
-      DI-confirmed call chains, config values like maxRetries)
+  • DETERMINISTIC CODE UNDERSTANDING — done by the skill itself:
+    read clean PR diff (ADO) + grep/read the local FLT repo
+    → blast radius, statically-resolved DI bindings, config values.
+    Escalate only if ambiguous: runtime DI registry → self-spun OmniSharp.
+    (Legacy C# EdogQaCodeAnalyzer is NOT used.)
   • LLM derives applicable scenarios from that map:
     happy path, performance, edge cases (failure injection: Phase 2)
     — every category that applies to THIS diff
@@ -382,7 +385,7 @@ Orthogonal walls catching different escapes. **Operational** protects the enviro
 | Harness vs test failure | Clearly separated |
 | Output | Terminal + HTML (auto-open) + PR comment (auto-post) |
 | Safety | Fully autonomous, gated at phase boundaries |
-| Location | User-global (`~/.copilot/skills/`) |
+| Location | Versioned in repo (`skills/`), symlinked to user-global `~/.copilot/skills/` |
 
 ---
 
@@ -401,20 +404,17 @@ Dark, Palantir aesthetic (per EDOG design bible). The **hero is the correlated c
 ## 12. Migration from F27
 
 ### Reused
-- **The deterministic code-understanding layers — VERIFIED BUILT.** `EdogQaCodeAnalyzer.AnalyzeAsync` already runs graph blast-radius (`EdogQaGraphProvider`), Roslyn/OmniSharp enrichment (`EdogQaOmniSharpProvider`, with regex fallback), DI ground truth (`EdogQaDiRegistryProvider` + `EdogDiRegistryCapture`), `ClusterImpactZones`, and `EdogQaInvariantExtractor` — *all before* the LLM phase (Phase 7, ~line 634). It produces `AnalysisResult.ImpactZones` + entry points + interface resolutions + `CodeInvariant`s deterministically. **Layers 1 & 2 are reuse, not build** — we add a thin extraction that early-returns this `AnalysisResult` and skips the LLM phase. Already exercised by `test_qa_e2e.py` (asserts real impact zones).
-- `EdogQaStimulusDispatcher` — for advanced stimuli (DI invocation, SignalR broadcast)
+- `EdogQaStimulusDispatcher` — optional, for advanced stimuli (DI invocation, SignalR broadcast)
 - `flt_catalog.py` + `/api/playground/catalog` — endpoint knowledge
-- `EdogQaRunStore` — optional, for past-run history lookup
+- The **runtime DI registry** data (`EdogDiRegistryCapture` via the `di` topic) — *optional* ground-truth input for dynamic-DI cases the skill can't resolve statically
 - ADO proxy, deploy pipeline, infra wizard APIs, chaos engine, flag override — all as tools
 - The 11 interceptors — the evidence/trace source
 
-### Retired
-- `EdogQaScenarioOrchestrator`, `EdogQaLlmClient`, `EdogQaLlmProvider`, `EdogQaAssertionEngine` — the LLM scenario generation + assertion pipeline (Phase 7 of `AnalyzeAsync` and downstream)
+### Retired / not used
+- **The entire legacy code-understanding engine** — `EdogQaCodeAnalyzer`, `EdogQaOmniSharpProvider`, `EdogQaGraphProvider`, `EdogQaInvariantExtractor`, `EdogQaScenarioOrchestrator`, `EdogQaLlmClient`, `EdogQaLlmProvider`, `EdogQaAssertionEngine`. The skill does code understanding itself (reads diff + repo; self-spins OmniSharp only if needed). Earlier draft proposed reusing the analyzer's pre-LLM half via a new endpoint — **dropped**: the skill reasons over code directly, so neither the engine nor a new analyzer endpoint is needed.
 - The typed stimulus/matcher contract schemas (P10) — replaced by plain-language intent
 - Curation stage UI, analysis UI, scenario editor — replaced by conversational curation
 - `qa-panel.js` and all frontend QA modules — replaced by the skill + HTML report
-
-> Note: only the **LLM-caging** layers are retired. The **deterministic code-understanding** half of `AnalyzeAsync` is kept and promoted to a first-class grounding tool via the early-return extraction.
 
 ### New
 - The skill itself (`~/.copilot/skills/flt-pr-scenario-validator/`)
@@ -444,9 +444,9 @@ Dark, Palantir aesthetic (per EDOG design bible). The **hero is the correlated c
 
 Guardrails are **not** a late phase. The locked target, teardown ledger, phase allowlist, and evidence-cited verdict are **foundational** — they ship with the first thing that can mutate state or emit a claim.
 
-- **Phase 1 (MVP):** skill skeleton + PR resolution + FLT-repo-local HEAD-match check + fire-and-poll cross-turn orchestration + deterministic blast-radius extraction (reuse `AnalyzeAsync` pre-LLM half) + invariant grounding + locked-target selection + teardown ledger + `edog qa --cleanup` + deploy + **happy-path / edge / config-bound performance** scenarios + invariant suite + **evidence-cited** terminal verdict + **PR comment auto-post** (plain-text is fine — it's the reason a *PR* validator exists). **No failure injection** (chaos feature not yet ready), no auto-investigation.
+- **Phase 1 (MVP):** skill skeleton + PR resolution + FLT-repo-local HEAD-match check + fire-and-poll cross-turn orchestration + **skill-native code understanding** (read diff + grep repo) + invariant grounding + locked-target selection + teardown ledger + `edog qa --cleanup` + deploy + **happy-path / edge / config-bound performance** scenarios + invariant suite + **evidence-cited** terminal verdict + **PR comment auto-post** (plain-text is fine — it's the reason a *PR* validator exists). **No failure injection** (chaos feature not yet ready), no auto-investigation.
 - **Phase 2:** **failure-injection scenarios** (once the chaos/error-sim feature matures) + auto-investigation (chaos-augmented follow-up experiments) + destructive-op gating on reused-with-data.
 - **Phase 3:** trace-bundle endpoint (stable IDs, unsampled) + verification pass + full cross-signal correlation + rich HTML report (richer PR comment links to it).
 - **Phase 4:** infra auto-provisioning + independent dead-man's-switch watchdog.
 
-**To resolve during planning:** confirm the analyzer is wired (not null) in a live DevMode deploy vs only the test harness (the hub falls back to synthetic scenarios when `CodeAnalyzer == null`); the OmniSharp-vs-regex-fallback semantic-depth gap; how cross-turn run state is persisted (session store vs a file EDOG owns); trace-bundle retention window and the unsampled-window cost; concurrency (one validation run at a time, like `EdogQaExecutionEngine._runLock`); how the verification pass handles claims whose shape isn't mechanically checkable (semantic interpretation → forced into the inference tier).
+**To resolve during planning:** how the skill self-spins OmniSharp on demand (binary discovery, warm-up cost, when it's worth it vs plain code-reading); how cross-turn run state is persisted (session store vs a file EDOG owns); trace-bundle retention window and the unsampled-window cost; concurrency (single-validation lock, like `EdogQaExecutionEngine._runLock`); how the verification pass handles claims whose shape isn't mechanically checkable (semantic interpretation → forced into the inference tier); the repo `skills/` → user-global symlink install step.
