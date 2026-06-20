@@ -114,19 +114,24 @@ The skill has bash and `curl`s `localhost:5555`. Every capability already exists
 | Trigger DAG | `POST /api/flt-proxy/liveTableSchedule/runDAG/{iterationId}` — **the skill generates a fresh GUID `iterationId` (= OpId)**; body optional (`MLVExecutionDefinitionId` not required) → poll `getDAGExecStatus/{id}` (states: running/completed/failed/cancelled/…) | Exists |
 | Run API | `/api/flt-proxy/*`, `/api/fabric/*` | Exists |
 | Spark cell | `/api/notebook/create-session` → `execute-cell` → `close-session` | Exists |
-| Flip feature flag | `POST /api/edog/feature-flags/overrides`, `DELETE .../overrides/{flag}` | Exists |
+| Flip feature flag | `POST /api/edog/feature-flags/overrides` (+ `/overrides/bulk`), `DELETE .../overrides/{flag}` — **synchronous push to FLT:5557 with `X-EDOG-Control-Token`; success requires hash+revision echo (`applied`).** `FeatureNames.cs` (in the FLT clone) is the source of truth; the catalog exposes `effectiveForMyWorkspace/locked/isOverridden/overrideValue`. **CRITICAL: a flag-gated change is NOT exercised unless the flag is flipped ON — otherwise the skill validates the OLD path and reports a false PASS** (see §7). | Exists |
 | Inject fault | F24 chaos `ErrorSimAddRule` / `ErrorSimRemoveRule` — **SignalR-only, no REST** → Phase 2 needs a REST shim or a SignalR client | Exists (SignalR) |
 | Observe (raw) | `/api/logs`, `/api/telemetry`, `/api/executions` — **AUDITED: transparent proxies to the FLT log server; query params + response shapes are FLT-DEFINED, not EDOG's.** The skill discovers the real contract at runtime (do NOT assume `?since=&level=`). Plus `/api/edog/interceptors-status` (proxies FLT). | Exists |
 | **Verify output landed** | `/api/onelake/table-preview-rows`, `/api/onelake/table-metadata`, `/api/mwc/table-details` — reads **live Delta parquet rows**; confirm a DAG wrote the *right data*, not just "it ran" | Exists |
 | Schema validation | `GET /api/playground/swagger/spec` → OpenAPI for the response-schema invariant | Exists |
 | Endpoint / flag catalog | `GET /api/playground/catalog`, `/api/edog/feature-flags/catalog` | Exists |
 | Read PR diff | `GET /api/ado-proxy/pr-diff` — returns `{prId, title, author, diff, sourceCommit, commonCommit, …}` (audited; `sourceCommit` feeds HEAD-match) | Exists |
+| **API-contract diff (deterministic grounding)** | **`GET /api/playground/swagger/diff`** — diffs the live runtime swagger vs the FLT repo's committed `Swagger/Swagger.json` baseline → typed `{summary, changes[]}` with **stable change IDs `ch-001…`**. `summary.totalChanges > 0` = the PR changed the API contract; removed/modified endpoints = breaking. A first-class, *deterministic* grounding source — every contract change is a citable fact and drives endpoint-test selection (see §7). | Exists |
+| **Deterministic failure attribution** | `src/frontend/js/error-sim-catalog.js` (115 codes tagged `errorSource` User/System · `category` · `httpStatus` · `fltCodePath`) + `error-decoder.js` (regex-scans logs for `MLV_/FLT_/SPARK_/GTS_` codes → O(1) lookup w/ severity, retryable, suggestedFix). Lets the skill classify a failure as **change-attributable** (`User`+validation/auth) vs **infra** (`System`+throttling/execution) *mechanically*, not by LLM guess (feeds §9.B attribution + harness-vs-test split). | Exists |
+| **Token-expiry / health check** | `GET /api/edog/health` → `bearerExpiresIn`, `tokenExpired`, `mwcToken` state; `/api/flt/config` reports `bearerToken`/MWC availability. Bearer (~1h, 5-min buffer) **auto-refreshes mid-run iff a username/session is saved**; MWC has a 15-min refresh buffer. 401/403 → re-auth required; 404 → `capacity_routing_not_ready` (retryable). The skill checks `bearerExpiresIn` before long ops. | Exists |
 
 ### The one new piece of product work
 
 **`GET /api/qa/trace-bundle?since={T0}&correlationId={id}`** — a unified observation endpoint returning logs + telemetry + all 11 interceptor streams + DAG state in **one correlated snapshot**, every event carrying a **stable ID** and **unsampled** for the run window.
 
 It is load-bearing for two reasons: (1) correlation is a single call returning a time-ordered, correlation-ID-joined event stream instead of stitching 5+ endpoints; (2) it is the **citable evidence ledger** — every assertion in the verdict cites a stable event ID that exists in the bundle (see §9.B). Unsampled coverage is what makes absence claims ("no error occurred") provable. **This is the highest-leverage thing to build** — everything else the skill composes from existing APIs.
+
+> **Audited evidence reality (what's citable when).** Real stable IDs exist *today*: every interceptor event carries a monotonic `TopicEvent.SequenceId` (per topic — `log/telemetry/http/retry/dag/token/spark/fileop/cache/catalog/flt-ops/…`) plus payload IDs (`IterationId`, `CorrelationId`, `RootActivityId`, `dagId`, `nodeId`, `sessionTrackingId`). **But** the rich topic-event stream is **SignalR-primary**; over plain REST the skill gets `/api/logs`, `/api/telemetry`, `/api/stats`, `/api/executions`, `/api/edog/interceptors-status`. So **Phase 1 grounds on logs + telemetry + onelake rows + http responses + swagger-diff `ch-NNN` + error-codes** (all REST-citable); full topic-event citation (e.g. `retry:#1851`, `dag:#1847` SequenceIds) is exactly what the **Phase-3 trace-bundle** exposes over REST. Also audited: **interceptors do NOT capture method return values** — only status/duration/errors/counts — so grounded claims must cite *captured fields*, never "the method returned X." The trace-bundle additionally mints a single canonical cross-topic trace ID (current IDs are topic-local).
 
 ---
 
@@ -258,7 +263,7 @@ No schema, ever. Scenarios are **plain-language intents the skill generates from
 
 | Change touches | Scenarios generated | Infra it needs |
 |----------------|--------------------|----------------|
-| API controller / endpoint | Happy (valid → 2xx + schema valid); Edge (null / boundary / missing params → graceful 4xx) | lakehouse; maybe 1 table |
+| API controller / endpoint | Happy (valid → 2xx + schema valid); Edge (null / boundary / missing params → graceful 4xx); **Contract-diff** (run `swagger/diff` → assert each `ch-NNN` change is intended, flag removed/modified endpoints as breaking) | lakehouse; maybe 1 table |
 | DAG node / scheduling | Trigger DAG → verify node transitions → final `Completed` | an MLV with a multi-node DAG over ≥1 table |
 | Retry / resilience policy | P1: observe the path under normal stimulus · P2: inject fault → backoff ≤ `maxRetries` | depends on path |
 | Token / auth flow | Long-running DAG → observe token lifetime across the write | a longer MLV DAG |
@@ -276,9 +281,13 @@ No schema, ever. Scenarios are **plain-language intents the skill generates from
 | DAG node logic | Happy | "Trigger DAG, verify node transitions and final state Completed" | runDAG + getDAGExecStatus |
 | Any hot path | Performance | "Run under load; assert completion within the config/SLA bound read from code" | runDAG / playground |
 | Spark client | Happy | "Create session, run trivial query, verify pool responsive" | notebook session |
-| Feature flag | Edge | "Run with flag ON and OFF, verify each path behaves per its contract" | flag override + re-run |
+| Feature flag | Edge | "Detect `FeatureNames.` refs in the diff; **flip the flag ON to exercise the new path**, then run ON and OFF and verify each behaves per its contract" | flag override + re-run |
 
-The applicable categories are chosen by the LLM from the blast radius — a retry-policy change pulls in failure-injection scenarios; a new endpoint pulls in happy + boundary; a hot-path change pulls in performance.
+The applicable categories are chosen by the LLM from the blast radius — a retry-policy change pulls in failure-injection scenarios; a new endpoint pulls in happy + boundary + **contract-diff**; a hot-path change pulls in performance.
+
+**Two non-negotiable generation rules (audited):**
+- **Flag-gating is a correctness gate, not an edge case.** If the diff references `FeatureNames.<X>`, the changed code path is *dormant until the flag is ON*. The skill **must** flip the flag ON to exercise the PR's actual behavior; running flag-OFF only validates the pre-change path. Skipping this silently produces a **false PASS** — the most dangerous outcome the validator can emit. Detection is mechanical (grep the diff for `FeatureNames.`).
+- **Contract changes are grounded by `swagger/diff`, not by reading the diff.** Any controller/DTO change → call `GET /api/playground/swagger/diff` and cite the typed `ch-NNN` entries. A removed or signature-changed endpoint is a **breaking-change** finding regardless of test outcome.
 
 ---
 
@@ -348,6 +357,10 @@ Two orthogonal guardrail families, each a wall **at the tool boundary** — neve
 At PHASE 0 the skill lists workspaces (`/api/fabric/workspaces`) and lakehouses (`/workspaces/{id}/lakehouses`) **enriched with decision context** — capacity SKU + rough cost, a flag on anything production-ish, and whether each lakehouse is empty (safe) or holds data (handle with care). The menu's first option is **"create fresh sandbox."** The user picks `(workspace, lakehouse, capacity)` — or fresh.
 
 That tuple is then **frozen for the entire run**. Every mutating tool call is checked against the locked target at the tool boundary. The agent physically cannot address a different lakehouse mid-run, no matter what an ID drift or hallucination suggests. Rejected alternative: trusting the model to "stay on the right environment" — that is asking the probabilistic thing to police its own probabilism.
+
+> **Audited: pin GUIDs, never names.** FLT's name-based resolution fallback can *silently resolve the wrong lakehouse* when GUIDs are absent (it logs a "backward compatibility mode" line). The locked tuple is therefore `(workspaceId, lakehouseId, capacityId)` **GUIDs**; the boundary check compares GUIDs, and any name-based-resolution log during the run is surfaced as a locked-target violation, not ignored.
+>
+> **Audited: the worktree config-repoint must not nuke tokens or clobber state.** Deploy is config-driven (reads `flt_repo_path` from `edog-config.json`), so the worktree flow repoints it — but saving config **via `--config` deletes `.edog-token-cache`**, forcing a mid-run MWC re-mint. The repoint therefore **edits `edog-config.json` directly** (restored by the `config_restore` ledger reverser) and never via `--config`. State files the run must preserve untouched: `edog-config.json`, `.edog-session.json`, `.edog-bearer-cache`, `.edog-token-cache`, `.edog-onelake-bearer-cache`, and the worktree's own `workload-dev-mode.json` (whose `CapacityGuid` must match the locked target).
 
 **2. Created-vs-reused (only destroy what you created).**
 
@@ -424,6 +437,9 @@ vs.
 ```
 
 Conflating these erodes trust fast. They render in distinct categories everywhere (terminal, HTML, PR comment), and a harness failure can never be reported as a PASS or a FAIL.
+
+**6. Failure attribution is catalog-grounded, not guessed.**
+Deciding *whose fault a failure is* (the change vs the environment) is the highest-stakes inference the validator makes — so it is anchored to a deterministic source, not the model's intuition. The skill decodes every failure through `error-decoder.js` (regex → known `MLV_/FLT_/SPARK_/GTS_` code) and the 115-entry `error-sim-catalog.js` (each code tagged `errorSource` User/System · `category` · `httpStatus` · `fltCodePath`). The mapping is mechanical: `User`+validation/auth → **change-attributable**; `System`+throttling/execution/deploy → **infra / harness**. The LLM may *narrate* the failure, but the attribution tier (and thus whether it routes to §9.B-5's harness vs test bucket) is set by the catalog. Token-related faults are read off `/api/edog/health` (`bearerExpiresIn`, `tokenExpired`) and `capacity_routing_not_ready` (404) — both classified infra, never a verdict on the change.
 
 ### 9.C Why two families
 
@@ -511,9 +527,9 @@ Dark, Palantir aesthetic (per EDOG design bible). The **hero is the correlated c
 
 Guardrails are **not** a late phase. The locked target, teardown ledger, phase allowlist, and evidence-cited verdict are **foundational** — they ship with the first thing that can mutate state or emit a claim.
 
-- **Phase 1 (MVP):** run-lock → PR resolution (direct git/ADO) → **start server after PR** → skill-native code understanding (diff + repo grep) → scenario generation (`reference/scenarios.md`) with infra needs → **scenario-aware environment** (user picks existing/new; existing fitness-check; new = skill-seeded, tailored) → **worktree** PR checkout → deploy + HEAD-match → **happy/edge/perf** scenarios (self-cleaning) → invariant grounding + evidence-cited verdict (`qa_verdict.verify`) → **markdown PR comment** → cleanup (auto on pass, **offer-keep on fail**) + `edog --qa-cleanup`. **No failure injection, no chaos investigation.**
+- **Phase 1 (MVP):** run-lock → PR resolution (direct git/ADO) → **start server after PR** → skill-native code understanding (diff + repo grep, incl. **`FeatureNames.` flag-gating detection**) → scenario generation (`reference/scenarios.md`) with infra needs → **scenario-aware environment** (user picks existing/new; existing fitness-check; new = skill-seeded, tailored) → **worktree** PR checkout (config-repoint via direct `edog-config.json` edit, not `--config`) → deploy + HEAD-match → **happy/edge/perf + contract-diff (`swagger/diff`)** scenarios, **flag-ON exercise of flag-gated changes** (self-cleaning) → invariant grounding on **logs/telemetry/onelake/http/swagger-diff/error-codes** (REST-citable) + **catalog-grounded failure attribution** + evidence-cited verdict (`qa_verdict.verify`) → **token-expiry guard** (`/api/edog/health bearerExpiresIn`) + **GUID-pinned locked target** → **markdown PR comment** → cleanup (auto on pass, **offer-keep on fail**) + `edog --qa-cleanup`. **No failure injection, no chaos investigation.**
 - **Phase 2:** **failure-injection scenarios** (once chaos/error-sim matures) + auto-investigation (chaos-augmented confirmation; upgrades Phase-1 "suspected" to "confirmed") + destructive-op gating on reused-with-data.
-- **Phase 3:** trace-bundle endpoint (stable IDs, unsampled) + verification pass over the unified bundle + full cross-signal correlation + rich HTML causal-board report (richer PR comment links to it).
+- **Phase 3:** trace-bundle endpoint (exposes the **SignalR-primary topic-event stream over REST** with the `TopicEvent.SequenceId` + canonical cross-topic trace ID; unsampled) + verification pass over the unified bundle + full cross-signal correlation + rich HTML causal-board report (richer PR comment links to it).
 - **Phase 4:** infra auto-provisioning polish + independent dead-man's-switch watchdog.
 
 **To resolve during planning:** how the skill self-spins OmniSharp on demand (binary discovery, warm-up cost, when it's worth it vs plain code-reading); how cross-turn run state is persisted (session store vs a file EDOG owns); trace-bundle retention window and the unsampled-window cost; concurrency (single-validation lock, like `EdogQaExecutionEngine._runLock`); how the verification pass handles claims whose shape isn't mechanically checkable (semantic interpretation → forced into the inference tier); the repo `skills/` → user-global symlink install step.

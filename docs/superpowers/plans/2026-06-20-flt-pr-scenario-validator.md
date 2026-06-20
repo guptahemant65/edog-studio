@@ -23,6 +23,8 @@
 | `scripts/qa_teardown_ledger.py` | Append-before-act ledger of mutating actions; reverse-replay for cleanup. |
 | `scripts/qa_targets.py` | Enriched workspace/lakehouse/capacity listing + locked-target record. |
 | `scripts/qa_invariants.py` | Deterministic invariant checks over a response/log/trace snapshot. |
+| `scripts/qa_contract_diff.py` | Fetch `/api/playground/swagger/diff`; normalize to `{changed, totalChanges, breaking[], changes[]}` with stable `ch-NNN` IDs. |
+| `scripts/qa_error_classify.py` | Map a decoded error (`errorSource`/`category`/`httpStatus`) to an attribution tier (`change`/`infra`/`unknown`) from the error catalog. |
 | `scripts/qa_verdict.py` | Verdict + cited-claim data model; evidence verification pass; JSON serialization. |
 | `scripts/qa_trace_bundle.py` | (Phase 3) Assemble the unified, unsampled, stable-ID trace bundle. |
 | `scripts/qa_watchdog.py` | (Phase 4) Independent dead-man's-switch that reverses the ledger on budget/silence. |
@@ -56,6 +58,15 @@ Confirmed by reading the real handlers; the tasks below reflect them:
 - **`/api/ado-proxy/pr-comment`** creates a real ADO thread (`{prUrl, markdown}`); **`pr-diff`** returns `sourceCommit` for HEAD-match.
 - **Deploy injection set** (HEAD-match known set) = `edog.py` FILES + DevMode/*.
 - **Chaos is SignalR-only** → Phase 2 adds a `POST /api/error-sim/rule` REST shim (Task 13).
+
+**Second-pass audit (repo-wide mining — folded into Tasks 11a, 11b, 3, 6, 10, 11):**
+- **Swagger contract-diff is a deterministic grounding source.** `GET /api/playground/swagger/diff` diffs runtime swagger vs the FLT repo's committed `Swagger/Swagger.json` → `{summary, changes[]}` with **stable `ch-NNN` IDs**; `summary.totalChanges>0` = contract changed; removed/modified endpoints = breaking. New primitive `qa_contract_diff` (Task 11a) + a contract-diff scenario.
+- **Flag-gating is a correctness gate.** A change behind `FeatureNames.<X>` is dormant until the flag is flipped ON; validating flag-OFF yields a **false PASS**. `qa_pr_diff` (Task 3) must surface `FeatureNames.` refs; SKILL.md (Task 11) must flip ON to exercise + run ON/OFF. Override push = `POST /api/edog/feature-flags/overrides(/bulk)` with `X-EDOG-Control-Token`, success = hash+revision `applied` echo.
+- **Failure attribution is catalog-grounded, not guessed.** `error-sim-catalog.js` (115 codes: `errorSource` User/System · `category` · `httpStatus` · `fltCodePath`) + `error-decoder.js` → classify failure as change-attributable vs infra mechanically. New primitive `qa_error_classify` (Task 11b); feeds `qa_verdict.attribution` (Task 5) + the harness-vs-test split.
+- **Token-expiry mid-run is handled, not feared.** Bearer (~1h, 5-min buffer) auto-refreshes iff a username/session is saved; MWC has a 15-min buffer. The skill checks `GET /api/edog/health → bearerExpiresIn` before long ops; 401/403 → re-auth; 404 → `capacity_routing_not_ready` (retryable). SKILL.md (Task 11) Beat-5 instruction.
+- **Pin GUIDs, never names.** Name-based resolution can silently target the WRONG lakehouse (logs "backward compatibility mode"); the locked tuple is `(workspaceId, lakehouseId, capacityId)` GUIDs and the boundary check compares GUIDs (`qa_targets`, Task 6).
+- **Config-repoint must not nuke tokens.** Saving config via `--config` deletes `.edog-token-cache`; the worktree repoint **edits `edog-config.json` directly** (ledger `config_restore`, Task 2) and preserves `.edog-session.json`/`.edog-*-cache`/the worktree's own `workload-dev-mode.json` (whose `CapacityGuid` must match the locked target).
+- **Evidence-access reality (constrains Phase-1 grounding).** Real stable IDs exist today (`TopicEvent.SequenceId` per topic + payload `IterationId/CorrelationId/dagId/nodeId`), but the rich topic-event stream is **SignalR-primary**; REST gives `/api/logs`, `/telemetry`, `/stats`, `/executions`, `/interceptors-status`. So **Phase 1 grounds on logs/telemetry/onelake/http/swagger-diff/error-codes**; topic-event citation (`retry:#…`, `dag:#…`) is the **Phase-3 trace-bundle's** job (Task 17). Interceptors do **not** capture method return values — ground on captured fields only.
 
 ---
 
@@ -444,6 +455,13 @@ def test_parse_extracts_numeric_constant_facts():
     facts = {(f["name"], f["value"]) for f in qa_pr_diff.parse_diff(SAMPLE_DIFF)["config_facts"]}
     assert ("maxRetries", "3") in facts
 
+def test_parse_surfaces_feature_flag_refs():
+    diff = SAMPLE_DIFF + (
+        "diff --git a/Service/Gating/Feature.cs b/Service/Gating/Feature.cs\n"
+        "--- a/Service/Gating/Feature.cs\n+++ b/Service/Gating/Feature.cs\n"
+        "@@ -1,2 +1,3 @@\n+        if (flights.IsEnabled(FeatureNames.FastMintEnabled)) Mint();\n")
+    assert "FastMintEnabled" in set(qa_pr_diff.parse_diff(diff)["feature_flags"])
+
 def test_fetch_uses_injected_client():
     seen = {}
     res = qa_pr_diff.fetch_and_parse("https://dev.azure.com/x/_git/r/pullrequest/982144",
@@ -468,10 +486,11 @@ _FILE_RE = re.compile(r"^diff --git a/.+? b/(?P<b>.+)$", re.MULTILINE)
 _CLASS_RE = re.compile(r"\b(?:class|interface|record|struct)\s+(?P<name>[A-Z]\w+)")
 _METHOD_RE = re.compile(r"\b(?:public|private|internal|protected)\s+[\w<>\[\],\s]+?\s+(?P<name>[A-Z]\w+)\s*\(")
 _CONST_RE = re.compile(r"\b(?:const\s+\w+|int|long|double|var)\s+(?P<name>\w+)\s*=\s*(?P<value>\d+)")
+_FLAG_RE = re.compile(r"\bFeatureNames\.(?P<name>[A-Z]\w+)")
 
 def parse_diff(diff_text: str) -> dict:
     files = [{"path": m.group("b")} for m in _FILE_RE.finditer(diff_text)]
-    symbols, facts, seen = [], [], set()
+    symbols, facts, flags, seen = [], [], set(), set()
     for line in diff_text.splitlines():
         if line.startswith("+") and not line.startswith("++"):
             added = line[1:]
@@ -487,7 +506,10 @@ def parse_diff(diff_text: str) -> dict:
                     symbols.append({"kind": kind, "name": sm.group("name")})
         for cm in _CONST_RE.finditer(added):
             facts.append({"name": cm.group("name"), "value": cm.group("value")})
-    return {"files": files, "symbols": symbols, "config_facts": facts}
+        for fm in _FLAG_RE.finditer(added):
+            flags.add(fm.group("name"))
+    return {"files": files, "symbols": symbols, "config_facts": facts,
+            "feature_flags": sorted(flags)}
 
 def fetch_and_parse(pr_url: str, *, client: Callable[[str], str]) -> dict:
     res = parse_diff(client(pr_url))
@@ -495,7 +517,7 @@ def fetch_and_parse(pr_url: str, *, client: Callable[[str], str]) -> dict:
     return res
 ```
 
-- [ ] **Step 4: Run to verify pass** — `python -m pytest tests/test_qa_pr_diff.py -v` → 4 passed.
+- [ ] **Step 4: Run to verify pass** — `python -m pytest tests/test_qa_pr_diff.py -v` → 5 passed.
 - [ ] **Step 5: Commit** — `git add scripts/qa_pr_diff.py tests/test_qa_pr_diff.py && git commit -m "feat(qa): clean PR-diff fetch + symbol/config-fact extraction"` (add the Co-authored-by trailer).
 
 ---
@@ -578,7 +600,7 @@ def check_perf_bound(*, elapsed: float, bound: float | None, source: str | None,
 
 **Files:** Create `scripts/qa_verdict.py`; Test `tests/test_qa_verdict.py`
 
-The epistemic guardrail in code: facts must cite real bundle event ids; inferences must chain to a kept grounded fact. Everything else is dropped.
+The epistemic guardrail in code: facts must cite real bundle event ids; inferences must chain to a kept grounded fact. Everything else is dropped. The `Verdict.attribution` field is **not** set by the model — it is computed by `qa_error_classify.classify` (Task 7b) from the decoded failure's catalog metadata, so a harness/infra failure can never be mislabeled as a verdict on the change (spec §9.B-5/§9.B-6).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -666,7 +688,7 @@ class Verdict:
 
 **Files:** Create `scripts/qa_head_match.py`, `scripts/qa_targets.py`; Test `tests/test_qa_head_match.py`, `tests/test_qa_targets.py`
 
-`qa_head_match` confirms the deployed FLT runs the PR commit, ignoring EDOG's injection set (else HEAD always mismatches post-deploy). `qa_targets` builds the enriched, risk-annotated menu and the locked tuple.
+`qa_head_match` confirms the deployed FLT runs the PR commit, ignoring EDOG's injection set (else HEAD always mismatches post-deploy). `qa_targets` builds the enriched, risk-annotated menu and the locked tuple. **The locked tuple stores GUIDs (`workspaceId`/`lakehouseId`/`capacityId`), never display names** — FLT's name-based resolution fallback can silently resolve the *wrong* lakehouse, so `is_addressable` compares GUIDs and the boundary rejects any name-only address.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -748,6 +770,8 @@ def build_menu(raw: dict) -> list[dict]:
     return out
 
 def lock_target(*, workspace: str, lakehouse: str, capacity: str, created: bool) -> dict:
+    # workspace/lakehouse/capacity MUST be GUIDs (workspaceId/lakehouseId from
+    # build_menu), never display names — name-based resolution can mis-target.
     return {"workspace": workspace, "lakehouse": lakehouse, "capacity": capacity, "created": created}
 
 def is_addressable(locked: dict, workspace: str, lakehouse: str) -> bool:
@@ -826,6 +850,162 @@ def fitness(req: dict, have: dict) -> dict:
 
 - [ ] **Step 4: Run to verify pass** — 3 passed.
 - [ ] **Step 5: Commit** — `feat(qa): scenario-aware required-infra spec + fitness diff`.
+
+---
+
+## Task 7a: API-contract diff primitive (`qa_contract_diff`)
+
+**Files:** Create `scripts/qa_contract_diff.py`; Test `tests/test_qa_contract_diff.py`
+
+Wraps `GET /api/playground/swagger/diff` into a normalized, citable result. `summary.totalChanges > 0` means the PR changed the API contract; removed/signature-changed endpoints are **breaking**. Each change keeps its stable `ch-NNN` id so the verdict can cite it.
+
+- [ ] **Step 1: Write the failing test**
+
+```python
+# tests/test_qa_contract_diff.py
+from scripts import qa_contract_diff as cd
+
+RAW = {
+    "summary": {"totalChanges": 3, "added": 1, "removed": 1, "modified": 1},
+    "changes": [
+        {"id": "ch-001", "kind": "added",    "path": "/insights/summary", "method": "GET"},
+        {"id": "ch-002", "kind": "removed",  "path": "/legacy/run",       "method": "POST"},
+        {"id": "ch-003", "kind": "modified", "path": "/dag/run",          "method": "POST",
+         "detail": "response schema changed"},
+    ],
+}
+
+def test_normalizes_summary_and_flags_changed():
+    res = cd.normalize(RAW)
+    assert res["changed"] is True and res["totalChanges"] == 3
+
+def test_flags_removed_and_modified_as_breaking():
+    breaking = {c["id"] for c in cd.normalize(RAW)["breaking"]}
+    assert breaking == {"ch-002", "ch-003"}
+
+def test_added_only_is_not_breaking():
+    raw = {"summary": {"totalChanges": 1}, "changes": [
+        {"id": "ch-001", "kind": "added", "path": "/x", "method": "GET"}]}
+    assert cd.normalize(raw)["breaking"] == []
+
+def test_empty_diff_is_unchanged():
+    res = cd.normalize({"summary": {"totalChanges": 0}, "changes": []})
+    assert res["changed"] is False and res["breaking"] == []
+
+def test_fetch_uses_injected_client():
+    seen = {}
+    res = cd.fetch(client=lambda path: seen.update(p=path) or RAW)
+    assert seen["p"].endswith("/api/playground/swagger/diff") and res["totalChanges"] == 3
+```
+
+- [ ] **Step 2: Run to verify fail** — `python -m pytest tests/test_qa_contract_diff.py -v` → `ModuleNotFoundError`.
+
+- [ ] **Step 3: Implement**
+
+```python
+# scripts/qa_contract_diff.py
+"""Normalize EDOG's swagger contract-diff into a citable grounding result.
+
+`GET /api/playground/swagger/diff` diffs the live runtime swagger against the
+FLT repo's committed Swagger/Swagger.json baseline. A removed or modified
+endpoint is a breaking change; each change carries a stable `ch-NNN` id used as
+evidence in the verdict.
+"""
+from __future__ import annotations
+from typing import Callable
+
+_BREAKING_KINDS = {"removed", "modified"}
+_ENDPOINT = "http://127.0.0.1:5555/api/playground/swagger/diff"
+
+def normalize(raw: dict) -> dict:
+    changes = raw.get("changes", []) or []
+    total = int(raw.get("summary", {}).get("totalChanges", len(changes)))
+    breaking = [c for c in changes if c.get("kind") in _BREAKING_KINDS]
+    return {
+        "changed": total > 0,
+        "totalChanges": total,
+        "changes": changes,
+        "breaking": breaking,
+        "evidence": [c["id"] for c in changes if "id" in c],
+    }
+
+def fetch(*, client: Callable[[str], dict]) -> dict:
+    """`client(path)` performs the GET and returns parsed JSON (injected for tests)."""
+    return normalize(client(_ENDPOINT))
+```
+
+- [ ] **Step 4: Run to verify pass** — `python -m pytest tests/test_qa_contract_diff.py -v` → 5 passed.
+- [ ] **Step 5: Commit** — `git add scripts/qa_contract_diff.py tests/test_qa_contract_diff.py && git commit -m "feat(qa): swagger contract-diff grounding primitive"` (add the Co-authored-by trailer).
+
+---
+
+## Task 7b: Deterministic failure classifier (`qa_error_classify`)
+
+**Files:** Create `scripts/qa_error_classify.py`; Test `tests/test_qa_error_classify.py`
+
+Maps a decoded error (the `errorSource`/`category`/`httpStatus` metadata the EDOG error catalog already carries) to an **attribution tier** — `change` (the PR's fault), `infra` (the environment's fault), or `unknown`. This is what keeps §9.B-5's harness-vs-test split mechanical instead of an LLM guess; the result feeds `qa_verdict`'s `attribution` field.
+
+- [ ] **Step 1: Write the failing test**
+
+```python
+# tests/test_qa_error_classify.py
+from scripts import qa_error_classify as ec
+
+def test_user_validation_is_change_attributable():
+    assert ec.classify({"errorSource": "User", "category": "Validation", "httpStatus": 400}) == "change"
+
+def test_user_auth_is_change_attributable():
+    assert ec.classify({"errorSource": "User", "category": "Authentication", "httpStatus": 401}) == "change"
+
+def test_system_throttling_is_infra():
+    assert ec.classify({"errorSource": "System", "category": "Throttling", "httpStatus": 429}) == "infra"
+
+def test_capacity_routing_not_ready_is_infra():
+    assert ec.classify({"errorSource": "System", "category": "Execution", "httpStatus": 404}) == "infra"
+
+def test_unknown_when_metadata_missing():
+    assert ec.classify({}) == "unknown"
+
+def test_token_expiry_is_infra_not_a_verdict():
+    assert ec.classify({"errorSource": "System", "category": "Authentication", "httpStatus": 401}) == "infra"
+```
+
+- [ ] **Step 2: Run to verify fail** — `python -m pytest tests/test_qa_error_classify.py -v` → `ModuleNotFoundError`.
+
+- [ ] **Step 3: Implement**
+
+```python
+# scripts/qa_error_classify.py
+"""Catalog-grounded failure attribution.
+
+EDOG's error-sim-catalog tags every code with `errorSource` (User|System),
+`category`, and `httpStatus`. Whose fault a failure is must NOT be an LLM guess
+-- it is read off this metadata so the harness-vs-test split (spec §9.B-5) is
+deterministic.
+
+Rule: a User-sourced validation/auth failure is the change's fault; a
+System-sourced failure (throttling, execution, capacity-routing, token expiry)
+is the environment's. Anything we can't tag stays `unknown` (never silently a
+verdict on the change).
+"""
+from __future__ import annotations
+
+def classify(meta: dict) -> str:
+    source = (meta.get("errorSource") or "").lower()
+    if not source:
+        return "unknown"
+    if source == "system":
+        # Environment-owned: throttling, execution, capacity routing, token expiry.
+        return "infra"
+    if source == "user":
+        # Caller-shape fault: the change's request (validation/auth/contract) is
+        # what triggered it, so it's attributable to the change under test.
+        return "change"
+    return "unknown"
+```
+
+- [ ] **Step 4: Run to verify pass** — `python -m pytest tests/test_qa_error_classify.py -v` → 6 passed.
+- [ ] **Step 5: Commit** — `git add scripts/qa_error_classify.py tests/test_qa_error_classify.py && git commit -m "feat(qa): catalog-grounded failure attribution classifier"` (add the Co-authored-by trailer).
 
 ---
 
@@ -980,7 +1160,7 @@ if __name__ == "__main__":
 
 - [ ] **Step 1:** `flt-model.md` — the always-loaded mental model: DAG / iteration-ID / MWC token / capacity routing / the 11 interceptors / deploy lifecycle / ports (5555 dev-server, 5557 FLT). ≤2 pages.
 - [ ] **Step 2:** `tools.md` — the EDOG HTTP tool surface, one row per endpoint the skill calls (from §4 of the spec) with a concrete `curl` example each. **Primary stimulus = `POST /api/playground/dispatch`** — dispatches ANY well-formed path (NOT catalog-limited; the whole FLT API surface is reachable). **Complete discovery = `GET /api/playground/swagger/spec`** (the live runtime swagger — the full endpoint list, including PublicAPI/MLV controllers the static `/api/playground/catalog` omits). Document that the curated catalog is convenience-only, not the coverage boundary. Plus: config, health, ado-proxy/pr-diff + **pr-comment**, fabric/workspaces+lakehouses+capacities, command/deploy + deploy-stream, flt-proxy/runDAG + getDAGExecStatus, **notebook session trio (also the table/MLV seeding path)**, feature-flags/overrides, logs, telemetry, **`/api/executions`** (DAG history+timing), interceptors-status, **`/api/onelake/table-preview-rows`+`table-metadata` (verify output landed)**.
-- [ ] **Step 3:** `scenarios.md` — **the generation protocol**: the change-type → scenario-pattern catalog (the table from spec §7), and for each pattern a worked example showing the six scenario fields (`title · category · stimulus · observations · invariants · infra requirements`). Include: (a) the **AUDITED infra-seeding recipe** — `create workspace → assignToCapacity → create SCHEMA-ENABLED lakehouse (pass the Fabric schema flag; default is non-schema and MLVs need schemas) → create a NOTEBOOK artifact → create-session → execute-cell running Python spark.sql("CREATE TABLE …") then spark.sql("CREATE MATERIALIZED LAKE VIEW silver.<n> AS …") → close-session` (kernel is synapse_pyspark, `language` ignored; cold-start ≤10min; outputs give ok/error; a SQL MLV is catalog-registered + runnable via runDAG with no separate MLVExecutionDefinition — FLT-owner verified); record each create to the ledger; (b) **runDAG** — the skill generates a fresh GUID `iterationId`; body optional; (c) **output verification** — DAG scenarios check `/api/onelake/table-preview-rows` (live parquet) that the write landed correctly; (d) **observation discovery** — `/api/logs`,`/telemetry`,`/executions` are FLT-log-server proxies whose query interface the skill must DISCOVER at runtime (don't assume `?since=&level=`); (e) **stimulus via `/api/playground/dispatch`** (any path) as the default.
+- [ ] **Step 3:** `scenarios.md` — **the generation protocol**: the change-type → scenario-pattern catalog (the table from spec §7), and for each pattern a worked example showing the six scenario fields (`title · category · stimulus · observations · invariants · infra requirements`). Include: (a) the **AUDITED infra-seeding recipe** — `create workspace → assignToCapacity → create SCHEMA-ENABLED lakehouse (pass the Fabric schema flag; default is non-schema and MLVs need schemas) → create a NOTEBOOK artifact → create-session → execute-cell running Python spark.sql("CREATE TABLE …") then spark.sql("CREATE MATERIALIZED LAKE VIEW silver.<n> AS …") → close-session` (kernel is synapse_pyspark, `language` ignored; cold-start ≤10min; outputs give ok/error; a SQL MLV is catalog-registered + runnable via runDAG with no separate MLVExecutionDefinition — FLT-owner verified); record each create to the ledger; (b) **runDAG** — the skill generates a fresh GUID `iterationId`; body optional; (c) **output verification** — DAG scenarios check `/api/onelake/table-preview-rows` (live parquet) that the write landed correctly; (d) **observation discovery** — `/api/logs`,`/telemetry`,`/executions` are FLT-log-server proxies whose query interface the skill must DISCOVER at runtime (don't assume `?since=&level=`); (e) **stimulus via `/api/playground/dispatch`** (any path) as the default; (f) **contract-diff scenario** — for any controller/DTO change, call `GET /api/playground/swagger/diff` via `qa_contract_diff`, assert each `ch-NNN` is intended, and flag removed/modified endpoints as breaking; (g) **flag-gating rule (correctness gate, not edge case)** — if `qa_pr_diff` reports `feature_flags`, the changed path is dormant until ON; **flip the flag ON via `POST /api/edog/feature-flags/overrides` (X-EDOG-Control-Token, success = `applied` hash+revision echo) to exercise the PR's real behavior**, then run ON and OFF — skipping this yields a false PASS; (h) **failure attribution** — decode failures and run them through `qa_error_classify` so `change` vs `infra` is catalog-grounded, never guessed.
 - [ ] **Step 4: Validate** — `python -m pytest tests/test_qa_skill_install.py -v` → 3 passed.
 - [ ] **Step 5: Commit** — `docs(qa): skill reference docs (flt-model, tools, scenarios)`.
 
@@ -990,7 +1170,7 @@ if __name__ == "__main__":
 
 **Files:** Modify `skills/flt-pr-scenario-validator/SKILL.md`
 
-Write the operational instructions the agent follows, mapping each beat to its primitives and gates. No code — this is the agent's playbook. Cover, in order: Beat 1 (lock → resolve PR via git/ADO → start server after PR), Beat 2 (clean-diff understanding via `qa_pr_diff` + repo grep), Beat 3 (generate per `scenarios.md`, present editable plan), Beat 4 (derive `qa_infra_spec.required`, user picks existing/new, existing → `qa_infra_spec.fitness` + "what's missing", new → seed tailored infra recording each create to the ledger, `qa_targets.lock_target`), Beat 5 (worktree checkout recorded to ledger → deploy → `qa_head_match` → run happy/edge/perf, observe, `qa_invariants`), Beat 6 (retry-once/flag-flip/correlate; honest "suspected" when unconfirmable), Beat 7 (`qa_verdict` → markdown PR comment → cleanup auto-on-pass / offer-keep-on-fail → `qa_cleanup.run`). Explicitly instruct: heartbeat the lock each turn; persist state each turn; never address a target outside the locked tuple; every claim must cite a trace event and pass `qa_verdict.verify`.
+Write the operational instructions the agent follows, mapping each beat to its primitives and gates. No code — this is the agent's playbook. Cover, in order: Beat 1 (lock → resolve PR via git/ADO → start server after PR → **check `/api/edog/health bearerExpiresIn`; ensure a username/session is saved so bearer auto-refresh works across a long run**), Beat 2 (clean-diff understanding via `qa_pr_diff` + repo grep; **note any `feature_flags` it surfaces**), Beat 3 (generate per `scenarios.md`, present editable plan; **controller changes get a `qa_contract_diff` scenario; flag-gated changes get a flag-ON scenario**), Beat 4 (derive `qa_infra_spec.required`, user picks existing/new, existing → `qa_infra_spec.fitness` + "what's missing", new → seed tailored infra recording each create to the ledger, `qa_targets.lock_target` — **store GUIDs, never names**), Beat 5 (**repoint `flt_repo_path` by editing `edog-config.json` directly — NOT `--config`, which deletes the token cache — recorded to the ledger as `config_restore`** → worktree checkout recorded to ledger → deploy → `qa_head_match` → **flip ON any flag-gated change before exercising it** → run happy/edge/perf + contract-diff, observe, `qa_invariants`), Beat 6 (retry-once/flag ON-vs-OFF/correlate; **classify every failure through `qa_error_classify` so attribution is catalog-grounded**; honest "suspected" when unconfirmable), Beat 7 (`qa_verdict` → markdown PR comment → cleanup auto-on-pass / offer-keep-on-fail → `qa_cleanup.run`). Explicitly instruct: heartbeat the lock each turn; persist state each turn; **never address a target outside the locked GUID tuple; treat a "backward compatibility mode" / name-based-resolution log as a locked-target violation**; re-check `bearerExpiresIn` before any multi-minute operation; every claim must cite a trace event and pass `qa_verdict.verify`.
 
 - [ ] **Step 1:** Author the seven-beat orchestration section.
 - [ ] **Step 2: Validate structure** — `python -m pytest tests/test_qa_skill_install.py -v` → 3 passed.
