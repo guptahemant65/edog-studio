@@ -109,19 +109,18 @@ The skill has bash and `curl`s `localhost:5555`. Every capability already exists
 | **Complete API discovery** | **`GET /api/playground/swagger/spec`** → the live `/swagger/v1/swagger.json` (Swashbuckle runtime spec) — the *complete* endpoint list, including PublicAPI/MLV controllers the static catalog omits | Exists |
 | Stimulus discovery (curated) | `GET /api/playground/catalog`, `/api/contract/capabilities` — UI-curated subset (liveTable-prefixed); convenience only, NOT the coverage boundary | Exists |
 | Provision infra | `/api/fabric/workspaces`, `/workspaces/{id}/assignToCapacity`, `/workspaces/{id}/lakehouses`, `/notebooks` | Exists |
-| **Seed tables + MLVs** | `/api/notebook/create-session` → `execute-cell` running Spark SQL `CREATE TABLE …` and **`CREATE MATERIALIZED LAKE VIEW <schema>.<name> AS SELECT … FROM <table>`** → `close-session` (verified: FLT `CreateCSTCluster.md`, `MLV_ALREADY_EXISTS`) | Exists |
-| Deploy FLT | `POST /api/command/deploy` + SSE `/api/command/deploy-stream` until `phase:running` | Exists |
-| Trigger DAG | `POST /api/flt-proxy/liveTableSchedule/runDAG/{iterationId}` (skill mints the iteration GUID; `MLVExecutionDefinitionId` from the seeded MLV) + poll `getDAGExecStatus/{id}` | Exists |
+| **Seed tables + MLVs** | Workspace → assignToCapacity → **schema-enabled** lakehouse → **notebook artifact** → `/api/notebook/create-session` → `execute-cell` running **Python** `spark.sql("CREATE TABLE …")` and `spark.sql("CREATE MATERIALIZED LAKE VIEW silver.<n> AS …")` → `close-session`. Audited: session is notebook-artifact-bound; kernel is `synapse_pyspark` and `language` is ignored; cold-start ≤10min; outputs give ok/error. A SQL-created MLV is catalog-registered and runnable via runDAG with no separate MLVExecutionDefinition (FLT-owner verified). | Exists |
+| Deploy FLT | `POST /api/command/deploy` + SSE `/api/command/deploy-stream`; completion = `event: complete`, phase `running`, `deployMessage:"Deploy complete"`. **Audited:** deploy is config-driven (patches `flt_repo_path` in place, no repo-path arg, no checkout) → worktree flow must repoint `flt_repo_path`. | Exists |
+| Trigger DAG | `POST /api/flt-proxy/liveTableSchedule/runDAG/{iterationId}` — **the skill generates a fresh GUID `iterationId` (= OpId)**; body optional (`MLVExecutionDefinitionId` not required) → poll `getDAGExecStatus/{id}` (states: running/completed/failed/cancelled/…) | Exists |
 | Run API | `/api/flt-proxy/*`, `/api/fabric/*` | Exists |
 | Spark cell | `/api/notebook/create-session` → `execute-cell` → `close-session` | Exists |
 | Flip feature flag | `POST /api/edog/feature-flags/overrides`, `DELETE .../overrides/{flag}` | Exists |
 | Inject fault | F24 chaos `ErrorSimAddRule` / `ErrorSimRemoveRule` — **SignalR-only, no REST** → Phase 2 needs a REST shim or a SignalR client | Exists (SignalR) |
-| Observe (raw) | `/api/logs`, `/api/telemetry`, `/api/executions` (DAG run history + timing), `/api/edog/interceptors-status`, error decode | Exists |
-| **Verify output landed** | `/api/onelake/table-preview-rows`, `/api/onelake/table-metadata`, `/api/mwc/table-details` — confirm a DAG wrote the *right data*, not just "it ran" | Exists |
+| Observe (raw) | `/api/logs`, `/api/telemetry`, `/api/executions` — **AUDITED: transparent proxies to the FLT log server; query params + response shapes are FLT-DEFINED, not EDOG's.** The skill discovers the real contract at runtime (do NOT assume `?since=&level=`). Plus `/api/edog/interceptors-status` (proxies FLT). | Exists |
+| **Verify output landed** | `/api/onelake/table-preview-rows`, `/api/onelake/table-metadata`, `/api/mwc/table-details` — reads **live Delta parquet rows**; confirm a DAG wrote the *right data*, not just "it ran" | Exists |
 | Schema validation | `GET /api/playground/swagger/spec` → OpenAPI for the response-schema invariant | Exists |
 | Endpoint / flag catalog | `GET /api/playground/catalog`, `/api/edog/feature-flags/catalog` | Exists |
-| Read PR diff | `GET /api/ado-proxy/pr-diff` | Exists |
-| Post PR comment | `POST /api/ado-proxy/pr-comment` (Beat 7) | Exists |
+| Read PR diff | `GET /api/ado-proxy/pr-diff` — returns `{prId, title, author, diff, sourceCommit, commonCommit, …}` (audited; `sourceCommit` feeds HEAD-match) | Exists |
 
 ### The one new piece of product work
 
@@ -180,29 +179,50 @@ BEAT 4 — ENVIRONMENT (scenario-aware)
   • EXISTING → probe (GET /api/fabric/workspaces, …/lakehouses) and
     DIFF against the required spec. If it falls short → show a CLEAR
     LIST of what's missing → user may switch to new.
-  • NEW → skill-SEEDED, tailored provisioning, all via the notebook path:
-      create lakehouse (/api/fabric/.../lakehouses)
-      → notebook create-session → execute-cell:
-          CREATE TABLE …                                   (seed tables)
-          CREATE MATERIALIZED LAKE VIEW silver.<name> AS … (seed MLVs)
-      → close-session.  Each create → ledger.record (auto-cleaned). [NEW]
+  • NEW → skill-SEEDED provisioning (AUDITED step order):
+      1. create workspace + assignToCapacity (Fabric API)
+      2. create a SCHEMA-ENABLED lakehouse — pass the Fabric schema flag;
+         default creation is NON-schema and silver.<name> MLVs REQUIRE
+         schemas (audited).
+      3. create a NOTEBOOK artifact (/notebooks) — the Jupyter session is
+         artifact-bound; no notebook → no session (audited).
+      4. create-session → execute-cell (kernel = synapse_pyspark; the
+         `language` field is ignored, so DDL is wrapped as Python):
+           spark.sql("CREATE TABLE …")                         (seed tables)
+           spark.sql("CREATE MATERIALIZED LAKE VIEW silver.<n> AS …") (MLVs)
+         Cold-start polls up to 10 min; outputs give status ok/error.
+      5. close-session.  Each create → ledger.record (auto-cleaned). [NEW]
+      Note: a SQL-created MLV is catalog-registered and runnable via runDAG
+      with NO separate MLVExecutionDefinition (verified by FLT domain owner).
   • qa_targets.lock_target → tuple frozen for the run         [NEW]
   ┌─ GATE: "Use existing rg_18 / spin fresh (~$X)?" ──────┐
   └───────────────────────────────────────────────────────┘
 
 BEAT 5 — DEPLOY & RUN
   • PR code onto FLT via a SEPARATE GIT WORKTREE at the PR commit
-    (.edog-qa/worktrees/{runId}) — never touches your working tree;
-    worktree is a ledger entry, removed on cleanup.            [NEW]
+    (.edog-qa/worktrees/{runId}) — never touches your working tree.
+    AUDITED: deploy is config-driven (patches flt_repo_path in place; no
+    repo-path arg, no checkout). So the worktree flow is:
+      create worktree → REPOINT config.flt_repo_path → worktree
+      (ledger: config_restore w/ old value) → deploy → restore config
+      → remove worktree on cleanup.                             [NEW]
   • ledger.record("deploy") → POST /api/command/deploy → poll SSE
-    deploy-stream until phase:running                          [EXISTING]
-  • qa_head_match.compare (deployed == PR commit, minus injections) [NEW]
+    deploy-stream; completion = `event: complete` with phase "running"
+    + deployMessage "Deploy complete"                          [EXISTING]
+  • qa_head_match.compare — deployed commit == PR commit, minus the AUDITED
+    injection set (FILES: GTSBasedSparkClient, Program, WorkloadApp,
+    DagExecutionHandlerV2, … + DevMode/*)                       [NEW]
   • qa_run_lock.heartbeat each turn                            [NEW]
   • Scenarios run HAPPY → EDGE → PERF, sequential, self-cleaning:
-      stimulus: /api/playground/dispatch (generic) or runDAG / notebook
-      observe: logs / telemetry / executions / interceptors-status
-      verify-output: /api/onelake/table-preview-rows (DAG wrote right data)
-      schema: /api/playground/swagger/spec
+      stimulus: /api/playground/dispatch (any path) or runDAG
+        — runDAG: the skill GENERATES a fresh GUID iterationId (= OpId);
+          body optional; poll getDAGExecStatus/{guid}
+      observe: logs / telemetry / executions — AUDITED: these are
+        transparent proxies to the FLT log server; their query params +
+        shapes are FLT-DEFINED, so the skill DISCOVERS the contract at
+        runtime (do NOT assume ?since=&level=).
+      verify-output: /api/onelake/table-preview-rows (reads live Delta
+        parquet — confirms the DAG wrote the RIGHT rows, not just "ran")
       qa_invariants.* over the observation window             [NEW]
   ┌─ GATE: "Deploy PR + run 4 scenarios? ~6min" ──────────┐
   └───────────────────────────────────────────────────────┘

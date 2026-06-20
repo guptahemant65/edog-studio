@@ -45,6 +45,18 @@
 ### Tests (`tests/`)
 One `tests/test_qa_<module>.py` per primitive, mirroring the module names above.
 
+## Audit findings (folded in — verified against actual code)
+
+Confirmed by reading the real handlers; the tasks below reflect them:
+- **Deploy is config-driven** (`dev-server.py:2870`; `edog.py` headless-deploy has no repo arg, no checkout) → the worktree flow REPOINTS `config.flt_repo_path` to the worktree before deploy, restores after (ledger `config_restore`).
+- **Fresh-infra seeding** needs a **schema-enabled lakehouse** + a **notebook artifact** first; DDL runs as Python `spark.sql(...)` on the `synapse_pyspark` kernel (`language` ignored); Spark cold-start ≤10min.
+- **A SQL-created MLV is runnable via `runDAG`** with no separate `MLVExecutionDefinition` (FLT-owner verified); the skill generates a fresh GUID `iterationId`.
+- **`/api/logs`,`/telemetry`,`/executions` are FLT-log-server proxies** — query interface is FLT-defined; discover at runtime, don't assume `?since=&level=`.
+- **`/api/onelake/table-preview-rows` reads live Delta parquet** — verify a DAG wrote the right rows.
+- **`/api/ado-proxy/pr-comment`** creates a real ADO thread (`{prUrl, markdown}`); **`pr-diff`** returns `sourceCommit` for HEAD-match.
+- **Deploy injection set** (HEAD-match known set) = `edog.py` FILES + DevMode/*.
+- **Chaos is SignalR-only** → Phase 2 adds a `POST /api/error-sim/rule` REST shim (Task 13).
+
 ---
 
 # PHASE 1 — MVP
@@ -872,10 +884,21 @@ def _worktree_remove(s: dict) -> bool:
     return subprocess.run(["git", "worktree", "remove", "--force", s["path"]],
                           capture_output=True).returncode == 0
 
+def _config_restore(s: dict) -> bool:
+    """Restore flt_repo_path after a worktree deploy (deploy is config-driven)."""
+    import json
+    from pathlib import Path
+    cfg_path = Path(__file__).parent.parent / "edog-config.json"
+    cfg = json.loads(cfg_path.read_text())
+    cfg["flt_repo_path"] = s["original"]
+    cfg_path.write_text(json.dumps(cfg, indent=2))
+    return True
+
 REVERSERS = {
     "flag_clear": _flag_clear,
     "capacity_delete": _capacity_delete,
     "worktree_remove": _worktree_remove,
+    "config_restore": _config_restore,   # restore flt_repo_path after worktree deploy
     "chaos_remove": lambda s: True,   # wired in Phase 2
     "lock_release": lambda s: True,
 }
@@ -957,7 +980,7 @@ if __name__ == "__main__":
 
 - [ ] **Step 1:** `flt-model.md` — the always-loaded mental model: DAG / iteration-ID / MWC token / capacity routing / the 11 interceptors / deploy lifecycle / ports (5555 dev-server, 5557 FLT). ≤2 pages.
 - [ ] **Step 2:** `tools.md` — the EDOG HTTP tool surface, one row per endpoint the skill calls (from §4 of the spec) with a concrete `curl` example each. **Primary stimulus = `POST /api/playground/dispatch`** — dispatches ANY well-formed path (NOT catalog-limited; the whole FLT API surface is reachable). **Complete discovery = `GET /api/playground/swagger/spec`** (the live runtime swagger — the full endpoint list, including PublicAPI/MLV controllers the static `/api/playground/catalog` omits). Document that the curated catalog is convenience-only, not the coverage boundary. Plus: config, health, ado-proxy/pr-diff + **pr-comment**, fabric/workspaces+lakehouses+capacities, command/deploy + deploy-stream, flt-proxy/runDAG + getDAGExecStatus, **notebook session trio (also the table/MLV seeding path)**, feature-flags/overrides, logs, telemetry, **`/api/executions`** (DAG history+timing), interceptors-status, **`/api/onelake/table-preview-rows`+`table-metadata` (verify output landed)**.
-- [ ] **Step 3:** `scenarios.md` — **the generation protocol**: the change-type → scenario-pattern catalog (the table from spec §7), and for each pattern a worked example showing the six scenario fields (`title · category · stimulus · observations · invariants · infra requirements`). Include: (a) the **infra-seeding recipe** — `create-session → execute-cell: CREATE TABLE … → execute-cell: CREATE MATERIALIZED LAKE VIEW silver.<name> AS SELECT … FROM <table> → close-session` (verified path; record each create to the ledger); (b) **output verification** — DAG scenarios must check `/api/onelake/table-preview-rows` that the write landed correctly, not just that the run completed; (c) **stimulus via `/api/playground/dispatch`** as the default.
+- [ ] **Step 3:** `scenarios.md` — **the generation protocol**: the change-type → scenario-pattern catalog (the table from spec §7), and for each pattern a worked example showing the six scenario fields (`title · category · stimulus · observations · invariants · infra requirements`). Include: (a) the **AUDITED infra-seeding recipe** — `create workspace → assignToCapacity → create SCHEMA-ENABLED lakehouse (pass the Fabric schema flag; default is non-schema and MLVs need schemas) → create a NOTEBOOK artifact → create-session → execute-cell running Python spark.sql("CREATE TABLE …") then spark.sql("CREATE MATERIALIZED LAKE VIEW silver.<n> AS …") → close-session` (kernel is synapse_pyspark, `language` ignored; cold-start ≤10min; outputs give ok/error; a SQL MLV is catalog-registered + runnable via runDAG with no separate MLVExecutionDefinition — FLT-owner verified); record each create to the ledger; (b) **runDAG** — the skill generates a fresh GUID `iterationId`; body optional; (c) **output verification** — DAG scenarios check `/api/onelake/table-preview-rows` (live parquet) that the write landed correctly; (d) **observation discovery** — `/api/logs`,`/telemetry`,`/executions` are FLT-log-server proxies whose query interface the skill must DISCOVER at runtime (don't assume `?since=&level=`); (e) **stimulus via `/api/playground/dispatch`** (any path) as the default.
 - [ ] **Step 4: Validate** — `python -m pytest tests/test_qa_skill_install.py -v` → 3 passed.
 - [ ] **Step 5: Commit** — `docs(qa): skill reference docs (flt-model, tools, scenarios)`.
 
