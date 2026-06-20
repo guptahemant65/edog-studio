@@ -5146,6 +5146,11 @@ Examples:
     parser.add_argument("-a", "--artifact", help="Artifact ID")
     parser.add_argument("-c", "--capacity", help="Capacity ID")
     parser.add_argument("-r", "--repo", help="FabricLiveTable repo path")
+    parser.add_argument(
+        "--qa-cleanup",
+        metavar="RUNID",
+        help="Reverse a QA validation run's teardown ledger (orphan recovery)",
+    )
 
     args = parser.parse_args()
 
@@ -5171,6 +5176,15 @@ Examples:
         print("🐕 Opening EDOG Log Viewer at http://localhost:5555")
         print("   Make sure FLT service is running with EDOG changes applied.")
         sys.exit(0)
+
+    # QA cleanup command doesn't need repo_root — reverse a run's teardown
+    # ledger even if the skill process is gone (orphaned-capacity guard).
+    if args.qa_cleanup:
+        from scripts import qa_cleanup
+
+        r = qa_cleanup.run(args.qa_cleanup)
+        print(f"  Cleanup: reversed {r['reversed']}, failed {r['failed']}")
+        sys.exit(0 if r["failed"] == 0 else 1)
 
     if args.headless_deploy:
         repo_root = get_repo_root()
