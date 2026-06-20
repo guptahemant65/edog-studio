@@ -9,6 +9,17 @@ from dataclasses import dataclass, field
 
 _SECRET_RE = re.compile(r"(Bearer\s+[A-Za-z0-9._-]{12,}|MwcToken\s+\S{12,}|eyJ[A-Za-z0-9._-]{20,})")
 
+# FLT's terminal DAG/node states. Grounded in the FLT source, not guessed:
+# LiveTableMaintenanceController.cs:257 "Only terminal statuses (Completed,
+# Failed, Cancelled, Skipped) are allowed", and LiveTableInsightsController.cs:118
+# / :938 "terminal ... completed, failed, cancelled, skipped". Omitting Skipped
+# (as an earlier hardcode did) makes a skipped-terminal node read as "did not
+# terminate" -> a false verdict. Polled status may be translated (Skipped ->
+# Cancelled per SchedulerRunStatus), so a raw Skipped may not always reach here,
+# but completeness is strictly safer. Injectable so a PR that changes the enum
+# can supply the deployed set rather than fighting a baked-in literal.
+TERMINAL_DAG_STATES = ("Completed", "Failed", "Cancelled", "Skipped")
+
 
 @dataclass
 class Finding:
@@ -34,10 +45,10 @@ def check_no_secret_in_logs(lines: list[dict]) -> Finding:
     return Finding("no_secret_in_logs", not hits, "secret in logs" if hits else "clean", hits)
 
 
-def check_dag_terminates(dag: dict) -> Finding:
+def check_dag_terminates(dag: dict, *, terminal_states: tuple[str, ...] = TERMINAL_DAG_STATES) -> Finding:
     state = dag.get("state", "")
     timed_out = bool(dag.get("timedOut"))
-    ok = state in ("Completed", "Failed", "Cancelled") and not timed_out
+    ok = state in terminal_states and not timed_out
     return Finding(
         "dag_terminates",
         ok,
