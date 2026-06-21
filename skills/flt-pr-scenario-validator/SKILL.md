@@ -19,6 +19,7 @@ Use this skill when the user asks to validate / QA / test / "run scenarios on" a
 - **EDOG** owns capability: deploy, stimulus, observation, infra. Every capability is an HTTP endpoint — see `reference/tools.md`.
 - **Python primitives** (`scripts/qa_*.py`) own the dangerous, must-be-deterministic parts. You call them; you do not re-implement their logic in prose. They are the guardrails enforced at the tool boundary:
   - `qa_run_lock` — single-validation lock (heartbeat-based).
+  - `qa_resolve_change` — **Beat 1 entry: resolve a branch *or* a PR to validate, server-free.** PR-first (finds a branch's open PR via `az`), else diffs `origin/<branch>` (or the local branch) against `origin/main`'s merge-base. Returns `{source, prId?, title, author, sourceCommit, baseCommit, diff, changedFiles}`. Feeds `qa_pr_diff`.
   - `qa_teardown_ledger` — append-before-act ledger; reverse-replays on cleanup.
   - `qa_pr_diff` — clean PR diff → files, symbols, config facts, feature-flag refs.
   - `qa_change_understanding` — **Beat 2's grounded "understand the change" engine.** Ties the diff + the Roslyn code-graph (ChangeScanner: feature-flag gates + the **signal footprint** across the evidence streams; PreciseEngine: *what reaches the changed code*) + `qa_flag_gates` into one structured understanding plus the Beat-5 **watch-checklist**. Call it instead of guessing flags, callers, or signals. Server-free. See `reference/code-understanding.md`.
@@ -43,12 +44,11 @@ Read `reference/flt-model.md` (DAG, iteration ID, tokens, capacity routing, the 
 
 Seven beats. Each names its **gate** (what must be true to proceed), the **primitives/tools** it calls, and stops at a human checkpoint where marked. Persist state after every beat; heartbeat the lock every turn.
 
-### Beat 1 — Acquire & resolve
-- Acquire the lock: `qa_run_lock.acquire(runId, pr)`. If refused, report the current holder and STOP — another validation is live.
-- Resolve the PR: `GET /api/ado-proxy/pr-diff?prUrl=<full PR URL>` → `{prId, title, author, diff, sourceCommit, commonCommit}` (the param is `prUrl`, not `prId`; fallback: `az repos pr show` + `git diff origin/main...<sourceCommit>`). Pin `sourceCommit` as the commit under validation.
-- Start the server **headless**: launch `python scripts/dev-server.py` directly (it does **not** open a browser). Do **not** run `python edog.py` — its default opens the EDOG Studio webpage, which this skill must not do. API-only on `:5555`. **Record the server start to the ledger** (`qa_teardown_ledger.record(runId, "server_start", {"pid": <pid>}, reverse={"op":"server_stop","pid":<pid>})`) so teardown — or a crash-recovery `qa_cleanup` — stops the exact process the skill spawned. **Exception:** if `:5555` was *already healthy* when you arrived (someone else's server), do NOT record/stop it — you didn't start it; just use it.
-- Check `GET /api/edog/health` → `bearerExpiresIn`, `tokenExpired`, `mwcToken`. Ensure a username/session is saved so the bearer auto-refreshes across a long run.
-- **Gate:** lock held, PR resolved, server answering on `:5555`. Resolve the PR *before* starting the server — never spin up infra for a PR that doesn't exist.
+### Beat 1 — Acquire & resolve (server-free)
+- Acquire the lock: `qa_run_lock.acquire(runId, ref)`. If refused, report the current holder and STOP — another validation is live.
+- **Resolve what to validate with `qa_resolve_change.resolve(input, repo=<FLT repo>)` — a branch *or* a PR, no server needed.** It is **PR-first**: given a branch it looks for that branch's open PR (`az repos pr`) and uses it; with no PR it falls back to `origin/<branch>`, else the local branch, and diffs against the default branch's merge-base (`origin/main`). Given a PR number/URL it resolves that directly. You get `{source: pr|branch, prId?, title, author, sourceCommit, baseCommit, diff, changedFiles}` — pin `sourceCommit` as the commit under validation. A plain `git diff` is correct here: nothing is deployed yet, so it is the true state of the change.
+- **No FLT server in Beat 1.** Reading and understanding the change (Beats 1–3) needs no server — it starts **later, in Beat 4**, only when real infrastructure is needed, so a docs-only diff or a non-existent branch never spins one up.
+- **Gate:** lock held **and** a change resolved (PR or branch) with a pinned `sourceCommit`. If neither an open PR nor the branch can be found, STOP plainly — there is nothing to validate, and nothing was started to clean up.
 
 ### Beat 2 — Understand the change
 - **Run the change-understanding engine first — `qa_change_understanding` (server-free).** Feed it the changed `.cs` files + changed symbols (from `qa_pr_diff`), and the changed project's `.csproj` when you want the entry points. It returns, every fact grounded in code — never guessed:
@@ -70,6 +70,7 @@ Seven beats. Each names its **gate** (what must be true to proceed), the **primi
 - Present the scenario plan to the user as an **editable** list. **Gate:** user approves/edits before any infra is touched.
 
 ### Beat 4 — Lock the target
+- **Start the FLT server now (the first beat that needs it), headless:** launch `python scripts/dev-server.py` directly (it does **not** open a browser). Do **not** run `python edog.py` — its default opens the EDOG Studio webpage, which this skill must not do. API-only on `:5555`. **Record the server start to the ledger** (`qa_teardown_ledger.record(runId, "server_start", {"pid": <pid>}, reverse={"op":"server_stop","pid":<pid>})`) so teardown — or a crash-recovery `qa_cleanup` — stops the exact process the skill spawned. **Exception:** if `:5555` was *already healthy* when you arrived (someone else's server), do NOT record/stop it — you didn't start it; just use it. Then check `GET /api/edog/health` → `bearerExpiresIn`, `tokenExpired`, `mwcToken`; ensure a username/session is saved so the bearer auto-refreshes across the long run.
 - Derive required infra: `qa_infra_spec.required(scenarios)` — counts plus `table_properties`, `flags`, `dag_nodes`.
 - List candidates: `GET /api/fabric/workspaces` (+ lakehouses) → `qa_targets.build_menu(raw)`. Present the risk-annotated menu (`safe` / `has_data` / `prod_like`).
 - User picks **existing** or **new**:

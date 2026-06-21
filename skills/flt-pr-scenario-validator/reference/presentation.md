@@ -135,16 +135,17 @@ One standing line, after the per-case results. The citation on each case (`reque
 
 Each beat declares **every** state it can render — not just the happy path. The left columns are the skill's internal trigger (not shown to the user); the **Render** column is exactly what the user reads, and must be plain. `STOP` = end the run cleanly here. **Couldn't-check** = a limit of the test setup, never a verdict on the change.
 
-### Beat 1 — Find the pull request
+### Beat 1 — Find the change (a branch or a PR)
 
 | State | When | Render (what the user sees) |
 |---|---|---|
-| PR found | open PR on the branch, or an explicit `#`/URL | `✓ Found open PR #982144 — "title"` + `repo · 4 files · 142 lines · by a.lee`, then `✓ Started a local test server on port 5555` |
-| No PR | no open PR and none given | `STOP`: `▲ No open pull request on this branch.` + `Point me at one:  edog qa <PR number or URL>` + `Stopped — I didn't start anything, so there's nothing to clean up.` **(Server never started.)** |
+| PR found | open PR on the branch, or an explicit `#`/URL | `✓ Found open PR #982144 — "title"` + `repo · 4 files · 142 lines · by a.lee` (no server yet — that starts in Beat 4) |
+| Branch, no PR | a branch with no open PR | `✓ Using branch users/x/feature (no open PR) — comparing it against main` + `4 files · 142 lines`. Proceed on the branch's diff. |
+| Nothing found | no PR and no such branch (local or on origin) | `STOP`: `▲ Couldn't find an open PR or a branch by that name.` + `Point me at one:  a branch name, a PR number, or a PR URL` + `Stopped — I didn't start anything, so there's nothing to clean up.` |
 | Already running | another validation is live | `STOP`: `▲ A validation is already running (PR #1004, started 4 min ago). Only one runs at a time — I'll wait for it to finish or time out.` |
 | Cleared a stale lock | the previous run's heartbeat is dead | proceed, dim note: `(cleared a leftover lock from a run that crashed earlier)` |
-| Server wouldn't start | `:5555` won't come up | **couldn't check**: `▲ COULDN'T CHECK — the local test server wouldn't start (<reason>). That's a test-setup problem, not a verdict on your change.` |
-| Sign-in expiring | token nearly expired / no saved session | `▲ Your sign-in token expires in 6 min and nothing is saved to refresh it. Sign in again before the long run, or it may stop partway through.` |
+
+(The test server, the sign-in/token check, and any "server wouldn't start" state belong to **Beat 4** now — Beat 1 is server-free.)
 
 ### Beat 2 — Understand the change
 
