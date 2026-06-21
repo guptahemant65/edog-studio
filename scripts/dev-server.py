@@ -466,6 +466,32 @@ _file_watcher_thread: threading.Thread | None = None
 _file_watcher_stop = threading.Event()
 
 
+# ── SignalR -> REST bridge (lazy; connects only after FLT/hub is up) ─────────
+# Exposes the FLT SignalR topic streams (perf/fileop/spark/token/retry/di/...)
+# over plain HTTP polling so the REST-based QA skill can read them. Dormant until
+# the first /api/edog/stream subscribe/poll, which only happens in Beat 5 (after
+# deploy) — Beats 1-3 stay server-free.
+_signalr_bridge = None
+_signalr_bridge_lock = threading.Lock()
+
+
+def _hub_url() -> str | None:
+    """Current SignalR hub base URL, or None when FLT isn't running yet."""
+    port = _studio_state.get("fltPort")
+    return f"http://localhost:{port}/hub/playground" if port else None
+
+
+def _get_signalr_bridge():
+    """Singleton SignalR bridge, created on first use."""
+    global _signalr_bridge
+    with _signalr_bridge_lock:
+        if _signalr_bridge is None:
+            from edog_signalr_bridge import SignalRBridge
+
+            _signalr_bridge = SignalRBridge(_hub_url)
+        return _signalr_bridge
+
+
 def _file_watcher_loop():
     """Background thread: polls FileWatcher every 3 seconds."""
     import contextlib
@@ -3261,6 +3287,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/api/flt/config":
             self._serve_config()
+        elif self.path.startswith("/api/edog/stream/"):
+            self._serve_stream_get()
         elif self.path == "/api/fabric/capacities":
             self._serve_list_capacities()
         elif self.path.startswith("/api/fabric/"):
@@ -3400,6 +3428,9 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
     def do_POST(self):
         if self.path == "/api/fabric/capacities":
             self._serve_create_capacity()
+            return
+        if self.path.startswith("/api/edog/stream/"):
+            self._serve_stream_post()
             return
         if self.path.startswith("/api/fabric/"):
             self._proxy_fabric("POST")
@@ -4662,6 +4693,35 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 return
 
             time.sleep(0.5)
+
+    def _serve_stream_get(self):
+        """GET /api/edog/stream/{topic}?since=&max=  or  /api/edog/stream/_status."""
+        from urllib.parse import parse_qs, urlparse
+
+        parsed = urlparse(self.path)
+        tail = parsed.path[len("/api/edog/stream/"):]
+        bridge = _get_signalr_bridge()
+        if tail == "_status":
+            self._json_response(200, bridge.status())
+            return
+        topic = tail.strip("/")
+        qs = parse_qs(parsed.query)
+        try:
+            since = int(qs.get("since", ["0"])[0])
+            max_n = min(int(qs.get("max", ["1000"])[0]), 5000)
+        except (ValueError, IndexError):
+            self._json_response(400, {"error": "bad_params", "message": "since/max must be integers"})
+            return
+        result = bridge.poll(topic, since=since, max_n=max_n)
+        self._json_response(200 if result.get("ok") else 400, result)
+
+    def _serve_stream_post(self):
+        """POST /api/edog/stream/{topic}/subscribe — start buffering a topic."""
+        tail = self.path[len("/api/edog/stream/"):].strip("/")
+        topic = tail[: -len("/subscribe")] if tail.endswith("/subscribe") else tail
+        bridge = _get_signalr_bridge()
+        result = bridge.subscribe(topic)
+        self._json_response(200 if result.get("ok") else 400, result)
 
     def _proxy_to_log_server(self, method="GET"):
         """Proxy request to the EDOG log server running inside FLT on localhost."""
@@ -8805,6 +8865,13 @@ if __name__ == "__main__":
                 print("  ⚠ Revert timed out after 30s — run manually: python edog.py --revert")
             except Exception as e:
                 print(f"  ⚠ Revert failed: {e} — run manually: python edog.py --revert")
+
+        # Stop the SignalR bridge (its daemon thread + socket) on shutdown.
+        if _signalr_bridge is not None:
+            try:
+                _signalr_bridge.stop()
+            except Exception:
+                pass
 
         server.server_close()
         print("Server stopped.")
