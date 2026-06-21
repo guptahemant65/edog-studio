@@ -1,0 +1,4 @@
+# Build artifacts for the skill's Roslyn code-graph tools.
+# The tools are committed as source and built on demand (qa_codegraph_build.py).
+*/bin/
+*/obj/

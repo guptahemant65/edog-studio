@@ -1,0 +1,66 @@
+{
+  "_comment": "Signal vocabulary: maps an FLT call/using/text pattern to one of the evidence streams the EDOG interceptors capture. Grounded in the FLT Service source (Tracer.Log*, Microsoft.ServicePlatform.Telemetry, ...OneLake, MwcTokenV2/GetTokenAsync, RetryPolicy.V2, Throttling). DATA, not code: extend freely. The runtime interceptors are the judge; this only builds the EXPECTED footprint so Beat 5 knows what to watch. Matching is case-sensitive substring on the call expression / using directive / raw node text.",
+  "streams": {
+    "log": {
+      "watch": "/api/logs (log stream)",
+      "calls": ["Tracer.LogSanitizedMessage", "Tracer.LogSanitizedError", "Tracer.Log", ".LogInformation", ".LogError", ".LogWarning", ".LogDebug", ".LogCritical"],
+      "usings": [],
+      "text": [],
+      "capture_message": true
+    },
+    "telemetry": {
+      "watch": "telemetry stream",
+      "calls": [".TrackEvent", ".EmitMetric", ".LogMetric", ".TrackMetric", "MetricEvent"],
+      "usings": ["Microsoft.ServicePlatform.Telemetry"],
+      "text": []
+    },
+    "spark": {
+      "watch": "spark stream (GTS session)",
+      "calls": ["ISparkClient", "SparkClient", "GTSBased", "SubmitSparkJob", "AcquireSession", "CreateSparkSession", ".RunDagAsync", "RunDAG"],
+      "usings": ["Microsoft.LiveTable.Service.SparkHttp", "Microsoft.LiveTable.Service.Spark"],
+      "text": []
+    },
+    "onelake_file": {
+      "watch": "fileop stream + read back via OneLake surface (the receipts)",
+      "calls": ["UploadAsync", "WriteAllText", "WriteJson", ".PutFile", "OneLakeClient"],
+      "usings": ["Microsoft.LiveTable.Service.OneLake"],
+      "text": ["MERGE INTO", "node_metrics.json", "dag_metrics.json", "changes.json", "sys_run_metrics", "sys_node_metrics", "sys_error_metrics", "_mlv_system"]
+    },
+    "token": {
+      "watch": "token stream",
+      "calls": ["GetTokenAsync", "GetMwcV2AuthContext", "GetMwcToken", "ITokenManager", "tokenManager."],
+      "usings": ["Microsoft.LiveTable.Service.TokenManagement"],
+      "text": []
+    },
+    "retry": {
+      "watch": "retry stream",
+      "calls": ["ExecuteWithRetry", "RetryAsync", "CreateOneLakeRetryPolicy", ".WaitAndRetry"],
+      "usings": ["Microsoft.LiveTable.Service.RetryPolicy"],
+      "text": []
+    },
+    "capacity": {
+      "watch": "capacity/throttling (harness signal, not a verdict)",
+      "calls": [],
+      "usings": ["Microsoft.LiveTable.Service.Throttling"],
+      "text": ["CapacityThrottling", "MLV_SPARK_JOB_CAPACITY_THROTTLING", "MLV_TOO_MANY_REQUESTS", "CapacityRetry"]
+    },
+    "cache": {
+      "watch": "cache stream",
+      "calls": [".GetOrCreate", ".GetOrCreateAsync", "SharedMemoryCache"],
+      "usings": [],
+      "text": ["MemoryCache", "IMemoryCache"]
+    },
+    "catalog": {
+      "watch": "catalog stream",
+      "calls": [".GetCode", "RegisterMlv", "MLVExecutionDefinition"],
+      "usings": ["Microsoft.LiveTable.Service.Catalog"],
+      "text": []
+    },
+    "dag": {
+      "watch": "dag stream (chain-of-steps run)",
+      "calls": ["DagExecutionHandler", "NodeExecutor", "ExecuteInternalAsync", "runDAG"],
+      "usings": ["Microsoft.LiveTable.Service.Core.V2"],
+      "text": []
+    }
+  }
+}
