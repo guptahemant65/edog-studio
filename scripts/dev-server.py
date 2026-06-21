@@ -7560,16 +7560,22 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._json_response(502, {"error": "fetch_error", "message": str(e)})
             return
 
-        # FLT uses ZlibStream (RFC 1950) — first 2 bytes are 78 9C / 78 DA. Some
-        # writers may use gzip (1F 8B); handle both defensively.
+        # The file is usually plain JSON (despite the `.gz` name — FLT/Lakehouse
+        # write it uncompressed in PPE), but older/other writers used ZlibStream
+        # (RFC 1950, header 78 9C / 78 DA) or gzip (1F 8B). Detect by the leading
+        # byte and handle all four: plain JSON, gzip, zlib, raw deflate.
         try:
-            if len(raw) >= 2 and raw[0] == 0x1F and raw[1] == 0x8B:
-                # gzip
-                decompressed = zlib.decompress(raw, wbits=zlib.MAX_WBITS | 16)
+            if raw[:1] in (b"{", b"["):
+                # Already-uncompressed JSON (the common case in PPE).
+                metadata = json.loads(raw)
             else:
-                # raw zlib (FLT default)
-                decompressed = zlib.decompress(raw)
-            metadata = json.loads(decompressed)
+                if len(raw) >= 2 and raw[0] == 0x1F and raw[1] == 0x8B:
+                    decompressed = zlib.decompress(raw, wbits=zlib.MAX_WBITS | 16)  # gzip
+                elif len(raw) >= 2 and raw[0] == 0x78:
+                    decompressed = zlib.decompress(raw)  # zlib (RFC 1950)
+                else:
+                    decompressed = zlib.decompress(raw, -zlib.MAX_WBITS)  # raw deflate (.NET DeflateStream)
+                metadata = json.loads(decompressed)
         except (zlib.error, json.JSONDecodeError) as e:
             self._json_response(
                 502,
