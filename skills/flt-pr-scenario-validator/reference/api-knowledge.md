@@ -22,9 +22,9 @@ This is the skill's map of what it can call, and **through which door**. Use it 
 
 A scenario is not validated by an API status. For anything that writes or reads an MLV, **read the stored data back through surface 3** and compare. Exact endpoints (all `GET` unless noted), grounded:
 
-- **List tables in the locked lakehouse** — `/api/mwc/tables?wsId={GUID}&lhId={GUID}&capId={GUID}` (`_serve_mwc_tables`). **All three params required** or it returns `400 missing_params`. Returns `{tables:[…], schemas:[{name,isShortcut,tableCount}], errors:[…]}`. (This is the endpoint to use — *not* a guessed `/api/onelake/tables`, which does not exist and returns 404.)
-- **Read the first N rows of a Delta table** — `/api/onelake/table-preview-rows` (`_serve_onelake_table_rows`). The data-correctness oracle: read the materialized rows, compare to an independent recompute.
-- **Table catalog metadata** — `/api/onelake/table-metadata` (`_serve_onelake_table_metadata`) reads `{lh}/Tables/{schema}/{table}/_metadata/table.json.gz` from OneLake DFS.
+- **List tables in the locked lakehouse** — `/api/mwc/tables?wsId={GUID}&lhId={GUID}&capId={GUID}` (`_serve_mwc_tables`). **All three params required** or it returns `400 missing_params`. Returns `{data:[{name, location, tableFormat, tableType, itemType, schemaName, …}], schemas:[…], continuationToken}` — **the table list is in `data[]`, not `tables[]`** (verified live). (This is the endpoint to use — *not* a guessed `/api/onelake/tables`, which does not exist and returns 404.)
+- **Read the first N rows of a Delta table** — `/api/onelake/table-preview-rows?wsId={GUID}&lhId={GUID}&schema={schema}&table={table}&limit={N≤100}` (`_serve_onelake_table_rows`). The data-correctness oracle: read the materialized rows, compare to an independent recompute. **Params are `wsId/lhId/schema/table/limit`** — *not* `workspaceId/lakehouseId/tableName/maxRows` (those `400`).
+- **Table catalog metadata** — `/api/onelake/table-metadata?wsId={GUID}&lhId={GUID}&schema={schema}&table={table}` (`_serve_onelake_table_metadata`) reads `{lh}/Tables/{schema}/{table}/_metadata/table.json.gz` from OneLake DFS (plain JSON in PPE despite the `.gz` name; a `502` is the shared int host, a harness condition).
 - **Row count & size from the delta log** — `/api/mwc/table-stats`.
 - **Filesystem timestamps** — `/api/onelake/item-timestamps` (`_serve_onelake_item_timestamps`) — to confirm *when* a write landed.
 

@@ -393,7 +393,7 @@ Read from the `getDAGExecStatus` response, the synchronous OneLake JSON (`node_m
 ### Layer C — OneLake Rows (data landed)
 
 ```bash
-curl -s "http://localhost:5555/api/onelake/table-preview-rows?workspaceId=WS&lakehouseId=LH&tableName=silver.orders_agg&maxRows=100"
+curl -s "http://localhost:5555/api/onelake/table-preview-rows?wsId=WS&lhId=LH&schema=silver&table=orders_agg&limit=100"
 ```
 
 **MLV convergence oracle:** run the MLV's defining SELECT in a fresh notebook Spark session and assert the materialized output equals the full-refresh result. Catches IR/CDF drift. Incremental and full refresh must converge.

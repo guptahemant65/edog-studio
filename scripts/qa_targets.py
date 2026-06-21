@@ -18,10 +18,23 @@ def _risk(name: str, has_data: bool) -> str:
     return "has_data" if has_data else "safe"
 
 
-def build_menu(raw: dict) -> list[dict]:
+def build_menu(raw: dict, *, fetch_lakehouses=None) -> list[dict]:
+    """Build the target menu from the workspaces response.
+
+    ``/api/fabric/workspaces`` returns workspaces WITHOUT inline lakehouses, so
+    pass ``fetch_lakehouses(workspace_id) -> {"value": [...]}`` (a call to
+    ``/api/fabric/workspaces/{id}/lakehouses``) to enrich each one. When a
+    workspace already carries an inline ``lakehouses`` list it is used as-is.
+    """
     out = []
     for ws in raw.get("value", []):
-        for lh in ws.get("lakehouses", []):
+        lakehouses = ws.get("lakehouses")
+        if lakehouses is None and fetch_lakehouses is not None:
+            try:
+                lakehouses = (fetch_lakehouses(ws["id"]) or {}).get("value", [])
+            except Exception:
+                lakehouses = []
+        for lh in lakehouses or []:
             out.append(
                 {
                     "workspace": ws["displayName"],

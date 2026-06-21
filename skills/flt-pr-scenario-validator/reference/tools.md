@@ -362,19 +362,23 @@ curl -s http://localhost:5555/api/edog/interceptors-status
 
 Read live Delta parquet rows. Confirms a DAG wrote the correct data, not just that it ran.
 
+**Params (verified live — all required): `wsId`, `lhId`, `schema`, `table`** (schema and table are **separate**, not a dotted `schema.table`). Optional `limit` (default 10, **max 100**). NOTE: these are **not** `workspaceId`/`lakehouseId`/`tableName`/`maxRows` — using those returns `400 missing_params`.
+
 ```bash
-curl -s "http://localhost:5555/api/onelake/table-preview-rows?workspaceId=WS&lakehouseId=LH&tableName=silver.orders_agg&maxRows=50"
+curl -s "http://localhost:5555/api/onelake/table-preview-rows?wsId=WS&lhId=LH&schema=silver&table=orders_agg&limit=50"
 ```
 
-**Key fields:** `rows` (array of row objects), `schema`.
+**Key fields:** `schemaName`, `tableName`, `columns` (`[{name,type,isPartition?}]`), `rows`, `rowsReturned`, `truncated`, `warnings`.
 
 ### `GET /api/onelake/table-metadata`
 
+**Params (verified live — all required): `wsId`, `lhId`, `schema`, `table`** (same as above; wrong-schema or wrong-table → `404 metadata_not_found`).
+
 ```bash
-curl -s "http://localhost:5555/api/onelake/table-metadata?workspaceId=WS&lakehouseId=LH&tableName=silver.orders_agg"
+curl -s "http://localhost:5555/api/onelake/table-metadata?wsId=WS&lhId=LH&schema=silver&table=orders_agg"
 ```
 
-**Key fields:** column schema, table properties (e.g. `delta.enableChangeDataFeed`), row count.
+**Key fields:** `allColumns`, `partitionColumnNames`, `storage`, Delta `properties`. For MLVs: `viewText` (the SELECT) + `sourceEntities`. (The `_metadata/table.json.gz` file is read directly from OneLake DFS; in PPE it is plain JSON despite the `.gz` name. A `502` here is the shared OneLake int host — a harness condition, not a verdict.)
 
 ### `POST /api/mwc/table-details`
 
