@@ -192,6 +192,13 @@ def candidate_files(repo: str, symbols: list[str], *, ref: str | None = None) ->
 
 def _main() -> int:
     import argparse
+
+    try:
+        from qa_io import ensure_utf8
+    except ModuleNotFoundError:
+        from scripts.qa_io import ensure_utf8
+    ensure_utf8()
+
     ap = argparse.ArgumentParser(description="Beat 2 flag tool: gating flags + real EDOG state")
     ap.add_argument("--files", default="", help="semicolon-separated .cs files to scan")
     ap.add_argument("--symbols", default="", help="comma-separated changed symbols")

@@ -18,6 +18,16 @@ Symbols (presentation.md §2): ◆ headline · ▸ doing/asking · ✓ good · �
 
 from __future__ import annotations
 
+# The TUI is Unicode marks; Windows' default console is cp1252 and would crash
+# on them. Make stdout UTF-8 as soon as the renderer is imported, so any script
+# that prints rendered output is safe on every platform.
+try:  # dev-server has scripts/ on sys.path; tests import as a package
+    from qa_io import ensure_utf8
+except ModuleNotFoundError:  # pragma: no cover - import-context shim
+    from scripts.qa_io import ensure_utf8
+
+ensure_utf8()
+
 # Status → (mark, word). The honesty contract (§5/§6): a test-setup problem is
 # never a pass/fail; a broken case is never a check mark; "never ran" is hollow.
 _STATUS = {

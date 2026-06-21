@@ -176,6 +176,13 @@ def render_plain(cu: dict) -> str:
 
 def _main() -> int:
     import argparse
+
+    try:
+        from qa_io import ensure_utf8
+    except ModuleNotFoundError:
+        from scripts.qa_io import ensure_utf8
+    ensure_utf8()
+
     ap = argparse.ArgumentParser(description="Beat 2: grounded change understanding")
     ap.add_argument("--diff-file", help="path to a unified diff (else read --files/--symbols directly)")
     ap.add_argument("--files", default="", help="semicolon-separated changed .cs files (already on disk)")
