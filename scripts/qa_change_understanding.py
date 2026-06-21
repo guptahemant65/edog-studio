@@ -44,7 +44,8 @@ def run_scanner(files: list[str], symbols: list[str], *, dll: Path = _SCANNER_DL
     if vocab.exists():
         cmd += ["--vocab", str(vocab)]
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120, check=False)
+        proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8",
+                              errors="replace", timeout=120, check=False)
         data = json.loads(proc.stdout)
         data["available"] = True
         return data
@@ -59,7 +60,7 @@ def run_precise(project: str, symbol: str, *, dll: Path = _PRECISE_DLL, max_refs
     try:
         proc = subprocess.run(
             ["dotnet", str(dll), "--project", project, "--symbol", symbol, "--max", str(max_refs)],
-            capture_output=True, text=True, timeout=300, check=False,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300, check=False,
         )
         return json.loads(proc.stdout)
     except (OSError, subprocess.SubprocessError, json.JSONDecodeError) as exc:

@@ -36,7 +36,8 @@ def ensure_built(project: str) -> Path | None:
     try:
         subprocess.run(
             ["dotnet", "build", "-c", "Release", "--nologo", "-v", "quiet"],
-            cwd=str(proj_dir), capture_output=True, text=True, timeout=600, check=True,
+            cwd=str(proj_dir), capture_output=True, text=True, encoding="utf-8",
+            errors="replace", timeout=600, check=True,
         )
     except (OSError, subprocess.SubprocessError):
         return None

@@ -57,7 +57,7 @@ def run_tracer(files: list[str], symbols: list[str], *, dll: Path = _TRACER_DLL)
     try:
         proc = subprocess.run(
             ["dotnet", str(dll), "--files", ";".join(files), "--symbols", ",".join(symbols)],
-            capture_output=True, text=True, timeout=120, check=False,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120, check=False,
         )
     except (OSError, subprocess.SubprocessError) as exc:
         return {"available": False, "reason": str(exc)[:200], "filesScanned": 0, "sites": []}
@@ -177,7 +177,7 @@ def candidate_files(repo: str, symbols: list[str], *, ref: str | None = None) ->
     cmd = ["git", "-C", repo, "--no-pager", "grep", "-l", "-E", "|".join(symbols)]
     if ref:
         cmd.append(ref)
-    proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False)
     files = []
     for line in proc.stdout.splitlines():
         line = line.strip()
