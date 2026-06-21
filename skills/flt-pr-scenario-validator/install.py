@@ -62,7 +62,8 @@ def main() -> None:
 
     # The skill's qa_* primitives + Roslyn tools live in the edog-studio repo
     # (scripts/). Build the code-graph tools so Beat 2 is ready out of the box.
-    repo_root = src.parents[2]  # skills/flt-pr-scenario-validator/ -> repo root
+    # src = <repo>/skills/flt-pr-scenario-validator -> parents[1] is the repo root.
+    repo_root = src.parents[1]
     _build_codegraph_tools(repo_root)
 
 

@@ -66,9 +66,9 @@ category: HappyPath
 stimulus:
   tool: POST /api/playground/dispatch
   body:
-    tokenType: bearer
+    tokenType: mwc
     method: GET
-    path: /api/liveTable/insights/summary
+    path: /liveTable/insights/summary
     headers: {}
     body: null
     timeout: 30
@@ -98,9 +98,9 @@ sub_scenarios:
     stimulus:
       tool: POST /api/playground/dispatch
       body:
-        tokenType: bearer
+        tokenType: mwc
         method: GET
-        path: /api/liveTable/insights/summary
+        path: /liveTable/insights/summary
         headers: {}
         body: null
         timeout: 30
