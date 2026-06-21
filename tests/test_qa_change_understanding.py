@@ -57,9 +57,11 @@ def test_gate_picture_resolves_edog_state(tmp_path):
 
 
 def test_entry_points_from_precise():
-    precise = [{"symbol": "X.NodeExecutor", "callers": ["ExecuteInternalAsync", "Foo"], "referenceCount": 4}]
+    precise = [{"symbol": "X.NodeExecutor", "callers": ["ExecuteInternalAsync", "Foo"], "referenceCount": 4,
+                "references": [{"file": "D.cs", "line": 10, "caller": "ExecuteInternalAsync"}]}]
     ep = cu.entry_points(precise)
     assert ep[0]["reachedBy"] == ["ExecuteInternalAsync", "Foo"]
+    assert ep[0]["references"] == [{"file": "D.cs", "line": 10, "caller": "ExecuteInternalAsync"}]
 
 
 def test_assemble_includes_honest_notes_and_parts(tmp_path):

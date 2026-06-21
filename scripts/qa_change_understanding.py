@@ -103,13 +103,15 @@ def watch_checklist(scanner_out: dict) -> list[dict]:
 
 
 def entry_points(precise_results: list[dict]) -> list[dict]:
-    """Per changed symbol, the methods that reach it (the door to trigger it)."""
+    """Per changed symbol: what reaches it (callers = the door to trigger it) and
+    every place it's used (references = who reads/writes it, for blast radius)."""
     out = []
     for r in precise_results:
         out.append({
             "symbol": r.get("symbol", ""),
             "reachedBy": r.get("callers", []),
             "referenceCount": r.get("referenceCount", 0),
+            "references": r.get("references", []),  # [{file, line, caller}] — surfaced from the precise engine
         })
     return out
 
