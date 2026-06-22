@@ -2800,13 +2800,45 @@ class WorkspaceExplorer {
       } else {
         const data = await this._api.listWorkspaces();
         this._workspaces = (data && data.value) || [];
-        // Enrich workspaces with capacity display names (best-effort)
-        this._enrichCapacityNames();
       }
+      // Paint the tree immediately using raw capacity IDs — never block first
+      // render on the slow, flaky /capacities call. Friendly capacity names
+      // are a cosmetic nice-to-have fetched off the critical path afterwards
+      // (see _scheduleCapacityEnrichment). The card already falls back to the
+      // capacity ID when no name is available, so this is purely an upgrade.
       this._renderTree();
+      if (!this._isMock) this._scheduleCapacityEnrichment();
     } catch (err) {
       this._treeEl.innerHTML = '<div class="ws-tree-item dimmed" style="justify-content:center">Could not load workspaces</div>';
       this._toast(`Failed to load workspaces: ${err.message}`, 'error');
+    }
+  }
+
+  /**
+   * Defer capacity-name enrichment off the startup critical path. The tree is
+   * already painted with raw capacity IDs by the time this runs; this only
+   * upgrades labels to friendly names/SKU/region IF the slow, flaky
+   * /capacities call succeeds. Scheduled when the browser is idle so it never
+   * competes with the initial load and is far less likely to be caught
+   * in-flight by a page reload (the source of the [client-disconnect] noise).
+   *
+   * Fully isolated: any failure — sync throw or rejected promise — is
+   * swallowed here and in _enrichCapacityNames, so the workspace tree is never
+   * impacted and keeps working with capacity IDs.
+   */
+  _scheduleCapacityEnrichment() {
+    var self = this;
+    var run = function() {
+      try {
+        self._enrichCapacityNames();
+      } catch (e) {
+        /* best-effort — capacity names are a nice-to-have, never surface */
+      }
+    };
+    if (typeof requestIdleCallback === 'function') {
+      requestIdleCallback(run, { timeout: 2000 });
+    } else {
+      setTimeout(run, 0);
     }
   }
 
