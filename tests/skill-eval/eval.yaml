@@ -1,0 +1,373 @@
+# =============================================================================
+# Vally eval harness for the `flt-pr-scenario-validator` skill.
+#
+# Vally validates *the skill that validates FLT PRs*. Each `stimulus` is a
+# natural-language request; vally runs the real agent (copilot-sdk executor)
+# with the skill loaded, then grades the trajectory against a rubric + a few
+# deterministic gates.
+#
+# Grounding: every rubric criterion below is taken from the skill's own
+# contract in skills/flt-pr-scenario-validator/SKILL.md (the seven beats, the
+# grounding protocol, the guardrails, and the presentation contract). Nothing
+# here is invented.
+#
+# Tiers (see README.md for the full rationale + how to run each):
+#   tier a  — server-free behaviour (beats 1-3): resolve, understand, plan.
+#   tier b  — guardrails / negative paths (must STOP, must not fabricate).
+#   tier c  — presentation contract (no emoji, no raw leaks, plain language).
+#   tier d  — full end-to-end (beats 4-7) against a LIVE EDOG env. Not run in
+#             CI: needs a provisioned environment + human checkpoints.
+#
+# `auto: "yes"` marks the self-contained stimuli (the `ci` suite in .vally.yaml).
+# Fixture-dependent and live stimuli are excluded from the default run.
+#
+# Lint:  vally lint -e eval.yaml
+# Run :  vally eval -e eval.yaml --suite ci --work-dir <edog-studio-root>
+#        (do NOT run until the environment notes in README.md are satisfied)
+# =============================================================================
+
+name: flt-pr-scenario-validator-eval
+description: >-
+  Behavioural eval for the flt-pr-scenario-validator skill. Confirms the agent
+  resolves and understands an FLT change server-free, derives scenarios from the
+  diff, stops at the human approval gate, honours the presentation contract, and
+  fails closed on guardrail paths. Tier-d covers the live end-to-end journey.
+version: "0.1.0"
+type: capability
+
+defaults:
+  runs: 1
+  timeout: 20m
+  model: claude-sonnet-4.6
+  executor: copilot-sdk
+  judge_model: claude-sonnet-4.6
+
+# Eval-level scoring. Weights bind to the grader `name`s used below; a stimulus
+# that omits a grader simply doesn't contribute that weight.
+scoring:
+  weights:
+    prompt: 0.55
+    skill-invocation: 0.20
+    completed: 0.10
+    output-not-matches: 0.10
+    output-not-contains: 0.05
+  threshold: 0.7
+
+stimuli:
+  # ---------------------------------------------------------------------------
+  # TIER A — server-free behaviour (beats 1-3) on the real cdf-card-impl change
+  # ---------------------------------------------------------------------------
+
+  - name: resolve-and-understand-cdf
+    prompt: >-
+      Validate the FLT pull request on branch
+      users/guptahemant/cdf-card-impl. Walk me through what the change is and
+      what it implies before doing anything that touches infrastructure.
+    tags:
+      tier: a
+      auto: "yes"
+      requires: flt-repo
+      cost: medium
+    environment:
+      skills: [flt-pr-scenario-validator]
+      # Beat 2's code-graph engine needs the Roslyn tools built once.
+      commands:
+        - python scripts/qa_codegraph_build.py
+    rubric:
+      - The flt-pr-scenario-validator skill is actually used and the response
+        follows its beat structure — it does not improvise an ad-hoc review.
+      - Beat 1 resolves the change for branch users/guptahemant/cdf-card-impl
+        and pins a specific source commit, WITHOUT starting any FLT server or
+        deploying anything (beats 1-3 are server-free).
+      - Beat 2 grounds the feature-flag gating by walking the code to its
+        IsEnabled(...) guard — including when the guard lives on an unchanged
+        line in the caller — and reports each flag's real EDOG (test-env)
+        state. Flags are never invented or grepped blindly from the diff.
+      - Unknowns are stated honestly. The response acknowledges a change can be
+        gated by a ParametersManifest/config key, an internal check, or a
+        capacity/tenant condition — not only a feature flag — and never
+        silently assumes the changed code runs.
+      - Every factual claim cites its source (a file:line, a config key, or a
+        captured event id). Inferences are labelled as inferences.
+      - Presentation follows the contract — plain language, the allowed Unicode
+        marks only, and no raw JSON, curl commands, or Python tracebacks are
+        shown to the user.
+    graders:
+      - { type: skill-invocation, name: skill-invoked, config: { required: [flt-pr-scenario-validator] } }
+      - { type: prompt, name: judge, config: { scoring: scale_1_5, threshold: 0.7 } }
+      - { type: completed, name: completed }
+      - { type: output-not-matches, name: no-emoji, config: { pattern: '[\uD800-\uDBFF][\uDC00-\uDFFF]' } }
+      - { type: output-not-contains, name: no-traceback, config: { substring: "Traceback (most recent call last)" } }
+    constraints:
+      max_turns: 40
+      expect_skills: [flt-pr-scenario-validator]
+
+  - name: scenario-plan-grounded-and-gated
+    prompt: >-
+      For the FLT PR on branch users/guptahemant/cdf-card-impl, design the test
+      scenarios you would run, and show me the plan before touching anything.
+    tags:
+      tier: a
+      auto: "yes"
+      requires: flt-repo
+      cost: medium
+    environment:
+      skills: [flt-pr-scenario-validator]
+      commands:
+        - python scripts/qa_codegraph_build.py
+    rubric:
+      - The flt-pr-scenario-validator skill is used and reaches Beat 3.
+      - Beat 3 derives the scenario plan FROM the actual diff — the number of
+        scenarios falls out of the change, not a fixed template or a
+        hand-picked count. A docs-only change would yield zero; this change
+        yields the cases its surface actually triggers.
+      - Controller/DTO changes get an API contract-diff scenario; flag-gated
+        changes get a flag-in-required-state scenario, where applicable to this
+        diff.
+      - The plan is presented as an EDITABLE list and the run STOPS at the
+        human approval gate BEFORE any infrastructure is touched or any server
+        is started.
+      - No infrastructure was created, no target was locked, and no deploy
+        happened — this is still the server-free phase.
+      - Presentation follows the contract (plain language, allowed marks only,
+        no raw tool output leaked).
+    graders:
+      - { type: skill-invocation, name: skill-invoked, config: { required: [flt-pr-scenario-validator] } }
+      - { type: prompt, name: judge, config: { scoring: scale_1_5, threshold: 0.7 } }
+      - { type: completed, name: completed }
+      - { type: output-not-matches, name: no-emoji, config: { pattern: '[\uD800-\uDBFF][\uDC00-\uDFFF]' } }
+    constraints:
+      max_turns: 40
+      expect_skills: [flt-pr-scenario-validator]
+
+  # ---------------------------------------------------------------------------
+  # TIER C — presentation contract (graded hard on the terminal output itself)
+  # ---------------------------------------------------------------------------
+
+  - name: presentation-contract
+    prompt: >-
+      Validate the FLT PR on branch users/guptahemant/cdf-card-impl and present
+      your findings.
+    tags:
+      tier: c
+      auto: "yes"
+      requires: flt-repo
+      cost: medium
+    environment:
+      skills: [flt-pr-scenario-validator]
+      commands:
+        - python scripts/qa_codegraph_build.py
+    rubric:
+      - Output uses only the skill's allowed Unicode marks
+        (diamond, triangle-right, check, cross, up-triangle, hollow-diamond,
+        filled-square, dotted-circle) and contains NO emoji.
+      - Status words come only from the fixed set — PASS, BROKEN, SUSPECTED,
+        COULDN'T CHECK, NEVER RAN.
+      - Healthy or default states are shown plainly; the attention and broken
+        marks are reserved for genuine exceptions (restraint is the default).
+      - No raw tool output is shown — no JSON dumps, no curl commands, no Python
+        tracebacks. Evidence is offered through an on-demand "show <ref>"
+        affordance instead of being dumped inline.
+      - Language is plain English for an engineer who does not know FLT
+        internals; only DAG and MLV jargon is allowed, each glossed on first
+        use.
+      - Every fact trails its source citation; uncited claims are not shown.
+    graders:
+      - { type: skill-invocation, name: skill-invoked, config: { required: [flt-pr-scenario-validator] } }
+      - { type: prompt, name: judge, config: { scoring: scale_1_5, threshold: 0.7 } }
+      - { type: completed, name: completed }
+      - { type: output-not-matches, name: no-emoji, config: { pattern: '[\uD800-\uDBFF][\uDC00-\uDFFF]' } }
+      - { type: output-not-contains, name: no-traceback, config: { substring: "Traceback (most recent call last)" } }
+    constraints:
+      max_turns: 40
+      expect_skills: [flt-pr-scenario-validator]
+
+  # ---------------------------------------------------------------------------
+  # TIER B — guardrails / negative paths (the skill must STOP and not fabricate)
+  # ---------------------------------------------------------------------------
+
+  - name: nonexistent-branch-stops-plainly
+    prompt: >-
+      Validate the FLT PR on branch
+      users/guptahemant/this-branch-does-not-exist-zzz.
+    tags:
+      tier: b
+      auto: "yes"
+      requires: flt-repo
+      cost: low
+    environment:
+      skills: [flt-pr-scenario-validator]
+    rubric:
+      - Beat 1 finds neither an open PR nor the named branch and STOPS plainly,
+        saying there is nothing to validate and nothing was started to clean up.
+      - No FLT server is started and no infrastructure is touched.
+      - The message is plain — no raw error dump or traceback is shown to the
+        user.
+    graders:
+      - { type: skill-invocation, name: skill-invoked, config: { required: [flt-pr-scenario-validator] } }
+      - { type: prompt, name: judge, config: { scoring: scale_1_5, threshold: 0.7 } }
+      - { type: completed, name: completed }
+      - { type: output-not-contains, name: no-traceback, config: { substring: "Traceback (most recent call last)" } }
+    constraints:
+      max_turns: 20
+      expect_skills: [flt-pr-scenario-validator]
+
+  - name: non-flt-repo-out-of-scope
+    prompt: >-
+      Validate the pull request in my node-todo-app repo (a small Express.js
+      API). Run the FLT scenario validator on it.
+    tags:
+      tier: b
+      auto: "yes"
+      requires: none
+      cost: low
+    environment:
+      skills: [flt-pr-scenario-validator]
+    rubric:
+      - The skill recognises the request is outside its scope — the target is
+        not an FLT (FabricLiveTable) repository — and declines to run the full
+        validation journey rather than fabricating FLT scenarios.
+      - It does not deploy, seed infrastructure, or invent FLT-specific
+        findings for a non-FLT codebase.
+    graders:
+      - { type: prompt, name: judge, config: { scoring: scale_1_5, threshold: 0.7 } }
+      - { type: completed, name: completed }
+    constraints:
+      max_turns: 15
+
+  - name: concurrent-run-refused
+    prompt: >-
+      Validate the FLT PR on branch users/guptahemant/cdf-card-impl.
+    tags:
+      tier: b
+      auto: "yes"
+      requires: flt-repo
+      cost: low
+    environment:
+      skills: [flt-pr-scenario-validator]
+      # Seed a held validation lock so this run must hit the single-validation
+      # guard. (Adjust to the qa_run_lock CLI/contract for your checkout; the
+      # intent: a foreign lock is already present when the skill starts.)
+      commands:
+        - python scripts/qa_run_lock.py acquire eval-seed-holder seed-ref
+    rubric:
+      - The single-validation lock is already held by another holder, so the
+        skill refuses to start a second validation, reports the current holder,
+        and STOPS.
+      - It does not deploy, seed infrastructure, or run scenarios while the lock
+        is held.
+    graders:
+      - { type: skill-invocation, name: skill-invoked, config: { required: [flt-pr-scenario-validator] } }
+      - { type: prompt, name: judge, config: { scoring: scale_1_5, threshold: 0.7 } }
+      - { type: completed, name: completed }
+    constraints:
+      max_turns: 15
+      expect_skills: [flt-pr-scenario-validator]
+
+  - name: docs-only-change-no-runtime-surface
+    prompt: >-
+      Validate the FLT PR on branch <DOCS_ONLY_BRANCH> (a documentation-only
+      change).
+    tags:
+      tier: b
+      auto: "no"
+      requires: fixture-branch
+      cost: low
+    environment:
+      skills: [flt-pr-scenario-validator]
+    rubric:
+      - Beat 2 recognises the diff is docs/build/IaC/test-only with no
+        runtime-validatable surface, says so plainly, and STOPS.
+      - It does not deploy and does not fabricate scenarios for a change with no
+        runtime surface.
+      - No FLT server is started and no infrastructure is touched.
+    graders:
+      - { type: skill-invocation, name: skill-invoked, config: { required: [flt-pr-scenario-validator] } }
+      - { type: prompt, name: judge, config: { scoring: scale_1_5, threshold: 0.7 } }
+      - { type: completed, name: completed }
+    constraints:
+      max_turns: 25
+      expect_skills: [flt-pr-scenario-validator]
+
+  - name: auth-posture-detect-only
+    prompt: >-
+      Validate the FLT PR on branch <AUTH_POSTURE_BRANCH> (it changes controller
+      authentication posture).
+    tags:
+      tier: b
+      auto: "no"
+      requires: fixture-branch
+      cost: medium
+    environment:
+      skills: [flt-pr-scenario-validator]
+      commands:
+        - python scripts/qa_codegraph_build.py
+    rubric:
+      - A change touching controller auth posture (PublicUnprotectedController /
+        PublicAadProtectedController / BaseApiController, the
+        MwcV2RequirePermissionsFilter, or ControllersConfig authenticator
+        wiring) is STATICALLY flagged for human review.
+      - The skill explicitly does NOT run a runtime auth/authz test, and never
+        claims auth "passed" — because EDOG disables FLT auth wholesale, a
+        runtime auth test would be a manufactured false PASS.
+    graders:
+      - { type: skill-invocation, name: skill-invoked, config: { required: [flt-pr-scenario-validator] } }
+      - { type: prompt, name: judge, config: { scoring: scale_1_5, threshold: 0.7 } }
+      - { type: completed, name: completed }
+    constraints:
+      max_turns: 30
+      expect_skills: [flt-pr-scenario-validator]
+
+  # ---------------------------------------------------------------------------
+  # TIER D — full end-to-end (beats 4-7) against a LIVE EDOG environment.
+  # Excluded from the default run: needs a provisioned env + human checkpoints.
+  # ---------------------------------------------------------------------------
+
+  - name: full-e2e-cdf-live
+    prompt: >-
+      Validate the FLT PR on branch users/guptahemant/cdf-card-impl end to end
+      against the live environment, and give me a verdict with evidence.
+    tags:
+      tier: d
+      auto: "no"
+      requires: live-edog
+      cost: high
+    environment:
+      skills: [flt-pr-scenario-validator]
+      commands:
+        - python scripts/qa_codegraph_build.py
+    rubric:
+      - Beat 4 starts the FLT service headless (dev-server.py, never edog.py),
+        records the server start to the teardown ledger, and locks a target by
+        GUID tuple (workspace, lakehouse, capacity) — never by display name.
+      - Beat 5 deploys, then confirms via head-match that the PR's source commit
+        is what actually ran. A head mismatch is treated as a HARNESS failure,
+        not a verdict on the PR.
+      - Required feature flags are set via override AND re-read from the catalog
+        to confirm effectiveForMyWorkspace actually flipped (the const name is
+        resolved to the real FM wire key first).
+      - Each scenario is judged on ALL relevant signals, not the API status
+        alone — the API body, the data that landed (OneLake rows + MLV
+        convergence), the FLT-native outputs, the traces, and execution-proof
+        that the changed symbols actually ran.
+      - Harness conditions (head mismatch, token expiry, capacity throttling
+        430, inbound throttling 429, infra-classified errors, locked/missing
+        flags) are surfaced honestly and never reported as a PASS or FAIL on the
+        change.
+      - The verdict cites a real trace event (or asserted response body) for
+        every factual claim and survives evidence verification; coverage is
+        measured, never declared.
+      - Posting to the PR happens only after the author confirms; cleanup then
+        reverses the ledger to ZERO orphans — git worktree clean, no leftover
+        flag overrides, FLT repo git status clean, and the dev-server the skill
+        started is stopped (a pre-existing server is left running).
+    graders:
+      - { type: skill-invocation, name: skill-invoked, config: { required: [flt-pr-scenario-validator] } }
+      - { type: prompt, name: judge, config: { scoring: scale_1_5, threshold: 0.7 } }
+      - { type: completed, name: completed }
+      - { type: output-not-matches, name: no-emoji, config: { pattern: '[\uD800-\uDBFF][\uDC00-\uDFFF]' } }
+      - { type: output-not-contains, name: no-traceback, config: { substring: "Traceback (most recent call last)" } }
+    constraints:
+      max_turns: 120
+      max_duration: 60m
+      expect_skills: [flt-pr-scenario-validator]

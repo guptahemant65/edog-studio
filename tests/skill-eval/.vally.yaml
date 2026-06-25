@@ -1,0 +1,65 @@
+# Vally project config for the flt-pr-scenario-validator skill eval.
+# Paths are resolved relative to this file's directory (tests/skill-eval/).
+
+paths:
+  # The skill lives at <repo-root>/skills/flt-pr-scenario-validator.
+  skills:
+    - ../../skills
+  evals:
+    - .
+  results: ./vally-results
+
+# Named suites — filter the stimuli in eval.yaml by tag.
+#   vally eval --suite <name> -e eval.yaml --work-dir <edog-studio-root>
+suites:
+  # Self-contained, automatable stimuli (no external fixtures, no live env).
+  # These still need the FLT repo locally for the cdf-card-impl ones — see
+  # README.md "What each tier needs to actually run".
+  ci:
+    description: >-
+      Server-free + guardrail + presentation stimuli that need no fixture
+      branches and no live EDOG. The default inner-loop / CI run.
+    filter:
+      auto: "yes"
+    evals:
+      - eval.yaml
+
+  # Beats 1-3 behaviour on the real cdf-card-impl change.
+  server-free:
+    description: Resolve, understand, and plan — the server-free phase.
+    filter:
+      tier: a
+    evals:
+      - eval.yaml
+
+  # Negative / fail-closed paths.
+  guardrails:
+    description: The skill must STOP and must not fabricate.
+    filter:
+      tier: b
+    evals:
+      - eval.yaml
+
+  # Terminal-output contract.
+  presentation:
+    description: No emoji, no raw leaks, plain language, citations.
+    filter:
+      tier: c
+    evals:
+      - eval.yaml
+
+  # Stimuli that need a prepared fixture branch (docs-only, auth-posture).
+  fixtures:
+    description: Needs a prepared fixture branch — see README.md.
+    filter:
+      requires: fixture-branch
+    evals:
+      - eval.yaml
+
+  # Full end-to-end against a live EDOG environment. Manual / gated.
+  live-e2e:
+    description: Beats 4-7 against a provisioned live environment + human gates.
+    filter:
+      tier: d
+    evals:
+      - eval.yaml
